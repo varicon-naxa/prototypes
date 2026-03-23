@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Add Purchase Order (Guided)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+  .sidebar-item.active .icon { opacity: 1; }
+
+  /* Main */
+  .main { flex: 1; padding: 24px 32px; overflow-y: auto; }
+
+  /* Top bar */
+  .top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .top-bar-left { display: flex; align-items: center; gap: 12px; }
+  .back-btn { background: none; border: none; cursor: pointer; font-size: 20px; color: #666; padding: 4px; }
+  .back-btn:hover { color: #333; }
+  .top-bar h1 { font-size: 20px; font-weight: 600; }
+  .top-bar-actions { display: flex; gap: 10px; }
+  .btn-draft { padding: 10px 20px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; color: #555; }
+  .btn-draft:hover { background: #f5f5f5; }
+  .btn-submit { padding: 10px 20px; border: none; border-radius: 6px; background: #f7941d; font-size: 13px; font-weight: 700; cursor: pointer; color: #fff; }
+  .btn-submit:hover { background: #e8850f; }
+  .btn-submit:disabled { background: #ccc; cursor: not-allowed; }
+
+  /* Guided steps */
+  .guided-section { max-width: 100%; }
+  .step-row { display: flex; gap: 16px; margin-bottom: 16px; }
+  .step-row .step-card { flex: 1; margin-bottom: 0; }
+
+  /* Step card */
+  .step-card {
+    background: #fff; border: 2px solid #e0e0e0; border-radius: 12px;
+    padding: 24px 28px; margin-bottom: 16px; transition: all 0.3s;
+    position: relative;
+  }
+  .step-card.active { border-color: #f7941d; box-shadow: 0 4px 16px rgba(247,148,29,0.15); }
+  .step-card.done { border-color: #4caf50; background: #fafff9; }
+  .step-card.locked { opacity: 0.5; pointer-events: none; }
+
+  .step-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .step-number {
+    width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; flex-shrink: 0; transition: all 0.3s;
+  }
+  .step-card.active .step-number { background: #f7941d; color: #fff; }
+  .step-card.done .step-number { background: #4caf50; color: #fff; }
+  .step-card.locked .step-number { background: #e0e0e0; color: #999; }
+  .step-card:not(.active):not(.done):not(.locked) .step-number { background: #e0e0e0; color: #999; }
+
+  .step-title { font-size: 16px; font-weight: 600; color: #333; }
+  .step-card.done .step-title { color: #2e7d32; }
+  .step-subtitle { font-size: 13px; color: #888; margin-top: 2px; }
+
+  .step-done-value {
+    display: none; margin-left: auto; font-size: 14px; font-weight: 600;
+    color: #2e7d32; background: #e8f5e9; padding: 4px 14px; border-radius: 6px;
+  }
+  .step-card.done .step-done-value { display: inline-block; }
+
+  .step-body { display: none; }
+  .step-card.active .step-body { display: block; }
+
+  /* Form inputs */
+  .form-select-large {
+    width: 100%; padding: 14px 16px; border: 2px solid #e0e0e0; border-radius: 8px;
+    font-size: 15px; background: #fff; appearance: none; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 14px center;
+    transition: border-color 0.2s;
+  }
+  .form-select-large:focus { outline: none; border-color: #f7941d; }
+
+  .form-input-large {
+    width: 100%; padding: 14px 16px; border: 2px solid #e0e0e0; border-radius: 8px;
+    font-size: 15px; background: #fff; transition: border-color 0.2s;
+  }
+  .form-input-large:focus { outline: none; border-color: #f7941d; }
+
+  .form-hint { font-size: 12px; color: #999; margin-top: 6px; }
+
+  /* Continue button inside step */
+  .step-continue {
+    margin-top: 16px; padding: 10px 24px; border: none; border-radius: 6px;
+    background: #f7941d; color: #fff; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .step-continue:hover { background: #e8850f; }
+  .step-continue:disabled { background: #ccc; cursor: not-allowed; }
+
+  /* Edit button for completed steps */
+  .step-edit {
+    display: none; position: absolute; top: 24px; right: 24px;
+    padding: 6px 14px; border: 1px solid #d0d0d0; border-radius: 6px;
+    background: #fff; font-size: 12px; font-weight: 600; cursor: pointer; color: #666;
+  }
+  .step-edit:hover { background: #f5f5f5; }
+  .step-card.done .step-edit { display: inline-block; }
+
+  /* Auto-filled fields row */
+  .auto-fields {
+    display: none; margin-top: 20px; padding: 16px 20px;
+    background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px;
+  }
+  .auto-fields.visible { display: block; }
+  .auto-fields .label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+  .auto-fields .value { font-size: 14px; color: #333; font-weight: 500; }
+  .auto-row { display: flex; gap: 24px; }
+  .auto-row > div { flex: 1; }
+
+  /* Rest of form (appears after 3 steps complete) -->
+  .rest-form { display: none; max-width: 100%; margin-top: 24px; }
+  .rest-form.visible { display: block; }
+  .rest-form h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333; }
+
+  /* Delivery items table */
+  .delivery-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
+  .delivery-table thead { background: #fafafa; }
+  .delivery-table th { text-align: left; padding: 10px 12px; font-size: 12px; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; }
+  .delivery-table td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+  .delivery-table input, .delivery-table select {
+    width: 100%; padding: 8px 10px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 13px;
+  }
+  .add-line-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border: 1px dashed #ccc; border-radius: 6px;
+    background: #fff; font-size: 13px; color: #888; cursor: pointer; margin-bottom: 24px;
+  }
+  .add-line-btn:hover { background: #f9f9f9; border-color: #aaa; color: #555; }
+
+  /* Totals */
+  .totals { display: flex; flex-direction: column; align-items: flex-end; margin-bottom: 24px; }
+  .totals .row { display: flex; gap: 40px; padding: 4px 0; font-size: 14px; }
+  .totals .row .label { color: #888; text-align: right; min-width: 160px; }
+  .totals .row .val { font-weight: 600; min-width: 100px; text-align: right; }
+  .totals .total-row { font-size: 18px; font-weight: 700; border-top: 2px solid #e0e0e0; padding-top: 8px; margin-top: 4px; }
+
+  /* Sections */
+  .form-section { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px 24px; margin-bottom: 16px; }
+  .form-section h4 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #333; }
+  .form-section .row { display: flex; gap: 16px; }
+  .form-section .row > div { flex: 1; }
+  .form-section label { display: block; font-size: 12px; font-weight: 600; color: #888; margin-bottom: 4px; }
+  .form-section input, .form-section textarea, .form-section select {
+    width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 13px;
+  }
+  .form-section textarea { resize: vertical; min-height: 60px; }
+
+  .dropzone {
+    border: 2px dashed #d0d0d0; border-radius: 8px; padding: 24px;
+    text-align: center; color: #999; font-size: 13px; cursor: pointer;
+  }
+  .dropzone:hover { border-color: #aaa; }
+
+  /* Progress indicator */
+  .progress-bar {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 24px;
+    padding: 12px 16px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
+  }
+  .progress-bar .prog-fill {
+    flex: 1; height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden;
+  }
+  .progress-bar .prog-fill-inner {
+    height: 100%; background: linear-gradient(90deg, #f7941d, #4caf50);
+    border-radius: 3px; transition: width 0.4s;
+  }
+  .progress-bar .prog-text { font-size: 12px; font-weight: 600; color: #888; white-space: nowrap; }
+
+  /* Annotation */
+  .annotation {
+    margin-top: 32px; padding: 16px 20px; background: #fff8f0;
+    border: 1px solid #f7941d; border-radius: 8px; font-size: 13px; color: #333; line-height: 1.6;
+  }
+  .annotation h3 { color: #f7941d; font-size: 14px; margin-bottom: 8px; }
+  .annotation ul { margin-left: 20px; }
+  .annotation li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Cookie's Civil</div>
+    <div class="sidebar-item"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Docket</div>
+    <div class="sidebar-item active"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">🚚</span> Delivery Docket</div>
+    <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+  </div>
+
+  <div class="main">
+    <!-- Top bar -->
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <button class="back-btn">←</button>
+        <h1>Add Purchase Order</h1>
+      </div>
+      <div class="top-bar-actions">
+        <button class="btn-draft">SAVE AS DRAFT</button>
+        <button class="btn-submit" id="submitBtn" disabled>SUBMIT</button>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-bar">
+      <span class="prog-text" id="progText">Step 1 of 3</span>
+      <div class="prog-fill"><div class="prog-fill-inner" id="progBar" style="width:0%"></div></div>
+    </div>
+
+    <!-- Guided steps -->
+    <div class="guided-section">
+
+      <!-- Steps 1 & 2 side by side -->
+      <div class="step-row">
+        <!-- Step 1: Project -->
+        <div class="step-card active" id="step1">
+          <button class="step-edit" onclick="editStep(1)">Edit</button>
+          <div class="step-header">
+            <div class="step-number">1</div>
+            <div>
+              <div class="step-title">Select Project</div>
+              <div class="step-subtitle">Which project is this for?</div>
+            </div>
+            <div class="step-done-value" id="step1Value"></div>
+          </div>
+          <div class="step-body">
+            <select class="form-select-large" id="projectSelect" onchange="onProjectSelect()">
+              <option value="">Choose a project...</option>
+              <option value="VAR004">(VAR004) Bourke Street Roadworks</option>
+              <option value="VAR001">(VAR001) Road Replacement Swanston St</option>
+              <option value="VAR011">(VAR011) Residential House Foundation</option>
+              <option value="VAR006">(VAR006) Little Collins Roadworks</option>
+              <option value="VAR005">(VAR005) Bar Beach Curb Works</option>
+              <option value="VAR003">(VAR003) House Slab Construction</option>
+              <option value="VAR002">(VAR002) Cost Plus Project</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Step 2: Supplier -->
+        <div class="step-card locked" id="step2">
+          <button class="step-edit" onclick="editStep(2)">Edit</button>
+          <div class="step-header">
+            <div class="step-number">2</div>
+            <div>
+              <div class="step-title">Select Supplier</div>
+              <div class="step-subtitle">Who are you ordering from?</div>
+            </div>
+            <div class="step-done-value" id="step2Value"></div>
+          </div>
+          <div class="step-body">
+            <select class="form-select-large" id="supplierSelect" onchange="onSupplierSelect()">
+              <option value="">Choose a supplier...</option>
+              <option value="A1">A1 Asphalting Pty. Ltd.</option>
+              <option value="AAA">AAA Boring</option>
+              <option value="ABC">ABC Supplier</option>
+              <option value="Acme">Acme</option>
+              <option value="Adam">Adam Smith</option>
+              <option value="Boral">Boral</option>
+              <option value="Hanson">Hanson</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: PO Title (full width below) -->
+      <div class="step-card locked" id="step3">
+        <button class="step-edit" onclick="editStep(3)">Edit</button>
+        <div class="step-header">
+          <div class="step-number">3</div>
+          <div>
+            <div class="step-title">Add PO Title</div>
+            <div class="step-subtitle">Give this purchase order a descriptive name</div>
+          </div>
+          <div class="step-done-value" id="step3Value"></div>
+        </div>
+        <div class="step-body">
+          <input type="text" class="form-input-large" id="poTitle" placeholder="e.g. Bedding Sand supplies, Concrete for Stage 2..." onkeydown="onTitleKeydown(event)">
+          <div class="form-hint">Press Enter to continue</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Auto-filled fields (shown after step 3) -->
+    <div class="auto-fields" id="autoFields">
+      <div class="auto-row">
+        <div>
+          <div class="label">Order Date</div>
+          <div class="value">Mon 23/03/2026</div>
+        </div>
+        <div>
+          <div class="label">PO Number</div>
+          <div class="value" id="autoPoNumber">PO–001</div>
+        </div>
+        <div>
+          <div class="label">GST</div>
+          <div class="value">GST – Exclusive</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rest of form (visible after 3 guided steps) -->
+    <div class="rest-form" id="restForm">
+
+      <h3>Delivery Items</h3>
+      <table class="delivery-table">
+        <thead>
+          <tr>
+            <th style="width:30px">#</th>
+            <th>Resource</th>
+            <th>Description</th>
+            <th>Accounting Code</th>
+            <th>Task</th>
+            <th>Cost Centre</th>
+            <th style="width:60px">Unit</th>
+            <th style="width:90px">Unit Cost</th>
+            <th style="width:70px">Order Qty</th>
+            <th style="width:80px">Tax</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td><select><option>Search Resource...</option></select></td>
+            <td><input type="text" placeholder="Description"></td>
+            <td><select><option>Select Acc. Code</option></select></td>
+            <td><select><option>Select Task</option></select></td>
+            <td><select><option>Select Cost Centre</option></select></td>
+            <td><input type="text"></td>
+            <td><input type="text" placeholder="$"></td>
+            <td><input type="text"></td>
+            <td>GST on Exp.</td>
+          </tr>
+        </tbody>
+      </table>
+      <button class="add-line-btn">+ Add Delivery Item</button>
+
+      <div class="totals">
+        <div class="row"><span class="label">Subtotal</span><span class="val">$ 0.00</span></div>
+        <div class="row"><span class="label">Total GST 10%</span><span class="val">$ 0.00</span></div>
+        <div class="row total-row"><span class="label">Total</span><span class="val">$ 0.00</span></div>
+      </div>
+
+      <!-- Attachments -->
+      <div class="form-section">
+        <h4>Attachments</h4>
+        <div class="dropzone">+ Browse or drop file</div>
+      </div>
+
+      <!-- Delivery details -->
+      <div class="form-section">
+        <h4>Delivery Details</h4>
+        <div class="row">
+          <div><label>Attention</label><input type="text"></div>
+          <div><label>Instruction</label><textarea placeholder="Add Delivery Instructions..."></textarea></div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <div><label>Phone</label><input type="text"></div>
+          <div></div>
+        </div>
+      </div>
+
+      <!-- Approval Workflow -->
+      <div class="form-section">
+        <h4>Approval Workflow</h4>
+        <p style="font-size:13px; color:#888; margin-bottom:12px;">Users selected under 'Can Approve' and 'Can Close' will receive an email notification for the purchase order approval request.</p>
+        <div class="row">
+          <div><label>Can Approve</label><select><option>Nominate Approver</option></select></div>
+          <div><label>Can Close</label><select><option>Nominate Approver</option></select></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Annotation -->
+    <div class="annotation">
+      <h3>Product Spec — Guided Purchase Order Creation</h3>
+      <ul>
+        <li><strong>Change:</strong> Replaced the flat form with a guided 3-step flow for the essential fields (Project, Supplier, PO Title), then reveals the full form.</li>
+        <li><strong>Step 1 — Select Project:</strong> Large dropdown with search. Must complete before step 2 unlocks.</li>
+        <li><strong>Step 2 — Select Supplier:</strong> Unlocks after project selected. Large dropdown with search.</li>
+        <li><strong>Step 3 — PO Title:</strong> Unlocks after supplier selected. Free text with helpful hint.</li>
+        <li><strong>After all 3 steps:</strong> Auto-filled fields appear (Order Date, PO Number, GST). Full delivery items table, attachments, delivery details, and approval workflow revealed.</li>
+        <li><strong>Progress bar:</strong> Shows completion progress. Submit button only enables after all 3 steps done.</li>
+        <li><strong>Edit:</strong> Completed steps show the selected value and an "Edit" button to go back and change.</li>
+        <li><strong>Why:</strong> The current form shows everything at once which is overwhelming. Guiding users through the 3 most important decisions first reduces cognitive load and ensures critical fields aren't missed.</li>
+      </ul>
+      <p style="margin-top: 8px; color: #888; font-size: 12px;">Prototype by James Baker — click through the steps to see the interaction.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+let completedSteps = new Set();
+
+function onProjectSelect() {
+  const val = document.getElementById('projectSelect').value;
+  if (val) completeStep(1);
+}
+
+function onSupplierSelect() {
+  const val = document.getElementById('supplierSelect').value;
+  if (val) completeStep(2);
+}
+
+function onTitleKeydown(e) {
+  if (e.key === 'Enter') {
+    const val = document.getElementById('poTitle').value.trim();
+    if (val) completeStep(3);
+  }
+}
+
+function completeStep(step) {
+  completedSteps.add(step);
+  const card = document.getElementById('step' + step);
+
+  // Get display value
+  let displayVal = '';
+  if (step === 1) {
+    const sel = document.getElementById('projectSelect');
+    displayVal = sel.options[sel.selectedIndex].text;
+    document.getElementById('autoPoNumber').textContent = 'PO-' + sel.value + '-0034';
+  } else if (step === 2) {
+    const sel = document.getElementById('supplierSelect');
+    displayVal = sel.options[sel.selectedIndex].text;
+  } else if (step === 3) {
+    displayVal = document.getElementById('poTitle').value.trim();
+  }
+
+  // Mark done
+  card.classList.remove('active');
+  card.classList.add('done');
+  document.getElementById('step' + step + 'Value').textContent = displayVal;
+
+  // Unlock next step and focus it
+  const nextStep = step + 1;
+  if (nextStep <= 3) {
+    const nextCard = document.getElementById('step' + nextStep);
+    nextCard.classList.remove('locked');
+    nextCard.classList.add('active');
+    // Auto-focus the input in the next step
+    setTimeout(() => {
+      const input = nextCard.querySelector('select, input');
+      if (input) input.focus();
+    }, 100);
+  }
+
+  // After all 3 steps, show the rest
+  if (completedSteps.size === 3) {
+    document.getElementById('autoFields').classList.add('visible');
+    document.getElementById('restForm').classList.add('visible');
+    document.getElementById('submitBtn').disabled = false;
+  }
+
+  updateProgress();
+}
+
+function editStep(step) {
+  const card = document.getElementById('step' + step);
+  card.classList.remove('done');
+  card.classList.add('active');
+  completedSteps.delete(step);
+
+  // Lock subsequent steps
+  for (let i = step + 1; i <= 3; i++) {
+    const c = document.getElementById('step' + i);
+    if (!completedSteps.has(i)) {
+      c.classList.remove('active');
+      c.classList.add('locked');
+    }
+  }
+
+  // Hide rest form if step 3 not complete
+  if (!completedSteps.has(3)) {
+    document.getElementById('autoFields').classList.remove('visible');
+    document.getElementById('restForm').classList.remove('visible');
+    document.getElementById('submitBtn').disabled = true;
+  }
+
+  updateProgress();
+}
+
+function updateProgress() {
+  const count = completedSteps.size;
+  const pct = Math.round((count / 3) * 100);
+  document.getElementById('progBar').style.width = pct + '%';
+  if (count < 3) {
+    document.getElementById('progText').textContent = 'Step ' + (count + 1) + ' of 3';
+  } else {
+    document.getElementById('progText').textContent = 'All steps complete — add delivery items below';
+  }
+}
+</script>
+</body>
+</html>

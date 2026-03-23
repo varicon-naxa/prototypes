@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Add Project (Improved)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+  .sidebar-item.active .icon { opacity: 1; }
+
+  .main { flex: 1; padding: 0; overflow-y: auto; }
+
+  .top-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; background: #fff; border-bottom: 1px solid #e0e0e0; position: sticky; top: 0; z-index: 10; }
+  .top-bar-left { display: flex; align-items: center; gap: 12px; }
+  .back-btn { background: none; border: none; cursor: pointer; font-size: 20px; color: #666; padding: 4px; text-decoration: none; }
+  .top-bar h1 { font-size: 18px; font-weight: 600; }
+  .top-bar-actions { display: flex; gap: 10px; }
+  .btn-draft { padding: 10px 20px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; color: #555; }
+  .btn-draft:hover { background: #f5f5f5; }
+  .btn-submit { padding: 10px 24px; border: none; border-radius: 6px; background: #f7941d; font-size: 13px; font-weight: 700; cursor: pointer; color: #fff; }
+  .btn-submit:hover { background: #e8850f; }
+
+  .form-container { max-width: 900px; margin: 0 auto; padding: 24px 32px 60px; }
+
+  .form-section { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px; margin-bottom: 16px; }
+  .form-section h3 { font-size: 15px; font-weight: 600; color: #333; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #f0f0f0; }
+
+  .form-row { display: flex; gap: 16px; margin-bottom: 14px; }
+  .form-row > .field { flex: 1; }
+  .form-row > .field.full { flex: 2; }
+
+  .field label { display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 4px; }
+  .field label .req { color: #e53935; }
+  .field input, .field select, .field textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 6px;
+    font-size: 13px; background: #fff; transition: border-color 0.2s;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: #f7941d; }
+  .field input.prefilled { background: #f0faf0; border-color: #4caf50; color: #2e7d32; font-weight: 600; }
+  .field textarea { resize: vertical; min-height: 70px; }
+  .field .hint { font-size: 11px; color: #999; margin-top: 3px; }
+  .field .duration { font-size: 12px; color: #f7941d; font-weight: 600; margin-top: 4px; }
+
+  .radio-group { display: flex; gap: 16px; padding: 8px 0; }
+  .radio-group label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 400; color: #444; cursor: pointer; }
+  .radio-group input[type="radio"] { accent-color: #f7941d; }
+
+  .assignee-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .assignee-row select { flex: 1; }
+  .remove-btn { background: none; border: none; color: #ccc; cursor: pointer; font-size: 18px; }
+  .remove-btn:hover { color: #e53935; }
+  .add-assignee-btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px; border: 1px dashed #ccc; border-radius: 6px; background: #fff; font-size: 12px; color: #888; cursor: pointer; }
+  .add-assignee-btn:hover { border-color: #aaa; color: #555; }
+
+  .upload-area { border: 2px dashed #d0d0d0; border-radius: 8px; padding: 32px; text-align: center; color: #999; font-size: 13px; cursor: pointer; }
+  .upload-area:hover { border-color: #f7941d; }
+  .upload-area .upload-icon { font-size: 32px; margin-bottom: 8px; }
+  .upload-area a { color: #f7941d; text-decoration: underline; }
+
+  .ai-banner { display: flex; align-items: center; gap: 16px; padding: 16px 20px; background: linear-gradient(135deg, #ede7f6, #e8eaf6); border: 1px solid #b39ddb; border-radius: 8px; margin-bottom: 16px; }
+  .ai-banner .ai-icon { font-size: 28px; }
+  .ai-banner-text { flex: 1; }
+  .ai-banner-text h4 { font-size: 14px; font-weight: 600; color: #4527a0; margin-bottom: 2px; }
+  .ai-banner-text p { font-size: 13px; color: #666; }
+
+  .toggle-bar { display: flex; border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden; margin-bottom: 12px; }
+  .toggle-bar button { flex: 1; padding: 8px 16px; border: none; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; color: #888; }
+  .toggle-bar button.active { background: #1a1a2e; color: #fff; }
+
+  /* Xero sync banner */
+  .xero-sync-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #f0f7ff; border: 1px solid #2196f3; border-radius: 6px; margin-top: 8px; }
+  .xero-sync-bar p { flex: 1; font-size: 13px; color: #555; }
+  .xero-sync-btn { padding: 6px 16px; border: none; border-radius: 6px; background: #13B5EA; color: #fff; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .xero-sync-btn:hover { background: #0e9fd0; }
+
+  /* Greyed out section */
+  .greyed-out { opacity: 0.4; pointer-events: none; }
+
+  /* Payment act auto-set */
+  .auto-set { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #4caf50; font-weight: 600; margin-top: 4px; }
+  .auto-set svg { width: 14px; height: 14px; }
+
+  /* Cost centre conditional */
+  .conditional-note { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; background: #fff8f0; border: 1px solid #f7941d; border-radius: 6px; margin-bottom: 12px; font-size: 13px; color: #555; line-height: 1.5; }
+  .conditional-note .note-icon { flex-shrink: 0; width: 20px; height: 20px; background: #f7941d; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+
+  .annotation { margin-top: 32px; padding: 16px 20px; background: #fff8f0; border: 1px solid #f7941d; border-radius: 8px; font-size: 13px; color: #333; line-height: 1.6; }
+  .annotation h3 { color: #f7941d; font-size: 14px; margin-bottom: 8px; }
+  .annotation ul { margin-left: 20px; }
+  .annotation li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Cookie's Civil</div>
+    <div class="sidebar-item active"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">🖼</span> Gallery</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Docket</div>
+    <div class="sidebar-item"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">🚚</span> Delivery Docket</div>
+    <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+  </div>
+
+  <div class="main">
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <a class="back-btn" href="#">←</a>
+        <h1>Add Project</h1>
+      </div>
+      <div class="top-bar-actions">
+        <button class="btn-draft">SAVE AS DRAFT</button>
+        <button class="btn-submit">ADD PROJECT</button>
+      </div>
+    </div>
+
+    <div class="form-container">
+
+      <!-- AI Banner -->
+      <div class="ai-banner">
+        <div class="ai-icon">✦</div>
+        <div class="ai-banner-text">
+          <h4>AI Project Setup</h4>
+          <p>Upload an estimation sheet and let AI help you set up your project faster.</p>
+        </div>
+      </div>
+
+      <!-- Section 1: Project Details -->
+      <div class="form-section">
+        <h3>Project Details</h3>
+
+        <div class="form-row">
+          <div class="field">
+            <label>Job Number <span class="req">*</span></label>
+            <input type="text" value="VAR-001" class="prefilled" readonly>
+            <div class="hint">Auto-generated — next in sequence</div>
+          </div>
+          <div class="field">
+            <label>Project Name <span class="req">*</span></label>
+            <input type="text" placeholder="Enter project name" autofocus>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field full">
+            <label>Description</label>
+            <textarea placeholder="Enter project description"></textarea>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field full">
+            <label>Tracking Category (Xero) <span class="req">*</span></label>
+            <select id="trackingCategory" onchange="onTrackingCategoryChange()">
+              <option value="">Select Tracking Category...</option>
+              <option value="var001">VAR-001 — Bourke Street Roadworks</option>
+              <option value="var002">VAR-002 — Swanston St Road Replacement</option>
+              <option value="var003">VAR-003 — Eastern Freeway Bridge Widening</option>
+              <option value="var004">VAR-004 — Geelong Ring Road Drainage</option>
+              <option value="var005">VAR-005 — Docklands Retaining Wall</option>
+              <option value="var006">VAR-006 — Little Collins Roadworks</option>
+              <option value="var007">VAR-007 — Ballarat Rail Crossing Removal</option>
+              <option value="var008">VAR-008 — Werribee Stormwater Upgrade</option>
+              <option value="create" style="color:#f7941d; font-weight:600;">+ Create new tracking category in Xero</option>
+            </select>
+            <div class="xero-sync-bar">
+              <p>Tracking categories are synced from Xero. If you don't see the right option, sync now.</p>
+              <button class="xero-sync-btn">Sync with Xero</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fields below tracking category — greyed out until selected -->
+        <div id="belowTracking">
+          <div class="form-row">
+            <div class="field">
+              <label>Start Date <span class="req">*</span></label>
+              <input type="date" id="startDate">
+            </div>
+            <div class="field">
+              <label>End Date <span class="req">*</span></label>
+              <input type="date" id="endDate" onchange="calcDuration()" style="border:2px solid #f7941d; background:#fff8f0;">
+              <div class="hint" style="color:#f7941d; font-weight:600;">← Please select an end date</div>
+              <div class="duration" id="durationDisplay"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Job Address -->
+      <div id="restOfForm">
+        <div class="form-section">
+          <h3>Job Address</h3>
+
+          <div class="form-row">
+            <div class="field full">
+              <label>Search Address</label>
+              <input type="text" placeholder="Start typing to search address..." id="addressSearch">
+              <div class="hint">Start typing — addresses will appear from Google Maps</div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field full">
+              <label>Street Address <span class="req">*</span></label>
+              <input type="text" placeholder="Street address" id="streetAddress">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label>Suburb / City <span class="req">*</span></label>
+              <input type="text" placeholder="Suburb or city" id="suburb">
+            </div>
+            <div class="field">
+              <label>State <span class="req">*</span></label>
+              <select id="stateSelect" onchange="autoSetPaymentAct()">
+                <option value="">Select State</option>
+                <option value="VIC">VIC</option>
+                <option value="NSW">NSW</option>
+                <option value="QLD">QLD</option>
+                <option value="SA">SA</option>
+                <option value="WA">WA</option>
+                <option value="TAS">TAS</option>
+                <option value="NT">NT</option>
+                <option value="ACT">ACT</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label>Postal Code <span class="req">*</span></label>
+              <input type="text" placeholder="Postcode" id="postcode">
+            </div>
+            <div class="field">
+              <label>Country <span class="req">*</span></label>
+              <select id="country">
+                <option selected>Australia</option>
+                <option>New Zealand</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Client Details -->
+        <div class="form-section">
+          <h3>Client Details</h3>
+
+          <div class="form-row">
+            <div class="field">
+              <label>Client</label>
+              <select id="clientSelect" onchange="onClientChange()">
+                <option value="">Select Client</option>
+                <option value="mel">City of Melbourne</option>
+                <option value="vic">VicRoads</option>
+                <option value="priv">Private Client A</option>
+                <option value="add" style="color:#f7941d; font-weight:600;">+ Add New Client</option>
+              </select>
+            </div>
+            <div class="field" id="clientContactField" style="display:none;">
+              <label>Client Contact</label>
+              <select>
+                <option value="">Select Contact</option>
+                <option>John Smith — Project Manager</option>
+                <option>Sarah Jones — Contract Admin</option>
+                <option>Mike Brown — Site Rep</option>
+                <option value="addcontact" style="color:#f7941d; font-weight:600;">+ Add New Contact</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 4: Project Lead Contact -->
+        <div class="form-section">
+          <h3>Project Lead Contact <span style="color:#e53935; font-size:12px;">*</span></h3>
+
+          <div class="form-row">
+            <div class="field full">
+              <label>Assigned User <span class="req">*</span></label>
+              <select>
+                <option value="">Select User</option>
+                <option>James Baker</option>
+                <option>Amir</option>
+                <option>Ford</option>
+                <option>Amulya</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 5: Assigned To -->
+        <div class="form-section">
+          <h3>Assigned To</h3>
+          <div class="hint" style="margin-bottom:12px;">Optional. Add users to project to have project show for them in Varicon admin mobile app.</div>
+
+          <div class="assignee-row">
+            <select style="flex:1;">
+              <option value="">Select Role</option>
+              <option>Project Manager</option>
+              <option>Site Supervisor</option>
+              <option>Senior Manager</option>
+            </select>
+            <select style="flex:1;">
+              <option value="">Select User</option>
+              <option>James Baker</option>
+              <option>Amir</option>
+              <option>Ford</option>
+            </select>
+            <button class="remove-btn">&times;</button>
+          </div>
+
+          <button class="add-assignee-btn">+ Add Assignee</button>
+        </div>
+
+        <!-- Section 6: Payment Act (auto-set from state) -->
+        <div class="form-section">
+          <h3>Payment Act</h3>
+          <div class="form-row">
+            <div class="field full">
+              <label>Payment Act</label>
+              <select id="paymentActSelect">
+                <option value="">Select Payment Act</option>
+                <option value="VIC">Building and Construction Industry Security of Payment Act 2002 (VIC)</option>
+                <option value="NSW">Building and Construction Industry Security of Payment Act 1999 (NSW)</option>
+                <option value="QLD">Building Industry Fairness (Security of Payment) Act 2017 (QLD)</option>
+                <option value="SA">Building and Construction Industry Security of Payment Act 2009 (SA)</option>
+                <option value="WA">Building and Construction Industry (Security of Payment) Act 2021 (WA)</option>
+                <option value="TAS">Building and Construction Industry Security of Payment Act 2009 (TAS)</option>
+                <option value="NT">Construction Contracts (Security of Payments) Act 2004 (NT)</option>
+                <option value="ACT">Building and Construction Industry (Security of Payment) Act 2009 (ACT)</option>
+              </select>
+              <div class="auto-set" id="paymentActAuto" style="display:none;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                Auto-set based on project state
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 7: Allowance -->
+        <div class="form-section">
+          <h3>Allowance</h3>
+          <div class="form-row">
+            <div class="field full">
+              <label>Allowance</label>
+              <select>
+                <option value="">Select Allowance</option>
+                <option>Standard Allowance</option>
+                <option>Remote Allowance</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 7b: Dayworks -->
+        <div class="form-section">
+          <h3>Dayworks</h3>
+          <div style="margin-bottom:14px;">
+            <div style="font-size:12px; font-weight:600; color:#666; margin-bottom:8px;">Will this project include dayworks?</div>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;"><input type="radio" name="dayworks" value="no" checked onchange="onDayworksChange()" style="accent-color:#f7941d;"> No</label>
+              <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;"><input type="radio" name="dayworks" value="all" onchange="onDayworksChange()" style="accent-color:#f7941d;"> Yes — all works are on dayworks rates</label>
+              <label style="display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer;"><input type="radio" name="dayworks" value="some" onchange="onDayworksChange()" style="accent-color:#f7941d;"> Yes — some/all Variation works on dayworks rates</label>
+            </div>
+          </div>
+
+          <!-- Dayworks setup (hidden by default) -->
+          <div id="dayworksSetup" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid #f0f0f0;">
+
+            <div style="display:flex; gap:12px; padding:14px 18px; background:#f0f7ff; border:1px solid #2196f3; border-radius:8px; margin-bottom:16px; font-size:13px; line-height:1.5; color:#555;">
+              <div style="flex-shrink:0; width:20px; height:20px; background:#2196f3; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;">i</div>
+              <div>Configure the basic daywork settings below. After the project is created, go to <strong>Project Settings → Daywork Docket Settings</strong> to set up Charge Resources and the Daywork Claim Calculator.</div>
+            </div>
+
+            <!-- General settings -->
+            <div style="font-size:14px; font-weight:600; margin-bottom:12px;">General Settings</div>
+
+            <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+              <tr style="border-bottom:1px solid #f0f0f0;">
+                <td style="padding:14px 0; font-size:13px; font-weight:600; color:#333;">Employee Daywork Dockets<br><span style="font-weight:400; font-size:11px; color:#999;">Enable to allow employees to submit daywork dockets for this project</span></td>
+                <td style="padding:14px 0; text-align:right; width:60px;"><div class="toggle on" onclick="this.classList.toggle('on')" style="min-width:44px;"></div></td>
+              </tr>
+              <tr>
+                <td style="padding:14px 0; font-size:13px; font-weight:600; color:#333;">Multi-day Docket<br><span style="font-weight:400; font-size:11px; color:#999;">Allow users and employees to create a single daywork docket of multiple days</span></td>
+                <td style="padding:14px 0; text-align:right; width:60px;"><div class="toggle" onclick="this.classList.toggle('on')" style="min-width:44px;"></div></td>
+              </tr>
+            </table>
+
+            <!-- Approval Settings -->
+            <div style="font-size:14px; font-weight:600; margin-bottom:4px;">Approval Settings</div>
+            <div style="font-size:12px; color:#888; margin-bottom:12px;">Default client representative who will receive daywork docket requests for approval</div>
+
+            <div style="display:flex; gap:12px; margin-bottom:14px;">
+              <div style="flex:1;">
+                <div style="font-size:12px; font-weight:600; color:#666; margin-bottom:4px;">Name</div>
+                <input type="text" placeholder="Enter approver's name" style="width:100%; padding:10px 12px; border:1px solid #d0d0d0; border-radius:6px; font-size:13px;">
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:12px; font-weight:600; color:#666; margin-bottom:4px;">Email</div>
+                <input type="email" placeholder="Client email" style="width:100%; padding:10px 12px; border:1px solid #d0d0d0; border-radius:6px; font-size:13px;">
+              </div>
+            </div>
+
+            <div style="margin-bottom:14px;">
+              <div style="font-size:12px; font-weight:600; color:#666; margin-bottom:4px;">Client Recipients (CC)</div>
+              <input type="text" placeholder="Add CC email addresses separated by commas or semicolons" style="width:100%; padding:10px 12px; border:1px solid #d0d0d0; border-radius:6px; font-size:13px;">
+            </div>
+
+            <div style="margin-bottom:20px;">
+              <div style="font-size:12px; font-weight:600; color:#666; margin-bottom:4px;">Notify To</div>
+              <div style="font-size:11px; color:#999; margin-bottom:4px;">Select Varicon users to be notified when a daywork docket is submitted or approved</div>
+              <select style="width:100%; padding:10px 12px; border:1px solid #d0d0d0; border-radius:6px; font-size:13px;" multiple size="4">
+                <option>james@varicon.com.au — James Baker</option>
+                <option>amir@varicon.com.au — Amir</option>
+                <option>ford@varicon.com.au — Ford</option>
+                <option>amulya@varicon.com.au — Amulya</option>
+                <option>prashant@varicon.com.au — Prashant</option>
+              </select>
+              <div style="font-size:11px; color:#999; margin-top:3px;">Hold Ctrl/Cmd to select multiple users</div>
+            </div>
+
+            <!-- Daywork Template -->
+            <div style="font-size:14px; font-weight:600; margin-bottom:4px;">Daywork Template</div>
+            <div style="font-size:12px; color:#888; margin-bottom:12px;">Toggle on the categories you need for daywork dockets on this project.</div>
+
+            <table style="width:100%; border-collapse:collapse; margin-bottom:16px;">
+              <tr style="border-bottom:1px solid #f0f0f0;">
+                <td style="padding:14px 16px; background:#fafafa; border:1px solid #e0e0e0; border-bottom:none; border-radius:8px 8px 0 0;">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:18px;">👷</span>
+                    <div>
+                      <div style="font-size:14px; font-weight:600;">Labour</div>
+                      <label style="font-size:12px; color:#888; cursor:pointer;"><input type="checkbox" style="accent-color:#f7941d; margin-right:4px;"> Include Travel Hour</label>
+                    </div>
+                  </div>
+                </td>
+                <td style="padding:14px 16px; background:#fafafa; border:1px solid #e0e0e0; border-left:none; border-bottom:none; border-radius:0 8px 0 0; text-align:right; width:60px;"><div class="toggle on" onclick="this.classList.toggle('on')" style="min-width:44px;"></div></td>
+              </tr>
+              <tr style="border-bottom:1px solid #f0f0f0;">
+                <td style="padding:14px 16px; background:#fafafa; border:1px solid #e0e0e0; border-top:none; border-bottom:none;">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:18px;">🚜</span>
+                    <div>
+                      <div style="font-size:14px; font-weight:600;">Plant and Equipment</div>
+                      <label style="font-size:12px; color:#888; cursor:pointer;"><input type="checkbox" style="accent-color:#f7941d; margin-right:4px;"> Allow user to enter duration for equipment attachment</label>
+                    </div>
+                  </div>
+                </td>
+                <td style="padding:14px 16px; background:#fafafa; border:1px solid #e0e0e0; border-left:none; border-top:none; border-bottom:none; text-align:right; width:60px;"><div class="toggle on" onclick="this.classList.toggle('on')" style="min-width:44px;"></div></td>
+              </tr>
+              <tr style="border-bottom:1px solid #f0f0f0;">
+                <td style="padding:14px 16px; background:#fafafa; border:1px solid #e0e0e0; border-top:none; border-bottom:none;">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:18px;">📦</span>
+                    <span style="font-size:14px; font-weight:600;">Materials</span>
+                  </div>
+                </td>
+                <td style="padding:14px 16px; background:#fafafa; border:1px solid #e0e0e0; border-left:none; border-top:none; border-bottom:none; text-align:right; width:60px;"><div class="toggle on" onclick="this.classList.toggle('on')" style="min-width:44px;"></div></td>
+              </tr>
+              <tr>
+                <td style="padding:14px 16px; background:#fafafa; border:1px solid #e0e0e0; border-top:none; border-radius:0 0 0 8px;">
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:18px;">📋</span>
+                    <span style="font-size:14px; font-weight:600;">Miscellaneous</span>
+                  </div>
+                </td>
+                <td style="padding:14px 16px; background:#fafafa; border:1px solid #e0e0e0; border-left:none; border-top:none; border-radius:0 0 8px 0; text-align:right; width:60px;"><div class="toggle on" onclick="this.classList.toggle('on')" style="min-width:44px;"></div></td>
+              </tr>
+            </table>
+
+            <!-- Reminder -->
+            <div style="display:flex; gap:12px; padding:14px 18px; background:#fff8f0; border:1px solid #f7941d; border-radius:8px; font-size:13px; line-height:1.5; color:#555;">
+              <div style="flex-shrink:0; width:20px; height:20px; background:#f7941d; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;">!</div>
+              <div><strong>After creating this project</strong>, go to Project Settings → Daywork Docket Settings to complete setup:
+                <ul style="margin-top:6px; margin-left:16px;">
+                  <li>Set up <strong>Charge Resources</strong> (labour rates, plant rates)</li>
+                  <li>Configure the <strong>Daywork Claim Calculator</strong></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 8: Estimation Sheet -->
+        <div class="form-section">
+          <h3>Estimation Sheet</h3>
+
+          <div class="toggle-bar" id="estToggle">
+            <button class="active" onclick="setEstMode('upload')">Upload Estimation Sheet</button>
+            <button onclick="setEstMode('skip')">Continue Without Estimation Sheet</button>
+          </div>
+
+          <div id="estUpload">
+            <div style="display:flex; gap:16px;">
+              <!-- Option 1: Upload existing file -->
+              <div style="flex:1;">
+                <div class="upload-area">
+                  <div class="upload-icon">📄</div>
+                  <p><strong>I have a file ready</strong></p>
+                  <p>Drag and drop or <a href="#">Choose a file</a> to upload</p>
+                  <div class="hint" style="margin-top:8px;">File must be in Varicon upload format (.xlsx, .xls, .csv)</div>
+                  <div class="hint">If your file is in another format, use <strong>"I need a template"</strong> instead</div>
+                </div>
+              </div>
+              <!-- Option 2: Save draft + download template -->
+              <div style="flex:1;">
+                <div class="upload-area" style="border-color:#f7941d; background:#fff8f0;" onclick="alert('In the real app: saves project as draft and opens the estimation template download page.')">
+                  <div class="upload-icon">⬇️</div>
+                  <p><strong>I need a template</strong></p>
+                  <p>Save project as draft and <a href="#" style="color:#f7941d;">download estimation template</a></p>
+                  <div class="hint" style="margin-top:8px;">Complete the template offline, then upload it later</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="estSkip" style="display:none;">
+            <div class="conditional-note">
+              <div class="note-icon">i</div>
+              <div>You can add an estimation sheet later from the project settings.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 9: Assign Cost Centre -->
+        <div class="form-section" id="costCentreSection">
+          <h3>Assign Cost Centre <span style="color:#e53935; font-size:12px;">*</span></h3>
+          <div id="costCentreGreyNote" style="font-size:13px; color:#4caf50; font-weight:600; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Not required — Cost Centres will be set from your Estimation Sheet
+          </div>
+
+          <div class="form-row">
+            <div class="field full">
+              <label>Cost Centres <span class="req">*</span></label>
+              <div id="ccChips" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;"></div>
+              <div style="position:relative;" id="ccDropdownWrap">
+                <div style="padding:10px 12px; border:1px solid #d0d0d0; border-radius:6px; font-size:13px; color:#888; cursor:pointer; background:#fff; display:flex; justify-content:space-between; align-items:center;" onclick="toggleCCDropdown()">
+                  Select Cost Centres...
+                  <span style="font-size:10px;">▼</span>
+                </div>
+                <div id="ccDropdown" style="display:none; position:absolute; left:0; right:0; top:100%; background:#fff; border:1px solid #d0d0d0; border-top:none; border-radius:0 0 6px 6px; z-index:20; box-shadow:0 4px 12px rgba(0,0,0,0.1); max-height:280px; overflow-y:auto;">
+                  <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-size:13px; font-weight:400; color:#333;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'"><input type="checkbox" style="accent-color:#4caf50; width:16px; height:16px;" onchange="toggleCC(this, 'Building Works')"> Building Works</label>
+                  <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-size:13px; font-weight:400; color:#333;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'"><input type="checkbox" style="accent-color:#4caf50; width:16px; height:16px;" onchange="toggleCC(this, 'Concrete Works')"> Concrete Works</label>
+                  <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-size:13px; font-weight:400; color:#333;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'"><input type="checkbox" style="accent-color:#4caf50; width:16px; height:16px;" onchange="toggleCC(this, 'Demolition')"> Demolition</label>
+                  <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-size:13px; font-weight:400; color:#333;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'"><input type="checkbox" style="accent-color:#4caf50; width:16px; height:16px;" onchange="toggleCC(this, 'Drainage')"> Drainage</label>
+                  <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-size:13px; font-weight:400; color:#333;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'"><input type="checkbox" style="accent-color:#4caf50; width:16px; height:16px;" onchange="toggleCC(this, 'Earthworks')"> Earthworks</label>
+                  <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-size:13px; font-weight:400; color:#333;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'"><input type="checkbox" style="accent-color:#4caf50; width:16px; height:16px;" onchange="toggleCC(this, 'Landscaping')"> Landscaping</label>
+                  <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-size:13px; font-weight:400; color:#333;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'"><input type="checkbox" style="accent-color:#4caf50; width:16px; height:16px;" onchange="toggleCC(this, 'Preliminaries')"> Preliminaries</label>
+                  <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-size:13px; font-weight:400; color:#333;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'"><input type="checkbox" style="accent-color:#4caf50; width:16px; height:16px;" onchange="toggleCC(this, 'Roadworks')"> Roadworks</label>
+                  <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-size:13px; font-weight:400; color:#333;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'"><input type="checkbox" style="accent-color:#4caf50; width:16px; height:16px;" onchange="toggleCC(this, 'Site Mobilisation / Demobilisation')"> Site Mobilisation / Demobilisation</label>
+                  <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-size:13px; font-weight:400; color:#333;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'"><input type="checkbox" style="accent-color:#4caf50; width:16px; height:16px;" onchange="toggleCC(this, 'Site Recurring Costs')"> Site Recurring Costs</label>
+                  <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; cursor:pointer; font-size:13px; font-weight:400; color:#333;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'"><input type="checkbox" style="accent-color:#4caf50; width:16px; height:16px;" onchange="toggleCC(this, 'Utility Works')"> Utility Works</label>
+                </div>
+              </div>
+              <div class="hint">Select one or more cost centres for this project</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action buttons at bottom of form -->
+        <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:8px; margin-bottom:32px;">
+          <button class="btn-draft">SAVE AS DRAFT</button>
+          <button class="btn-submit">ADD PROJECT</button>
+        </div>
+
+      </div><!-- end restOfForm -->
+
+      <!-- Annotation -->
+      <div class="annotation">
+        <h3>Changes from Current Add Project Form</h3>
+        <ul>
+          <li><strong>Job Number:</strong> Pre-filled with next in sequence (VAR-001). Editable in a future project settings step.</li>
+          <li><strong>Removed:</strong> Contract Number, Purchase Order Number, Segment, Status (always Active for new projects).</li>
+          <li><strong>Tracking Category (Xero):</strong> Mandatory. Greyed-out fields below until selected. Sync with Xero button. Option to create new tracking category at bottom of list.</li>
+          <li><strong>Start Date:</strong> Defaults to today. End Date shows calculated project duration underneath.</li>
+          <li><strong>Client Details:</strong> Now includes Client Contact dropdown (appears after selecting client). "+ Add New Contact" option at bottom of list.</li>
+          <li><strong>Payment Act:</strong> Auto-set based on the State selected in Job Address. Shows green confirmation.</li>
+          <li><strong>Resource Cost Sheet:</strong> Hidden (handled during onboarding setup).</li>
+          <li><strong>Assign Cost Centre:</strong> Moved below Estimation Sheet. Includes explanation that it's only required if not uploading an estimation sheet (which contains cost centres).</li>
+        </ul>
+        <p style="margin-top: 8px; color: #888; font-size: 12px;">Prototype by James Baker</p>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// Simulated address autocomplete with real Australian addresses
+const sampleAddresses = [
+  { full: '123 Bourke Street, Melbourne VIC 3000', street: '123 Bourke Street', suburb: 'Melbourne', state: 'VIC', postcode: '3000' },
+  { full: '45 Collins Street, Melbourne VIC 3000', street: '45 Collins Street', suburb: 'Melbourne', state: 'VIC', postcode: '3000' },
+  { full: '200 George Street, Sydney NSW 2000', street: '200 George Street', suburb: 'Sydney', state: 'NSW', postcode: '2000' },
+  { full: '15 Adelaide Street, Brisbane QLD 4000', street: '15 Adelaide Street', suburb: 'Brisbane', state: 'QLD', postcode: '4000' },
+  { full: '88 Moorabool Street, Geelong VIC 3220', street: '88 Moorabool Street', suburb: 'Geelong', state: 'VIC', postcode: '3220' },
+  { full: '7 Pakington Street, Geelong West VIC 3218', street: '7 Pakington Street', suburb: 'Geelong West', state: 'VIC', postcode: '3218' },
+  { full: '320 St Kilda Road, Southbank VIC 3006', street: '320 St Kilda Road', suburb: 'Southbank', state: 'VIC', postcode: '3006' },
+  { full: '1 Flinders Street, Melbourne VIC 3000', street: '1 Flinders Street', suburb: 'Melbourne', state: 'VIC', postcode: '3000' },
+  { full: '55 Swanston Street, Melbourne VIC 3000', street: '55 Swanston Street', suburb: 'Melbourne', state: 'VIC', postcode: '3000' },
+  { full: '42 Bridge Road, Richmond VIC 3121', street: '42 Bridge Road', suburb: 'Richmond', state: 'VIC', postcode: '3121' },
+  { full: '10 Market Street, Sydney NSW 2000', street: '10 Market Street', suburb: 'Sydney', state: 'NSW', postcode: '2000' },
+  { full: '250 Pitt Street, Sydney NSW 2000', street: '250 Pitt Street', suburb: 'Sydney', state: 'NSW', postcode: '2000' },
+  { full: '100 Creek Street, Brisbane QLD 4000', street: '100 Creek Street', suburb: 'Brisbane', state: 'QLD', postcode: '4000' },
+  { full: '5 Hindley Street, Adelaide SA 5000', street: '5 Hindley Street', suburb: 'Adelaide', state: 'SA', postcode: '5000' },
+  { full: '30 St Georges Terrace, Perth WA 6000', street: '30 St Georges Terrace', suburb: 'Perth', state: 'WA', postcode: '6000' },
+];
+
+function initAddressAutocomplete() {
+  const input = document.getElementById('addressSearch');
+  let dropdown = null;
+
+  input.addEventListener('input', function() {
+    const val = this.value.toLowerCase().trim();
+    if (dropdown) dropdown.remove();
+    if (val.length < 2) return;
+
+    const matches = sampleAddresses.filter(a => a.full.toLowerCase().includes(val)).slice(0, 5);
+    if (matches.length === 0) return;
+
+    dropdown = document.createElement('div');
+    dropdown.style.cssText = 'position:absolute; left:0; right:0; top:100%; background:#fff; border:1px solid #d0d0d0; border-top:none; border-radius:0 0 6px 6px; z-index:20; box-shadow:0 4px 12px rgba(0,0,0,0.1);';
+    matches.forEach(addr => {
+      const item = document.createElement('div');
+      item.style.cssText = 'padding:10px 12px; font-size:13px; cursor:pointer; border-bottom:1px solid #f0f0f0;';
+      item.textContent = addr.full;
+      item.onmouseenter = () => item.style.background = '#f5f5f5';
+      item.onmouseleave = () => item.style.background = '#fff';
+      item.onclick = () => {
+        input.value = addr.full;
+        document.getElementById('streetAddress').value = addr.street;
+        document.getElementById('suburb').value = addr.suburb;
+        document.getElementById('postcode').value = addr.postcode;
+        const stateSel = document.getElementById('stateSelect');
+        for (let i = 0; i < stateSel.options.length; i++) {
+          if (stateSel.options[i].value === addr.state) { stateSel.selectedIndex = i; break; }
+        }
+        autoSetPaymentAct();
+        dropdown.remove();
+        dropdown = null;
+      };
+      dropdown.appendChild(item);
+    });
+
+    input.parentElement.style.position = 'relative';
+    input.parentElement.appendChild(dropdown);
+  });
+
+  document.addEventListener('click', function(e) {
+    if (dropdown && !input.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.remove();
+      dropdown = null;
+    }
+  });
+}
+
+// Set start date to today
+document.addEventListener('DOMContentLoaded', function() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('startDate').value = today;
+  // Init address autocomplete
+  initAddressAutocomplete();
+  // Initially grey out below tracking category
+  updateTrackingGrey();
+  updateCostCentreVisibility();
+});
+
+function onTrackingCategoryChange() {
+  const val = document.getElementById('trackingCategory').value;
+  if (val === 'create') {
+    alert('In the real app, this opens Xero to create a new tracking category.');
+    document.getElementById('trackingCategory').value = '';
+    return;
+  }
+  updateTrackingGrey();
+}
+
+function updateTrackingGrey() {
+  const val = document.getElementById('trackingCategory').value;
+  const below = document.getElementById('belowTracking');
+  const rest = document.getElementById('restOfForm');
+  if (!val) {
+    below.classList.add('greyed-out');
+    rest.classList.add('greyed-out');
+  } else {
+    below.classList.remove('greyed-out');
+    rest.classList.remove('greyed-out');
+  }
+}
+
+function calcDuration() {
+  const start = document.getElementById('startDate').value;
+  const end = document.getElementById('endDate').value;
+  const endInput = document.getElementById('endDate');
+  const display = document.getElementById('durationDisplay');
+  // Remove the prompt styling once date is selected
+  if (end) {
+    endInput.style.border = '1px solid #d0d0d0';
+    endInput.style.background = '#fff';
+    const hintEl = endInput.nextElementSibling;
+    if (hintEl && hintEl.textContent.includes('Please select')) hintEl.style.display = 'none';
+  }
+  if (start && end) {
+    const s = new Date(start);
+    const e = new Date(end);
+    const diffMs = e - s;
+    if (diffMs < 0) { display.textContent = 'End date must be after start date'; return; }
+    const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    const weeks = Math.floor(days / 7);
+    const months = Math.floor(days / 30);
+    let text = days + ' days';
+    if (months > 0) text = months + ' month' + (months > 1 ? 's' : '') + ' (' + days + ' days)';
+    else if (weeks > 0) text = weeks + ' week' + (weeks > 1 ? 's' : '') + ' (' + days + ' days)';
+    display.textContent = 'Duration: ' + text;
+  } else {
+    display.textContent = '';
+  }
+}
+
+function onClientChange() {
+  const val = document.getElementById('clientSelect').value;
+  const contactField = document.getElementById('clientContactField');
+  if (val === 'add') {
+    alert('In the real app, this opens the Add Client modal.');
+    document.getElementById('clientSelect').value = '';
+    contactField.style.display = 'none';
+    return;
+  }
+  contactField.style.display = val ? 'block' : 'none';
+}
+
+function autoSetPaymentAct() {
+  const state = document.getElementById('stateSelect').value;
+  const select = document.getElementById('paymentActSelect');
+  const autoMsg = document.getElementById('paymentActAuto');
+  if (state) {
+    select.value = state;
+    autoMsg.style.display = 'flex';
+  } else {
+    select.value = '';
+    autoMsg.style.display = 'none';
+  }
+}
+
+function setEstMode(mode) {
+  const btns = document.querySelectorAll('#estToggle button');
+  btns[0].classList.toggle('active', mode === 'upload');
+  btns[1].classList.toggle('active', mode === 'skip');
+  document.getElementById('estUpload').style.display = mode === 'upload' ? 'block' : 'none';
+  document.getElementById('estSkip').style.display = mode === 'skip' ? 'block' : 'none';
+  updateCostCentreVisibility();
+}
+
+function toggleCCDropdown() {
+  const dd = document.getElementById('ccDropdown');
+  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('ccDropdownWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('ccDropdown').style.display = 'none';
+  }
+});
+
+function toggleCC(checkbox, name) {
+  const container = document.getElementById('ccChips');
+  if (checkbox.checked) {
+    const chip = document.createElement('span');
+    chip.setAttribute('data-cc', name);
+    chip.style.cssText = 'display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:#e8f5e9; border:1px solid #4caf50; border-radius:6px; font-size:13px; color:#2e7d32; font-weight:500;';
+    chip.innerHTML = name + '<span style="cursor:pointer; color:#999; font-size:16px; margin-left:2px;" onclick="removeCCChip(this,\'' + name.replace(/'/g, "\\'") + '\')">&times;</span>';
+    container.appendChild(chip);
+  } else {
+    const chip = container.querySelector('[data-cc="' + name + '"]');
+    if (chip) chip.remove();
+  }
+}
+
+function removeCCChip(closeBtn, name) {
+  closeBtn.parentElement.remove();
+  // Uncheck the corresponding checkbox
+  const labels = document.querySelectorAll('#ccDropdown label');
+  labels.forEach(lbl => {
+    if (lbl.textContent.trim() === name) {
+      lbl.querySelector('input').checked = false;
+    }
+  });
+}
+
+function onDayworksChange() {
+  const val = document.querySelector('input[name="dayworks"]:checked').value;
+  document.getElementById('dayworksSetup').style.display = val === 'no' ? 'none' : 'block';
+}
+
+function updateCostCentreVisibility() {
+  const isUpload = document.querySelector('#estToggle button:first-child').classList.contains('active');
+  const section = document.getElementById('costCentreSection');
+  const note = document.getElementById('costCentreGreyNote');
+  if (isUpload) {
+    section.style.opacity = '0.6';
+    section.style.pointerEvents = 'none';
+    note.style.display = 'flex';
+  } else {
+    section.style.opacity = '1';
+    section.style.pointerEvents = 'auto';
+    note.style.display = 'none';
+  }
+}
+</script>
+</body>
+</html>
