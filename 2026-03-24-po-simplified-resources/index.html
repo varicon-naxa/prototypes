@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Add Purchase Order (Simplified Resources)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+  .sidebar-item.active .icon { opacity: 1; }
+
+  /* Main */
+  .main { flex: 1; padding: 0; overflow-y: auto; }
+
+  /* Top bar + stepper wrapper — fixed at top of .main */
+  .fixed-header { position: sticky; top: 0; z-index: 100; background: #fff; }
+  .top-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; background: #fff; border-bottom: 1px solid #e0e0e0; }
+  .top-bar-left { display: flex; align-items: center; gap: 12px; }
+  .back-btn { background: none; border: none; cursor: pointer; font-size: 20px; color: #666; padding: 4px; }
+  .back-btn:hover { color: #333; }
+  .top-bar h1 { font-size: 20px; font-weight: 600; }
+  .top-bar-actions { display: flex; gap: 10px; }
+  .btn-draft { padding: 10px 20px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; color: #555; }
+  .btn-draft:hover { background: #f5f5f5; }
+  .btn-submit { padding: 10px 20px; border: none; border-radius: 6px; background: #f7941d; font-size: 13px; font-weight: 700; cursor: pointer; color: #fff; }
+  .btn-submit:hover { background: #e8850f; }
+  .btn-submit:disabled { background: #ccc; cursor: not-allowed; }
+
+  /* Stepper */
+  .wizard-stepper {
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px 32px 12px; background: #fff; border-bottom: 1px solid #e0e0e0;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1); gap: 0;
+  }
+  .wiz-step { display: flex; align-items: center; gap: 6px; cursor: default; }
+  .wiz-step-circle {
+    width: 30px; height: 30px; border-radius: 50%; border: 2px solid #d0d0d0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; color: #999; background: #fff;
+    transition: all 0.3s; flex-shrink: 0;
+  }
+  .wiz-step-circle.active { border-color: #f7941d; color: #f7941d; background: #fff8f0; }
+  .wiz-step-circle.done { border-color: #4caf50; color: #fff; background: #4caf50; }
+  .wiz-step-label { font-size: 11px; font-weight: 600; letter-spacing: 0.3px; color: #999; white-space: nowrap; transition: color 0.3s; }
+  .wiz-step-label.active { color: #f7941d; }
+  .wiz-step-label.done { color: #4caf50; }
+  .wiz-step-line { width: 40px; height: 2px; background: #d0d0d0; margin: 0 8px; transition: background 0.3s; flex-shrink: 0; }
+  .wiz-step-line.done { background: #4caf50; }
+
+  /* Guided steps */
+  .guided-section { max-width: 100%; }
+  .step-row { display: flex; gap: 16px; margin-bottom: 16px; }
+  .step-row .step-card { flex: 1; margin-bottom: 0; }
+
+  /* Step card */
+  .step-card {
+    background: #fff; border: 2px solid #e0e0e0; border-radius: 12px;
+    padding: 24px 28px; margin-bottom: 16px; transition: all 0.3s;
+    position: relative;
+  }
+  .step-card.active { border-color: #f7941d; box-shadow: 0 4px 16px rgba(247,148,29,0.15); }
+  .step-card.done { border-color: #4caf50; background: #fafff9; }
+  .step-card.locked { opacity: 0.5; pointer-events: none; }
+
+  .step-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .step-number {
+    width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; flex-shrink: 0; transition: all 0.3s;
+  }
+  .step-card.active .step-number { background: #f7941d; color: #fff; }
+  .step-card.done .step-number { background: #4caf50; color: #fff; }
+  .step-card.locked .step-number { background: #e0e0e0; color: #999; }
+  .step-card:not(.active):not(.done):not(.locked) .step-number { background: #e0e0e0; color: #999; }
+
+  .step-title { font-size: 16px; font-weight: 600; color: #333; }
+  .step-card.done .step-title { color: #2e7d32; }
+  .step-subtitle { font-size: 13px; color: #888; margin-top: 2px; }
+
+  .step-done-value {
+    display: none; margin-left: auto; font-size: 14px; font-weight: 600;
+    color: #2e7d32; background: #e8f5e9; padding: 4px 14px; border-radius: 6px;
+  }
+  .step-card.done .step-done-value { display: inline-block; }
+
+  .step-body { display: none; }
+  .step-card.active .step-body { display: block; }
+
+  /* Form inputs */
+  .form-select-large {
+    width: 100%; padding: 14px 16px; border: 2px solid #e0e0e0; border-radius: 8px;
+    font-size: 15px; background: #fff; appearance: none; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 14px center;
+    transition: border-color 0.2s;
+  }
+  .form-select-large:focus { outline: none; border-color: #f7941d; }
+
+  .form-input-large {
+    width: 100%; padding: 14px 16px; border: 2px solid #e0e0e0; border-radius: 8px;
+    font-size: 15px; background: #fff; transition: border-color 0.2s;
+  }
+  .form-input-large:focus { outline: none; border-color: #f7941d; }
+
+  .form-hint { font-size: 12px; color: #999; margin-top: 6px; }
+
+  /* Edit button for completed steps */
+  .step-edit {
+    display: none; position: absolute; top: 24px; right: 24px;
+    padding: 6px 14px; border: 1px solid #d0d0d0; border-radius: 6px;
+    background: #fff; font-size: 12px; font-weight: 600; cursor: pointer; color: #666;
+  }
+  .step-edit:hover { background: #f5f5f5; }
+  .step-card.done .step-edit { display: inline-block; }
+
+  /* Auto-filled fields row */
+  .auto-fields {
+    margin-top: 20px; padding: 16px 20px;
+    background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px;
+    opacity: 0.3; transition: opacity 0.3s;
+  }
+  .auto-fields.visible { opacity: 1; }
+  .auto-fields .label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; margin-bottom: 4px; }
+  .auto-fields .value { font-size: 14px; color: #333; font-weight: 500; }
+  .auto-row { display: flex; gap: 24px; }
+  .auto-row > div { flex: 1; }
+
+  /* Rest of form */
+  .rest-form { max-width: 100%; margin-top: 24px; opacity: 0.3; pointer-events: none; transition: opacity 0.3s; }
+  .rest-form.visible { opacity: 1; pointer-events: auto; }
+  .rest-form h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #333; }
+
+  /* Delivery items table */
+  .delivery-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
+  .delivery-table thead { background: #fafafa; }
+  .delivery-table th { text-align: left; padding: 10px 12px; font-size: 12px; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; }
+  .delivery-table td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+  .delivery-table input, .delivery-table select {
+    width: 100%; padding: 8px 10px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 13px;
+  }
+  .add-line-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border: 1px dashed #ccc; border-radius: 6px;
+    background: #fff; font-size: 13px; color: #888; cursor: pointer; margin-bottom: 24px;
+  }
+  .add-line-btn:hover { background: #f9f9f9; border-color: #aaa; color: #555; }
+
+  /* Totals */
+  .totals { display: flex; flex-direction: column; align-items: flex-end; margin-bottom: 24px; }
+  .totals .row { display: flex; gap: 40px; padding: 4px 0; font-size: 14px; }
+  .totals .row .label { color: #888; text-align: right; min-width: 160px; }
+  .totals .row .val { font-weight: 600; min-width: 100px; text-align: right; }
+  .totals .total-row { font-size: 18px; font-weight: 700; border-top: 2px solid #e0e0e0; padding-top: 8px; margin-top: 4px; }
+
+  /* Sections */
+  .form-section { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px 24px; margin-bottom: 16px; }
+  .form-section h4 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #333; }
+  .form-section .row { display: flex; gap: 16px; }
+  .form-section .row > div { flex: 1; }
+  .form-section label { display: block; font-size: 12px; font-weight: 600; color: #888; margin-bottom: 4px; }
+  .form-section input, .form-section textarea, .form-section select {
+    width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 13px;
+  }
+  .form-section textarea { resize: vertical; min-height: 60px; }
+
+  .dropzone {
+    border: 2px dashed #d0d0d0; border-radius: 8px; padding: 24px;
+    text-align: center; color: #999; font-size: 13px; cursor: pointer;
+  }
+  .dropzone:hover { border-color: #aaa; }
+
+  /* Annotation */
+  .annotation {
+    margin-top: 32px; padding: 16px 20px; background: #fff8f0;
+    border: 1px solid #f7941d; border-radius: 8px; font-size: 13px; color: #333; line-height: 1.6;
+  }
+  .annotation h3 { color: #f7941d; font-size: 14px; margin-bottom: 8px; }
+  .annotation ul { margin-left: 20px; }
+  .annotation li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Cookie's Civil</div>
+    <div class="sidebar-item"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Docket</div>
+    <div class="sidebar-item active"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">🚚</span> Delivery Docket</div>
+    <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+  </div>
+
+  <div class="main" id="mainScroll">
+    <div class="fixed-header">
+      <!-- Top bar -->
+      <div class="top-bar">
+        <div class="top-bar-left">
+          <button class="back-btn">←</button>
+          <h1>Add Purchase Order</h1>
+        </div>
+        <div class="top-bar-actions"></div>
+      </div>
+
+      <!-- Stepper — wizard style -->
+      <div class="wizard-stepper">
+        <div class="wiz-step"><div class="wiz-step-circle active" id="sc1">1</div><div class="wiz-step-label active" id="sl1">Project</div></div>
+        <div class="wiz-step-line" id="line1"></div>
+        <div class="wiz-step"><div class="wiz-step-circle" id="sc2">2</div><div class="wiz-step-label" id="sl2">Supplier</div></div>
+        <div class="wiz-step-line" id="line2"></div>
+        <div class="wiz-step"><div class="wiz-step-circle" id="sc3">3</div><div class="wiz-step-label" id="sl3">PO Title</div></div>
+        <div class="wiz-step-line" id="line3"></div>
+        <div class="wiz-step"><div class="wiz-step-circle" id="sc4">4</div><div class="wiz-step-label" id="sl4">Delivery Items</div></div>
+        <div class="wiz-step-line" id="line4"></div>
+        <div class="wiz-step"><div class="wiz-step-circle" id="sc5">5</div><div class="wiz-step-label" id="sl5">Details</div></div>
+        <div class="wiz-step-line" id="line5"></div>
+        <div class="wiz-step"><div class="wiz-step-circle" id="sc6">6</div><div class="wiz-step-label" id="sl6">Approval</div></div>
+      </div>
+    </div>
+
+    <div style="padding: 24px 32px;">
+    <!-- Guided steps -->
+    <div class="guided-section">
+
+      <!-- Steps 1 & 2 side by side -->
+      <div class="step-row">
+        <!-- Step 1: Project -->
+        <div class="step-card active" id="step1">
+          <button class="step-edit" onclick="editStep(1)">Edit</button>
+          <div class="step-header">
+            <div class="step-number">1</div>
+            <div>
+              <div class="step-title">Select Project</div>
+              <div class="step-subtitle">Which project is this for?</div>
+            </div>
+            <div class="step-done-value" id="step1Value"></div>
+          </div>
+          <div class="step-body">
+            <select class="form-select-large" id="projectSelect" onchange="onProjectSelect()">
+              <option value="">Choose a project...</option>
+              <option value="VAR004">(VAR004) Bourke Street Roadworks</option>
+              <option value="VAR001">(VAR001) Road Replacement Swanston St</option>
+              <option value="VAR011">(VAR011) Residential House Foundation</option>
+              <option value="VAR006">(VAR006) Little Collins Roadworks</option>
+              <option value="VAR005">(VAR005) Bar Beach Curb Works</option>
+              <option value="VAR003">(VAR003) House Slab Construction</option>
+              <option value="VAR002">(VAR002) Cost Plus Project</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Step 2: Supplier -->
+        <div class="step-card locked" id="step2">
+          <button class="step-edit" onclick="editStep(2)">Edit</button>
+          <div class="step-header">
+            <div class="step-number">2</div>
+            <div>
+              <div class="step-title">Select Supplier</div>
+              <div class="step-subtitle">Who are you ordering from?</div>
+            </div>
+            <div class="step-done-value" id="step2Value"></div>
+          </div>
+          <div class="step-body">
+            <select class="form-select-large" id="supplierSelect" onchange="onSupplierSelect()">
+              <option value="">Choose a supplier...</option>
+              <option value="A1" data-resource="Subcontractor" data-code="312">A1 Asphalting Pty. Ltd.</option>
+              <option value="AAA" data-resource="Subcontractor" data-code="312">AAA Boring</option>
+              <option value="Boral" data-resource="Material" data-code="311">Boral Concrete</option>
+              <option value="Hanson" data-resource="Material" data-code="311">Hanson Construction Materials</option>
+              <option value="Coates" data-resource="Plant and Equipment" data-code="313">Coates Hire</option>
+              <option value="Kennards" data-resource="Plant and Equipment" data-code="313">Kennards Hire</option>
+              <option value="Programmed" data-resource="Labour" data-code="314">Programmed Skilled Workforce</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: PO Title (full width below) -->
+      <div class="step-card locked" id="step3">
+        <button class="step-edit" onclick="editStep(3)">Edit</button>
+        <div class="step-header">
+          <div class="step-number">3</div>
+          <div>
+            <div class="step-title">Add PO Title</div>
+            <div class="step-subtitle">Give this purchase order a descriptive name</div>
+          </div>
+          <div class="step-done-value" id="step3Value"></div>
+        </div>
+        <div class="step-body">
+          <input type="text" class="form-input-large" id="poTitle" placeholder="e.g. Bedding Sand supplies, Concrete for Stage 2..." oninput="onTitleInput()">
+        </div>
+      </div>
+    </div>
+
+    <!-- Auto-filled fields (shown after step 3) -->
+    <div class="auto-fields" id="autoFields">
+      <div class="auto-row">
+        <div>
+          <div class="label">Order Date</div>
+          <div class="value">Mon 23/03/2026</div>
+        </div>
+        <div>
+          <div class="label">PO Number</div>
+          <div class="value" id="autoPoNumber">PO–001</div>
+        </div>
+        <div>
+          <div class="label">GST</div>
+          <div class="value">GST – Exclusive</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rest of form (visible after 3 guided steps) -->
+    <div class="rest-form" id="restForm">
+
+      <h3 id="section4">Delivery Items</h3>
+
+      <div id="resourceTypeBanner" style="display:none; margin-bottom:12px; padding:10px 16px; background:#f0faf0; border:1px solid #4caf50; border-radius:8px; font-size:13px; color:#2e7d32;">
+        ✓ Resource type <strong id="resTypeLabel">Material</strong> and accounting code <strong id="resAccLabel">311 — Materials</strong> auto-set from supplier. <a href="#" style="color:#1565c0; margin-left:8px;" onclick="event.preventDefault(); document.getElementById('resTypeOverride').style.display='flex';">Change</a>
+      </div>
+      <div id="resTypeOverride" style="display:none; margin-bottom:12px; gap:12px; align-items:center;">
+        <label style="font-size:12px; font-weight:600; color:#666;">Resource Type:</label>
+        <select style="padding:8px 12px; border:1px solid #d0d0d0; border-radius:6px; font-size:13px;" onchange="overrideResourceType(this.value)">
+          <option value="Material" data-code="311">Material</option>
+          <option value="Plant and Equipment" data-code="313">Plant and Equipment</option>
+          <option value="Labour" data-code="314">Labour</option>
+          <option value="Subcontractor" data-code="312">Subcontractor</option>
+        </select>
+      </div>
+
+      <table class="delivery-table">
+        <thead>
+          <tr>
+            <th style="width:30px">#</th>
+            <th>Description</th>
+            <th style="width:100px">Unit</th>
+            <th>Cost Centre</th>
+            <th style="width:100px">Unit Cost ($)</th>
+            <th style="width:70px">Order Qty</th>
+            <th style="width:100px">Total ($)</th>
+            <th style="width:80px">Tax</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td><input type="text" class="desc-input" placeholder="e.g. Bedding Sand, 25MPa Concrete..." style="border-color:#f7941d; background:#fff8f0;" onfocus="this.style.borderColor='#f7941d'; this.style.background='#fff';" oninput="if(this.value){this.style.borderColor='#d0d0d0';this.style.background='#fff';}else{this.style.borderColor='#f7941d';this.style.background='#fff8f0';}"></td>
+            <td><select class="unit-select" style="border-color:#f7941d; background:#fff8f0;"></select></td>
+            <td><select class="cc-select" style="border-color:#f7941d; background:#fff8f0;" onchange="onCostCentreChange(this)">
+              <option value="">Select Cost Centre</option>
+              <option>Building Works</option>
+              <option>Concrete Works</option>
+              <option>Demolition</option>
+              <option>Drainage</option>
+              <option>Earthworks</option>
+              <option>Landscaping</option>
+              <option>Preliminaries</option>
+              <option>Roadworks</option>
+              <option>Site Mobilisation / Demobilisation</option>
+              <option>Site Recurring Costs</option>
+              <option>Utility Works</option>
+            </select></td>
+            <td style="position:relative"><span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#888;font-size:13px;">$</span><input type="text" class="cost-input" placeholder="0.00" style="padding-left:22px;" oninput="calcLineTotal(this)"></td>
+            <td><input type="text" class="qty-input" placeholder="0" oninput="calcLineTotal(this)"></td>
+            <td style="text-align:right;font-weight:600;color:#333;" class="line-total">$ 0.00</td>
+            <td>GST on Exp.</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td><input type="text" class="desc-input" placeholder="e.g. Bedding Sand, 25MPa Concrete..." style="border-color:#f7941d; background:#fff8f0;" onfocus="this.style.borderColor='#f7941d'; this.style.background='#fff';" oninput="if(this.value){this.style.borderColor='#d0d0d0';this.style.background='#fff';}else{this.style.borderColor='#f7941d';this.style.background='#fff8f0';}"></td>
+            <td><select class="unit-select" style="border-color:#f7941d; background:#fff8f0;"></select></td>
+            <td><select class="cc-select" style="border-color:#f7941d; background:#fff8f0;" onchange="onCostCentreChange(this)">
+              <option value="">Select Cost Centre</option>
+              <option>Building Works</option>
+              <option>Concrete Works</option>
+              <option>Demolition</option>
+              <option>Drainage</option>
+              <option>Earthworks</option>
+              <option>Landscaping</option>
+              <option>Preliminaries</option>
+              <option>Roadworks</option>
+              <option>Site Mobilisation / Demobilisation</option>
+              <option>Site Recurring Costs</option>
+              <option>Utility Works</option>
+            </select></td>
+            <td style="position:relative"><span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#888;font-size:13px;">$</span><input type="text" class="cost-input" placeholder="0.00" style="padding-left:22px;" oninput="calcLineTotal(this)"></td>
+            <td><input type="text" class="qty-input" placeholder="0" oninput="calcLineTotal(this)"></td>
+            <td style="text-align:right;font-weight:600;color:#333;" class="line-total">$ 0.00</td>
+            <td>GST on Exp.</td>
+          </tr>
+        </tbody>
+      </table>
+      <button class="add-line-btn">+ Add Delivery Item</button>
+
+      <div class="totals">
+        <div class="row"><span class="label">Subtotal (ex. GST)</span><span class="val" id="totSubtotal">$ 0.00</span></div>
+        <div class="row"><span class="label">GST 10%</span><span class="val" id="totGst">$ 0.00</span></div>
+        <div class="row total-row"><span class="label">Total (inc. GST)</span><span class="val" id="totTotal">$ 0.00</span></div>
+      </div>
+
+      <!-- Attachments & Delivery Details -->
+      <div class="form-section" id="section5">
+        <h4>Attachments</h4>
+        <div class="dropzone">+ Browse or drop file</div>
+      </div>
+
+      <div class="form-section">
+        <h4>Delivery Details</h4>
+        <div class="row">
+          <div><label>Attention</label><input type="text"></div>
+          <div><label>Instruction</label><textarea placeholder="Add Delivery Instructions..."></textarea></div>
+        </div>
+        <div class="row" style="margin-top:12px;">
+          <div><label>Phone</label><input type="text"></div>
+          <div></div>
+        </div>
+      </div>
+
+      <!-- Approval Workflow -->
+      <div class="form-section" id="section6">
+        <h4>Approval Workflow</h4>
+        <p style="font-size:13px; color:#888; margin-bottom:16px;">Users selected under 'Can Approve' and 'Can Close' will receive an email notification for the purchase order approval request.</p>
+        <div class="row" style="gap:16px;">
+          <div style="flex:1; background:#fff; border:2px solid #e0e0e0; border-radius:10px; padding:16px;">
+            <div style="background:#f7941d; color:#fff; padding:10px 16px; border-radius:6px; font-weight:700; font-size:14px; margin-bottom:12px;">Can Approve</div>
+            <div id="po-approve-list" style="margin-bottom:8px;"></div>
+            <select style="width:100%; padding:10px 12px; border:1px solid #d0d0d0; border-radius:6px; font-size:13px;" onchange="addPOApprover('approve', this)">
+              <option value="">+ Add Approver...</option>
+              <option>James Baker — CEO</option>
+              <option>Amir — Head of Customer Success</option>
+              <option>Ford — Sales Manager</option>
+              <option>Cristiane — People & Finance</option>
+              <option>Amulya — Head of Engineering</option>
+              <option>Prashant — Senior Developer</option>
+            </select>
+            <div style="font-size:11px; color:#888; margin-top:6px;">Can Approve if total amount is <strong>Any Amount</strong></div>
+          </div>
+          <div style="flex:1; background:#fff; border:2px solid #e0e0e0; border-radius:10px; padding:16px;">
+            <div style="background:#f7941d; color:#fff; padding:10px 16px; border-radius:6px; font-weight:700; font-size:14px; margin-bottom:12px;">Can Close</div>
+            <div id="po-close-list" style="margin-bottom:8px;"></div>
+            <select style="width:100%; padding:10px 12px; border:1px solid #d0d0d0; border-radius:6px; font-size:13px;" onchange="addPOApprover('close', this)">
+              <option value="">+ Add Closer...</option>
+              <option>James Baker — CEO</option>
+              <option>Amir — Head of Customer Success</option>
+              <option>Ford — Sales Manager</option>
+              <option>Cristiane — People & Finance</option>
+              <option>Amulya — Head of Engineering</option>
+              <option>Prashant — Senior Developer</option>
+            </select>
+            <div style="font-size:11px; color:#888; margin-top:6px;">Can Close if total amount is <strong>Any Amount</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div style="display:flex; gap:16px; justify-content:center; margin-top:24px; margin-bottom:32px; padding:24px; background:#fff; border:1px solid #e0e0e0; border-radius:8px;">
+      <button style="padding:16px 40px; border:2px solid #d0d0d0; border-radius:8px; background:#fff; font-size:16px; font-weight:700; cursor:pointer; color:#555; transition:all 0.15s;" onmouseenter="this.style.background='#f5f5f5'" onmouseleave="this.style.background='#fff'">SAVE AS DRAFT</button>
+      <button id="submitBtn" disabled style="padding:16px 48px; border:none; border-radius:8px; background:#ccc; font-size:16px; font-weight:700; cursor:not-allowed; color:#fff; transition:all 0.15s; box-shadow:none;" onmouseenter="if(!this.disabled){this.style.background='#e8850f'}" onmouseleave="if(!this.disabled){this.style.background='#f7941d'}">SUBMIT PURCHASE ORDER</button>
+    </div>
+
+    <!-- Annotation -->
+    <div class="annotation">
+      <h3>Product Spec — Guided Purchase Order Creation</h3>
+      <ul>
+        <li><strong>Change:</strong> Replaced the flat form with a guided 6-step flow. Steps 1-3 are guided (Project, Supplier, PO Title), then the full form reveals for steps 4-6.</li>
+        <li><strong>Stepper:</strong> Wizard-style stepper stays pinned at the top, showing progress through all 6 sections.</li>
+        <li><strong>Steps 1-3:</strong> Sequential guided cards. Must complete each before the next unlocks.</li>
+        <li><strong>Steps 4-6:</strong> Full form sections (Delivery Items, Attachments & Details, Approval) — stepper updates as you scroll.</li>
+        <li><strong>Why:</strong> The current form shows everything at once which is overwhelming. Guiding users through the 3 most important decisions first reduces cognitive load and ensures critical fields aren't missed.</li>
+      </ul>
+      <p style="margin-top: 8px; color: #888; font-size: 12px;">Prototype by James Baker — click through the steps to see the interaction.</p>
+    </div>
+    </div><!-- end content padding -->
+  </div>
+</div>
+
+<script>
+let completedSteps = new Set();
+const totalSections = 6;
+const sectionNames = ['', 'Project', 'Supplier', 'PO Title', 'Delivery Items', 'Details', 'Approval'];
+let currentSection = 1;
+
+function onProjectSelect() {
+  const val = document.getElementById('projectSelect').value;
+  if (val) completeStep(1);
+}
+
+function onSupplierSelect() {
+  const val = document.getElementById('supplierSelect').value;
+  if (val) completeStep(2);
+}
+
+function onTitleInput() {
+  const val = document.getElementById('poTitle').value.trim();
+  if (val.length > 0 && !completedSteps.has(3)) {
+    // Soft-complete step 3 — don't collapse the card, just unlock the rest
+    completedSteps.add(3);
+    document.getElementById('autoFields').classList.add('visible');
+    document.getElementById('restForm').classList.add('visible');
+    document.getElementById('step3Value').textContent = val;
+    currentSection = 4;
+    checkSteps456();
+  }
+  // Keep updating the displayed value as user types
+  if (completedSteps.has(3)) {
+    document.getElementById('step3Value').textContent = val;
+  }
+}
+
+function completeStep(step) {
+  completedSteps.add(step);
+  const card = document.getElementById('step' + step);
+
+  let displayVal = '';
+  if (step === 1) {
+    const sel = document.getElementById('projectSelect');
+    displayVal = sel.options[sel.selectedIndex].text;
+    document.getElementById('autoPoNumber').textContent = 'PO-' + sel.value + '-0034';
+  } else if (step === 2) {
+    const sel = document.getElementById('supplierSelect');
+    displayVal = sel.options[sel.selectedIndex].text;
+    setResourceFromSupplier();
+  } else if (step === 3) {
+    displayVal = document.getElementById('poTitle').value.trim();
+  }
+
+  card.classList.remove('active');
+  card.classList.add('done');
+  document.getElementById('step' + step + 'Value').textContent = displayVal;
+
+  const nextStep = step + 1;
+  if (nextStep <= 3) {
+    const nextCard = document.getElementById('step' + nextStep);
+    nextCard.classList.remove('locked');
+    nextCard.classList.add('active');
+    setTimeout(() => {
+      const input = nextCard.querySelector('select, input');
+      if (input) input.focus();
+    }, 100);
+  }
+
+  if (completedSteps.size === 3) {
+    document.getElementById('autoFields').classList.add('visible');
+    document.getElementById('restForm').classList.add('visible');
+    currentSection = 4;
+    checkSteps456();
+    return;
+  }
+
+  updateStepper();
+}
+
+function editStep(step) {
+  const card = document.getElementById('step' + step);
+  card.classList.remove('done');
+  card.classList.add('active');
+  completedSteps.delete(step);
+
+  for (let i = step + 1; i <= 3; i++) {
+    const c = document.getElementById('step' + i);
+    if (!completedSteps.has(i)) {
+      c.classList.remove('active');
+      c.classList.add('locked');
+    }
+  }
+
+  if (!completedSteps.has(3)) {
+    document.getElementById('autoFields').classList.remove('visible');
+    document.getElementById('restForm').classList.remove('visible');
+    document.getElementById('submitBtn').disabled = true;
+    currentSection = step;
+  }
+
+  updateStepper();
+}
+
+function isStep4Done() {
+  // At least one delivery item has a resource selected
+  let hasItem = false;
+  document.querySelectorAll('.delivery-table tbody tr').forEach(row => {
+    const res = row.querySelector('select');
+    if (res && res.value) hasItem = true;
+  });
+  return hasItem;
+}
+
+function isStep5Done() {
+  // Details are not required — always complete
+  return true;
+}
+
+function isStep6Done() {
+  // At least one approver and one closer
+  const hasApprover = document.querySelectorAll('#po-approve-list [data-name]').length > 0;
+  const hasCloser = document.querySelectorAll('#po-close-list [data-name]').length > 0;
+  return hasApprover && hasCloser;
+}
+
+function checkSteps456() {
+  if (isStep4Done()) completedSteps.add(4); else completedSteps.delete(4);
+  completedSteps.add(5); // always done
+  if (isStep6Done()) completedSteps.add(6); else completedSteps.delete(6);
+  updateStepper();
+  // Submit requires 1-4 and 6
+  const canSubmit = completedSteps.has(1) && completedSteps.has(2) && completedSteps.has(3) && completedSteps.has(4) && completedSteps.has(6);
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = !canSubmit;
+  if (canSubmit) {
+    btn.style.background = '#f7941d';
+    btn.style.cursor = 'pointer';
+    btn.style.boxShadow = '0 4px 16px rgba(247,148,29,0.4)';
+  } else {
+    btn.style.background = '#ccc';
+    btn.style.cursor = 'not-allowed';
+    btn.style.boxShadow = 'none';
+  }
+}
+
+function updateStepper() {
+  // Determine active section based on scroll or guided progress
+  let activeSection;
+  if (!completedSteps.has(1) || !completedSteps.has(2) || !completedSteps.has(3)) {
+    // Still in guided steps
+    if (!completedSteps.has(1)) activeSection = 1;
+    else if (!completedSteps.has(2)) activeSection = 2;
+    else activeSection = 3;
+  } else {
+    activeSection = currentSection;
+  }
+
+  for (let i = 1; i <= totalSections; i++) {
+    const circle = document.getElementById('sc' + i);
+    const label = document.getElementById('sl' + i);
+    circle.classList.remove('active', 'done');
+    label.classList.remove('active', 'done');
+
+    if (completedSteps.has(i)) {
+      circle.classList.add('done');
+      circle.textContent = '✓';
+      label.classList.add('done');
+    } else if (i === activeSection) {
+      circle.classList.add('active');
+      circle.textContent = i;
+      label.classList.add('active');
+    } else {
+      circle.textContent = i;
+    }
+  }
+
+  // Update lines
+  for (let i = 1; i < totalSections; i++) {
+    const line = document.getElementById('line' + i);
+    if (completedSteps.has(i)) {
+      line.classList.add('done');
+    } else {
+      line.classList.remove('done');
+    }
+  }
+}
+
+// Calculate line total and update summary
+function calcLineTotal(input) {
+  const row = input.closest('tr');
+  const cost = parseFloat(row.querySelector('.cost-input').value) || 0;
+  const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
+  const total = cost * qty;
+  row.querySelector('.line-total').textContent = '$ ' + total.toFixed(2);
+  updateTotals();
+}
+
+function updateTotals() {
+  let subtotal = 0;
+  document.querySelectorAll('.delivery-table tbody tr').forEach(row => {
+    const cost = parseFloat(row.querySelector('.cost-input')?.value) || 0;
+    const qty = parseFloat(row.querySelector('.qty-input')?.value) || 0;
+    subtotal += cost * qty;
+  });
+  const gst = subtotal * 0.1;
+  const total = subtotal + gst;
+  document.getElementById('totSubtotal').textContent = '$ ' + subtotal.toFixed(2);
+  document.getElementById('totGst').textContent = '$ ' + gst.toFixed(2);
+  document.getElementById('totTotal').textContent = '$ ' + total.toFixed(2);
+}
+
+// Resource type codes mapping
+const resourceCodeMap = {
+  'Material': { code: '311', label: '311 — Materials' },
+  'Subcontractor': { code: '312', label: '312 — Subcontractor' },
+  'Plant and Equipment': { code: '313', label: '313 — Plant & Equipment Rental' },
+  'Labour': { code: '314', label: '314 — Labour Hire' }
+};
+
+// Auto-set resource type from supplier
+function setResourceFromSupplier() {
+  const sel = document.getElementById('supplierSelect');
+  const opt = sel.options[sel.selectedIndex];
+  const resType = opt.getAttribute('data-resource');
+  if (resType && resourceCodeMap[resType]) {
+    document.getElementById('resTypeLabel').textContent = resType;
+    document.getElementById('resAccLabel').textContent = resourceCodeMap[resType].label;
+    document.getElementById('resourceTypeBanner').style.display = 'block';
+    document.getElementById('resTypeOverride').style.display = 'none';
+    populateUnitsForType(resType);
+  }
+}
+
+function overrideResourceType(type) {
+  if (resourceCodeMap[type]) {
+    document.getElementById('resTypeLabel').textContent = type;
+    document.getElementById('resAccLabel').textContent = resourceCodeMap[type].label;
+    populateUnitsForType(type);
+  }
+}
+
+// Units by resource type
+const unitsByType = {
+  'Material': ['m3', 'm2', 'tonnes', 'kg', 'lineal m', 'Each', 'Lump Sum'],
+  'Subcontractor': ['Lump Sum', 'Each', 'Day', 'Hour', 'm2', 'lineal m'],
+  'Plant and Equipment': ['Day', 'Week', 'Lump Sum', 'Each'],
+  'Labour': ['Hour', 'Day', 'Lump Sum']
+};
+
+function populateUnitsForType(type) {
+  const units = unitsByType[type] || ['Each', 'Lump Sum'];
+  document.querySelectorAll('.unit-select').forEach(sel => {
+    const prev = sel.value;
+    sel.innerHTML = '<option value="" style="color:#999;">Unit</option>';
+    units.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u; opt.textContent = u;
+      sel.appendChild(opt);
+    });
+    if (prev && units.includes(prev)) sel.value = prev;
+    // Keep orange if not selected
+    if (!sel.value) { sel.style.borderColor = '#f7941d'; sel.style.background = '#fff8f0'; }
+  });
+}
+
+// When selecting a unit, clear required styling
+document.addEventListener('change', function(e) {
+  if (e.target.classList.contains('unit-select')) {
+    if (e.target.value) { e.target.style.borderColor = '#d0d0d0'; e.target.style.background = '#fff'; }
+    else { e.target.style.borderColor = '#f7941d'; e.target.style.background = '#fff8f0'; }
+  }
+});
+
+// Cost centre cascade — selecting on first row sets all empty ones
+function onCostCentreChange(sel) {
+  if (sel.value) {
+    sel.style.borderColor = '#d0d0d0';
+    sel.style.background = '#fff';
+    // Auto-fill all other empty cost centre selects
+    document.querySelectorAll('.cc-select').forEach(other => {
+      if (!other.value && other !== sel) {
+        other.value = sel.value;
+        other.style.borderColor = '#4caf50';
+        other.style.background = '#f0faf0';
+        setTimeout(() => { other.style.borderColor = '#d0d0d0'; other.style.background = '#fff'; }, 1500);
+      }
+    });
+  }
+}
+
+// Add approver chip
+function addPOApprover(role, selectEl) {
+  const val = selectEl.value;
+  if (!val) return;
+  selectEl.value = '';
+  const list = document.getElementById('po-' + role + '-list');
+  if (list.querySelector('[data-name="' + val + '"]')) return;
+  const chip = document.createElement('div');
+  chip.setAttribute('data-name', val);
+  chip.style.cssText = 'display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:#f5f5f5; border:1px solid #e0e0e0; border-radius:6px; margin-bottom:6px; font-size:13px;';
+  chip.innerHTML = '<span>' + val + '</span><span style="cursor:pointer; color:#999; font-size:16px; margin-left:8px;" onclick="this.parentElement.remove(); checkSteps456();">×</span>';
+  list.appendChild(chip);
+  checkSteps456();
+}
+
+// Track scroll position for sections 4-6
+document.getElementById('mainScroll').addEventListener('scroll', function() {
+  if (completedSteps.size < 3) return;
+  const sections = [
+    { id: 'section6', step: 6 },
+    { id: 'section5', step: 5 },
+    { id: 'section4', step: 4 },
+  ];
+  const scrollTop = this.scrollTop + 200;
+  let found = 4;
+  for (const s of sections) {
+    const el = document.getElementById(s.id);
+    if (el && el.offsetTop <= scrollTop) { found = s.step; break; }
+  }
+  if (found !== currentSection) {
+    currentSection = found;
+    checkSteps456();
+  }
+});
+</script>
+</body>
+</html>
