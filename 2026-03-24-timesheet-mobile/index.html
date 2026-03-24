@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Varicon Mobile — Timesheet</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', Roboto, sans-serif; background: #f5f5f5; color: #333; max-width: 390px; margin: 0 auto; min-height: 100vh; overflow-x: hidden; }
+
+  .status-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px; background: #fff; font-size: 12px; font-weight: 600; }
+
+  .screen { display: none; min-height: 100vh; }
+  .screen.active { display: block; }
+
+  /* Nav bar */
+  .nav { display: flex; align-items: center; padding: 12px 16px; background: #fff; border-bottom: 1px solid #e0e0e0; }
+  .nav .back { font-size: 20px; cursor: pointer; margin-right: 12px; color: #f7941d; }
+  .nav h1 { font-size: 17px; font-weight: 600; flex: 1; }
+  .nav .nav-icons { display: flex; gap: 12px; font-size: 18px; color: #888; }
+
+  /* Timesheet home */
+  .welcome { padding: 16px; background: #fff; border-bottom: 1px solid #e0e0e0; }
+  .welcome h2 { font-size: 18px; font-weight: 600; }
+  .welcome .prev { font-size: 12px; color: #888; margin-top: 4px; }
+  .welcome .date { font-size: 12px; color: #888; float: right; margin-top: -32px; }
+
+  .clock-btn {
+    display: block; width: calc(100% - 32px); margin: 16px; padding: 14px; border: none;
+    border-radius: 10px; font-size: 16px; font-weight: 700; text-align: center; cursor: pointer;
+  }
+  .clock-in-btn { background: #f7941d; color: #fff; }
+  .clock-in-btn:active { background: #e8850f; }
+  .clock-out-btn { background: #e53935; color: #fff; }
+  .clock-out-btn:active { background: #c62828; }
+
+  .add-ts { display: block; text-align: center; padding: 10px; font-size: 14px; color: #888; cursor: pointer; }
+
+  .leave-btns { display: flex; gap: 10px; padding: 0 16px 12px; }
+  .leave-btn { flex: 1; padding: 10px; border: 1px solid #f7941d; border-radius: 8px; text-align: center; font-size: 13px; font-weight: 600; color: #f7941d; background: #fff; cursor: pointer; }
+
+  /* Timesheet cards */
+  .ts-card { margin: 8px 16px; background: #fff; border-radius: 10px; border: 1px solid #e8e8e8; padding: 14px; }
+  .ts-card.approved { border-left: 4px solid #4caf50; background: #fafff9; }
+  .ts-card.unapproved { border-left: 4px solid #f7941d; }
+  .ts-card .tc-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .ts-card .tc-date { width: 40px; text-align: center; }
+  .ts-card .tc-date .day { font-size: 20px; font-weight: 800; color: #1a1a2e; }
+  .ts-card .tc-date .mon { font-size: 10px; color: #888; font-weight: 600; }
+  .ts-card .tc-project { font-size: 14px; font-weight: 600; flex: 1; }
+  .ts-card .tc-meta { font-size: 11px; color: #888; margin-left: 50px; }
+  .ts-card .tc-status { font-size: 11px; font-weight: 600; text-align: right; margin-top: 4px; }
+  .tc-status-approved { color: #4caf50; }
+  .tc-status-unapproved { color: #f7941d; }
+
+  /* Bottom tabs */
+  .bottom-tabs { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 390px; display: flex; background: #fff; border-top: 1px solid #e0e0e0; z-index: 10; }
+  .btab { flex: 1; padding: 10px 0 8px; text-align: center; font-size: 10px; font-weight: 600; color: #888; cursor: pointer; }
+  .btab.active { color: #f7941d; }
+  .btab .btab-icon { font-size: 18px; margin-bottom: 2px; }
+
+  /* ===== CLOCK IN SCREEN ===== */
+  .section-label { padding: 12px 16px 4px; font-size: 12px; color: #888; font-weight: 600; }
+  .field-card { margin: 0 16px 12px; background: #fff; border-radius: 10px; border: 1px solid #e8e8e8; overflow: hidden; }
+  .field-card .fc-row { padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f0f0f0; }
+  .field-card .fc-row:last-child { border-bottom: none; }
+  .field-card .fc-label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; }
+  .field-card .fc-value { font-size: 14px; font-weight: 500; }
+  .field-card select { font-size: 14px; font-weight: 500; border: none; background: none; appearance: none; text-align: right; color: #333; width: 100%; padding: 0; }
+
+  .map-placeholder { margin: 0 16px 12px; height: 160px; background: linear-gradient(135deg, #d4e6c3, #b8d4a0); border-radius: 10px; display: flex; align-items: center; justify-content: center; position: relative; }
+  .map-pin { width: 20px; height: 20px; background: #e53935; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
+  .map-address { margin: -4px 16px 12px; font-size: 12px; color: #555; display: flex; align-items: center; gap: 6px; }
+
+  /* Equipment card */
+  .equip-card { margin: 0 16px 8px; background: #fff; border-radius: 10px; border: 1px solid #e8e8e8; padding: 12px 16px; }
+  .equip-card .eq-top { display: flex; align-items: center; justify-content: space-between; }
+  .equip-card .eq-name { font-size: 14px; font-weight: 600; }
+  .equip-card .eq-remove { font-size: 16px; color: #999; cursor: pointer; }
+  .equip-card .eq-type { font-size: 11px; color: #888; margin-top: 2px; }
+  .equip-card .eq-attachments { margin-top: 8px; }
+  .eq-attach { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; }
+  .eq-attach input { width: 18px; height: 18px; accent-color: #f7941d; }
+
+  .add-equip-btn { display: block; margin: 0 16px 12px; padding: 10px; border: 1px dashed #ccc; border-radius: 10px; text-align: center; font-size: 13px; color: #888; cursor: pointer; background: #fff; }
+
+  /* Forms */
+  .form-card { margin: 0 16px 8px; background: #fff; border-radius: 10px; border: 1px solid #e8e8e8; padding: 12px 16px; }
+  .form-card .fm-name { font-size: 14px; font-weight: 600; }
+  .form-card .fm-equip { font-size: 12px; color: #888; margin-top: 2px; }
+  .form-card .fm-status { font-size: 12px; font-weight: 600; margin-top: 4px; }
+  .fm-not-started { color: #e65100; }
+  .fm-submitted { color: #4caf50; }
+
+  /* Fixed bottom button */
+  .fixed-btn { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); width: 358px; padding: 14px; border: none; border-radius: 10px; font-size: 16px; font-weight: 700; text-align: center; cursor: pointer; z-index: 10; }
+  .fixed-btn.orange { background: #f7941d; color: #fff; }
+  .fixed-btn.orange:active { background: #e8850f; }
+  .fixed-btn.red { background: #e53935; color: #fff; }
+  .fixed-btn.red:active { background: #c62828; }
+  .fixed-btn.green { background: #4caf50; color: #fff; }
+
+  .spacer { height: 140px; }
+
+  /* Prestart form */
+  .prestart-section { margin: 0 16px 12px; background: #fff; border-radius: 10px; border: 1px solid #e8e8e8; padding: 16px; }
+  .prestart-section h3 { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+  .prestart-q { margin-bottom: 16px; }
+  .prestart-q .pq-label { font-size: 13px; font-weight: 500; margin-bottom: 8px; line-height: 1.4; }
+  .prestart-q .pq-label .req { color: #e53935; }
+  .prestart-q.blocked { opacity: 0.25; pointer-events: none; }
+  .pq-options { display: flex; flex-direction: column; gap: 6px; }
+  .pq-opt { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 14px; cursor: pointer; transition: all 0.15s; }
+  .pq-opt:active { background: #f5f5f5; }
+  .pq-opt.selected { border-color: #4caf50; background: #f0faf0; }
+  .pq-opt.selected-warn { border-color: #f7941d; background: #fff8f0; }
+  .pq-opt.selected-danger { border-color: #e53935; background: #fde8e8; }
+  .pq-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #d0d0d0; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .pq-opt.selected .pq-radio { border-color: #4caf50; }
+  .pq-opt.selected .pq-radio::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: #4caf50; }
+  .pq-opt.selected-warn .pq-radio { border-color: #f7941d; }
+  .pq-opt.selected-warn .pq-radio::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: #f7941d; }
+
+  .prestart-input { width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 8px; font-size: 14px; font-family: inherit; }
+  .prestart-input:focus { outline: none; border-color: #f7941d; }
+
+  .photo-row { display: flex; gap: 8px; margin-top: 8px; }
+  .photo-thumb { width: 56px; height: 56px; border-radius: 8px; background: #e8e8e8; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+  .photo-add { width: 56px; height: 56px; border-radius: 8px; border: 2px dashed #ccc; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #ccc; cursor: pointer; }
+
+  .sig-box { height: 80px; border: 1px dashed #d0d0d0; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 13px; cursor: pointer; font-family: cursive; }
+
+  /* Modal */
+  .modal-overlay { position: fixed; top: 0; left: 50%; transform: translateX(-50%); width: 390px; height: 100vh; background: rgba(0,0,0,.4); display: none; z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: #fff; border-radius: 16px; padding: 32px 24px; text-align: center; width: 85%; }
+  .modal .modal-icon { width: 56px; height: 56px; border-radius: 50%; background: #e8f5e9; color: #4caf50; display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 16px; }
+  .modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .modal p { font-size: 13px; color: #888; margin-bottom: 20px; }
+  .modal-btn { display: block; width: 100%; padding: 12px; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; margin-bottom: 8px; }
+  .modal-btn.green { background: #4caf50; color: #fff; }
+  .modal-btn.orange { background: #f7941d; color: #fff; }
+  .modal-btn.outline { background: #fff; color: #555; border: 1px solid #d0d0d0; }
+
+  /* Clocked timesheet */
+  .clocked-info { margin: 12px 16px; background: #fff; border-radius: 10px; border: 1px solid #e8e8e8; padding: 16px; }
+  .clocked-info .ci-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+  .clocked-info .ci-row:last-child { border-bottom: none; }
+  .ci-label { font-size: 12px; color: #888; font-weight: 600; }
+  .ci-value { font-size: 14px; font-weight: 600; }
+  .ci-warn { padding: 10px 14px; background: #fff8f0; border: 1px solid #f7941d; border-radius: 8px; font-size: 12px; color: #e65100; margin-bottom: 12px; }
+
+  /* Cost centre assignment */
+  .cost-section { margin: 12px 16px; background: #fff; border-radius: 10px; border: 1px solid #e8e8e8; padding: 16px; }
+  .cost-section h3 { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+  .cost-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+  .cost-row .cost-label { color: #888; }
+  .cost-row .cost-val { font-weight: 600; }
+  .assign-btn { display: block; width: 100%; padding: 10px; border: 1px dashed #f7941d; border-radius: 8px; text-align: center; font-size: 13px; font-weight: 600; color: #f7941d; cursor: pointer; background: #fff; margin-top: 8px; }
+
+  /* Equipment picker bottom sheet */
+  .bottom-sheet { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 390px; background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 -4px 20px rgba(0,0,0,.15); z-index: 50; display: none; max-height: 60vh; overflow-y: auto; }
+  .bottom-sheet.show { display: block; }
+  .bs-handle { width: 40px; height: 4px; background: #d0d0d0; border-radius: 2px; margin: 10px auto; }
+  .bs-search { margin: 0 16px 8px; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 8px; font-size: 14px; width: calc(100% - 32px); }
+  .bs-tabs { display: flex; margin: 0 16px 8px; gap: 8px; }
+  .bs-tab { padding: 6px 14px; border-radius: 16px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid #e0e0e0; background: #fff; color: #888; }
+  .bs-tab.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+  .bs-item { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+  .bs-item:active { background: #f5f5f5; }
+  .bs-item .bsi-name { font-size: 14px; font-weight: 500; }
+  .bs-item .bsi-type { font-size: 12px; color: #888; }
+</style>
+</head>
+<body>
+
+<!-- ===== SCREEN 1: MY TIMESHEET ===== -->
+<div class="screen active" id="s1">
+  <div class="status-bar"><span>14:49</span><span>📶 📡 🔋 92%</span></div>
+  <div class="nav">
+    <span style="font-size:20px; cursor:pointer;">☰</span>
+    <h1 style="margin-left:12px;">My Timesheet</h1>
+    <div class="nav-icons"><span>🔄</span><span>🔔</span><span>▽</span></div>
+  </div>
+
+  <div class="welcome">
+    <h2>Welcome back James!</h2>
+    <div class="prev">Previously worked on<br><strong>Bourke Street Roadworks</strong><br>From Tue, 17 Mar 2026 – Wed, 25 Mar, 2026</div>
+    <div class="date">Tue, 24 Mar, 2026</div>
+  </div>
+
+  <button class="clock-btn clock-in-btn" onclick="showScreen('s2')">Clock in</button>
+  <div class="add-ts">+ Add Timesheet</div>
+
+  <div class="leave-btns">
+    <div class="leave-btn">Request leave</div>
+    <div class="leave-btn">View all leave</div>
+  </div>
+
+  <div class="ts-card unapproved">
+    <div class="tc-top">
+      <div class="tc-date"><div class="day">24</div><div class="mon">MAR</div></div>
+      <div class="tc-project">(VAR004) Bourke Street Roadworks</div>
+    </div>
+    <div class="tc-meta">CLOCKED: 0h 15m &nbsp;⏱ 30m &nbsp;🚗 30m</div>
+    <div class="tc-meta">🔴 2 &nbsp;👍 1 &nbsp;📋 1</div>
+    <div class="tc-status tc-status-unapproved">Unapproved</div>
+  </div>
+
+  <div class="ts-card approved">
+    <div class="tc-top">
+      <div class="tc-date"><div class="day">24</div><div class="mon">MAR</div></div>
+      <div class="tc-project">(VAR004) Bourke Street Roadworks</div>
+    </div>
+    <div class="tc-meta">CLOCKED: 9h 0m &nbsp;⏱ 30m &nbsp;🚗 30m</div>
+    <div class="tc-meta">APPROVED: 9h 0m &nbsp;⏱ 30m</div>
+    <div class="tc-meta">🔴 2 &nbsp;✅ 2</div>
+    <div class="tc-status tc-status-approved">Approved</div>
+  </div>
+
+  <div style="height:60px;"></div>
+  <div class="bottom-tabs">
+    <div class="btab active"><div class="btab-icon">⏱</div>Timesheet</div>
+    <div class="btab"><div class="btab-icon">📅</div>Shifts</div>
+    <div class="btab"><div class="btab-icon">📝</div>Forms</div>
+    <div class="btab"><div class="btab-icon">🚚</div>Docket</div>
+    <div class="btab"><div class="btab-icon">📁</div>File</div>
+  </div>
+</div>
+
+<!-- ===== SCREEN 2: CLOCK IN ===== -->
+<div class="screen" id="s2">
+  <div class="status-bar"><span>14:49</span><span>📶 📡 🔋 91%</span></div>
+  <div class="nav">
+    <span class="back" onclick="showScreen('s1')">←</span>
+    <h1>Clockin</h1>
+  </div>
+
+  <div class="section-label">Project</div>
+  <div class="field-card">
+    <div class="fc-row">
+      <select style="font-size:14px; font-weight:600;">
+        <option>(VAR004) Bourke Street Roadworks</option>
+        <option>(VAR001) Road Replacement Swanston St</option>
+        <option>(VAR011) Residential House Foundation</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section-label">Current Location</div>
+  <div class="map-placeholder"><div class="map-pin"></div></div>
+  <div class="map-address">📍 2 Gallaghers Pl Collins Street Precinct Melbourne, 3000, Australia</div>
+
+  <div class="section-label">EQUIPMENT</div>
+  <p style="font-size:12px; color:#888; padding:0 16px 8px;">Please select the equipment you will be operating.</p>
+
+  <div class="equip-card" id="equip1" style="display:none;">
+    <div class="eq-top">
+      <div class="eq-name">(DOZ001) Dozer</div>
+      <span class="eq-remove" onclick="document.getElementById('equip1').style.display='none'">✕</span>
+    </div>
+    <div class="eq-type">Equipment Attachments</div>
+    <div class="eq-attachments">
+      <label class="eq-attach"><input type="checkbox"> (Float Charge) Float Charge</label>
+      <label class="eq-attach"><input type="checkbox"> (Dozer Fuel p/h) Dozer Fuel p/h</label>
+    </div>
+  </div>
+
+  <div class="add-equip-btn" onclick="openEquipSheet()">Select Equipment</div>
+
+  <div class="section-label" id="formsLabel" style="display:none;">FORMS</div>
+  <p id="formsHint" style="display:none; font-size:12px; color:#888; padding:0 16px 8px;">You can submit them now or submit later before clocking out.</p>
+  <div class="form-card" id="formCard" style="display:none;" onclick="showScreen('s3')">
+    <div class="fm-name">Dozer Prestart</div>
+    <div class="fm-equip">📋 Dozer (DOZ001)</div>
+    <div class="fm-status fm-not-started">Not Started</div>
+  </div>
+
+  <div class="spacer"></div>
+  <button class="fixed-btn orange" onclick="clockIn()">Clock in</button>
+
+  <!-- Equipment bottom sheet -->
+  <div class="bottom-sheet" id="equipSheet">
+    <div class="bs-handle"></div>
+    <input class="bs-search" placeholder="Search Equipment" type="text">
+    <div class="bs-tabs">
+      <div class="bs-tab active">Project Equipment</div>
+      <div class="bs-tab">Unassigned Equipment</div>
+    </div>
+    <div style="font-size:12px; color:#f7941d; font-weight:600; padding:8px 16px;">Plant and Equipment</div>
+    <div class="bs-item" onclick="selectEquip('DOZ001', 'Dozer')"><span class="bsi-name">(DOZ001) Dozer</span><span class="bsi-type">Dry Hire</span></div>
+    <div class="bs-item" onclick="selectEquip('DOZ002', 'Dozer')"><span class="bsi-name">(DOZ002) Dozer</span><span class="bsi-type">Dry Hire</span></div>
+    <div class="bs-item" onclick="selectEquip('EXC01', 'Excavator 10T')"><span class="bsi-name">(EXC01) Excavator 10T</span><span class="bsi-type">Dry Hire</span></div>
+    <div class="bs-item" onclick="selectEquip('EX003', 'Excavator 30T')"><span class="bsi-name">(EX003) Excavator 30T</span><span class="bsi-type">Dry Hire</span></div>
+    <div class="bs-item" onclick="selectEquip('TRUCK01', 'Truck 7 yarder')"><span class="bsi-name">(TRUCK01) Truck 7 yarder</span><span class="bsi-type">Dry Hire</span></div>
+    <div style="height:20px;"></div>
+  </div>
+</div>
+
+<!-- ===== SCREEN 3: PRESTART FORM ===== -->
+<div class="screen" id="s3">
+  <div class="status-bar"><span>14:50</span><span>📶 📡 🔋 90%</span></div>
+  <div class="nav">
+    <span class="back" onclick="showScreen('s2')">←</span>
+    <h1>Submit Form</h1>
+  </div>
+
+  <div style="padding:16px;">
+    <h2 style="font-size:18px; font-weight:700; color:#1a1a2e;">Dozer Prestart</h2>
+    <h3 style="font-size:15px; font-weight:600; margin-top:12px; margin-bottom:16px;">General Information</h3>
+  </div>
+
+  <div class="prestart-section">
+    <div style="font-size:11px; color:#888; font-weight:600; text-transform:uppercase; margin-bottom:10px;">Auto-filled from clock-in</div>
+    <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; padding:8px 12px; background:#f0faf0; border:1px solid #c8e6c9; border-radius:8px; font-size:13px;"><span style="color:#888;">Machine</span><span style="color:#2e7d32; font-weight:600;">(DOZ001) Dozer</span></div>
+      <div style="display:flex; justify-content:space-between; padding:8px 12px; background:#f0faf0; border:1px solid #c8e6c9; border-radius:8px; font-size:13px;"><span style="color:#888;">Operator</span><span style="color:#2e7d32; font-weight:600;">James Baker</span></div>
+      <div style="display:flex; justify-content:space-between; padding:8px 12px; background:#f0faf0; border:1px solid #c8e6c9; border-radius:8px; font-size:13px;"><span style="color:#888;">Location</span><span style="color:#2e7d32; font-weight:600;">2 Gallaghers Pl, Melbourne 3000</span></div>
+    </div>
+    <div class="prestart-q">
+      <div class="pq-label">Current Hours <span class="req">*</span></div>
+      <input class="prestart-input" type="number" placeholder="Enter current hours">
+    </div>
+    <div class="prestart-q">
+      <div class="pq-label">Next Service Due</div>
+      <div style="padding:10px 12px; background:#f5f5f5; border:1px solid #e0e0e0; border-radius:8px; font-size:14px; color:#555; font-weight:500;">150 hours <span style="font-size:11px; color:#888; font-weight:400; margin-left:6px;">from asset management</span></div>
+    </div>
+  </div>
+
+  <div style="padding:0 16px; font-size:13px; color:#555; margin-bottom:12px; line-height:1.5;">Ensure all checks are completed before operating the plant. Report any issues immediately.</div>
+
+  <div class="prestart-section">
+    <div class="prestart-q">
+      <div class="pq-label">Damages / Issues <span class="req">*</span></div>
+      <div class="pq-options" onclick="selectOpt(event)">
+        <div class="pq-opt"><div class="pq-radio"></div>OK - No Damage</div>
+        <div class="pq-opt"><div class="pq-radio"></div>Needs Attention - Damage Noted</div>
+        <div class="pq-opt"><div class="pq-radio"></div>DANGER - Needs Immediate Attention</div>
+      </div>
+    </div>
+    <div class="prestart-q">
+      <div class="pq-label">Engine - Oil level, Coolant, AIR FILTERS, Battery <span class="req">*</span></div>
+      <div class="pq-options" onclick="selectOpt(event)">
+        <div class="pq-opt"><div class="pq-radio"></div>OK</div>
+        <div class="pq-opt"><div class="pq-radio"></div>Needs Attention</div>
+        <div class="pq-opt"><div class="pq-radio"></div>DANGER</div>
+      </div>
+    </div>
+    <div class="prestart-q">
+      <div class="pq-label">Hydraulics - Oil Level, Leaks <span class="req">*</span></div>
+      <div class="pq-options" onclick="selectOpt(event)">
+        <div class="pq-opt"><div class="pq-radio"></div>OK</div>
+        <div class="pq-opt"><div class="pq-radio"></div>Needs Attention</div>
+        <div class="pq-opt"><div class="pq-radio"></div>DANGER</div>
+      </div>
+    </div>
+    <div class="prestart-q">
+      <div class="pq-label">Wheels/Tracks - Tyres, Loose nuts, Pads, Wear <span class="req">*</span></div>
+      <div class="pq-options" onclick="selectOpt(event)">
+        <div class="pq-opt"><div class="pq-radio"></div>OK</div>
+        <div class="pq-opt"><div class="pq-radio"></div>Needs Attention</div>
+        <div class="pq-opt"><div class="pq-radio"></div>SAFETY RISK</div>
+      </div>
+    </div>
+    <div class="prestart-q">
+      <div class="pq-label">Guards - In place, damage, missing bolts <span class="req">*</span></div>
+      <div class="pq-options" onclick="selectOpt(event)">
+        <div class="pq-opt"><div class="pq-radio"></div>OK</div>
+        <div class="pq-opt"><div class="pq-radio"></div>Needs Attention</div>
+        <div class="pq-opt"><div class="pq-radio"></div>SAFETY RISK Do not Operate</div>
+      </div>
+    </div>
+    <div class="prestart-q">
+      <div class="pq-label">Cabin - Cleanliness, Seat Belt, Safety Bar, UHF, First Aid Kit <span class="req">*</span></div>
+      <div class="pq-options" onclick="selectOpt(event)">
+        <div class="pq-opt"><div class="pq-radio"></div>OK</div>
+        <div class="pq-opt"><div class="pq-radio"></div>Needs Attention</div>
+        <div class="pq-opt"><div class="pq-radio"></div>Missing items or damage</div>
+      </div>
+    </div>
+    <div class="prestart-q">
+      <div class="pq-label">Electrical - Lights, Reverse Buzzer, Horn <span class="req">*</span></div>
+      <div class="pq-options" onclick="selectOpt(event)">
+        <div class="pq-opt"><div class="pq-radio"></div>OK</div>
+        <div class="pq-opt"><div class="pq-radio"></div>Needs Attention</div>
+        <div class="pq-opt"><div class="pq-radio"></div>Safety Risk - DO NOT OPERATE</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="prestart-section">
+    <div class="prestart-q">
+      <div class="pq-label">Faults Found or General Comments</div>
+      <textarea class="prestart-input" rows="3" placeholder="Enter any comments..."></textarea>
+    </div>
+    <div class="prestart-q">
+      <div class="pq-label">Photos of machine <span class="req">*</span></div>
+      <div style="font-size:11px; color:#888; margin-bottom:8px;">Front, back, left, right sides. Max 10 images.</div>
+      <div class="photo-row">
+        <div class="photo-thumb" style="background:#d4e0d0;">🏗️</div>
+        <div class="photo-add">+</div>
+      </div>
+    </div>
+    <div class="prestart-q">
+      <div class="pq-label">Signature</div>
+      <div class="sig-box">J Baker</div>
+    </div>
+  </div>
+
+  <div style="height:100px;"></div>
+  <button class="fixed-btn orange" onclick="submitPrestart()">SUBMIT</button>
+</div>
+
+<!-- ===== SCREEN 4: CLOCKED IN (timer running) ===== -->
+<div class="screen" id="s4">
+  <div class="status-bar"><span>14:51</span><span>📶 📡 🔋 90%</span></div>
+  <div class="nav">
+    <span class="back" onclick="showScreen('s1')">←</span>
+    <h1>Clocked In</h1>
+  </div>
+
+  <div style="text-align:center; padding:24px 16px; background:#fff; border-bottom:1px solid #e0e0e0;">
+    <div style="font-size:12px; color:#888; margin-bottom:4px;">CLOCKED IN AT</div>
+    <div style="font-size:32px; font-weight:800; color:#1a1a2e;">10:45 AM</div>
+    <div style="font-size:14px; color:#f7941d; font-weight:600; margin-top:4px;">(VAR004) Bourke Street Roadworks</div>
+    <div style="font-size:12px; color:#888; margin-top:8px;">Duration: <strong id="timerDisplay">4h 06m</strong></div>
+  </div>
+
+  <div class="equip-card" style="margin-top:12px;">
+    <div class="eq-top">
+      <div class="eq-name">(DOZ001) Dozer</div>
+      <span style="font-size:11px; color:#888;">Dry Hire</span>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="fm-name">Dozer Prestart</div>
+    <div class="fm-equip">📋 Dozer (DOZ001)</div>
+    <div class="fm-status fm-submitted">Submitted · 02:51 PM, 24 Mar, 2026</div>
+  </div>
+
+  <div class="spacer"></div>
+  <button class="fixed-btn red" onclick="clockOut()">Clock Out</button>
+</div>
+
+<!-- ===== SCREEN 5: CLOCK OUT / CONFIRM ===== -->
+<div class="screen" id="s5">
+  <div class="status-bar"><span>14:52</span><span>📶 📡 🔋 90%</span></div>
+  <div class="nav">
+    <span class="back" onclick="showScreen('s4')">←</span>
+    <h1>Clocked Timesheet</h1>
+    <span style="font-size:18px; color:#888;">⋮</span>
+  </div>
+
+  <div class="field-card" style="margin:12px 16px;">
+    <div class="fc-row"><span class="fc-label">Project</span><span class="fc-value">(VAR004) Bourke Street Roadworks</span></div>
+    <div class="fc-row"><span class="fc-label">Date</span><span class="fc-value">24/03/2026</span></div>
+  </div>
+
+  <div style="padding:0 16px; font-size:12px; color:#f7941d; margin-bottom:4px;">ℹ️ Clock-in and Clock-out times are rounded to the nearest 15-minute interval as per company policy</div>
+
+  <div id="clockedTimes" class="clocked-info">
+    <div class="ci-row"><span class="ci-label">Clock In</span><input type="time" id="ciIn" value="10:45" style="font-size:16px; font-weight:700; border:1px solid #d0d0d0; border-radius:6px; padding:6px 10px; text-align:center;" onchange="validateTimes()"></div>
+    <div class="ci-row"><span class="ci-label">Clock Out</span><input type="time" id="ciOut" value="14:45" style="font-size:16px; font-weight:700; border:1px solid #d0d0d0; border-radius:6px; padding:6px 10px; text-align:center;" onchange="validateTimes()"></div>
+    <div class="ci-row"><span class="ci-label">Break</span><span class="ci-value">30 mins</span></div>
+    <div class="ci-row"><span class="ci-label">Clocked Duration</span><span class="ci-value" style="color:#f7941d; font-size:16px;" id="ciDuration">03h 30m</span></div>
+  </div>
+
+  <div id="sameTimeWarn" style="display:none; margin:0 16px 12px; padding:10px 14px; background:#fde8e8; border:1px solid #e53935; border-radius:8px; font-size:12px; color:#c62828; font-weight:600;">⚠ Clock-in and clock-out times are the same. Please adjust the clock-out time.</div>
+
+  <div id="futureWarn" style="display:none; margin:0 16px 12px; padding:10px 14px; background:#fde8e8; border:1px solid #e53935; border-radius:8px; font-size:12px; color:#c62828; font-weight:600;">⚠ Clock-out time cannot be in the future.</div>
+
+  <div style="padding:0 16px; margin-bottom:4px;"><div class="section-label" style="padding:0;">Remarks</div></div>
+  <div class="field-card" style="margin:4px 16px 12px;"><div class="fc-row"><textarea style="width:100%; border:none; font-size:14px; font-family:inherit; resize:none;" rows="2" placeholder="Remarks..."></textarea></div></div>
+
+  <div class="equip-card">
+    <div class="eq-top">
+      <div class="eq-name">(DOZ001) Dozer</div>
+    </div>
+    <div style="font-size:11px; color:#888; margin-top:2px;">Dry Hire</div>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:8px;">
+      <span style="font-size:12px; color:#888;">Duration</span>
+      <span style="font-size:14px; font-weight:700;">3h 30m</span>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="fm-name">Dozer Prestart</div>
+    <div class="fm-equip">📋 Dozer (DOZ001)</div>
+    <div class="fm-status fm-submitted">Submitted · 02:51 PM, 24 Mar, 2026</div>
+  </div>
+
+  <div class="spacer"></div>
+  <button class="fixed-btn green" onclick="confirmTimesheet()">Confirm</button>
+</div>
+
+<!-- ===== SUCCESS MODAL ===== -->
+<div class="modal-overlay" id="clockInModal">
+  <div class="modal">
+    <div class="modal-icon">✓</div>
+    <h3>Clocked in!</h3>
+    <p>You have clocked in successfully</p>
+    <button class="modal-btn green" onclick="closeModal('clockInModal'); showScreen('s4');">Ok</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="successModal">
+  <div class="modal">
+    <div class="modal-icon">✓</div>
+    <h3>Success!</h3>
+    <p>Your timesheet has been added successfully!</p>
+    <div style="display:flex; gap:10px; margin-bottom:12px;">
+      <div style="flex:1; padding:10px; border:1px solid #e0e0e0; border-radius:8px; text-align:center;"><div style="font-size:11px; color:#888;">Clock In</div><div style="font-size:16px; font-weight:700;">10:45 AM</div></div>
+      <div style="flex:1; padding:10px; border:1px solid #e0e0e0; border-radius:8px; text-align:center;"><div style="font-size:11px; color:#888;">Clock Out</div><div style="font-size:16px; font-weight:700;">2:45 PM</div></div>
+    </div>
+    <div style="display:flex; gap:10px; margin-bottom:16px;">
+      <div style="flex:1; padding:10px; border:1px solid #e0e0e0; border-radius:8px; text-align:center;"><div style="font-size:11px; color:#888;">Break</div><div style="font-size:16px; font-weight:700;">30 m</div></div>
+      <div style="flex:1; padding:10px; border:1px solid #e0e0e0; border-radius:8px; text-align:center;"><div style="font-size:11px; color:#888;">Total Hours</div><div style="font-size:16px; font-weight:700;">03h 30m</div></div>
+    </div>
+    <button class="modal-btn orange">Create daywork docket</button>
+    <button class="modal-btn outline" onclick="closeModal('successModal'); showScreen('s1');">Close</button>
+  </div>
+</div>
+
+<script>
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function openEquipSheet() {
+  document.getElementById('equipSheet').classList.add('show');
+}
+
+function selectEquip(code, name) {
+  document.getElementById('equipSheet').classList.remove('show');
+  document.getElementById('equip1').style.display = 'block';
+  document.getElementById('equip1').querySelector('.eq-name').textContent = '(' + code + ') ' + name;
+  document.getElementById('formsLabel').style.display = 'block';
+  document.getElementById('formsHint').style.display = 'block';
+  document.getElementById('formCard').style.display = 'block';
+}
+
+function selectOpt(e) {
+  const opt = e.target.closest('.pq-opt');
+  if (!opt) return;
+  const group = opt.closest('.pq-options');
+  group.querySelectorAll('.pq-opt').forEach(o => o.classList.remove('selected', 'selected-warn', 'selected-danger'));
+  opt.classList.add('selected');
+  // Remove blocker on this question
+  const q = group.closest('.prestart-q');
+  if (q) q.classList.remove('blocked');
+  // Check if next question should be unblocked
+  updatePrestartBlockers();
+}
+
+function updatePrestartBlockers() {
+  const questions = document.querySelectorAll('#s3 .prestart-q');
+  let foundUnanswered = false;
+  questions.forEach(q => {
+    const opts = q.querySelector('.pq-options');
+    if (!opts) return; // skip non-radio questions
+    const hasSelection = opts.querySelector('.pq-opt.selected, .pq-opt.selected-warn, .pq-opt.selected-danger');
+    if (foundUnanswered) {
+      q.classList.add('blocked');
+    } else {
+      q.classList.remove('blocked');
+      if (!hasSelection) {
+        foundUnanswered = true;
+        // Block everything after this
+      }
+    }
+  });
+  // Update submit button
+  const allAnswered = ![...document.querySelectorAll('#s3 .prestart-q .pq-options')].some(opts => !opts.querySelector('.pq-opt.selected, .pq-opt.selected-warn, .pq-opt.selected-danger'));
+  const submitBtn = document.querySelector('#s3 .fixed-btn');
+  submitBtn.style.opacity = allAnswered ? '1' : '0.4';
+  submitBtn.style.pointerEvents = allAnswered ? 'auto' : 'none';
+}
+
+// Init blockers on load
+document.addEventListener('DOMContentLoaded', function() {
+  updatePrestartBlockers();
+});
+
+function submitPrestart() {
+  document.getElementById('formCard').querySelector('.fm-status').textContent = 'Submitted · 02:51 PM, 24 Mar, 2026';
+  document.getElementById('formCard').querySelector('.fm-status').className = 'fm-status fm-submitted';
+  showScreen('s2');
+}
+
+function clockIn() {
+  document.getElementById('clockInModal').classList.add('show');
+}
+
+function clockOut() {
+  showScreen('s5');
+}
+
+function confirmTimesheet() {
+  document.getElementById('successModal').classList.add('show');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+function validateTimes() {
+  const ciIn = document.getElementById('ciIn');
+  const ciOut = document.getElementById('ciOut');
+  const sameWarn = document.getElementById('sameTimeWarn');
+  const futureWarn = document.getElementById('futureWarn');
+  const duration = document.getElementById('ciDuration');
+  const confirmBtn = document.querySelector('#s5 .fixed-btn');
+
+  const inVal = ciIn.value;
+  const outVal = ciOut.value;
+
+  // Check if same
+  const isSame = inVal === outVal;
+  sameWarn.style.display = isSame ? 'block' : 'none';
+  ciIn.style.color = isSame ? '#e53935' : '#333';
+  ciOut.style.color = isSame ? '#e53935' : '#333';
+  ciIn.style.borderColor = isSame ? '#e53935' : '#d0d0d0';
+  ciOut.style.borderColor = isSame ? '#e53935' : '#d0d0d0';
+
+  // Check if clock out is in the future
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  const outParts = outVal.split(':');
+  const outMins = parseInt(outParts[0]) * 60 + parseInt(outParts[1]);
+  const isFuture = outMins > nowMins;
+  futureWarn.style.display = isFuture ? 'block' : 'none';
+  if (isFuture) {
+    ciOut.style.color = '#e53935';
+    ciOut.style.borderColor = '#e53935';
+  }
+
+  // Calculate duration
+  const inParts = inVal.split(':');
+  const inMins = parseInt(inParts[0]) * 60 + parseInt(inParts[1]);
+  let diffMins = outMins - inMins - 30; // minus 30 min break
+  if (diffMins < 0) diffMins = 0;
+  const hours = Math.floor(diffMins / 60);
+  const mins = diffMins % 60;
+  duration.textContent = (hours < 10 ? '0' : '') + hours + 'h ' + (mins < 10 ? '0' : '') + mins + 'm';
+
+  // Disable confirm if invalid
+  if (isSame || isFuture) {
+    confirmBtn.style.opacity = '0.4';
+    confirmBtn.style.pointerEvents = 'none';
+  } else {
+    confirmBtn.style.opacity = '1';
+    confirmBtn.style.pointerEvents = 'auto';
+  }
+}
+</script>
+</body>
+</html>
