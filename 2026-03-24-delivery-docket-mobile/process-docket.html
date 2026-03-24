@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Varicon Mobile — Process Docket</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', Roboto, sans-serif; background: #f5f5f5; color: #333; max-width: 390px; margin: 0 auto; min-height: 100vh; }
+
+  .status-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px; background: #fff; font-size: 12px; font-weight: 600; }
+  .nav-bar { display: flex; align-items: center; padding: 12px 16px; background: #1a1a2e; color: #fff; gap: 12px; }
+  .nav-bar .back { font-size: 20px; cursor: pointer; }
+  .nav-bar h1 { font-size: 16px; font-weight: 600; flex: 1; }
+  .nav-bar .badge { padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #e53935; color: #fff; }
+
+  /* Docket image */
+  .docket-image {
+    background: #e8e8e8; height: 180px; display: flex; align-items: center; justify-content: center;
+    position: relative; cursor: pointer;
+  }
+  .docket-image .img-mock {
+    width: 70%; height: 85%; background: #fff; border-radius: 4px; padding: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.2); font-size: 9px; line-height: 1.4; transform: rotate(-1deg);
+  }
+  .docket-image .img-mock h3 { font-size: 11px; margin-bottom: 2px; }
+  .docket-image .expand-hint {
+    position: absolute; bottom: 8px; right: 12px; background: rgba(0,0,0,.6);
+    color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 6px;
+  }
+
+  /* OCR banner */
+  .ocr-banner {
+    margin: 12px 16px; padding: 10px 14px; background: #ede7f6; border: 1px solid #b39ddb;
+    border-radius: 10px; display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: #4527a0;
+  }
+  .ocr-banner .ocr-icon { font-size: 18px; }
+
+  /* Sections */
+  .section {
+    margin: 0 16px 12px; background: #fff; border-radius: 12px;
+    border: 1px solid #e8e8e8; overflow: hidden;
+  }
+  .section.required { border: 2px solid #f7941d; }
+  .section.done { border: 2px solid #4caf50; }
+  .section-head {
+    padding: 14px 16px 0; display: flex; align-items: center; gap: 8px;
+  }
+  .section-head .snum {
+    width: 22px; height: 22px; border-radius: 50%; background: #f7941d; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;
+  }
+  .section.done .section-head .snum { background: #4caf50; }
+  .section-head h3 { font-size: 14px; font-weight: 700; }
+  .section-body { padding: 10px 16px 16px; }
+
+  .field-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 4px; margin-top: 10px; }
+  .field-label:first-child { margin-top: 0; }
+  .field-input {
+    width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 8px;
+    font-size: 14px; background: #fff; font-family: inherit; appearance: none;
+  }
+  .field-input:focus { outline: none; border-color: #f7941d; }
+  select.field-input {
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+  }
+  .field-input.ocr-filled { background: #f3e5f5; border-color: #b39ddb; }
+  .ocr-tag { display: inline-block; font-size: 9px; font-weight: 700; color: #7c4dff; margin-left: 6px; vertical-align: middle; }
+
+  /* Supplier match */
+  .supplier-match {
+    margin-top: 8px; padding: 10px 12px; background: #f0faf0; border: 1px solid #4caf50;
+    border-radius: 8px; font-size: 12px; color: #2e7d32; display: none;
+  }
+  .supplier-match.show { display: block; }
+
+  /* PO options */
+  .po-options { display: flex; gap: 8px; margin-top: 8px; }
+  .po-opt {
+    flex: 1; padding: 12px 10px; border: 2px solid #e0e0e0; border-radius: 10px;
+    text-align: center; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s;
+  }
+  .po-opt:active { background: #f5f5f5; }
+  .po-opt.selected { border-color: #f7941d; background: #fff8f0; color: #f7941d; }
+  .po-opt.secondary { flex: 0 0 auto; padding: 12px 14px; font-size: 12px; opacity: .6; }
+  .po-opt.secondary.selected { opacity: 1; }
+  .po-opt .po-icon { font-size: 20px; margin-bottom: 4px; }
+
+  .po-select-wrap { display: none; margin-top: 10px; }
+  .po-select-wrap.show { display: block; }
+
+  .po-match-info {
+    margin-top: 8px; padding: 10px 12px; background: #f0faf0; border: 1px solid #4caf50;
+    border-radius: 8px; font-size: 12px; color: #2e7d32; display: none;
+  }
+  .po-match-info.show { display: block; }
+
+  /* Delivery items */
+  .items-loaded { display: none; }
+  .items-loaded.show { display: block; }
+  .receive-all-btn {
+    display: block; width: 100%; padding: 10px; border: 2px dashed #4caf50; border-radius: 8px;
+    background: #f0faf0; color: #2e7d32; font-size: 13px; font-weight: 600; text-align: center;
+    cursor: pointer; margin-bottom: 10px; border-style: solid;
+  }
+  .receive-all-btn:active { background: #e0f2e0; }
+
+  .del-item {
+    padding: 12px; background: #fafafa; border: 1px solid #e8e8e8; border-radius: 10px;
+    margin-bottom: 8px; position: relative;
+  }
+  .del-item { cursor: pointer; transition: transform 0.25s, opacity 0.25s; overflow: hidden; }
+  .del-item.swiping { transform: translateX(-100%); opacity: 0; }
+  .del-item.removed { max-height: 0; padding: 0 12px; margin: 0; border: none; opacity: 0; overflow: hidden; transition: max-height 0.3s, padding 0.3s, margin 0.3s, opacity 0.2s; }
+  .del-item .di-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .del-item .di-desc { font-size: 14px; font-weight: 600; flex: 1; }
+  .del-item .swipe-hint { font-size: 11px; color: #c62828; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .del-item .di-meta { font-size: 12px; color: #888; margin-top: 4px; }
+  .del-item .di-qty-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .del-item .di-qty-row label { font-size: 12px; font-weight: 600; color: #555; }
+  .di-qty-input {
+    width: 80px; padding: 10px; border: 2px solid #d0d0d0; border-radius: 8px;
+    font-size: 16px; font-weight: 700; text-align: center; font-family: inherit;
+  }
+  .di-qty-input:focus { outline: none; border-color: #f7941d; }
+  .del-item .di-qty-row .di-unit { font-size: 13px; color: #888; }
+  .del-item .di-qty-row .di-ordered { font-size: 11px; color: #888; margin-left: auto; }
+  .del-item .di-undo {
+    display: block; width: 100%; text-align: center; padding: 8px;
+    font-size: 13px; color: #1565c0; font-weight: 600; cursor: pointer;
+  }
+
+  /* Bottom bar */
+  .bottom-bar {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 390px; padding: 12px 16px; background: #fff;
+    border-top: 1px solid #e0e0e0; display: flex; gap: 10px;
+    box-shadow: 0 -2px 8px rgba(0,0,0,.06); z-index: 10;
+  }
+  .bottom-bar .btn {
+    flex: 1; padding: 14px; border-radius: 10px; font-size: 15px; font-weight: 700;
+    text-align: center; cursor: pointer; border: 2px solid;
+  }
+  .btn-save { background: #fff; border-color: #d0d0d0; color: #555; }
+  .btn-save:active { background: #f5f5f5; }
+  .btn-confirm { background: #4caf50; border-color: #4caf50; color: #fff; }
+  .btn-confirm:active { background: #43a047; }
+  .btn-next { background: #f7941d; border-color: #f7941d; color: #fff; }
+  .btn-next:active { background: #e8850f; }
+
+  .spacer { height: 80px; }
+</style>
+</head>
+<body>
+
+<div class="status-bar"><span>12:06</span><span>📶 📡 🔋 66%</span></div>
+<div class="nav-bar">
+  <span class="back" onclick="window.location='docket-list.html'" style="cursor:pointer">‹</span>
+  <h1>Process Docket</h1>
+  <span class="badge">Incomplete</span>
+</div>
+
+<!-- Docket image -->
+<div class="docket-image">
+  <div class="img-mock">
+    <h3>A1 ASPHALTING PTY LTD</h3>
+    <div style="color:#888; font-size:8px;">ABN: 52 108 456 789</div>
+    <div style="margin-top:6px;">
+      <strong>Delivery Docket:</strong> A1-DD-4421<br>
+      <strong>Date:</strong> 24/03/2026<br>
+      <strong>Project:</strong> Bourke St Roadworks<br>
+      <strong>Product:</strong> Asphaltic Concrete AC14<br>
+      <strong>Quantity:</strong> 18 tonnes<br>
+      <strong>Truck:</strong> VIC 1AB 2CD
+    </div>
+  </div>
+  <div class="expand-hint">Tap to expand</div>
+</div>
+
+<!-- OCR banner -->
+<div class="ocr-banner">
+  <span class="ocr-icon">✦</span>
+  <span>We've read this docket — check the details below and confirm.</span>
+</div>
+
+<!-- Step 1: Supplier -->
+<div class="section required" id="sec1">
+  <div class="section-head"><div class="snum">1</div><h3>Supplier</h3></div>
+  <div class="section-body">
+    <div class="field-label">Supplier <span class="ocr-tag">✦ OCR</span></div>
+    <select class="field-input ocr-filled" id="supplierSelect" onchange="onSupplierChange()">
+      <option value="">Select supplier...</option>
+      <option value="a1" selected>A1 Asphalting Pty. Ltd.</option>
+      <option>Boral Concrete</option>
+      <option>Hanson Construction Materials</option>
+      <option>Coates Hire</option>
+      <option>Holcim Australia</option>
+      <option value="new" style="color:#f7941d;">+ Add new supplier</option>
+    </select>
+    <div class="supplier-match show" id="supplierMatch">✓ Matched from OCR — "A1 ASPHALTING PTY LTD"</div>
+
+    <div class="field-label">Supplier Docket # <span class="ocr-tag">✦ OCR</span></div>
+    <input class="field-input ocr-filled" value="A1-DD-4421">
+
+    <div class="field-label">Delivery Date <span class="ocr-tag">✦ OCR</span></div>
+    <input class="field-input ocr-filled" type="text" value="Tue 24/03/2026" readonly>
+  </div>
+</div>
+
+<!-- Step 2: Match PO -->
+<div class="section required" id="sec2">
+  <div class="section-head"><div class="snum">2</div><h3>Purchase Order</h3></div>
+  <div class="section-body">
+    <div class="po-options">
+      <div class="po-opt" onclick="selectPO('link', this)">
+        <div class="po-icon">🔗</div>
+        Link to PO
+      </div>
+      <div class="po-opt secondary" onclick="selectPO('none', this)">
+        ✕ No PO
+      </div>
+    </div>
+
+    <div class="po-select-wrap" id="poSelectWrap">
+      <div class="field-label" style="margin-top:12px;">Select Purchase Order</div>
+      <select class="field-input" id="poSelect" onchange="onPOChange()">
+        <option value="">Choose PO...</option>
+        <option value="po33">PO-VAR004-0033 — Asphalt & Bitumen ($55,000)</option>
+        <option value="po28">PO-VAR004-0028 — Roadworks Stage 2 ($38,000)</option>
+        <option value="po19">PO-VAR004-0019 — Plant Hire ($22,000)</option>
+      </select>
+      <div class="po-match-info" id="poMatchInfo">✓ PO matched — delivery items loaded below</div>
+    </div>
+  </div>
+</div>
+
+<!-- Step 3: Delivery Items -->
+<div class="section" id="sec3">
+  <div class="section-head"><div class="snum">3</div><h3>Delivery Items</h3></div>
+  <div class="section-body">
+    <p style="font-size:12px; color:#888; margin-bottom:10px;">Select a PO above to load the order items. Mark what was actually delivered.</p>
+
+    <div class="items-loaded" id="itemsLoaded">
+      <button class="receive-all-btn" onclick="receiveAll()">✓ Receive All in Full</button>
+
+      <div class="del-item" id="item1">
+        <div class="di-top">
+          <div class="di-desc">Asphaltic Concrete AC14</div>
+          <div class="swipe-hint" onclick="event.stopPropagation(); swipeItem('item1')">← swipe to remove</div>
+        </div>
+        <div class="di-meta">Ordered: 40t · Previously received: 12t · Remaining: 28t</div>
+        <div class="di-qty-row">
+          <label>Received:</label>
+          <input class="di-qty-input recv-input" type="number" placeholder="0" value="18">
+          <span class="di-unit">tonnes</span>
+          <span class="di-ordered">of 28t remaining</span>
+        </div>
+      </div>
+
+      <div class="del-item" id="item2">
+        <div class="di-top">
+          <div class="di-desc">Asphaltic Concrete AC20 (base)</div>
+          <div class="swipe-hint" onclick="event.stopPropagation(); swipeItem('item2')">← swipe to remove</div>
+        </div>
+        <div class="di-meta">Ordered: 60t · Previously received: 0t · Remaining: 60t</div>
+        <div class="di-qty-row">
+          <label>Received:</label>
+          <input class="di-qty-input recv-input" type="number" placeholder="0">
+          <span class="di-unit">tonnes</span>
+          <span class="di-ordered">of 60t remaining</span>
+        </div>
+      </div>
+
+      <div class="del-item" id="item3">
+        <div class="di-top">
+          <div class="di-desc">Tack Coat Application</div>
+          <div class="swipe-hint" onclick="event.stopPropagation(); swipeItem('item3')">← swipe to remove</div>
+        </div>
+        <div class="di-meta">Ordered: 500m² · Previously received: 200m² · Remaining: 300m²</div>
+        <div class="di-qty-row">
+          <label>Received:</label>
+          <input class="di-qty-input recv-input" type="number" placeholder="0">
+          <span class="di-unit">m²</span>
+          <span class="di-ordered">of 300m² remaining</span>
+        </div>
+      </div>
+
+      <div class="del-item" id="item4">
+        <div class="di-top">
+          <div class="di-desc">Line Marking Paint (white)</div>
+          <div class="swipe-hint" onclick="event.stopPropagation(); swipeItem('item4')">← swipe to remove</div>
+        </div>
+        <div class="di-meta">Ordered: 20 drums · Previously received: 20 drums · Remaining: 0</div>
+        <div class="di-qty-row">
+          <label>Received:</label>
+          <input class="di-qty-input recv-input" type="number" placeholder="0" value="0">
+          <span class="di-unit">drums</span>
+          <span class="di-ordered">of 0 remaining</span>
+        </div>
+      </div>
+
+      <div class="del-item" id="item5">
+        <div class="di-top">
+          <div class="di-desc">Road Base Material (Class 2)</div>
+          <div class="swipe-hint" onclick="event.stopPropagation(); swipeItem('item5')">← swipe to remove</div>
+        </div>
+        <div class="di-meta">Ordered: 80t · Previously received: 35t · Remaining: 45t</div>
+        <div class="di-qty-row">
+          <label>Received:</label>
+          <input class="di-qty-input recv-input" type="number" placeholder="0">
+          <span class="di-unit">tonnes</span>
+          <span class="di-ordered">of 45t remaining</span>
+        </div>
+      </div>
+
+      <p style="font-size:11px; color:#999; margin-top:4px;">Remove items not included in this delivery. Only keep items that were actually delivered.</p>
+    </div>
+  </div>
+</div>
+
+<div class="spacer"></div>
+
+<div class="bottom-bar">
+  <div class="btn btn-save" onclick="window.location='docket-list.html'">Save</div>
+  <div class="btn btn-next" onclick="window.location='docket-list.html'">Save & Next Docket →</div>
+</div>
+
+<script>
+function selectPO(type, el) {
+  document.querySelectorAll('.po-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('poSelectWrap').style.display = type === 'link' ? 'block' : 'none';
+  document.getElementById('poSelectWrap').classList.toggle('show', type === 'link');
+  if (type === 'none') {
+    document.getElementById('poMatchInfo').classList.remove('show');
+    document.getElementById('itemsLoaded').classList.remove('show');
+    markDone('sec2');
+  }
+}
+
+function onPOChange() {
+  const val = document.getElementById('poSelect').value;
+  if (val) {
+    document.getElementById('poMatchInfo').classList.add('show');
+    document.getElementById('itemsLoaded').classList.add('show');
+    markDone('sec2');
+  } else {
+    document.getElementById('poMatchInfo').classList.remove('show');
+    document.getElementById('itemsLoaded').classList.remove('show');
+  }
+}
+
+function onSupplierChange() {
+  const val = document.getElementById('supplierSelect').value;
+  document.getElementById('supplierMatch').classList.toggle('show', val === 'a1');
+  if (val) markDone('sec1');
+}
+
+function markDone(secId) {
+  const sec = document.getElementById(secId);
+  sec.classList.remove('required');
+  sec.classList.add('done');
+}
+
+function swipeItem(id) {
+  const item = document.getElementById(id);
+  item.classList.add('swiping');
+  setTimeout(() => {
+    item.classList.remove('swiping');
+    item.classList.add('removed');
+    // Insert undo bar after the item
+    const undo = document.createElement('div');
+    undo.style.cssText = 'margin:0 0 8px; padding:10px 14px; background:#fde8e8; border-radius:10px; display:flex; align-items:center; justify-content:space-between; font-size:13px; color:#c62828;';
+    undo.innerHTML = '<span>Item removed</span><span style="color:#1565c0; font-weight:600; cursor:pointer;" onclick="undoItem(\'' + id + '\', this)">Undo</span>';
+    item.parentNode.insertBefore(undo, item.nextSibling);
+  }, 250);
+}
+
+function undoItem(id, undoEl) {
+  const item = document.getElementById(id);
+  item.classList.remove('removed');
+  undoEl.parentElement.remove();
+}
+
+function receiveAll() {
+  document.querySelectorAll('.recv-input').forEach(input => {
+    const item = input.closest('.del-item');
+    if (!item.classList.contains('removed')) {
+      // Parse remaining from the "of Xt remaining" text
+      const remaining = input.closest('.di-qty-row').querySelector('.di-ordered').textContent;
+      const match = remaining.match(/of\s+([\d.]+)/);
+      if (match) input.value = match[1];
+    }
+  });
+}
+
+// Mark step 1 as done on load since OCR filled it
+markDone('sec1');
+</script>
+
+</body>
+</html>
