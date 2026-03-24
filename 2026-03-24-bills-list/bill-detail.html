@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Edit Bill (Redesign)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+  .sidebar-item.active .icon { opacity: 1; }
+
+  .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+  /* Fixed header */
+  .bill-header {
+    padding: 16px 32px; background: #fff; border-bottom: 1px solid #e0e0e0;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .bill-header-left { display: flex; align-items: center; gap: 12px; }
+  .bill-header-left a { color: #666; text-decoration: none; font-size: 20px; }
+  .bill-header-left h1 { font-size: 18px; font-weight: 600; }
+  .bill-header-left .bill-ref { font-size: 13px; color: #888; margin-left: 8px; }
+  .bill-status { padding: 4px 14px; border-radius: 12px; font-size: 12px; font-weight: 600; background: #f0f0f0; color: #666; }
+
+  /* Stepper */
+  .bill-stepper {
+    padding: 16px 32px 12px; background: #fff; border-bottom: 1px solid #e0e0e0;
+    display: flex; align-items: center; justify-content: center; gap: 0;
+    position: sticky; top: 57px; z-index: 9; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  }
+  .bs-step { display: flex; align-items: center; gap: 6px; }
+  .bs-circle {
+    width: 30px; height: 30px; border-radius: 50%; border: 2px solid #d0d0d0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; color: #999; background: #fff; transition: all 0.3s;
+  }
+  .bs-circle.active { border-color: #f7941d; color: #f7941d; background: #fff8f0; }
+  .bs-circle.done { border-color: #4caf50; color: #fff; background: #4caf50; }
+  .bs-label { font-size: 11px; font-weight: 600; color: #999; white-space: nowrap; }
+  .bs-label.active { color: #f7941d; }
+  .bs-label.done { color: #4caf50; }
+  .bs-line { width: 50px; height: 2px; background: #d0d0d0; margin: 0 10px; }
+  .bs-line.done { background: #4caf50; }
+
+  /* Content area */
+  .bill-content { display: flex; flex: 1; overflow: hidden; }
+
+  /* PDF viewer */
+  .pdf-panel {
+    width: 45%; background: #e0e0e0; border-right: 1px solid #ccc;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .pdf-toolbar {
+    padding: 8px 16px; background: #333; color: #fff; display: flex; align-items: center; gap: 8px; font-size: 13px;
+  }
+  .pdf-toolbar button { background: rgba(255,255,255,.15); border: none; color: #fff; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .pdf-toolbar button:hover { background: rgba(255,255,255,.25); }
+  .pdf-body {
+    flex: 1; overflow-y: auto; padding: 20px; display: flex; justify-content: center;
+  }
+  .pdf-mock {
+    background: #fff; width: 100%; max-width: 500px; padding: 40px 36px; box-shadow: 0 2px 12px rgba(0,0,0,.15);
+    font-size: 12px; line-height: 1.6;
+  }
+  .pdf-mock h2 { font-size: 18px; margin-bottom: 4px; }
+  .pdf-mock .invoice-header { display: flex; justify-content: space-between; margin: 16px 0; }
+  .pdf-mock table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 11px; }
+  .pdf-mock th { background: #1a1a2e; color: #fff; padding: 6px 8px; text-align: left; font-size: 10px; }
+  .pdf-mock td { padding: 6px 8px; border-bottom: 1px solid #eee; }
+  .pdf-mock .totals-row td { font-weight: 700; border-top: 2px solid #333; }
+
+  /* Form panel */
+  .form-panel { flex: 1; overflow-y: auto; padding: 24px 28px; }
+
+  /* Section cards */
+  .section-card {
+    background: #fff; border: 2px solid #e0e0e0; border-radius: 10px;
+    padding: 20px 24px; margin-bottom: 16px; transition: all 0.3s;
+  }
+  .section-card.required { border-color: #f7941d; }
+  .section-card.done { border-color: #4caf50; background: #fafff9; }
+  .section-card h3 {
+    font-size: 15px; font-weight: 600; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-card h3 .step-num {
+    width: 24px; height: 24px; border-radius: 50%; background: #f7941d; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+  }
+  .section-card.done h3 .step-num { background: #4caf50; }
+  .section-card p.desc { font-size: 12px; color: #888; margin-bottom: 14px; }
+
+  .form-row { display: flex; gap: 12px; margin-bottom: 12px; }
+  .form-row > div { flex: 1; }
+  .form-row label { display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .3px; }
+  .form-input {
+    width: 100%; padding: 9px 12px; border: 1px solid #d0d0d0; border-radius: 6px;
+    font-size: 13px; background: #fff;
+  }
+  .form-input:focus { outline: none; border-color: #f7941d; }
+  .form-input.prefilled { background: #f0faf0; border-color: #4caf50; color: #2e7d32; font-weight: 500; }
+
+  /* Link PO section */
+  .link-options { display: flex; gap: 10px; margin-bottom: 12px; align-items: stretch; }
+  .link-option {
+    padding: 14px; border: 2px solid #e0e0e0; border-radius: 8px;
+    text-align: center; cursor: pointer; transition: all 0.2s; font-size: 13px; font-weight: 600;
+  }
+  .link-option.primary { flex: 3; }
+  .link-option.secondary { flex: 1; font-size: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0.7; }
+  .link-option:hover { border-color: #ccc; }
+  .link-option.selected { border-color: #f7941d; background: #fff8f0; color: #f7941d; }
+  .link-option .opt-icon { font-size: 24px; margin-bottom: 6px; }
+  .link-option .opt-label { font-size: 12px; color: #888; font-weight: 400; margin-top: 2px; }
+  .link-option.selected .opt-label { color: #f7941d; }
+
+  /* Line items table */
+  .line-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+  .line-table th { text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 600; color: #666; background: #fafafa; border-bottom: 1px solid #e0e0e0; }
+  .line-table td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
+  .line-table select, .line-table input {
+    width: 100%; padding: 7px 8px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 12px;
+  }
+  .line-table .desc-cell { font-weight: 500; color: #333; }
+
+  /* Action buttons at bottom */
+  .bill-actions {
+    display: flex; gap: 12px; justify-content: center; padding: 20px 24px;
+    background: #fff; border: 2px solid #e0e0e0; border-radius: 10px; margin-bottom: 16px;
+  }
+  .btn { padding: 14px 28px; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; border: 2px solid; transition: all 0.15s; }
+  .btn-cancel { background: #fff; border-color: #d0d0d0; color: #555; }
+  .btn-cancel:hover { background: #f5f5f5; }
+  .btn-draft { background: #fff; border-color: #1565c0; color: #1565c0; }
+  .btn-draft:hover { background: #e3f2fd; }
+  .btn-submit { background: #f7941d; border-color: #f7941d; color: #fff; }
+  .btn-submit:hover { background: #e8850f; }
+  .btn-approve { background: #4caf50; border-color: #4caf50; color: #fff; box-shadow: 0 4px 12px rgba(76,175,80,.3); }
+  .btn-approve:hover { background: #43a047; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Annotation */
+  .annotation {
+    margin-top: 8px; padding: 16px 20px; background: #fff8f0;
+    border: 1px solid #f7941d; border-radius: 8px; font-size: 13px; color: #333; line-height: 1.6;
+    margin-bottom: 24px;
+  }
+  .annotation h3 { color: #f7941d; font-size: 14px; margin-bottom: 8px; }
+  .annotation ul { margin-left: 20px; }
+  .annotation li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Cookie's Civil</div>
+    <div class="sidebar-item"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Docket</div>
+    <div class="sidebar-item"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">🚚</span> Delivery Docket</div>
+    <div class="sidebar-item active"><span class="icon">💰</span> Bills</div>
+  </div>
+
+  <div class="main">
+    <!-- Header -->
+    <div class="bill-header">
+      <div class="bill-header-left">
+        <a href="index.html">←</a>
+        <h1>Process Bill</h1>
+        <span class="bill-ref">SPH-INV-0587</span>
+        <span class="bill-status">Draft</span>
+      </div>
+    </div>
+
+    <!-- Stepper -->
+    <div class="bill-stepper">
+      <div class="bs-step"><div class="bs-circle active" id="bs1">1</div><div class="bs-label active" id="bl1">Supplier &amp; Summary</div></div>
+      <div class="bs-line" id="bline1"></div>
+      <div class="bs-step"><div class="bs-circle" id="bs2">2</div><div class="bs-label" id="bl2">Link PO &amp; Dockets</div></div>
+      <div class="bs-line" id="bline2"></div>
+      <div class="bs-step"><div class="bs-circle" id="bs3">3</div><div class="bs-label" id="bl3">Line Items</div></div>
+      <div class="bs-line" id="bline3"></div>
+      <div class="bs-step"><div class="bs-circle" id="bs4">4</div><div class="bs-label" id="bl4">Review &amp; Submit</div></div>
+    </div>
+
+    <!-- Content: PDF + Form side by side -->
+    <div class="bill-content">
+      <!-- PDF viewer -->
+      <div class="pdf-panel">
+        <div class="pdf-toolbar">
+          <span>Southeast_Plant_Hire_Invoice_SPH-INV-0587.pdf</span>
+          <span style="margin-left:auto;">1 / 1</span>
+          <button>−</button><button>+</button><button>⬇</button><button>🖨</button>
+        </div>
+        <div class="pdf-body">
+          <div class="pdf-mock">
+            <h2>SOUTHEAST PLANT HIRE</h2>
+            <div style="font-size:10px; color:#666;">18 Industrial Avenue, Hemmant QLD 4174 | Ph: 07 3890 4455 | ABN: 48 156 789 012</div>
+            <div style="background:#1a1a2e; color:#fff; text-align:center; padding:6px; margin:12px 0; font-weight:700; font-size:13px;">TAX INVOICE</div>
+
+            <div class="invoice-header">
+              <div>
+                <div><strong>Invoice No:</strong> SPH-INV-0587</div>
+                <div><strong>Bill To:</strong> Varicon Pty Ltd</div>
+                <div><strong>Project:</strong> VD001 - Wynnum Road Upgrade Stage 2</div>
+                <div><strong>Address:</strong> 245 Wynnum Rd, Morningside QLD 4170</div>
+              </div>
+              <div style="text-align:right">
+                <div><strong>Invoice Date:</strong> 18/03/2026</div>
+                <div><strong>Due Date:</strong> 17/04/2026</div>
+                <div><strong>Terms:</strong> 30 Days</div>
+                <div><strong>PO Number:</strong> PO-VD001-042</div>
+              </div>
+            </div>
+
+            <table>
+              <thead><tr><th>#</th><th>Description</th><th>Period</th><th>Days</th><th>Day Rate</th><th>Amount</th></tr></thead>
+              <tbody>
+                <tr><td>1</td><td>CAT 320 Excavator (20T) - Wet Hire<br><em style="font-size:10px;color:#888">Incl. operator - earthworks & trenching</em></td><td>09/03-13/03</td><td>5</td><td>$1,650.00</td><td>$8,250.00</td></tr>
+                <tr><td>2</td><td>CAT 320 Excavator (20T) - Wet Hire<br><em style="font-size:10px;color:#888">Incl. operator - earthworks & trenching</em></td><td>16/03-18/03</td><td>3</td><td>$1,650.00</td><td>$4,950.00</td></tr>
+                <tr><td>3</td><td>Bobcat S770 Skid Steer - Wet Hire<br><em style="font-size:10px;color:#888">Incl. operator - site cleanup & grading</em></td><td>09/03-13/03</td><td>5</td><td>$880.00</td><td>$4,400.00</td></tr>
+                <tr><td>4</td><td>10,000L Water Cart - Dry Hire<br><em style="font-size:10px;color:#888">Dust suppression</em></td><td>09/03-13/03</td><td>5</td><td>$450.00</td><td>$2,250.00</td></tr>
+                <tr><td>5</td><td>Wacker Plate Compactor - Dry Hire</td><td>09/03-18/03</td><td>8</td><td>$95.00</td><td>$760.00</td></tr>
+                <tr><td>6</td><td>Mobilisation / Demobilisation<br><em style="font-size:10px;color:#888">CAT 320 Excavator (float)</em></td><td></td><td>1</td><td>$1,200.00</td><td>$1,200.00</td></tr>
+                <tr><td>7</td><td>Mobilisation / Demobilisation<br><em style="font-size:10px;color:#888">Bobcat S770 (float)</em></td><td></td><td>1</td><td>$650.00</td><td>$650.00</td></tr>
+              </tbody>
+            </table>
+            <div style="text-align:right; font-size:12px; line-height:2;">
+              <div>Subtotal (Ex GST): <strong>$22,460.00</strong></div>
+              <div>GST (10%): <strong>$2,246.00</strong></div>
+              <div style="background:#f7941d; color:#fff; display:inline-block; padding:4px 16px; font-weight:700; font-size:14px; margin-top:4px;">AMOUNT DUE (Inc GST): $24,706.00</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Form panel -->
+      <div class="form-panel">
+        <!-- Step 1: Supplier & Summary -->
+        <div class="section-card required" id="sec1">
+          <h3><span class="step-num">1</span> Supplier & Summary</h3>
+          <p class="desc">Confirm the supplier and bill details. OCR didn't recognise this supplier — select or create one.</p>
+
+          <div class="form-row">
+            <div>
+              <label>Supplier</label>
+              <select class="form-input" id="supplierSelect" onchange="onSupplierSelect()">
+                <option value="">Select supplier...</option>
+                <option selected>Southeast Plant Hire</option>
+                <option>Coates Hire</option>
+                <option>Kennards Hire</option>
+                <option>Conplant Pty Ltd</option>
+                <option>National Pump & Energy</option>
+                <option>Boral Concrete</option>
+                <option>Hanson Construction Materials</option>
+                <option>A1 Asphalting Pty Ltd</option>
+                <option value="new" style="color:#f7941d; font-weight:600;">+ Add new supplier</option>
+              </select>
+            </div>
+            <div>
+              <label>Supplier Invoice Ref</label>
+              <input class="form-input prefilled" value="SPH-INV-0587" readonly>
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label>Transaction Date</label>
+              <input class="form-input prefilled" type="text" value="Wed 18/03/2026" readonly>
+            </div>
+            <div>
+              <label>Due Date</label>
+              <input class="form-input prefilled" type="text" value="Fri 17/04/2026" readonly>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Link PO & Dockets (REQUIRED — prominent) -->
+        <div class="section-card required" id="sec2">
+          <h3><span class="step-num">2</span> Link to Purchase Order & Dockets</h3>
+          <p class="desc">Link this bill to a PO and/or delivery docket so costs are tracked against the right project and budget.</p>
+
+          <div style="font-size:13px; font-weight:600; margin-bottom:8px;">Purchase Order</div>
+          <div class="link-options" id="poOptions">
+            <div class="link-option primary" onclick="selectPOOption('link', this)">
+              <div class="opt-icon">🔗</div>
+              <div>Link to PO</div>
+              <div class="opt-label">Match to an existing PO</div>
+            </div>
+            <div class="link-option secondary" onclick="selectPOOption('none', this)">
+              <div class="opt-icon">✕</div>
+              <div>No PO</div>
+            </div>
+          </div>
+          <div id="poSelectWrap" style="display:none; margin-bottom:16px;">
+            <select class="form-input" id="poSelect" onchange="onPOSelect()">
+              <option value="">Select PO...</option>
+              <option value="PO-VD001-042">PO-VD001-042 — Plant Hire Wynnum Rd ($28,000.00)</option>
+              <option value="PO-VD001-038">PO-VD001-038 — Earthworks Stage 2 ($45,000.00)</option>
+              <option value="PO-VD001-041">PO-VD001-041 — Site Services ($12,500.00)</option>
+            </select>
+            <div id="poMatchInfo" style="display:none; margin-top:8px; padding:10px 14px; background:#f0faf0; border:1px solid #4caf50; border-radius:6px; font-size:12px; color:#2e7d32;">
+              ✓ PO-VD001-042 matched — Project auto-filled to <strong>(VD001) Wynnum Road Upgrade Stage 2</strong>
+            </div>
+          </div>
+
+          <div style="font-size:13px; font-weight:600; margin-bottom:8px;">Delivery Dockets</div>
+          <div class="link-options" id="docketOptions">
+            <div class="link-option primary" onclick="selectDocketOption('link', this)">
+              <div class="opt-icon">🚚</div>
+              <div>Link to Dockets</div>
+              <div class="opt-label">Match to delivery dockets</div>
+            </div>
+            <div class="link-option secondary" onclick="selectDocketOption('none', this)">
+              <div class="opt-icon">✕</div>
+              <div>No Dockets</div>
+            </div>
+          </div>
+          <div id="docketSelectWrap" style="display:none;">
+            <div id="autoLinkedDockets" style="display:none; margin-bottom:8px; padding:10px 14px; background:#f0faf0; border:1px solid #4caf50; border-radius:6px; font-size:12px; color:#2e7d32;">
+              ✓ 2 dockets auto-linked from PO-VD001-042:
+              <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
+                <div style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:#fff; border:1px solid #c8e6c9; border-radius:4px;">
+                  <input type="checkbox" checked style="accent-color:#4caf50; width:16px; height:16px;">
+                  <span style="font-weight:500; color:#333;">DD-VD001-089</span> — 09/03/2026 — Excavator & Bobcat delivery
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:#fff; border:1px solid #c8e6c9; border-radius:4px;">
+                  <input type="checkbox" checked style="accent-color:#4caf50; width:16px; height:16px;">
+                  <span style="font-weight:500; color:#333;">DD-VD001-091</span> — 13/03/2026 — Equipment return & demob
+                </div>
+              </div>
+            </div>
+            <select class="form-input">
+              <option value="">+ Link additional docket...</option>
+              <option>DD-VD001-093 — 16/03/2026 — Excavator re-delivery</option>
+              <option>DD-VD001-095 — 18/03/2026 — Final equipment return</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Step 3: Line Items -->
+        <div class="section-card" id="sec3">
+          <h3><span class="step-num">3</span> Line Items</h3>
+          <p class="desc">Review line items extracted from the invoice. Assign project, resource, and accounting code to each.</p>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+            <div style="font-size:12px; color:#888;">GST: <strong>GST - Exclusive</strong></div>
+          </div>
+
+          <table class="line-table">
+            <thead>
+              <tr><th style="width:30px">#</th><th>Description</th><th style="width:130px">Project</th><th style="width:130px">Resource</th><th style="width:150px">Accounting Code</th><th style="width:90px; text-align:right">Amount</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1</td>
+                <td class="desc-cell">CAT 320 Excavator (20T) - Wet Hire</td>
+                <td><select><option>Select...</option><option selected>(VD001)</option></select></td>
+                <td><select><option>Select...</option><option selected>LS Plant and Equipment</option></select></td>
+                <td><select><option>Select...</option><option selected>313 — Plant & Equip</option></select></td>
+                <td style="text-align:right; font-weight:600;">$8,250.00</td>
+              </tr>
+              <tr>
+                <td>2</td>
+                <td class="desc-cell">CAT 320 Excavator (20T) - Wet Hire</td>
+                <td><select><option>Select...</option><option selected>(VD001)</option></select></td>
+                <td><select><option>Select...</option><option selected>LS Plant and Equipment</option></select></td>
+                <td><select><option>Select...</option><option selected>313 — Plant & Equip</option></select></td>
+                <td style="text-align:right; font-weight:600;">$4,950.00</td>
+              </tr>
+              <tr>
+                <td>3</td>
+                <td class="desc-cell">Bobcat S770 Skid Steer - Wet Hire</td>
+                <td><select><option>Select...</option><option selected>(VD001)</option></select></td>
+                <td><select><option>Select...</option><option selected>LS Plant and Equipment</option></select></td>
+                <td><select><option>Select...</option><option selected>313 — Plant & Equip</option></select></td>
+                <td style="text-align:right; font-weight:600;">$4,400.00</td>
+              </tr>
+              <tr>
+                <td>4</td>
+                <td class="desc-cell">10,000L Water Cart - Dry Hire</td>
+                <td><select><option>Select...</option><option selected>(VD001)</option></select></td>
+                <td><select><option>Select...</option><option selected>LS Plant and Equipment</option></select></td>
+                <td><select><option>Select...</option><option selected>313 — Plant & Equip</option></select></td>
+                <td style="text-align:right; font-weight:600;">$2,250.00</td>
+              </tr>
+              <tr>
+                <td>5</td>
+                <td class="desc-cell">Wacker Plate Compactor - Dry Hire</td>
+                <td><select><option>Select...</option><option selected>(VD001)</option></select></td>
+                <td><select><option>Select...</option><option selected>LS Plant and Equipment</option></select></td>
+                <td><select><option>Select...</option><option selected>313 — Plant & Equip</option></select></td>
+                <td style="text-align:right; font-weight:600;">$760.00</td>
+              </tr>
+              <tr>
+                <td>6</td>
+                <td class="desc-cell">Mobilisation / Demobilisation — CAT 320</td>
+                <td><select><option>Select...</option><option selected>(VD001)</option></select></td>
+                <td><select><option>Select...</option><option selected>LS Miscellaneous</option></select></td>
+                <td><select><option>Select...</option><option selected>429 — General Exp</option></select></td>
+                <td style="text-align:right; font-weight:600;">$1,200.00</td>
+              </tr>
+              <tr>
+                <td>7</td>
+                <td class="desc-cell">Mobilisation / Demobilisation — Bobcat S770</td>
+                <td><select><option>Select...</option><option selected>(VD001)</option></select></td>
+                <td><select><option>Select...</option><option selected>LS Miscellaneous</option></select></td>
+                <td><select><option>Select...</option><option selected>429 — General Exp</option></select></td>
+                <td style="text-align:right; font-weight:600;">$650.00</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="display:flex; flex-direction:column; align-items:flex-end; margin-top:12px; font-size:13px;">
+            <div style="display:flex; gap:32px; padding:4px 0;"><span style="color:#888;">Subtotal (ex. GST)</span><span style="font-weight:600;">$22,460.00</span></div>
+            <div style="display:flex; gap:32px; padding:4px 0;"><span style="color:#888;">GST 10%</span><span style="font-weight:600;">$2,246.00</span></div>
+            <div style="display:flex; gap:32px; padding:6px 0; border-top:2px solid #e0e0e0; margin-top:4px; font-size:16px;"><span style="font-weight:700;">Total (inc. GST)</span><span style="font-weight:700;">$24,706.00</span></div>
+          </div>
+        </div>
+
+        <!-- Step 4: Review & Submit -->
+        <div class="section-card" id="sec4">
+          <h3><span class="step-num">4</span> Review & Submit</h3>
+          <p class="desc">Choose approvers and submit this bill for approval, or approve directly if you have permission.</p>
+
+          <div class="form-row">
+            <div>
+              <label>Approvers</label>
+              <select class="form-input">
+                <option value="">Select approver...</option>
+                <option>James Baker — CEO</option>
+                <option>Cristiane — People & Finance</option>
+                <option>Ford — Sales Manager</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="bill-actions">
+          <button class="btn btn-draft">Save as Draft</button>
+          <button class="btn btn-submit" style="background:#fff; color:#f7941d; border-color:#f7941d;" onmouseenter="this.style.background='#fff8f0'" onmouseleave="this.style.background='#fff'">Submit for Approval</button>
+          <button class="btn btn-submit">Submit & Open Next Bill →</button>
+          <button class="btn btn-approve">Approve</button>
+        </div>
+
+        <!-- Annotation -->
+        <div class="annotation">
+          <h3>Changes from Current Bill Edit View</h3>
+          <ul>
+            <li><strong>"Link PO & Dockets" is now Step 2</strong> — required and prominent, not buried in the toolbar. Clear options: "Link to PO" or "No Purchase Order", and "Link to Dockets" or "No Dockets".</li>
+            <li><strong>Guided steps:</strong> 4-step process (Supplier & Summary → Link PO & Dockets → Line Items → Review & Submit) with a stepper at the top.</li>
+            <li><strong>Action buttons at the bottom</strong> — Cancel, Save as Draft, Submit for Approval, and Approve are all clearly visible below the form, not hidden in the toolbar.</li>
+            <li><strong>New supplier handling:</strong> When OCR doesn't recognise a supplier, the dropdown offers to create a new one with the detected name pre-filled.</li>
+            <li><strong>PO match auto-fills project:</strong> Selecting a PO automatically fills the project field on all line items with a green confirmation.</li>
+            <li><strong>Why:</strong> The current layout buries "Link to PO and Dockets" and approval actions in the top toolbar. This redesign makes the critical path obvious: identify supplier → link to PO → review lines → submit/approve.</li>
+          </ul>
+          <p style="margin-top: 8px; color: #888; font-size: 12px;">Prototype by James Baker</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let poChoice = null; // 'link' or 'none'
+let docketChoice = null;
+
+function selectPOOption(type, el) {
+  document.querySelectorAll('#poOptions .link-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  poChoice = type;
+  document.getElementById('poSelectWrap').style.display = type === 'link' ? 'block' : 'none';
+  if (type === 'none') document.getElementById('poMatchInfo').style.display = 'none';
+  checkStep2();
+}
+
+function selectDocketOption(type, el) {
+  document.querySelectorAll('#docketOptions .link-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  docketChoice = type;
+  document.getElementById('docketSelectWrap').style.display = type === 'link' ? 'block' : 'none';
+  checkStep2();
+}
+
+function onPOSelect() {
+  const val = document.getElementById('poSelect').value;
+  document.getElementById('poMatchInfo').style.display = val ? 'block' : 'none';
+
+  // If PO-VD001-042 selected, auto-link its dockets
+  if (val === 'PO-VD001-042') {
+    // Auto-select "Link to Dockets"
+    document.querySelectorAll('#docketOptions .link-option').forEach(o => o.classList.remove('selected'));
+    document.querySelector('#docketOptions .link-option.primary').classList.add('selected');
+    docketChoice = 'link';
+    document.getElementById('docketSelectWrap').style.display = 'block';
+    document.getElementById('autoLinkedDockets').style.display = 'block';
+  } else {
+    document.getElementById('autoLinkedDockets').style.display = 'none';
+  }
+
+  checkStep2();
+}
+
+function checkStep2() {
+  const poOk = poChoice === 'none' || (poChoice === 'link' && document.getElementById('poSelect').value);
+  const docketOk = docketChoice !== null;
+  const sec = document.getElementById('sec2');
+  const circle = document.getElementById('bs2');
+  const label = document.getElementById('bl2');
+  const line1 = document.getElementById('bline1');
+  if (poOk && docketOk) {
+    sec.classList.remove('required');
+    sec.classList.add('done');
+    circle.classList.remove('active');
+    circle.classList.add('done');
+    circle.textContent = '✓';
+    label.classList.remove('active');
+    label.classList.add('done');
+    line1.classList.add('done');
+  } else {
+    sec.classList.remove('done');
+    sec.classList.add('required');
+    circle.classList.remove('done');
+    circle.textContent = '2';
+    label.classList.remove('done');
+    line1.classList.remove('done');
+  }
+  updateStepper();
+}
+
+function checkStep3() {
+  // All line item resource selects must have a value selected (not "Select...")
+  const selects = document.querySelectorAll('.line-table tbody select');
+  let resourcesDone = true;
+  // Check only the Resource column (every 3rd select per row: index 1, 4, 7, ...)
+  document.querySelectorAll('.line-table tbody tr').forEach(row => {
+    const resourceSel = row.querySelectorAll('select')[1]; // 2nd select = Resource
+    if (resourceSel && (resourceSel.value === '' || resourceSel.value === 'Select...')) {
+      resourcesDone = false;
+    }
+  });
+  const sec = document.getElementById('sec3');
+  const circle = document.getElementById('bs3');
+  const label = document.getElementById('bl3');
+  const line2 = document.getElementById('bline2');
+  if (resourcesDone) {
+    sec.classList.add('done');
+    circle.classList.remove('active');
+    circle.classList.add('done');
+    circle.textContent = '✓';
+    label.classList.remove('active');
+    label.classList.add('done');
+    line2.classList.add('done');
+  } else {
+    sec.classList.remove('done');
+    circle.classList.remove('done');
+    circle.textContent = '3';
+    label.classList.remove('done');
+    line2.classList.remove('done');
+  }
+  updateStepper();
+}
+
+function updateStepper() {
+  // Step 1 is always done (OCR pre-filled)
+  document.getElementById('bs1').classList.add('done');
+  document.getElementById('bs1').textContent = '✓';
+  document.getElementById('bl1').classList.add('done');
+  // Step 4 active if 2 and 3 are done
+  const step2Done = document.getElementById('sec2').classList.contains('done');
+  const step3Done = document.getElementById('sec3').classList.contains('done');
+  const circle4 = document.getElementById('bs4');
+  const label4 = document.getElementById('bl4');
+  const line3 = document.getElementById('bline3');
+  if (step2Done && step3Done) {
+    circle4.classList.add('active');
+    label4.classList.add('active');
+    line3.classList.add('done');
+  } else {
+    circle4.classList.remove('active');
+    label4.classList.remove('active');
+    line3.classList.remove('done');
+  }
+}
+
+function onSupplierSelect() {
+  const val = document.getElementById('supplierSelect').value;
+  if (val === 'new') {
+    alert('In the real app, this creates "Southeast Plant Hire" as a new supplier and auto-fills.');
+  }
+}
+
+// Attach change listeners to all line item selects for step 3 checking
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.line-table tbody select').forEach(sel => {
+    sel.addEventListener('change', checkStep3);
+  });
+  // Initial check — line items are pre-filled so step 3 should be done
+  checkStep3();
+  updateStepper();
+});
+</script>
+</body>
+</html>
