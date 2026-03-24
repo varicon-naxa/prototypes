@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Process Delivery Docket</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+  .sidebar-item.active .icon { opacity: 1; }
+
+  .main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* Header */
+  .top-header { padding: 14px 28px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .top-header-left { display: flex; align-items: center; gap: 12px; }
+  .top-header-left a { color: #666; text-decoration: none; font-size: 20px; }
+  .top-header-left h1 { font-size: 17px; font-weight: 600; }
+  .top-header-left .ref { font-size: 12px; color: #888; margin-left: 8px; }
+  .top-header-left .badge { padding: 3px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #fde8e8; color: #c62828; margin-left: 8px; }
+  .progress-text { font-size: 12px; color: #888; }
+
+  /* Stepper */
+  .stepper-bar { padding: 14px 28px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: center; gap: 0; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,.04); }
+  .st-step { display: flex; align-items: center; gap: 6px; }
+  .st-circle { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #d0d0d0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: #999; background: #fff; transition: all 0.3s; }
+  .st-circle.active { border-color: #f7941d; color: #f7941d; background: #fff8f0; }
+  .st-circle.done { border-color: #4caf50; background: #4caf50; color: #fff; }
+  .st-label { font-size: 11px; font-weight: 600; color: #999; white-space: nowrap; }
+  .st-label.active { color: #f7941d; }
+  .st-label.done { color: #4caf50; }
+  .st-line { width: 50px; height: 2px; background: #d0d0d0; margin: 0 10px; }
+  .st-line.done { background: #4caf50; }
+
+  /* Split content */
+  .content-split { display: flex; flex: 1; overflow: hidden; }
+
+  /* Photo panel */
+  .photo-panel { width: 42%; background: #e0e0e0; border-right: 1px solid #ccc; display: flex; flex-direction: column; overflow: hidden; }
+  .photo-toolbar { padding: 8px 16px; background: #333; color: #fff; display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .photo-toolbar button { background: rgba(255,255,255,.15); border: none; color: #fff; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .photo-toolbar button:hover { background: rgba(255,255,255,.25); }
+  .photo-body { flex: 1; overflow-y: auto; display: flex; align-items: flex-start; justify-content: center; padding: 16px; background: #d0d0d0; }
+  .photo-mock { width: 100%; max-width: 380px; background: #fff; border-radius: 4px; box-shadow: 0 2px 12px rgba(0,0,0,.15); line-height: 1.5; overflow: hidden; }
+
+  /* Form panel */
+  .form-panel { flex: 1; overflow-y: auto; padding: 24px 28px 120px; }
+
+  /* Section cards */
+  .sec-card { background: #fff; border: 2px solid #e0e0e0; border-radius: 10px; padding: 20px 24px; margin-bottom: 14px; transition: all 0.3s; }
+  .sec-card.required { border-color: #f7941d; }
+  .sec-card.done { border-color: #4caf50; background: #fafff9; }
+  .sec-card h3 { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .sec-card h3 .sn { width: 22px; height: 22px; border-radius: 50%; background: #f7941d; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+  .sec-card.done h3 .sn { background: #4caf50; }
+  .sec-card .desc { font-size: 12px; color: #888; margin-bottom: 14px; }
+
+  .form-row { display: flex; gap: 12px; margin-bottom: 12px; }
+  .form-row > div { flex: 1; }
+  .form-row label { display: block; font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 4px; }
+  .fi { width: 100%; padding: 9px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 13px; background: #fff; font-family: inherit; }
+  .fi:focus { outline: none; border-color: #f7941d; }
+  select.fi { appearance: none; background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+  .fi.prefilled { background: #f0faf0; border-color: #4caf50; color: #2e7d32; font-weight: 500; }
+  .fi.ocr { background: #f3e5f5; border-color: #b39ddb; }
+  .ocr-tag { font-size: 9px; font-weight: 700; color: #7c4dff; margin-left: 6px; }
+
+  /* PO link options */
+  .po-opts { display: flex; gap: 10px; margin-bottom: 10px; }
+  .po-opt { padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; text-align: center; transition: all 0.15s; }
+  .po-opt:hover { border-color: #ccc; }
+  .po-opt.primary { flex: 3; }
+  .po-opt.secondary { flex: 1; opacity: .6; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+  .po-opt.selected { border-color: #f7941d; background: #fff8f0; color: #f7941d; }
+  .po-opt.secondary.selected { opacity: 1; }
+  .po-match { margin-top: 8px; padding: 10px 12px; background: #f0faf0; border: 1px solid #4caf50; border-radius: 6px; font-size: 12px; color: #2e7d32; display: none; }
+  .po-match.show { display: block; }
+
+  /* Delivery items */
+  .recv-all { display: block; width: 100%; padding: 10px; border: 2px solid #4caf50; border-radius: 8px; background: #f0faf0; color: #2e7d32; font-size: 13px; font-weight: 600; text-align: center; cursor: pointer; margin-bottom: 10px; }
+  .recv-all:hover { background: #e0f2e0; }
+
+  .del-item { padding: 14px; background: #fafafa; border: 1px solid #e8e8e8; border-radius: 8px; margin-bottom: 8px; display: flex; gap: 16px; align-items: flex-start; transition: all 0.3s; }
+  .del-item.removed { opacity: .15; max-height: 40px; overflow: hidden; padding: 10px 14px; }
+  .del-item .di-main { flex: 1; }
+  .del-item .di-name { font-size: 14px; font-weight: 600; }
+  .del-item .di-meta { font-size: 12px; color: #888; margin-top: 4px; }
+  .del-item .di-qty-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .del-item .di-qty-row label { font-size: 12px; font-weight: 600; color: #555; }
+  .qty-input { width: 80px; padding: 8px; border: 2px solid #d0d0d0; border-radius: 6px; font-size: 15px; font-weight: 700; text-align: center; font-family: inherit; }
+  .qty-input:focus { outline: none; border-color: #f7941d; }
+  .del-item .di-unit { font-size: 13px; color: #888; }
+  .del-item .di-remaining { font-size: 11px; color: #888; margin-left: auto; }
+  .del-item .di-remove { padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-size: 11px; color: #999; cursor: pointer; white-space: nowrap; flex-shrink: 0; align-self: flex-start; }
+  .del-item .di-remove:hover { background: #fde8e8; color: #e53935; border-color: #e53935; }
+  .del-item.removed .di-remove { display: none; }
+  .undo-bar { padding: 8px 14px; background: #fde8e8; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #c62828; margin-bottom: 8px; }
+  .undo-bar a { color: #1565c0; font-weight: 600; cursor: pointer; text-decoration: none; }
+  .undo-bar a:hover { text-decoration: underline; }
+
+  /* Bottom action bar */
+  .bottom-actions {
+    position: fixed; bottom: 0; left: 200px; right: 0;
+    padding: 14px 28px; background: #fff; border-top: 1px solid #e0e0e0;
+    display: flex; gap: 12px; justify-content: center; align-items: center;
+    box-shadow: 0 -2px 8px rgba(0,0,0,.06); z-index: 10;
+  }
+  .ba-btn { padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; border: 2px solid; transition: all 0.15s; }
+  .ba-save { background: #fff; border-color: #d0d0d0; color: #555; }
+  .ba-save:hover { background: #f5f5f5; }
+  .ba-submit { background: #fff; border-color: #f7941d; color: #f7941d; }
+  .ba-submit:hover { background: #fff8f0; }
+  .ba-next { background: #f7941d; border-color: #f7941d; color: #fff; box-shadow: 0 4px 12px rgba(247,148,29,.3); }
+  .ba-next:hover { background: #e8850f; }
+  .ba-counter { font-size: 12px; color: #888; margin-left: 12px; }
+
+  .annotation { margin: 24px 28px; padding: 16px 20px; background: #fff8f0; border: 1px solid #f7941d; border-radius: 8px; font-size: 13px; color: #333; line-height: 1.6; }
+  .annotation h3 { color: #f7941d; font-size: 14px; margin-bottom: 8px; }
+  .annotation ul { margin-left: 20px; }
+  .annotation li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Cookie's Civil</div>
+    <div class="sidebar-item"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Docket</div>
+    <div class="sidebar-item"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item active" style="justify-content:space-between;"><span style="display:flex;align-items:center;gap:10px;"><span class="icon">🚚</span> Delivery Docket</span><span style="background:#e53935;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;">39</span></div>
+    <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+  </div>
+
+  <div class="main">
+    <!-- Header -->
+    <div class="top-header">
+      <div class="top-header-left">
+        <a href="index.html">←</a>
+        <h1>Process Docket</h1>
+        <span class="ref">VAR00420260324102240</span>
+        <span class="badge">Incomplete</span>
+      </div>
+      <div class="progress-text">Docket 1 of 39</div>
+    </div>
+
+    <!-- Stepper -->
+    <div class="stepper-bar">
+      <div class="st-step"><div class="st-circle done" id="sc1">✓</div><div class="st-label done" id="sl1">Supplier</div></div>
+      <div class="st-line done" id="sline1"></div>
+      <div class="st-step"><div class="st-circle active" id="sc2">2</div><div class="st-label active" id="sl2">Purchase Order</div></div>
+      <div class="st-line" id="sline2"></div>
+      <div class="st-step"><div class="st-circle" id="sc3">3</div><div class="st-label" id="sl3">Delivery Items</div></div>
+      <div class="st-line" id="sline3"></div>
+      <div class="st-step"><div class="st-circle" id="sc4">4</div><div class="st-label" id="sl4">Cost Centre</div></div>
+    </div>
+
+    <!-- Split: photo + form -->
+    <div class="content-split">
+      <!-- Photo -->
+      <div class="photo-panel">
+        <div class="photo-toolbar">
+          <span>IMG_1774308172803.png</span>
+          <span style="margin-left:auto;">1 / 1</span>
+          <button>−</button><button>+</button><button>↻</button><button>⬇</button>
+        </div>
+        <div class="photo-body">
+          <div class="photo-mock" style="padding:24px 20px; text-align:left; font-size:10px; line-height:1.5; color:#333; position:relative;">
+            <!-- Mock delivery docket -->
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+              <div>
+                <div style="font-size:14px; font-weight:800; color:#1a1a2e; letter-spacing:.5px;">A1 ASPHALTING PTY LTD</div>
+                <div style="font-size:9px; color:#888; margin-top:2px;">ABN: 52 108 456 789 &nbsp;|&nbsp; 14 Industrial Drive, Laverton VIC 3028</div>
+                <div style="font-size:9px; color:#888;">Ph: (03) 9369 4200 &nbsp;|&nbsp; accounts@a1asphalting.com.au</div>
+              </div>
+              <div style="background:#1a1a2e; color:#fff; padding:4px 10px; font-size:10px; font-weight:700; border-radius:3px; white-space:nowrap;">DELIVERY DOCKET</div>
+            </div>
+
+            <div style="display:flex; gap:20px; margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid #ddd;">
+              <div style="flex:1;">
+                <div style="font-size:9px; color:#888; font-weight:600; text-transform:uppercase;">Docket No.</div>
+                <div style="font-size:12px; font-weight:700;">A1-DD-4421</div>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:8px; color:#888; font-weight:600; text-transform:uppercase;">Date</div>
+                <div style="font-size:12px; font-weight:700;">24/03/2026</div>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:8px; color:#888; font-weight:600; text-transform:uppercase;">Time</div>
+                <div style="font-size:12px; font-weight:700;">10:15 AM</div>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:20px; margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid #ddd;">
+              <div style="flex:1;">
+                <div style="font-size:9px; color:#888; font-weight:600; text-transform:uppercase;">Customer</div>
+                <div style="font-weight:600;">Cookie's Civil Pty Ltd</div>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:9px; color:#888; font-weight:600; text-transform:uppercase;">Project</div>
+                <div style="font-weight:600;">Bourke Street Roadworks</div>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:20px; margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid #ddd;">
+              <div style="flex:1;">
+                <div style="font-size:9px; color:#888; font-weight:600; text-transform:uppercase;">PO Number</div>
+                <div style="font-weight:600;">PO-VAR004-0033</div>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:9px; color:#888; font-weight:600; text-transform:uppercase;">Delivery Address</div>
+                <div>198 Bourke Street, Melbourne VIC 3000</div>
+              </div>
+            </div>
+
+            <table style="width:100%; border-collapse:collapse; margin-bottom:14px; font-size:10px;">
+              <thead>
+                <tr style="background:#f0f0f0;">
+                  <th style="padding:6px 8px; text-align:left; font-size:9px; font-weight:700; color:#666; border-bottom:1px solid #ddd;">Item</th>
+                  <th style="padding:6px 8px; text-align:left; font-size:9px; font-weight:700; color:#666; border-bottom:1px solid #ddd;">Description</th>
+                  <th style="padding:6px 8px; text-align:center; font-size:9px; font-weight:700; color:#666; border-bottom:1px solid #ddd;">Qty</th>
+                  <th style="padding:6px 8px; text-align:left; font-size:9px; font-weight:700; color:#666; border-bottom:1px solid #ddd;">Unit</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td style="padding:5px 8px; border-bottom:1px solid #eee;">1</td><td style="padding:5px 8px; border-bottom:1px solid #eee;">Asphaltic Concrete AC14 (wearing course)</td><td style="padding:5px 8px; text-align:center; border-bottom:1px solid #eee; font-weight:700;">18</td><td style="padding:5px 8px; border-bottom:1px solid #eee;">tonnes</td></tr>
+                <tr><td style="padding:5px 8px; border-bottom:1px solid #eee;">2</td><td style="padding:5px 8px; border-bottom:1px solid #eee;">Asphaltic Concrete AC14 — temperature at delivery</td><td style="padding:5px 8px; text-align:center; border-bottom:1px solid #eee; font-weight:700;">145°C</td><td style="padding:5px 8px; border-bottom:1px solid #eee;"></td></tr>
+              </tbody>
+            </table>
+
+            <div style="display:flex; gap:20px; margin-bottom:14px; padding-bottom:14px; border-bottom:1px solid #ddd;">
+              <div style="flex:1;">
+                <div style="font-size:9px; color:#888; font-weight:600; text-transform:uppercase;">Truck Rego</div>
+                <div style="font-weight:600;">VIC 1AB 2CD</div>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:9px; color:#888; font-weight:600; text-transform:uppercase;">Driver</div>
+                <div style="font-weight:600;">M. Thompson</div>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:9px; color:#888; font-weight:600; text-transform:uppercase;">Load #</div>
+                <div style="font-weight:600;">3 of 5</div>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:20px;">
+              <div style="flex:1;">
+                <div style="font-size:9px; color:#888; font-weight:600; text-transform:uppercase; margin-bottom:4px;">Driver Signature</div>
+                <div style="height:40px; border-bottom:1px solid #999; font-family:cursive; font-size:16px; color:#555; padding-top:12px;">M Thompson</div>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:9px; color:#888; font-weight:600; text-transform:uppercase; margin-bottom:4px;">Received By</div>
+                <div style="height:40px; border-bottom:1px solid #999; font-family:cursive; font-size:16px; color:#555; padding-top:12px;">J Baker</div>
+              </div>
+            </div>
+
+            <!-- Slight paper effect -->
+            <div style="position:absolute; top:8px; right:8px; font-size:9px; color:#ccc; transform:rotate(2deg);">📎</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Form -->
+      <div class="form-panel">
+
+        <!-- Step 1: Supplier (OCR pre-filled) -->
+        <div class="sec-card done" id="sec1">
+          <h3><span class="sn">✓</span> Supplier</h3>
+          <div class="desc">Matched from docket photo via OCR.</div>
+          <div class="form-row">
+            <div>
+              <label>Supplier <span class="ocr-tag">✦ OCR</span></label>
+              <select class="fi ocr" id="supplierSel" onchange="checkSteps()">
+                <option value="">Select supplier...</option>
+                <option value="a1" selected>A1 Asphalting Pty. Ltd.</option>
+                <option>Boral Concrete</option>
+                <option>Hanson Construction Materials</option>
+                <option>Coates Hire</option>
+                <option value="new" style="color:#f7941d;">+ Add new supplier</option>
+              </select>
+            </div>
+            <div>
+              <label>Supplier Docket # <span class="ocr-tag">✦ OCR</span></label>
+              <input class="fi ocr" value="A1-DD-4421">
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label>Project</label>
+              <input class="fi prefilled" value="(VAR004) Bourke Street Roadworks" readonly>
+            </div>
+            <div>
+              <label>Delivery Date</label>
+              <input class="fi prefilled" value="Tue 24/03/2026" readonly>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Purchase Order -->
+        <div class="sec-card required" id="sec2">
+          <h3><span class="sn">2</span> Purchase Order</h3>
+          <div class="desc">Link this docket to a PO to load delivery items and track against budget.</div>
+          <div class="po-opts">
+            <div class="po-opt primary" onclick="selectPO('link', this)">🔗 Link to Purchase Order</div>
+            <div class="po-opt secondary" onclick="selectPO('none', this)">✕ No PO</div>
+          </div>
+          <div id="poSelWrap" style="display:none;">
+            <label>Select PO</label>
+            <select class="fi" id="poSel" onchange="onPOSel()">
+              <option value="">Choose PO...</option>
+              <option value="po33">PO-VAR004-0033 — Asphalt & Bitumen Works ($55,000.00)</option>
+              <option value="po28">PO-VAR004-0028 — Roadworks Stage 2 ($38,000.00)</option>
+              <option value="po19">PO-VAR004-0019 — Plant Hire & Equipment ($22,000.00)</option>
+              <option value="po12">PO-VAR004-0012 — Concrete Supply ($18,500.00)</option>
+            </select>
+            <div class="po-match" id="poMatch">✓ PO matched — delivery items loaded below. Cost centre auto-filled.</div>
+          </div>
+        </div>
+
+        <!-- Step 3: Delivery Items -->
+        <div class="sec-card" id="sec3">
+          <h3><span class="sn">3</span> Delivery Items</h3>
+          <div class="desc">Confirm what was actually delivered. Remove items not in this delivery and adjust quantities.</div>
+
+          <div id="itemsEmpty" style="padding:20px; text-align:center; color:#999; font-size:13px;">
+            Select a Purchase Order above to load delivery items.
+          </div>
+
+          <div id="itemsLoaded" style="display:none;">
+            <button class="recv-all" onclick="receiveAll()">✓ Receive All Items in Full</button>
+
+            <div class="del-item" id="di1">
+              <div class="di-main">
+                <div class="di-name">Asphaltic Concrete AC14 (wearing course)</div>
+                <div class="di-meta">Ordered: 40t · Prev. received: 12t · Remaining: 28t</div>
+                <div class="di-qty-row">
+                  <label>Received:</label>
+                  <input class="qty-input ri" type="number" placeholder="0" value="18" data-max="28">
+                  <span class="di-unit">tonnes</span>
+                  <span class="di-remaining">of 28t remaining</span>
+                </div>
+              </div>
+              <div class="di-remove" onclick="removeItem('di1')">Remove</div>
+            </div>
+
+            <div class="del-item" id="di2">
+              <div class="di-main">
+                <div class="di-name">Asphaltic Concrete AC20 (base course)</div>
+                <div class="di-meta">Ordered: 60t · Prev. received: 0t · Remaining: 60t</div>
+                <div class="di-qty-row">
+                  <label>Received:</label>
+                  <input class="qty-input ri" type="number" placeholder="0" data-max="60">
+                  <span class="di-unit">tonnes</span>
+                  <span class="di-remaining">of 60t remaining</span>
+                </div>
+              </div>
+              <div class="di-remove" onclick="removeItem('di2')">Remove</div>
+            </div>
+
+            <div class="del-item" id="di3">
+              <div class="di-main">
+                <div class="di-name">Tack Coat Application</div>
+                <div class="di-meta">Ordered: 500m² · Prev. received: 200m² · Remaining: 300m²</div>
+                <div class="di-qty-row">
+                  <label>Received:</label>
+                  <input class="qty-input ri" type="number" placeholder="0" data-max="300">
+                  <span class="di-unit">m²</span>
+                  <span class="di-remaining">of 300m² remaining</span>
+                </div>
+              </div>
+              <div class="di-remove" onclick="removeItem('di3')">Remove</div>
+            </div>
+
+            <div class="del-item" id="di4">
+              <div class="di-main">
+                <div class="di-name">Line Marking Paint (white)</div>
+                <div class="di-meta">Ordered: 20 drums · Prev. received: 20 drums · Remaining: 0</div>
+                <div class="di-qty-row">
+                  <label>Received:</label>
+                  <input class="qty-input ri" type="number" placeholder="0" value="0" data-max="0">
+                  <span class="di-unit">drums</span>
+                  <span class="di-remaining">of 0 remaining</span>
+                </div>
+              </div>
+              <div class="di-remove" onclick="removeItem('di4')">Remove</div>
+            </div>
+
+            <div class="del-item" id="di5">
+              <div class="di-main">
+                <div class="di-name">Primer Seal (bitumen)</div>
+                <div class="di-meta">Ordered: 800m² · Prev. received: 0m² · Remaining: 800m²</div>
+                <div class="di-qty-row">
+                  <label>Received:</label>
+                  <input class="qty-input ri" type="number" placeholder="0" data-max="800">
+                  <span class="di-unit">m²</span>
+                  <span class="di-remaining">of 800m² remaining</span>
+                </div>
+              </div>
+              <div class="di-remove" onclick="removeItem('di5')">Remove</div>
+            </div>
+
+            <p style="font-size:11px; color:#999; margin-top:4px;">Remove items not included in this delivery.</p>
+          </div>
+        </div>
+
+        <!-- Step 4: Cost Centre -->
+        <div class="sec-card" id="sec4">
+          <h3><span class="sn">4</span> Cost Centre</h3>
+          <div class="desc">Assign a cost centre for project cost tracking.</div>
+          <div class="form-row">
+            <div>
+              <label>Cost Centre</label>
+              <select class="fi" id="ccSel" onchange="checkSteps()">
+                <option value="">Select Cost Centre...</option>
+                <option>Building Works</option>
+                <option>Concrete Works</option>
+                <option>Demolition</option>
+                <option>Drainage</option>
+                <option>Earthworks</option>
+                <option>Landscaping</option>
+                <option>Preliminaries</option>
+                <option value="road" selected>Roadworks</option>
+                <option>Site Mobilisation / Demobilisation</option>
+                <option>Site Recurring Costs</option>
+                <option>Utility Works</option>
+              </select>
+            </div>
+            <div>
+              <label>Notes (optional)</label>
+              <input class="fi" placeholder="Any notes about this delivery...">
+            </div>
+          </div>
+        </div>
+
+        <!-- Annotation -->
+        <div class="annotation">
+          <h3>Changes from Current Docket Detail View</h3>
+          <ul>
+            <li><strong>Immediate edit mode:</strong> No more "Edit Delivery Docket" button — the form is editable from the start.</li>
+            <li><strong>Guided 4-step process:</strong> Supplier → Purchase Order → Delivery Items → Cost Centre. Stepper at top shows progress.</li>
+            <li><strong>OCR pre-fill:</strong> Supplier and docket details from photo are pre-filled with purple OCR tags.</li>
+            <li><strong>PO linking loads items:</strong> Selecting a PO immediately loads the order items with ordered/received/remaining quantities.</li>
+            <li><strong>Easy item management:</strong> "Receive All in Full" button, Remove button per item, quantity inputs pre-focused.</li>
+            <li><strong>Bottom action bar:</strong> Save, Save & Submit, Save & Process Next — always visible. Shows "Docket 1 of 39" counter.</li>
+            <li><strong>"Save & Process Next →"</strong> is the primary action — work through the queue without going back to the list.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom actions — always visible -->
+    <div class="bottom-actions">
+      <button class="ba-btn ba-save" onclick="window.location='index.html'">Save</button>
+      <button class="ba-btn ba-submit">Save & Complete</button>
+      <button class="ba-btn ba-next">Save & Process Next →</button>
+      <span class="ba-counter">1 of 39 remaining</span>
+    </div>
+  </div>
+</div>
+
+<script>
+function selectPO(type, el) {
+  document.querySelectorAll('.po-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  const wrap = document.getElementById('poSelWrap');
+  wrap.style.display = type === 'link' ? 'block' : 'none';
+  if (type === 'none') {
+    document.getElementById('poMatch').classList.remove('show');
+    document.getElementById('itemsLoaded').style.display = 'none';
+    document.getElementById('itemsEmpty').style.display = 'block';
+    markDone('sec2');
+    updateStepper();
+  }
+}
+
+function onPOSel() {
+  const val = document.getElementById('poSel').value;
+  if (val) {
+    document.getElementById('poMatch').classList.add('show');
+    document.getElementById('itemsLoaded').style.display = 'block';
+    document.getElementById('itemsEmpty').style.display = 'none';
+    markDone('sec2');
+    markDone('sec3');
+    markDone('sec4');
+    // Auto-fill cost centre
+    document.getElementById('ccSel').value = 'road';
+  } else {
+    document.getElementById('poMatch').classList.remove('show');
+    document.getElementById('itemsLoaded').style.display = 'none';
+    document.getElementById('itemsEmpty').style.display = 'block';
+  }
+  updateStepper();
+}
+
+function markDone(id) {
+  const el = document.getElementById(id);
+  el.classList.remove('required');
+  el.classList.add('done');
+}
+
+function updateStepper() {
+  const steps = [
+    { sec: 'sec1', circle: 'sc1', label: 'sl1', line: 'sline1' },
+    { sec: 'sec2', circle: 'sc2', label: 'sl2', line: 'sline2' },
+    { sec: 'sec3', circle: 'sc3', label: 'sl3', line: 'sline3' },
+    { sec: 'sec4', circle: 'sc4', label: 'sl4', line: null },
+  ];
+  steps.forEach((s, i) => {
+    const done = document.getElementById(s.sec).classList.contains('done');
+    const c = document.getElementById(s.circle);
+    const l = document.getElementById(s.label);
+    c.classList.remove('active', 'done');
+    l.classList.remove('active', 'done');
+    if (done) {
+      c.classList.add('done'); c.textContent = '✓';
+      l.classList.add('done');
+    } else { c.textContent = i + 1; }
+    if (s.line) {
+      document.getElementById(s.line).classList.toggle('done', done);
+    }
+  });
+  // First non-done step gets active
+  for (const s of steps) {
+    if (!document.getElementById(s.sec).classList.contains('done')) {
+      document.getElementById(s.circle).classList.add('active');
+      document.getElementById(s.label).classList.add('active');
+      break;
+    }
+  }
+}
+
+function removeItem(id) {
+  const item = document.getElementById(id);
+  item.classList.add('removed');
+  const undo = document.createElement('div');
+  undo.className = 'undo-bar';
+  undo.id = 'undo-' + id;
+  undo.innerHTML = 'Item removed <a onclick="undoItem(\'' + id + '\')">Undo</a>';
+  item.parentNode.insertBefore(undo, item.nextSibling);
+}
+
+function undoItem(id) {
+  document.getElementById(id).classList.remove('removed');
+  const undo = document.getElementById('undo-' + id);
+  if (undo) undo.remove();
+}
+
+function receiveAll() {
+  document.querySelectorAll('.ri').forEach(input => {
+    const item = input.closest('.del-item');
+    if (!item.classList.contains('removed')) {
+      input.value = input.getAttribute('data-max');
+    }
+  });
+}
+
+function checkSteps() { updateStepper(); }
+updateStepper();
+</script>
+</body>
+</html>

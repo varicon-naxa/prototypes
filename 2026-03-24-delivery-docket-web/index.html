@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Delivery Dockets (Redesign)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; transition: background 0.15s; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+  .sidebar-item.active .icon { opacity: 1; }
+
+  .main { flex: 1; padding: 24px 32px; overflow-y: auto; }
+
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .page-header h1 { font-size: 22px; font-weight: 600; }
+
+  /* Needs processing banner */
+  .process-banner {
+    display: flex; align-items: center; gap: 14px; padding: 14px 20px;
+    background: #e53935; border-radius: 10px; margin-bottom: 16px; cursor: pointer; transition: all 0.15s;
+  }
+  .process-banner:hover { background: #c62828; }
+  .process-icon { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,.25); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; flex-shrink: 0; }
+  .process-banner .pb-text { flex: 1; color: #fff; }
+  .process-banner .pb-text h3 { font-size: 16px; font-weight: 700; }
+  .process-banner .pb-text p { font-size: 13px; opacity: .85; margin-top: 2px; }
+  .process-banner .pb-btn { background: rgba(255,255,255,.2); color: #fff; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .process-banner:hover .pb-btn { background: rgba(255,255,255,.3); }
+
+  /* Toolbar */
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .toolbar-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; color: #444; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+  .toolbar-btn:hover { background: #f9f9f9; border-color: #bbb; }
+  .toolbar-btn.accent { background: #f7941d; border-color: #f7941d; color: #fff; font-weight: 600; }
+  .toolbar-btn.accent:hover { background: #e8850f; }
+  .toolbar-search { display: flex; align-items: center; border: 1px solid #d0d0d0; border-radius: 6px; padding: 0 10px; background: #fff; margin-left: auto; }
+  .toolbar-search input { border: none; outline: none; padding: 8px 6px; font-size: 13px; width: 180px; }
+  .toolbar-search svg { width: 16px; height: 16px; color: #999; }
+
+  .filters-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .filter-select { padding: 8px 32px 8px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 13px; background: #fff; appearance: none; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid #e0e0e0; }
+  .tab { padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #888; transition: all 0.2s; }
+  .tab.active { color: #f7941d; border-bottom-color: #f7941d; }
+  .tab:hover { color: #f7941d; }
+  .tab .count { font-weight: 400; color: #999; margin-left: 4px; }
+  .tab.active .count { color: #f7941d; }
+  .tab .badge-red { background: #e53935; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; margin-left: 4px; }
+
+  /* Table */
+  .table-wrapper { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: #fafafa; }
+  th { text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; white-space: nowrap; }
+  td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafafa; }
+  tr.needs-action td { background: #fff8f7; }
+  tr.needs-action:hover td { background: #fef0ef; }
+  td a { color: #1a1a2e; text-decoration: none; font-weight: 500; }
+  td a:hover { color: #f7941d; }
+
+  .status-badge { display: inline-block; padding: 3px 12px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+  .sb-incomplete { background: #fde8e8; color: #c62828; }
+  .sb-complete { background: #e8f5e9; color: #2e7d32; }
+  .sb-paid { background: #e3f2fd; color: #1565c0; }
+  .sb-topay { background: #fff3e0; color: #e65100; }
+
+  .missing-tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; background: #fde8e8; color: #c62828; margin-right: 4px; }
+  .assigned-tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; background: #e8f5e9; color: #2e7d32; }
+
+  .thumb-img { width: 36px; height: 36px; border-radius: 6px; background: #e8e8e8; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; }
+  .thumb-img:hover { opacity: .8; }
+  .thumb-warn { position: relative; }
+  .thumb-warn::after { content: '!'; position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; background: #f7941d; color: #fff; border-radius: 50%; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+
+  .actions-btn { background: none; border: none; cursor: pointer; font-size: 18px; color: #999; padding: 4px 8px; }
+  .actions-btn:hover { color: #555; }
+
+  .process-link { color: #e53935; font-weight: 600; font-size: 12px; cursor: pointer; text-decoration: none; }
+  .process-link:hover { text-decoration: underline; }
+
+  .table-footer { display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 12px 16px; font-size: 13px; color: #888; border-top: 1px solid #e0e0e0; }
+
+  .annotation { margin-top: 24px; padding: 16px 20px; background: #fff8f0; border: 1px solid #f7941d; border-radius: 8px; font-size: 13px; color: #333; line-height: 1.6; }
+  .annotation h3 { color: #f7941d; font-size: 14px; margin-bottom: 8px; }
+  .annotation ul { margin-left: 20px; }
+  .annotation li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Cookie's Civil</div>
+    <div class="sidebar-item"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">🖼</span> Gallery</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Docket</div>
+    <div class="sidebar-item"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item active" style="justify-content:space-between;"><span style="display:flex;align-items:center;gap:10px;"><span class="icon">🚚</span> Delivery Docket</span><span style="background:#e53935;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;">39</span></div>
+    <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+  </div>
+
+  <div class="main">
+    <div class="page-header">
+      <h1>Delivery Dockets</h1>
+      <button class="toolbar-btn accent">+ Add Delivery Docket</button>
+    </div>
+
+    <!-- Needs processing banner -->
+    <div class="process-banner" onclick="window.location='process-docket.html'">
+      <div class="process-icon">39</div>
+      <div class="pb-text">
+        <h3>39 dockets need processing</h3>
+        <p>Captured on mobile — missing supplier, PO, or cost centre details</p>
+      </div>
+      <div class="pb-btn">Process Now →</div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <button class="toolbar-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Need Help?
+      </button>
+      <div class="toolbar-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="Search dockets...">
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-row">
+      <select class="filter-select">
+        <option>All Projects</option>
+        <option>(VAR004) Bourke Street Roadworks</option>
+        <option>(VAR001) Road Replacement Swanston St</option>
+        <option>(VAR011) Residential House Foundation</option>
+        <option>(SI 123457) BBA SCL</option>
+      </select>
+      <select class="filter-select">
+        <option>All Suppliers</option>
+        <option>A1 Asphalting Pty. Ltd.</option>
+        <option>AAA Boring</option>
+        <option>Boral Concrete</option>
+        <option>Hanson Construction Materials</option>
+        <option>XYZ Corp</option>
+      </select>
+      <select class="filter-select">
+        <option>Date Range</option>
+        <option>Last 7 days</option>
+        <option>Last 30 days</option>
+        <option>Last 90 days</option>
+        <option>This month</option>
+      </select>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" data-tab="all" onclick="filterToTab('all')">ALL <span class="count">(244)</span></div>
+      <div class="tab" data-tab="complete" onclick="filterToTab('complete')">COMPLETE <span class="count">(205)</span></div>
+      <div class="tab" data-tab="incomplete" onclick="filterToTab('incomplete')">NEEDS PROCESSING <span class="badge-red">39</span></div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Docket #</th>
+            <th>Supplier</th>
+            <th>Purchase Order</th>
+            <th>Cost Centre</th>
+            <th>Project</th>
+            <th>Status</th>
+            <th>Image</th>
+            <th style="width:80px"></th>
+          </tr>
+        </thead>
+        <tbody id="docketBody">
+          <!-- Incomplete — photo only from mobile -->
+          <tr class="needs-action" data-status="incomplete" onclick="window.location='process-docket.html'" style="cursor:pointer;">
+            <td>Tue, 24/03/2026</td>
+            <td>VAR00420260324102240</td>
+            <td>A1 Asphalting Pty. L...</td>
+            <td><span class="missing-tag">✕ Unassigned</span></td>
+            <td><span class="missing-tag">✕ Unassigned</span></td>
+            <td>(VAR004) Bourke Stre...</td>
+            <td><span class="status-badge sb-incomplete">Incomplete</span></td>
+            <td><div class="thumb-img">📋</div></td>
+            <td></td>
+          </tr>
+          <tr class="needs-action" data-status="incomplete" onclick="window.location='process-docket.html'" style="cursor:pointer;">
+            <td>Sat, 22/03/2026</td>
+            <td>VAR00420260322091500</td>
+            <td>Boral Concrete</td>
+            <td><span class="assigned-tag">✓ PO-VAR004-0012</span></td>
+            <td><span class="missing-tag">✕ Unassigned</span></td>
+            <td>(VAR004) Bourke Stre...</td>
+            <td><span class="status-badge sb-incomplete">Incomplete</span></td>
+            <td><div class="thumb-img">📋</div></td>
+            <td></td>
+          </tr>
+          <tr class="needs-action" data-status="incomplete" onclick="window.location='process-docket.html'" style="cursor:pointer;">
+            <td>Thu, 20/03/2026</td>
+            <td>VAR00420260320143000</td>
+            <td>Hanson Construction M...</td>
+            <td><span class="missing-tag">✕ Unassigned</span></td>
+            <td><span class="missing-tag">✕ Unassigned</span></td>
+            <td>(VAR004) Bourke Stre...</td>
+            <td><span class="status-badge sb-incomplete">Incomplete</span></td>
+            <td><div class="thumb-img">📋</div></td>
+            <td></td>
+          </tr>
+          <tr class="needs-action" data-status="incomplete" onclick="window.location='process-docket.html'" style="cursor:pointer;">
+            <td>Wed, 18/03/2026</td>
+            <td>VAR00420260318133243</td>
+            <td><span class="missing-tag">✕ Unknown</span></td>
+            <td><span class="missing-tag">✕ Unassigned</span></td>
+            <td><span class="missing-tag">✕ Unassigned</span></td>
+            <td>(VAR004) Bourke Stre...</td>
+            <td><span class="status-badge sb-incomplete">Incomplete</span></td>
+            <td><div class="thumb-img thumb-warn">📋</div></td>
+            <td></td>
+          </tr>
+          <tr class="needs-action" data-status="incomplete" onclick="window.location='process-docket.html'" style="cursor:pointer;">
+            <td>Mon, 16/03/2026</td>
+            <td>VAR00420260316082100</td>
+            <td>Coates Hire</td>
+            <td><span class="missing-tag">✕ Unassigned</span></td>
+            <td><span class="missing-tag">✕ Unassigned</span></td>
+            <td>(VAR004) Bourke Stre...</td>
+            <td><span class="status-badge sb-incomplete">Incomplete</span></td>
+            <td><div class="thumb-img">📋</div></td>
+            <td></td>
+          </tr>
+          <tr class="needs-action" data-status="incomplete" onclick="window.location='process-docket.html'" style="cursor:pointer;">
+            <td>Fri, 13/03/2026</td>
+            <td>VAR01120260313144500</td>
+            <td>Holcim Australia</td>
+            <td><span class="missing-tag">✕ Unassigned</span></td>
+            <td><span class="missing-tag">✕ Unassigned</span></td>
+            <td>(VAR011) Residential...</td>
+            <td><span class="status-badge sb-incomplete">Incomplete</span></td>
+            <td><div class="thumb-img">📋</div></td>
+            <td></td>
+          </tr>
+          <!-- Complete -->
+          <tr data-status="complete">
+            <td>Thu, 19/03/2026</td>
+            <td><a href="#">VAR00420260319102700</a></td>
+            <td>A1 Asphalting Pty. L...</td>
+            <td><span class="assigned-tag">✓ PO-VAR004-0033</span></td>
+            <td><span class="assigned-tag">✓ Roadworks</span></td>
+            <td>(VAR004) Bourke Stre...</td>
+            <td><span class="status-badge sb-topay">To be paid</span></td>
+            <td><div class="thumb-img">📋</div></td>
+            <td><button class="actions-btn">⋮</button></td>
+          </tr>
+          <tr data-status="complete">
+            <td>Wed, 11/03/2026</td>
+            <td><a href="#">VAR01120260311111100</a></td>
+            <td>XYZ Corp</td>
+            <td><span class="assigned-tag">✓ Assigned</span></td>
+            <td><span class="assigned-tag">✓ Assigned</span></td>
+            <td>(SI 123457) BBA SCL</td>
+            <td><span class="status-badge sb-paid">Paid</span></td>
+            <td>-</td>
+            <td><button class="actions-btn">⋮</button></td>
+          </tr>
+          <tr data-status="complete">
+            <td>Mon, 09/03/2026</td>
+            <td><a href="#">VAR01120260309114500</a></td>
+            <td>A1 Asphalting Pty. L...</td>
+            <td><span class="assigned-tag">✓ Assigned</span></td>
+            <td><span class="assigned-tag">✓ Earthworks</span></td>
+            <td>(VAR011) Residential...</td>
+            <td><span class="status-badge sb-topay">To be paid</span></td>
+            <td><div class="thumb-img">📋</div></td>
+            <td><button class="actions-btn">⋮</button></td>
+          </tr>
+          <tr data-status="complete">
+            <td>Wed, 04/03/2026</td>
+            <td><a href="#">VAR00420260304131500</a></td>
+            <td>A1 Asphalting Pty. L...</td>
+            <td><span class="assigned-tag">✓ PO-VAR004-0028</span></td>
+            <td><span class="assigned-tag">✓ Roadworks</span></td>
+            <td>(VAR004) Bourke Stre...</td>
+            <td><span class="status-badge sb-topay">To be paid</span></td>
+            <td><div class="thumb-img">📋</div></td>
+            <td><button class="actions-btn">⋮</button></td>
+          </tr>
+          <tr data-status="complete">
+            <td>Wed, 04/03/2026</td>
+            <td><a href="#">VAR00420260304091200</a></td>
+            <td>AAA Boring</td>
+            <td><span class="assigned-tag">✓ PO-VAR004-0019</span></td>
+            <td><span class="assigned-tag">✓ Drainage</span></td>
+            <td>(VAR004) Bourke Stre...</td>
+            <td><span class="status-badge sb-topay">To be paid</span></td>
+            <td><div class="thumb-img">📋</div></td>
+            <td><button class="actions-btn">⋮</button></td>
+          </tr>
+          <tr data-status="complete">
+            <td>Thu, 05/02/2026</td>
+            <td><a href="#">VAR00420260205150000</a></td>
+            <td>AAA Boring</td>
+            <td><span class="assigned-tag">✓ PO-VAR004-0004</span></td>
+            <td><span class="assigned-tag">✓ Earthworks</span></td>
+            <td>(VAR004) Bourke Stre...</td>
+            <td><span class="status-badge sb-topay">To be paid</span></td>
+            <td><div class="thumb-img">📋</div></td>
+            <td><button class="actions-btn">⋮</button></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="table-footer">
+        <span>Rows per page</span><span><strong>200</strong> ▾</span><span>1–12 of 244</span><span>‹ ›</span>
+      </div>
+    </div>
+
+    <!-- Annotation -->
+    <div class="annotation">
+      <h3>Changes from Current Delivery Docket List</h3>
+      <ul>
+        <li><strong>Red "Needs Processing" banner:</strong> Shows count of dockets captured on mobile that are missing supplier, PO, or cost centre. Clickable to filter. "Process Now" button to start working through them.</li>
+        <li><strong>Simplified tabs:</strong> All, Complete, Needs Processing (with red badge count) — replaces "Complete" and "Incomplete" with clearer language.</li>
+        <li><strong>Visual differentiation:</strong> Incomplete rows have a pink background. Missing fields shown as red "✕ Unassigned" tags. Assigned fields shown as green "✓" tags. Immediately obvious what needs attention.</li>
+        <li><strong>"Process →" link:</strong> Each incomplete row has a direct action link to open and process that docket.</li>
+        <li><strong>Unknown supplier warning:</strong> Orange ! badge on the image thumbnail when OCR couldn't identify the supplier.</li>
+        <li><strong>Removed:</strong> Task/Cost Centre combined into just "Cost Centre". Delivery Docket Status and Bills columns removed for clarity — status is now the processing status (Incomplete/To be paid/Paid).</li>
+        <li><strong>Why:</strong> The current view treats incomplete and complete dockets the same visually. Photo-captured dockets from mobile need immediate attention — this redesign makes them impossible to miss.</li>
+      </ul>
+      <p style="margin-top: 8px; color: #888; font-size: 12px;">Prototype by James Baker</p>
+    </div>
+  </div>
+</div>
+
+<script>
+function filterToTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.tab[data-tab="' + tab + '"]').classList.add('active');
+  document.querySelectorAll('#docketBody tr').forEach(row => {
+    const status = row.getAttribute('data-status');
+    if (tab === 'all') { row.style.display = ''; }
+    else { row.style.display = status === tab ? '' : 'none'; }
+  });
+}
+</script>
+</body>
+</html>
