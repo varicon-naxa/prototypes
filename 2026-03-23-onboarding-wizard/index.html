@@ -247,6 +247,38 @@
   }
   .forced-banner svg { flex-shrink: 0; }
 
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Finish screen */
+  .finish-screen {
+    display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: #fff; z-index: 10000; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 32px;
+  }
+  .finish-screen.show { display: flex; }
+  .finish-screen .finish-icon {
+    width: 80px; height: 80px; border-radius: 50%; background: #e8f5e9; color: #4caf50;
+    display: flex; align-items: center; justify-content: center; font-size: 40px; margin-bottom: 20px;
+  }
+  .finish-screen h2 { font-size: 28px; font-weight: 700; margin-bottom: 8px; color: #1a1a2e; }
+  .finish-screen p { font-size: 16px; color: #666; margin-bottom: 32px; }
+  .finish-screen .finish-btn {
+    padding: 14px 40px; background: #f7941d; color: #fff; border: none; border-radius: 8px;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+  }
+  .finish-screen .finish-btn:hover { background: #e8850f; }
+
+  /* Confetti */
+  .confetti-container { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10001; overflow: hidden; }
+  .confetti-piece {
+    position: absolute; top: -20px; width: 10px; height: 10px; border-radius: 2px;
+    animation: confetti-fall linear forwards;
+  }
+  @keyframes confetti-fall {
+    0% { top: -20px; transform: rotate(0deg) translateX(0); opacity: 1; }
+    100% { top: 110vh; transform: rotate(720deg) translateX(80px); opacity: 0; }
+  }
+
   .annotation { margin-top: 32px; padding: 16px 20px; background: #fff8f0; border: 1px solid #f7941d; border-radius: 8px; font-size: 13px; color: #333; line-height: 1.6; }
   .annotation h3 { color: #f7941d; font-size: 14px; margin-bottom: 8px; }
   .annotation ul { margin-left: 20px; }
@@ -801,17 +833,35 @@
 
       <!-- ==================== STEP 8: Suppliers ==================== -->
       <div class="step-panel" id="panel8">
-        <h2>Supplier Resource Mapping</h2>
-        <p class="subtitle">We've scanned your bills from the last 3 months and identified your most active suppliers. AI has predicted a resource type for each — review and adjust if needed.</p>
-
-        <div class="info-box blue" style="margin-bottom:20px;">
-          <div class="info-icon">✦</div>
-          <div><strong>AI-assisted mapping:</strong> Resource types marked with <span style="color:#7c4dff; font-weight:600;">✦ AI</span> were predicted based on your bill descriptions and supplier categories. You can override any prediction by selecting a different resource type from the dropdown.</div>
+        <!-- Sync overlay -->
+        <div id="syncOverlay" style="text-align:center; padding:60px 20px;">
+          <div style="width:80px; height:80px; margin:0 auto 20px; border-radius:50%; background:#13B5EA; display:flex; align-items:center; justify-content:center;">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" style="animation:spin 1.5s linear infinite;"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+          </div>
+          <h2 style="font-size:22px; margin-bottom:8px;">Syncing with Xero...</h2>
+          <p style="font-size:14px; color:#666; margin-bottom:24px;">Reading your bills from the last 3 months to identify suppliers</p>
+          <div style="max-width:400px; margin:0 auto;">
+            <div style="height:6px; background:#e0e0e0; border-radius:3px; overflow:hidden;">
+              <div id="syncBar" style="height:100%; width:0%; background:linear-gradient(90deg, #13B5EA, #4caf50); border-radius:3px; transition:width 0.3s;"></div>
+            </div>
+            <div id="syncStatus" style="font-size:13px; color:#888; margin-top:10px;">Connecting to Xero...</div>
+          </div>
         </div>
 
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-          <div style="font-size:14px; color:#666;"><strong>24 suppliers</strong> found across <strong>187 bills</strong> in the last 3 months</div>
-          <input type="text" placeholder="Search suppliers..." style="padding:8px 12px; border:1px solid #d0d0d0; border-radius:6px; font-size:13px; width:220px;">
+        <!-- Results (hidden until sync complete) -->
+        <div id="supplierResults" style="display:none;">
+          <h2>Supplier Resource Mapping</h2>
+          <p class="subtitle">We've scanned your bills from the last 3 months and identified your most active suppliers. AI has predicted a resource type for each — review and adjust if needed.</p>
+
+          <div class="info-box blue" style="margin-bottom:20px;">
+            <div class="info-icon">✦</div>
+            <div><strong>AI-assisted mapping:</strong> Resource types marked with <span style="color:#7c4dff; font-weight:600;">✦ AI</span> were predicted based on your bill descriptions and supplier categories. You can override any prediction by selecting a different resource type from the dropdown.</div>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+            <div style="font-size:14px; color:#666;"><strong>24 suppliers</strong> found across <strong>187 bills</strong> in the last 3 months</div>
+            <input type="text" placeholder="Search suppliers..." style="padding:8px 12px; border:1px solid #d0d0d0; border-radius:6px; font-size:13px; width:220px;">
+          </div>
         </div>
 
         <table class="codes-table" id="supplierTable">
@@ -850,6 +900,7 @@
           <div class="info-icon">✓</div>
           <div>This mapping helps Varicon automatically categorise purchase orders and bills by resource type. You can update supplier mappings later in <strong>Settings → Suppliers</strong>.</div>
         </div>
+        </div><!-- end supplierResults -->
       </div>
 
       <!-- Annotation -->
@@ -1018,6 +1069,8 @@ function goStep(step) {
   if (step < 1 || step > totalSteps) return;
   // When entering step 6, rebuild dropdowns to reflect any archive changes in step 5
   if (step === 6) rebuildResourceDropdowns();
+  // When entering step 8, run sync animation
+  if (step === 8) runSyncAnimation();
   document.getElementById('panel' + currentStep).classList.remove('active');
   currentStep = step;
   document.getElementById('panel' + currentStep).classList.add('active');
@@ -1236,7 +1289,47 @@ function clearAiBadge(selectEl) {
 }
 
 function finishSetup() {
-  alert('Setup complete! In the real app, this would dismiss the wizard and take you to the Projects dashboard.');
+  document.querySelector('.finish-screen').classList.add('show');
+  launchConfetti();
+}
+
+function launchConfetti() {
+  const container = document.getElementById('confettiContainer');
+  const colors = ['#f7941d', '#f15a24', '#4caf50', '#2196f3', '#e53935', '#9c27b0', '#ffeb3b', '#00bcd4'];
+  for (let i = 0; i < 120; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random() * 100 + '%';
+    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.width = (Math.random() * 8 + 6) + 'px';
+    piece.style.height = (Math.random() * 8 + 6) + 'px';
+    piece.style.animationDuration = (Math.random() * 2 + 2) + 's';
+    piece.style.animationDelay = (Math.random() * 2) + 's';
+    piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+    container.appendChild(piece);
+  }
+  setTimeout(() => container.innerHTML = '', 5000);
+}
+
+// Sync animation for suppliers step
+function runSyncAnimation() {
+  const bar = document.getElementById('syncBar');
+  const status = document.getElementById('syncStatus');
+  const steps = [
+    { pct: 15, text: 'Connecting to Xero...', delay: 600 },
+    { pct: 35, text: 'Reading bill history...', delay: 1200 },
+    { pct: 55, text: 'Identifying suppliers from 187 bills...', delay: 1800 },
+    { pct: 75, text: 'Mapping resource types with AI...', delay: 2400 },
+    { pct: 90, text: 'Finalising 24 supplier mappings...', delay: 3000 },
+    { pct: 100, text: 'Complete!', delay: 3600 },
+  ];
+  steps.forEach(s => {
+    setTimeout(() => { bar.style.width = s.pct + '%'; status.textContent = s.text; }, s.delay);
+  });
+  setTimeout(() => {
+    document.getElementById('syncOverlay').style.display = 'none';
+    document.getElementById('supplierResults').style.display = 'block';
+  }, 4200);
 }
 
 // --- PO Number Preview ---
@@ -1302,6 +1395,20 @@ function onProjectManualToggle() {
   }
 }
 </script>
+
+<!-- Finish screen -->
+<div class="finish-screen">
+  <div class="finish-icon">✓</div>
+  <h2>You're all set!</h2>
+  <p>Your Varicon account is fully configured and ready to go.</p>
+  <div style="display:flex; gap:16px; flex-wrap:wrap; justify-content:center; margin-bottom:32px;">
+    <div style="padding:12px 20px; background:#f5f5f5; border-radius:8px; text-align:center;"><div style="font-size:11px; color:#888;">Projects</div><div style="font-size:20px; font-weight:700;">0</div></div>
+    <div style="padding:12px 20px; background:#f5f5f5; border-radius:8px; text-align:center;"><div style="font-size:11px; color:#888;">Suppliers</div><div style="font-size:20px; font-weight:700;">24</div></div>
+    <div style="padding:12px 20px; background:#f5f5f5; border-radius:8px; text-align:center;"><div style="font-size:11px; color:#888;">Accounting Codes</div><div style="font-size:20px; font-weight:700;">28</div></div>
+  </div>
+  <button class="finish-btn" onclick="window.location.reload()">Go to Projects →</button>
+</div>
+<div class="confetti-container" id="confettiContainer"></div>
 
 </body>
 </html>
