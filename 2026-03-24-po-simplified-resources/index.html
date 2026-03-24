@@ -332,7 +332,7 @@
       <h3 id="section4">Delivery Items</h3>
 
       <div id="resourceTypeBanner" style="display:none; margin-bottom:12px; padding:10px 16px; background:#f0faf0; border:1px solid #4caf50; border-radius:8px; font-size:13px; color:#2e7d32;">
-        ✓ Resource type <strong id="resTypeLabel">Material</strong> and accounting code <strong id="resAccLabel">311 — Materials</strong> auto-set from supplier. <a href="#" style="color:#1565c0; margin-left:8px;" onclick="event.preventDefault(); document.getElementById('resTypeOverride').style.display='flex';">Change</a>
+        ✓ Resource type <strong id="resTypeLabel">Material</strong> and accounting code <strong id="resAccLabel">311 — Materials</strong> auto-set from supplier. <a href="#" style="color:#1565c0; margin-left:8px;" onclick="event.preventDefault(); toggleAdvancedColumns();">Change</a>
       </div>
       <div id="resTypeOverride" style="display:none; margin-bottom:12px; gap:12px; align-items:center;">
         <label style="font-size:12px; font-weight:600; color:#666;">Resource Type:</label>
@@ -348,7 +348,9 @@
         <thead>
           <tr>
             <th style="width:30px">#</th>
+            <th class="adv-col" style="display:none;">Resource Type</th>
             <th>Description</th>
+            <th class="adv-col" style="display:none;">Accounting Code</th>
             <th style="width:100px">Unit</th>
             <th>Cost Centre</th>
             <th style="width:100px">Unit Cost ($)</th>
@@ -360,7 +362,9 @@
         <tbody>
           <tr>
             <td>1</td>
+            <td class="adv-col" style="display:none;"><select class="res-type-select" onchange="onResTypePerRow(this)"><option>Material</option><option>Plant and Equipment</option><option>Labour</option><option>Subcontractor</option></select></td>
             <td><input type="text" class="desc-input" placeholder="e.g. Bedding Sand, 25MPa Concrete..." style="border-color:#f7941d; background:#fff8f0;" onfocus="this.style.borderColor='#f7941d'; this.style.background='#fff';" oninput="if(this.value){this.style.borderColor='#d0d0d0';this.style.background='#fff';}else{this.style.borderColor='#f7941d';this.style.background='#fff8f0';}"></td>
+            <td class="adv-col" style="display:none;"><select class="acc-code-select"><option value="311">311 — Materials</option><option value="312">312 — Subcontractor</option><option value="313">313 — Plant & Equip</option><option value="314">314 — Labour Hire</option><option value="425">425 — Freight</option><option value="429">429 — General Exp</option></select></td>
             <td><select class="unit-select" style="border-color:#f7941d; background:#fff8f0;"></select></td>
             <td><select class="cc-select" style="border-color:#f7941d; background:#fff8f0;" onchange="onCostCentreChange(this)">
               <option value="">Select Cost Centre</option>
@@ -383,7 +387,9 @@
           </tr>
           <tr>
             <td>2</td>
+            <td class="adv-col" style="display:none;"><select class="res-type-select" onchange="onResTypePerRow(this)"><option>Material</option><option>Plant and Equipment</option><option>Labour</option><option>Subcontractor</option></select></td>
             <td><input type="text" class="desc-input" placeholder="e.g. Bedding Sand, 25MPa Concrete..." style="border-color:#f7941d; background:#fff8f0;" onfocus="this.style.borderColor='#f7941d'; this.style.background='#fff';" oninput="if(this.value){this.style.borderColor='#d0d0d0';this.style.background='#fff';}else{this.style.borderColor='#f7941d';this.style.background='#fff8f0';}"></td>
+            <td class="adv-col" style="display:none;"><select class="acc-code-select"><option value="311">311 — Materials</option><option value="312">312 — Subcontractor</option><option value="313">313 — Plant & Equip</option><option value="314">314 — Labour Hire</option><option value="425">425 — Freight</option><option value="429">429 — General Exp</option></select></td>
             <td><select class="unit-select" style="border-color:#f7941d; background:#fff8f0;"></select></td>
             <td><select class="cc-select" style="border-color:#f7941d; background:#fff8f0;" onchange="onCostCentreChange(this)">
               <option value="">Select Cost Centre</option>
@@ -719,6 +725,33 @@ function setResourceFromSupplier() {
     document.getElementById('resourceTypeBanner').style.display = 'block';
     document.getElementById('resTypeOverride').style.display = 'none';
     populateUnitsForType(resType);
+  }
+}
+
+let advancedVisible = false;
+function toggleAdvancedColumns() {
+  advancedVisible = !advancedVisible;
+  document.querySelectorAll('.adv-col').forEach(el => {
+    el.style.display = advancedVisible ? '' : 'none';
+  });
+  // Hide the override row selector
+  document.getElementById('resTypeOverride').style.display = 'none';
+}
+
+function onResTypePerRow(sel) {
+  const row = sel.closest('tr');
+  const type = sel.value;
+  const mapping = resourceCodeMap[type];
+  if (mapping) {
+    const accSel = row.querySelector('.acc-code-select');
+    if (accSel) accSel.value = mapping.code;
+    // Update units for this row's unit select
+    const unitSel = row.querySelector('.unit-select');
+    const units = unitsByType[type] || ['Each', 'Lump Sum'];
+    const prev = unitSel.value;
+    unitSel.innerHTML = '<option value="">Unit</option>';
+    units.forEach(u => { const o = document.createElement('option'); o.value = u; o.textContent = u; unitSel.appendChild(o); });
+    if (prev && units.includes(prev)) unitSel.value = prev;
   }
 }
 
