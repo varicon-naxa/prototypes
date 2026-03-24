@@ -479,11 +479,20 @@ function selectPO(type, el) {
   el.classList.add('selected');
   const wrap = document.getElementById('poSelWrap');
   wrap.style.display = type === 'link' ? 'block' : 'none';
+  if (type === 'link') {
+    // Restore steps 3/4 (will fully activate when PO selected)
+    unGreyOut('sec3');
+    unGreyOut('sec4');
+    document.getElementById('itemsEmpty').style.display = 'block';
+  }
   if (type === 'none') {
     document.getElementById('poMatch').classList.remove('show');
     document.getElementById('itemsLoaded').style.display = 'none';
-    document.getElementById('itemsEmpty').style.display = 'block';
+    document.getElementById('itemsEmpty').style.display = 'none';
     markDone('sec2');
+    // Grey out steps 3 and 4
+    greyOut('sec3', 'Assigning Delivery Items requires docket to be attached to a Purchase Order.');
+    greyOut('sec4', 'Assigning Cost Centre requires docket to be attached to a Purchase Order.');
     updateStepper();
   }
 }
@@ -492,6 +501,8 @@ function onPOSel() {
   const val = document.getElementById('poSel').value;
   if (val) {
     document.getElementById('poMatch').classList.add('show');
+    unGreyOut('sec3');
+    unGreyOut('sec4');
     document.getElementById('itemsLoaded').style.display = 'block';
     document.getElementById('itemsEmpty').style.display = 'none';
     markDone('sec2');
@@ -505,6 +516,30 @@ function onPOSel() {
     document.getElementById('itemsEmpty').style.display = 'block';
   }
   updateStepper();
+}
+
+function greyOut(id, msg) {
+  const el = document.getElementById(id);
+  el.classList.remove('required', 'done');
+  el.style.opacity = '0.35';
+  el.style.pointerEvents = 'none';
+  // Add or update notice
+  let notice = el.querySelector('.no-po-notice');
+  if (!notice) {
+    notice = document.createElement('div');
+    notice.className = 'no-po-notice';
+    notice.style.cssText = 'padding:10px 14px; background:#fff3e0; border:1px solid #f7941d; border-radius:6px; font-size:13px; color:#e65100; margin-top:8px; font-weight:600;';
+    el.querySelector('.desc').insertAdjacentElement('afterend', notice);
+  }
+  notice.textContent = msg;
+}
+
+function unGreyOut(id) {
+  const el = document.getElementById(id);
+  el.style.opacity = '1';
+  el.style.pointerEvents = 'auto';
+  const notice = el.querySelector('.no-po-notice');
+  if (notice) notice.remove();
 }
 
 function markDone(id) {
