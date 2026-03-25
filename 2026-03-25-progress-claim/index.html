@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Progress Claim</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar { width: 40px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .sidebar .s-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; border-radius: 6px; color: #888; }
+  .sidebar .s-icon:hover { background: rgba(255,255,255,.1); }
+  .sidebar .s-icon.active { background: #f7941d; color: #fff; }
+  .sidebar .s-logo { width: 28px; height: 28px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 14px; margin-bottom: 8px; }
+
+  .main { flex: 1; overflow-y: auto; }
+
+  .proj-header { padding: 12px 24px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 10px; }
+  .proj-header a { color: #666; text-decoration: none; font-size: 16px; }
+  .proj-header h2 { font-size: 15px; font-weight: 600; }
+
+  .proj-tabs { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; padding: 0 24px; overflow-x: auto; }
+  .proj-tab { padding: 12px 14px; font-size: 12px; font-weight: 500; color: #888; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+  .proj-tab.active { color: #fff; background: #f7941d; }
+
+  .content { padding: 20px 24px; }
+
+  /* Summary cards */
+  .summary-row { display: flex; gap: 12px; margin-bottom: 20px; align-items: center; }
+  .summary-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px 16px; }
+  .summary-card .sc-label { font-size: 11px; color: #888; font-weight: 500; }
+  .summary-card .sc-value { font-size: 16px; font-weight: 700; margin-top: 2px; }
+  .completion-ring { width: 56px; height: 56px; border-radius: 50%; border: 4px solid #e0e0e0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #f7941d; position: relative; flex-shrink: 0; }
+  .completion-ring::before { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 4px solid transparent; border-top-color: #f7941d; border-right-color: #f7941d; transform: rotate(10deg); }
+
+  /* Contract details table */
+  .detail-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; font-size: 13px; margin-bottom: 20px; }
+  .detail-table thead { background: #f7941d; color: #fff; }
+  .detail-table th { padding: 10px 14px; text-align: left; font-size: 12px; font-weight: 600; }
+  .detail-table td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; }
+  .detail-table tr:last-child td { border-bottom: none; font-weight: 700; }
+  .detail-table .amt { text-align: right; }
+
+  /* Claims list */
+  .claims-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .claims-header h3 { font-size: 16px; font-weight: 700; }
+  .new-claim-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 24px; background: linear-gradient(135deg, #f7941d, #f15a24);
+    color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 700;
+    cursor: pointer; box-shadow: 0 4px 16px rgba(247,148,29,.35);
+    transition: all 0.15s;
+  }
+  .new-claim-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(247,148,29,.45); }
+
+  .claims-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; font-size: 13px; }
+  .claims-table thead { background: #fafafa; }
+  .claims-table th { padding: 10px 14px; text-align: left; font-size: 12px; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; }
+  .claims-table td { padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
+  .claims-table tr:last-child td { border-bottom: none; }
+  .claims-table tr:hover td { background: #fafafa; }
+  .claims-table .amt { text-align: right; font-weight: 600; }
+  .claims-table .actions-btn { background: none; border: none; cursor: pointer; font-size: 18px; color: #999; }
+
+  /* Retention setup banner */
+  .retention-banner {
+    text-align: center; padding: 40px 20px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 20px;
+  }
+  .retention-banner .rb-icon { font-size: 36px; color: #f7941d; margin-bottom: 12px; }
+  .retention-banner p { font-size: 14px; color: #666; margin-bottom: 16px; }
+  .retention-banner .rb-btn {
+    display: inline-block; padding: 10px 24px; background: #fff; border: 2px solid #f7941d;
+    color: #f7941d; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  .retention-banner .rb-btn:hover { background: #fff8f0; }
+
+  /* Modal */
+  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.4); display: none; z-index: 100; align-items: flex-start; justify-content: center; padding-top: 60px; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: #fff; border-radius: 12px; width: 90%; max-width: 560px; overflow: hidden; }
+  .modal-header { padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e0e0e0; }
+  .modal-header h3 { font-size: 17px; font-weight: 700; }
+  .modal-close { font-size: 20px; cursor: pointer; color: #888; background: none; border: none; }
+  .modal-body { padding: 20px 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid #e0e0e0; display: flex; justify-content: flex-end; gap: 10px; }
+  .modal-footer button { padding: 10px 24px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .mbtn-cancel { background: #fff; border: 1px solid #d0d0d0; color: #555; }
+  .mbtn-save { background: #f7941d; border: none; color: #fff; }
+
+  .form-label { font-size: 13px; font-weight: 600; margin-bottom: 4px; margin-top: 16px; display: block; }
+  .form-label:first-child { margin-top: 0; }
+  .form-desc { font-size: 12px; color: #888; margin-bottom: 8px; }
+  .form-input { width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 14px; }
+  .form-input:focus { outline: none; border-color: #f7941d; }
+  .form-row { display: flex; gap: 12px; }
+  .form-row > div { flex: 1; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
+  .toggle { width: 44px; height: 24px; background: #ccc; border-radius: 12px; position: relative; cursor: pointer; }
+  .toggle.on { background: #f7941d; }
+  .toggle::after { content: ''; position: absolute; width: 20px; height: 20px; background: #fff; border-radius: 50%; top: 2px; left: 2px; transition: .2s; }
+  .toggle.on::after { left: 22px; }
+  .form-check { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 12px; }
+  .form-check input { width: 18px; height: 18px; accent-color: #f7941d; }
+  .divider { border-top: 1px solid #e0e0e0; margin: 16px 0; }
+
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  .table-footer { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 12px 14px; font-size: 12px; color: #888; border-top: 1px solid #e0e0e0; background: #fff; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="s-logo">V</div>
+    <div class="s-icon">📁</div>
+    <div class="s-icon active">📊</div>
+    <div class="s-icon">⏱</div>
+    <div class="s-icon">📋</div>
+    <div class="s-icon">📅</div>
+    <div class="s-icon">📄</div>
+    <div class="s-icon">🛒</div>
+    <div class="s-icon">🚚</div>
+    <div class="s-icon">💰</div>
+  </div>
+
+  <div class="main">
+    <div class="proj-header">
+      <a href="#">←</a>
+      <h2>(VAR004) Bourke Street Roadworks</h2>
+    </div>
+    <div class="proj-tabs">
+      <div class="proj-tab">Dashboard</div>
+      <div class="proj-tab">Forecast</div>
+      <div class="proj-tab">Daily Cost Tracking</div>
+      <div class="proj-tab active">Claim</div>
+      <div class="proj-tab">Variation Register</div>
+      <div class="proj-tab">Report</div>
+      <div class="proj-tab">File Manager</div>
+      <div class="proj-tab">Site Diary</div>
+      <div class="proj-tab">Daywork Docket</div>
+    </div>
+
+    <!-- ===== SCREEN: CLAIMS HOME ===== -->
+    <div class="screen active" id="screenHome">
+      <div class="content">
+        <!-- Summary row -->
+        <div class="summary-row">
+          <div class="completion-ring">36.5%</div>
+          <div class="summary-card"><div class="sc-label">Grand Total</div><div class="sc-value">$ 515,000.00</div></div>
+          <div class="summary-card"><div class="sc-label">Claim To Date</div><div class="sc-value">$ 188,000.00</div></div>
+          <div class="summary-card"><div class="sc-label">Total Original Contract Value</div><div class="sc-value">$ 450,000.00</div></div>
+          <div class="summary-card"><div class="sc-label">Claimed</div><div class="sc-value">$ 160,000.00</div></div>
+          <div class="summary-card"><div class="sc-label">Remaining</div><div class="sc-value">$ 290,000.00</div></div>
+          <div class="summary-card"><div class="sc-label">Variation Total</div><div class="sc-value">$ 65,000.00</div></div>
+          <div class="summary-card"><div class="sc-label">Claimed</div><div class="sc-value">$ 28,000.00</div></div>
+          <div class="summary-card"><div class="sc-label">Remaining</div><div class="sc-value">$ 37,000.00</div></div>
+        </div>
+
+        <!-- Contract details -->
+        <table class="detail-table">
+          <thead><tr><th>Contract Details</th><th class="amt">Contract Sum</th><th class="amt">Claim to Date</th><th class="amt">Remaining Claim</th><th class="amt">Retention Withheld</th><th class="amt">Retention Released</th><th class="amt">Remaining Retention</th></tr></thead>
+          <tbody>
+            <tr><td>Contract Works</td><td class="amt">$ 450,000.00</td><td class="amt">$ 160,000.00</td><td class="amt">$ 290,000.00</td><td class="amt">$ 16,000.00</td><td class="amt">—</td><td class="amt">$ 6,500.00</td></tr>
+            <tr><td>Variations</td><td class="amt">$ 65,000.00</td><td class="amt">$ 28,000.00</td><td class="amt">$ 37,000.00</td><td class="amt">$ 300.00</td><td class="amt">—</td><td class="amt">$ 2,950.00</td></tr>
+            <tr><td><strong>Total</strong></td><td class="amt">$ 515,000.00</td><td class="amt">$ 188,000.00</td><td class="amt">$ 327,000.00</td><td class="amt">$ 16,300.00</td><td class="amt">$ 0.00</td><td class="amt">$ 9,450.00</td></tr>
+          </tbody>
+        </table>
+
+        <!-- Claims list -->
+        <div class="claims-header">
+          <h3>Claims</h3>
+          <button class="new-claim-btn" onclick="alert('In the real app, this creates a new claim for the next period.')">+ Make New Claim</button>
+        </div>
+
+        <table class="claims-table">
+          <thead>
+            <tr><th>Claim Number</th><th>Date Submitted</th><th>Date Approved</th><th>Invoice Ref</th><th>Claim Period</th><th class="amt">Claim Amount</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>5</strong></td><td>Wed, 11/03/2026</td><td>Wed, 11/03/2026</td><td>INV-VAR004-005</td><td>Thu, 12/02/2026 – Tue, 17/02/2026</td><td class="amt">$ 21,800.00</td><td><button class="actions-btn">⋮</button></td></tr>
+            <tr><td><strong>4</strong></td><td>Wed, 04/03/2026</td><td>Wed, 04/03/2026</td><td>INV-VAR004-004</td><td>Mon, 02/02/2026 – Wed, 11/02/2026</td><td class="amt">$ 20,000.00</td><td><button class="actions-btn">⋮</button></td></tr>
+            <tr><td><strong>3</strong></td><td>Thu, 26/02/2026</td><td>Thu, 26/02/2026</td><td>INV-VAR004-003</td><td>Thu, 01/01/2026 – Wed, 07/01/2026</td><td class="amt">$ 21,200.00</td><td><button class="actions-btn">⋮</button></td></tr>
+            <tr><td><strong>2</strong></td><td>Tue, 29/07/2025</td><td>Tue, 29/07/2025</td><td>INV-VAR004-002</td><td>Mon, 07/07/2025 – Tue, 08/07/2025</td><td class="amt">$ 30,000.00</td><td><button class="actions-btn">⋮</button></td></tr>
+            <tr><td><strong>1</strong></td><td>Sun, 13/07/2025</td><td>Sun, 13/07/2025</td><td>INV-VAR004-001</td><td>Sun, 01/06/2025 – Mon, 30/06/2025</td><td class="amt">$ 95,000.00</td><td><button class="actions-btn">⋮</button></td></tr>
+          </tbody>
+        </table>
+        <div class="table-footer"><span>Rows Per Page 15</span><span>1 to 5 of 5</span></div>
+      </div>
+    </div>
+
+    <!-- ===== SCREEN: FIRST TIME (no retention set) ===== -->
+    <div class="screen" id="screenFirstTime">
+      <div class="content">
+        <div class="summary-row">
+          <div class="completion-ring" style="color:#ccc; border-color:#e0e0e0;">0.00%</div>
+          <div class="summary-card"><div class="sc-label">Grand Total</div><div class="sc-value">$ 0.00</div></div>
+          <div class="summary-card"><div class="sc-label">Claim To Date</div><div class="sc-value">$ 0.00</div></div>
+          <div class="summary-card"><div class="sc-label">Total Original Contract Value</div><div class="sc-value">$ 0.00</div></div>
+          <div class="summary-card"><div class="sc-label">Claimed</div><div class="sc-value">$ 0.00</div></div>
+          <div class="summary-card"><div class="sc-label">Remaining</div><div class="sc-value">$ 0.00</div></div>
+        </div>
+
+        <div class="claims-header"><h3>Claims</h3></div>
+        <table class="claims-table">
+          <thead><tr><th>Claim Number</th><th>Date Submitted</th><th>Date Approved</th><th>Invoice Ref</th><th>Claim Period</th><th class="amt">Claim Amount</th></tr></thead>
+          <tbody></tbody>
+        </table>
+
+        <div class="retention-banner">
+          <div class="rb-icon">⚠</div>
+          <p>Please setup the retention setting before creating a new claim.</p>
+          <button class="rb-btn" onclick="openRetentionModal()">RETENTION SETTINGS</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Retention Settings Modal -->
+<div class="modal-overlay" id="retentionModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Retention Settings</h3>
+      <button class="modal-close" onclick="closeModal('retentionModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="toggle-row">
+        <div><div class="form-label" style="margin:0;">Merge Retention</div><div class="form-desc" style="margin:0;">Combine Retention Settings for contract and variation into single setting</div></div>
+        <div class="toggle" onclick="this.classList.toggle('on')"><span style="margin-left:50px; font-size:13px; color:#555;"> Enable</span></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="form-label">Contract Retention Basis</div>
+      <select class="form-input" style="max-width:200px;"><option>Percent</option><option>Fixed Amount</option></select>
+
+      <div class="form-row" style="margin-top:12px;">
+        <div><div class="form-label">Contract Max Retention</div><input class="form-input" placeholder="%" value="5"></div>
+        <div><div class="form-label">Contract Retention Rate</div><input class="form-input" placeholder="%" value="10"></div>
+      </div>
+
+      <label class="form-check"><input type="checkbox"> Enable Manual Contract Retention <span style="color:#f7941d; font-weight:700;">⚠</span></label>
+
+      <div class="divider"></div>
+
+      <div class="form-label">Variation Retention Basis</div>
+      <select class="form-input" style="max-width:200px;"><option>Percent</option><option>Fixed Amount</option></select>
+
+      <div class="form-row" style="margin-top:12px;">
+        <div><div class="form-label">Variation Max Retention</div><input class="form-input" placeholder="%" value="5"></div>
+        <div><div class="form-label">Variation Retention Rate</div><input class="form-input" placeholder="%" value="10"></div>
+      </div>
+
+      <label class="form-check"><input type="checkbox"> Enable Manual Variation Retention <span style="color:#f7941d; font-weight:700;">⚠</span></label>
+    </div>
+    <div class="modal-footer">
+      <button class="mbtn-cancel" onclick="closeModal('retentionModal')">Cancel</button>
+      <button class="mbtn-save" onclick="saveRetention()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Show first-time screen by default for demo — toggle with URL hash
+if (window.location.hash === '#first') {
+  document.getElementById('screenHome').classList.remove('active');
+  document.getElementById('screenFirstTime').classList.add('active');
+}
+
+function openRetentionModal() {
+  document.getElementById('retentionModal').classList.add('show');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+function saveRetention() {
+  closeModal('retentionModal');
+  // Switch to home screen with data
+  document.getElementById('screenFirstTime').classList.remove('active');
+  document.getElementById('screenHome').classList.add('active');
+}
+</script>
+</body>
+</html>
