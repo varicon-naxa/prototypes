@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Varicon — Subcontractor Timesheet</title>
+<title>Varicon — Timesheet Management</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
@@ -23,7 +23,6 @@
 
   /* Main */
   .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
-
   .screen { display: none; flex: 1; flex-direction: column; }
   .screen.active { display: flex; }
 
@@ -31,6 +30,8 @@
   .page-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 28px 0; }
   .page-header h1 { font-size: 22px; font-weight: 600; }
   .header-actions { display: flex; gap: 10px; }
+
+  /* Buttons */
   .btn { padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 2px solid; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
   .btn-outline { background: #fff; border-color: #d0d0d0; color: #555; }
   .btn-outline:hover { background: #f5f5f5; }
@@ -40,18 +41,22 @@
   .btn-success:hover { background: #43a047; }
   .btn-blue { background: #1565c0; border-color: #1565c0; color: #fff; }
   .btn-blue:hover { background: #0d47a1; }
+  .btn-danger { background: #e53935; border-color: #e53935; color: #fff; }
+  .btn-danger:hover { background: #c62828; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
 
-  /* Tabs */
-  .tabs { display: flex; gap: 0; padding: 0 28px; border-bottom: 2px solid #e0e0e0; margin-top: 16px; }
-  .tab { padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #888; transition: all 0.2s; }
-  .tab.active { color: #f7941d; border-bottom-color: #f7941d; }
-  .tab:hover { color: #f7941d; }
-  .tab .count { font-weight: 400; color: #999; margin-left: 4px; }
-  .tab.active .count { color: #f7941d; }
-  .tab .badge { background: #f7941d; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; margin-left: 4px; }
+  /* Big toggle */
+  .big-toggle { display: flex; margin: 16px 28px 0; background: #e8e8e8; border-radius: 10px; padding: 4px; }
+  .big-toggle-btn { flex: 1; padding: 14px 20px; border-radius: 8px; font-size: 15px; font-weight: 700; text-align: center; cursor: pointer; transition: all 0.2s; color: #888; }
+  .big-toggle-btn.active { background: #fff; color: #333; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  .big-toggle-btn:not(.active):hover { color: #555; }
+  .big-toggle-btn .bt-count { font-weight: 400; font-size: 13px; color: #999; margin-left: 4px; }
+  .big-toggle-btn.active .bt-count { color: #f7941d; }
 
   /* Content area */
   .content { flex: 1; padding: 20px 28px 100px; overflow-y: auto; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
 
   /* Summary cards */
   .summary-row { display: flex; gap: 16px; margin-bottom: 20px; }
@@ -61,8 +66,25 @@
   .si-green { background: #e8f5e9; }
   .si-blue { background: #e3f2fd; }
   .si-red { background: #fde8e8; }
+  .si-purple { background: #f3e5f5; }
   .summary-card .sc-value { font-size: 20px; font-weight: 700; }
   .summary-card .sc-label { font-size: 11px; color: #888; font-weight: 600; margin-top: 2px; }
+
+  /* Alert banner */
+  .alert-banner {
+    display: flex; align-items: center; gap: 14px; padding: 14px 20px;
+    border-radius: 10px; margin-bottom: 20px; cursor: pointer; transition: all 0.15s;
+  }
+  .alert-warning { background: #fff3e0; border: 2px solid #f7941d; }
+  .alert-warning:hover { background: #ffe8cc; }
+  .alert-icon {
+    width: 40px; height: 40px; border-radius: 50%; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; flex-shrink: 0;
+  }
+  .alert-text { flex: 1; }
+  .alert-text .alert-title { font-size: 14px; font-weight: 700; }
+  .alert-text .alert-detail { font-size: 12px; color: #555; margin-top: 2px; }
+  .alert-arrow { font-size: 20px; color: #999; }
 
   /* Toolbar */
   .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -85,7 +107,7 @@
   th { text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; white-space: nowrap; }
   td { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
   tr:last-child td { border-bottom: none; }
-  tr:hover { background: #fafafa; cursor: pointer; }
+  tr.data-row:hover { background: #fafafa; cursor: pointer; }
   .text-right { text-align: right; }
 
   /* Status badges */
@@ -96,14 +118,28 @@
   .s-locked { background: #e3f2fd; color: #1565c0; }
   .s-draft { background: #f0f0f0; color: #666; }
 
-  /* Company cards (for company selection) */
+  /* Date group header */
+  .date-group td { padding: 10px 16px; background: #fafafa; font-size: 12px; font-weight: 600; color: #666; }
+  .date-group:hover { background: #fafafa !important; cursor: default !important; }
+  .dg-count { background: #f7941d; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; margin-left: 6px; }
+
+  /* Checkbox */
+  .cb { width: 16px; height: 16px; border: 2px solid #ccc; border-radius: 3px; cursor: pointer; flex-shrink: 0; display: inline-block; }
+  .cb.checked { background: #f7941d; border-color: #f7941d; position: relative; }
+  .cb.checked::after { content: ''; position: absolute; left: 3px; top: 0; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+
+  /* Company cards */
   .company-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px; }
   .company-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px; cursor: pointer; transition: all 0.15s; }
   .company-card:hover { border-color: #f7941d; box-shadow: 0 2px 12px rgba(247,148,29,0.12); }
+  .company-card.selected { border-color: #f7941d; border-width: 2px; box-shadow: 0 2px 12px rgba(247,148,29,0.15); }
   .cc-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-  .cc-avatar { width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; color: #fff; }
+  .cc-avatar { width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; color: #fff; flex-shrink: 0; }
   .cc-name { font-size: 15px; font-weight: 600; }
   .cc-abn { font-size: 11px; color: #888; margin-top: 2px; }
+  .cc-type { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; margin-top: 4px; display: inline-block; }
+  .cc-type-abn { background: #fff3e0; color: #e65100; }
+  .cc-type-lh { background: #e3f2fd; color: #1565c0; }
   .cc-stats { display: flex; gap: 16px; padding-top: 12px; border-top: 1px solid #f0f0f0; }
   .cc-stat-label { font-size: 10px; color: #888; font-weight: 600; text-transform: uppercase; }
   .cc-stat-value { font-size: 14px; font-weight: 700; margin-top: 2px; }
@@ -127,6 +163,7 @@
   .linkage-node.active { background: #fff8f0; border: 2px solid #f7941d; }
   .linkage-node.linked { background: #e8f5e9; border: 2px solid #4caf50; }
   .linkage-node.pending { background: #f5f5f5; border: 2px dashed #ccc; }
+  .linkage-node.optional { background: #f9f9f9; border: 2px dashed #bbb; }
   .ln-icon { font-size: 24px; margin-bottom: 6px; }
   .ln-label { font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; }
   .ln-value { font-size: 13px; font-weight: 600; margin-top: 4px; }
@@ -151,27 +188,24 @@
     box-shadow: 0 -2px 8px rgba(0,0,0,.06); z-index: 10;
   }
 
-  /* Date group header */
-  .date-group { padding: 10px 16px; background: #fafafa; font-size: 12px; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 8px; }
-  .date-group .dg-count { background: #f7941d; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
+  /* Export dropdown */
+  .export-dropdown { position: relative; display: inline-block; }
+  .export-menu { display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12); min-width: 220px; z-index: 50; overflow: hidden; }
+  .export-menu.show { display: block; }
+  .export-menu-item { padding: 12px 16px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #f0f0f0; }
+  .export-menu-item:last-child { border-bottom: none; }
+  .export-menu-item:hover { background: #f9f9f9; }
+  .export-menu-item .emi-icon { font-size: 16px; width: 20px; text-align: center; }
+  .export-menu-item .emi-desc { font-size: 11px; color: #888; }
 
-  /* Checkbox */
-  .cb { width: 16px; height: 16px; border: 2px solid #ccc; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
-  .cb.checked { background: #f7941d; border-color: #f7941d; position: relative; }
-  .cb.checked::after { content: ''; position: absolute; left: 3px; top: 0; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  /* Supervisor prompt */
+  .supervisor-row { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #fff8f0; border-bottom: 1px solid #f0e0c0; font-size: 12px; color: #e65100; }
+  .supervisor-row:hover { background: #fff3e0 !important; }
 
   /* Toast */
   .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 13px; font-weight: 500; display: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
   .toast.show { display: block; animation: fadeIn 0.3s; }
   @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-
-  /* Big toggle */
-  .big-toggle { display: flex; margin: 16px 28px 0; background: #f0f0f0; border-radius: 10px; padding: 4px; }
-  .big-toggle-btn { flex: 1; padding: 14px 20px; border-radius: 8px; font-size: 15px; font-weight: 700; text-align: center; cursor: pointer; transition: all 0.2s; color: #888; }
-  .big-toggle-btn.active { background: #fff; color: #333; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
-  .big-toggle-btn:not(.active):hover { color: #555; }
-  .big-toggle-btn .bt-count { font-weight: 400; font-size: 13px; color: #999; margin-left: 4px; }
-  .big-toggle-btn.active .bt-count { color: #f7941d; }
 
   /* Prototype notice */
   .proto-notice { position: fixed; top: 0; left: 0; right: 0; background: #1a1a2e; color: #f7941d; text-align: center; padding: 6px; font-size: 11px; font-weight: 600; z-index: 200; }
@@ -180,7 +214,7 @@
 </head>
 <body>
 
-<div class="proto-notice">PROTOTYPE — Subcontractor Timesheet <a href="../">Back to all prototypes</a></div>
+<div class="proto-notice">PROTOTYPE — Timesheet Management <a href="../">Back to all prototypes</a></div>
 
 <div class="layout" style="margin-top: 28px;">
 
@@ -205,25 +239,177 @@
   <!-- Main content -->
   <div class="main">
 
-    <!-- ========== SCREEN 1: Timesheet List with Subcontractors tab ========== -->
+    <!-- ========== SCREEN 1: Timesheet List ========== -->
     <div class="screen active" id="screen-list">
       <div class="page-header">
         <h1>Timesheet</h1>
-        <div class="header-actions">
-          <button class="btn btn-outline">↓ Export</button>
-          <button class="btn btn-primary" onclick="go('screen-add')">+ Add Timesheet</button>
+        <div class="header-actions" id="header-actions-area">
+          <!-- Dynamic based on active toggle -->
         </div>
       </div>
 
       <div class="big-toggle">
-        <div class="big-toggle-btn" onclick="switchMode(this, 'employees')">Employees <span class="bt-count">(4)</span></div>
-        <div class="big-toggle-btn active" onclick="switchMode(this, 'subbies')">Subbies / Labour Hire <span class="bt-count">(3)</span></div>
+        <div class="big-toggle-btn active" onclick="switchMode('employees')">Employees <span class="bt-count">(4)</span></div>
+        <div class="big-toggle-btn" onclick="switchMode('subbies')">Subbies / Labour Hire <span class="bt-count">(3)</span></div>
       </div>
 
       <div class="content">
 
-        <!-- Subcontractors tab content -->
-        <div id="tab-subcontractors">
+        <!-- ===== EMPLOYEES TAB ===== -->
+        <div class="tab-content active" id="tab-employees">
+
+          <!-- Unapproved alert -->
+          <div class="alert-banner alert-warning" id="unapproved-alert" onclick="scrollToUnapproved()">
+            <div class="alert-icon" style="background: #f7941d;">!</div>
+            <div class="alert-text">
+              <div class="alert-title">2 unapproved timesheets need supervisor review</div>
+              <div class="alert-detail">James Baker has 2 timesheets from Tuesday not yet approved. Notify supervisor?</div>
+            </div>
+            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); notifySupervisor()">Notify Supervisor</button>
+            <span class="alert-arrow">›</span>
+          </div>
+
+          <div class="summary-row">
+            <div class="summary-card">
+              <div class="summary-icon si-blue">📋</div>
+              <div><div class="sc-value">7</div><div class="sc-label">Total Timesheets</div></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-icon si-green">✓</div>
+              <div><div class="sc-value">4</div><div class="sc-label">Approved</div></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-icon si-orange">⏳</div>
+              <div><div class="sc-value">2</div><div class="sc-label">Unapproved</div></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-icon si-purple">🔒</div>
+              <div><div class="sc-value">1</div><div class="sc-label">Payroll Locked</div></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-icon si-blue">⏱</div>
+              <div><div class="sc-value">46h 45m</div><div class="sc-label">Total Work Time</div></div>
+            </div>
+          </div>
+
+          <div class="toolbar">
+            <select class="filter-select"><option>All Projects</option><option>(VAR004) Bourke Street</option><option>(VAR005) Ring Road</option></select>
+            <select class="filter-select"><option>Fri 20/03 — Thu 26/03</option><option>Fri 13/03 — Thu 20/03</option><option>Custom Range</option></select>
+            <select class="filter-select"><option>All Statuses</option><option>Approved</option><option>Unapproved</option><option>Payroll Locked</option></select>
+            <div class="toolbar-search"><svg viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input placeholder="Search employees..."></div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:32px;"><div class="cb" onclick="toggleAllEmp(this)"></div></th>
+                  <th>Employee</th>
+                  <th>Project</th>
+                  <th>Approver</th>
+                  <th>Submitted Time</th>
+                  <th>Approved Time</th>
+                  <th>Task / Cost Centre</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Wednesday 25 Mar -->
+                <tr class="date-group"><td colspan="9">Wednesday, 25 Mar <span class="dg-count">1</span></td></tr>
+                <tr class="data-row">
+                  <td><div class="cb checked"></div></td>
+                  <td><strong>Ford Hoogendoorn</strong><br><span style="font-size:11px; color:#888;">Supervisor</span></td>
+                  <td>(VAR004) Bourke Stre...</td>
+                  <td>Varicon Info</td>
+                  <td>06:00 AM — 03:15 PM<br><span style="font-size:11px; color:#888;">8h 45m · ☕ 30m</span></td>
+                  <td>06:00 AM — 03:15 PM<br><span style="font-size:11px; color:#888;">8h 45m · ☕ 30m</span></td>
+                  <td>—</td>
+                  <td><span class="status s-locked">Payroll Locked</span></td>
+                  <td style="color:#ccc;">›</td>
+                </tr>
+
+                <!-- Tuesday 24 Mar -->
+                <tr class="date-group"><td colspan="9">Tuesday, 24 Mar <span class="dg-count">6</span></td></tr>
+                <tr class="data-row">
+                  <td><div class="cb"></div></td>
+                  <td><strong>Cris Baker</strong><br><span style="font-size:11px; color:#888;">Engineer</span></td>
+                  <td>(VAR004) Bourke Stre...</td>
+                  <td>Varicon Info</td>
+                  <td>07:00 AM — 04:30 PM<br><span style="font-size:11px; color:#888;">9h 0m · ☕ 30m</span></td>
+                  <td>07:00 AM — 04:30 PM<br><span style="font-size:11px; color:#888;">9h 0m · ☕ 30m</span></td>
+                  <td>Unassigned Task — Pa...</td>
+                  <td><span class="status s-approved">Approved</span></td>
+                  <td style="color:#ccc;">›</td>
+                </tr>
+                <tr class="data-row">
+                  <td><div class="cb"></div></td>
+                  <td><strong>Ford Hoogendoorn</strong><br><span style="font-size:11px; color:#888;">Supervisor</span></td>
+                  <td>(VAR004) Bourke Stre...</td>
+                  <td>Varicon Info</td>
+                  <td>07:00 AM — 04:30 PM<br><span style="font-size:11px; color:#888;">9h 0m · ☕ 30m</span></td>
+                  <td>07:00 AM — 04:30 PM<br><span style="font-size:11px; color:#888;">9h 0m · ☕ 30m</span></td>
+                  <td>Unassigned Task — Pa...</td>
+                  <td><span class="status s-approved">Approved</span></td>
+                  <td style="color:#ccc;">›</td>
+                </tr>
+                <tr class="data-row">
+                  <td><div class="cb"></div></td>
+                  <td><strong>George Carpenter</strong><br><span style="font-size:11px; color:#888;">Labourer</span></td>
+                  <td>(VAR004) Bourke Stre...</td>
+                  <td>Varicon Info</td>
+                  <td>07:00 AM — 06:30 PM<br><span style="font-size:11px; color:#888;">11h 0m · ☕ 30m</span></td>
+                  <td>07:00 AM — 06:30 PM<br><span style="font-size:11px; color:#888;">11h 0m · ☕ 30m</span></td>
+                  <td>Unassigned Task — Pa...</td>
+                  <td><span class="status s-approved">Approved</span></td>
+                  <td style="color:#ccc;">›</td>
+                </tr>
+                <tr class="data-row">
+                  <td><div class="cb"></div></td>
+                  <td><strong>James Baker</strong><br><span style="font-size:11px; color:#888;">Labourer</span></td>
+                  <td>(VAR004) Bourke Stre...</td>
+                  <td>Varicon Info</td>
+                  <td>07:00 AM — 04:30 PM<br><span style="font-size:11px; color:#888;">9h 0m · ☕ 30m</span></td>
+                  <td>07:00 AM — 04:30 PM<br><span style="font-size:11px; color:#888;">9h 0m · ☕ 30m</span></td>
+                  <td>Unassigned Task — Pa...</td>
+                  <td><span class="status s-approved">Approved</span></td>
+                  <td style="color:#ccc;">›</td>
+                </tr>
+
+                <!-- Unapproved rows -->
+                <tr class="supervisor-row" id="unapproved-section">
+                  <td colspan="9">⚠️ The following timesheets have not been approved by a supervisor</td>
+                </tr>
+                <tr class="data-row" style="background: #fffbf5;">
+                  <td><div class="cb"></div></td>
+                  <td><strong>James Baker</strong><br><span style="font-size:11px; color:#888;">Labourer</span></td>
+                  <td>(VAR004) Bourke Stre...</td>
+                  <td style="color: #e65100;">—</td>
+                  <td>10:45 AM — 02:45 PM<br><span style="font-size:11px; color:#888;">3h 30m · ☕ 30m</span></td>
+                  <td style="color: #ccc;">—</td>
+                  <td>—</td>
+                  <td><span class="status s-unapproved">Unapproved</span></td>
+                  <td style="color:#ccc;">›</td>
+                </tr>
+                <tr class="data-row" style="background: #fffbf5;">
+                  <td><div class="cb"></div></td>
+                  <td><strong>James Baker</strong><br><span style="font-size:11px; color:#888;">Labourer</span></td>
+                  <td>(VAR004) Bourke Stre...</td>
+                  <td style="color: #e65100;">—</td>
+                  <td>03:05 PM — 03:04 PM <span style="color:#e53935; font-size:11px;">+1 day</span><br><span style="font-size:11px; color:#888;">23h 59m · ☕ 0m</span></td>
+                  <td style="color: #ccc;">—</td>
+                  <td>—</td>
+                  <td><span class="status s-unapproved">Unapproved</span></td>
+                  <td style="color:#ccc;">›</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ===== SUBBIES / LABOUR HIRE TAB ===== -->
+        <div class="tab-content" id="tab-subbies">
+
           <div class="summary-row">
             <div class="summary-card">
               <div class="summary-icon si-orange">👷</div>
@@ -243,6 +429,8 @@
             </div>
           </div>
 
+          <p style="font-size: 13px; color: #666; margin-bottom: 16px; font-weight: 500;">Select a company to manage their timesheets, link to purchase orders, and create certificates of assessment.</p>
+
           <div class="toolbar">
             <select class="filter-select"><option>All Projects</option><option>(VAR004) Bourke Street</option><option>(VAR005) Ring Road</option></select>
             <select class="filter-select"><option>This Week</option><option>Last Week</option><option>This Month</option><option>Custom Range</option></select>
@@ -250,13 +438,13 @@
           </div>
 
           <div class="company-grid">
-            <!-- Company 1 -->
             <div class="company-card" onclick="go('screen-company')">
               <div class="cc-top">
                 <div class="cc-avatar" style="background: #1565c0;">BT</div>
                 <div>
                   <div class="cc-name">BlueTech Electrical</div>
                   <div class="cc-abn">ABN 51 824 753 901</div>
+                  <div class="cc-type cc-type-lh">Labour Hire</div>
                 </div>
               </div>
               <div class="cc-stats">
@@ -267,13 +455,13 @@
               </div>
             </div>
 
-            <!-- Company 2 -->
-            <div class="company-card">
+            <div class="company-card" onclick="go('screen-company')">
               <div class="cc-top">
                 <div class="cc-avatar" style="background: #2e7d32;">ML</div>
                 <div>
                   <div class="cc-name">Mitchell Labour Hire</div>
                   <div class="cc-abn">ABN 33 102 456 789</div>
+                  <div class="cc-type cc-type-lh">Labour Hire</div>
                 </div>
               </div>
               <div class="cc-stats">
@@ -284,25 +472,52 @@
               </div>
             </div>
 
-            <!-- Company 3 -->
-            <div class="company-card">
+            <div class="company-card" onclick="go('screen-company')">
               <div class="cc-top">
                 <div class="cc-avatar" style="background: #e65100;">SD</div>
                 <div>
                   <div class="cc-name">Steve Davidson</div>
-                  <div class="cc-abn">ABN 12 345 678 901 (Sole Trader)</div>
+                  <div class="cc-abn">ABN 12 345 678 901</div>
+                  <div class="cc-type cc-type-abn">Sole Trader (ABN)</div>
                 </div>
               </div>
               <div class="cc-stats">
                 <div><div class="cc-stat-label">This Week</div><div class="cc-stat-value">2 timesheets</div></div>
                 <div><div class="cc-stat-label">Hours</div><div class="cc-stat-value">17.0h</div></div>
                 <div><div class="cc-stat-label">Pending</div><div class="cc-stat-value" style="color: #e65100;">1</div></div>
-                <div><div class="cc-stat-label">Linked PO</div><div class="cc-stat-value">PO-0063</div></div>
+                <div><div class="cc-stat-label">Linked PO</div><div class="cc-stat-value" style="color: #ccc;">None</div></div>
               </div>
             </div>
           </div>
         </div>
 
+      </div>
+
+      <!-- Bottom actions for employees tab -->
+      <div class="bottom-actions" id="emp-bottom-actions">
+        <button class="btn btn-outline" onclick="notifySupervisor()">📧 Notify Supervisors</button>
+        <button class="btn btn-blue" onclick="payrollLock()">🔒 Payroll Lock Selected</button>
+        <div class="export-dropdown">
+          <button class="btn btn-primary" onclick="toggleExport()">↓ Export ▾</button>
+          <div class="export-menu" id="export-menu">
+            <div class="export-menu-item" onclick="doExport('summary')">
+              <span class="emi-icon">📊</span>
+              <div><strong>Timesheet Summary</strong><div class="emi-desc">PDF summary of all timesheets for the period</div></div>
+            </div>
+            <div class="export-menu-item" onclick="doExport('xero')">
+              <span class="emi-icon">🔵</span>
+              <div><strong>Export for Xero</strong><div class="emi-desc">CSV file formatted for Xero payroll import</div></div>
+            </div>
+            <div class="export-menu-item" onclick="doExport('myob')">
+              <span class="emi-icon">🟣</span>
+              <div><strong>Export for MYOB</strong><div class="emi-desc">CSV file formatted for MYOB payroll import</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom actions for subbies tab (hidden initially) -->
+      <div class="bottom-actions" id="sub-bottom-actions" style="display: none;">
       </div>
     </div>
 
@@ -313,17 +528,19 @@
         <div class="cc-avatar" style="background: #1565c0; width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #fff;">BT</div>
         <div style="flex:1;">
           <h2>BlueTech Electrical</h2>
-          <div class="dh-meta">ABN 51 824 753 901 &nbsp;·&nbsp; Linked to PO-0042</div>
+          <div class="dh-meta">ABN 51 824 753 901 &nbsp;·&nbsp; Labour Hire</div>
         </div>
-        <button class="btn btn-primary" onclick="go('screen-cert')">Create Payment Certificate</button>
+        <button class="btn btn-primary" onclick="go('screen-cert')">Create Certificate of Assessment</button>
       </div>
 
       <div class="content" style="padding-top: 20px;">
+
+        <!-- PO linkage info -->
         <div class="info-row">
-          <div class="info-card">
-            <div class="ic-label">Purchase Order</div>
-            <div class="ic-value">PO-0042</div>
-            <div class="ic-sub">Electrical works — Bourke Street · $48,500.00</div>
+          <div class="info-card" style="border-left: 4px solid #4caf50;">
+            <div class="ic-label">Linked Purchase Order</div>
+            <div class="ic-value">PO-0042 — Electrical Works</div>
+            <div class="ic-sub">(VAR004) Bourke Street Remediation · $48,500.00 · 65.5% remaining</div>
           </div>
           <div class="info-card">
             <div class="ic-label">Period</div>
@@ -344,15 +561,18 @@
 
         <div class="toolbar">
           <select class="filter-select"><option>All Workers</option><option>Tom Reynolds</option><option>Jake Chen</option><option>Maria Santos</option></select>
-          <select class="filter-select"><option>All Statuses</option><option>Approved</option><option>Pending</option><option>Unapproved</option></select>
-          <button class="btn btn-outline" style="margin-left: auto;" onclick="approveAll()">✓ Approve Selected</button>
+          <select class="filter-select"><option>All Statuses</option><option>Approved</option><option>Pending</option></select>
+          <div style="margin-left: auto; display: flex; gap: 8px;">
+            <button class="btn btn-outline btn-sm" onclick="linkPO()">📋 Link to PO</button>
+            <button class="btn btn-success btn-sm" onclick="approveAll()">✓ Approve Selected</button>
+          </div>
         </div>
 
         <div class="table-wrapper">
           <table>
             <thead>
               <tr>
-                <th style="width:32px;"><div class="cb" onclick="toggleAll(this)"></div></th>
+                <th style="width:32px;"><div class="cb" onclick="toggleAllSub(this)"></div></th>
                 <th>Worker</th>
                 <th>Date</th>
                 <th>Project</th>
@@ -366,8 +586,8 @@
               </tr>
             </thead>
             <tbody>
-              <tr class="date-group" style="cursor:default;"><td colspan="11">Wednesday, 26 Mar <span class="dg-count">2</span></td></tr>
-              <tr>
+              <tr class="date-group"><td colspan="11">Wednesday, 26 Mar <span class="dg-count">2</span></td></tr>
+              <tr class="data-row">
                 <td><div class="cb" onclick="toggleCb(this)"></div></td>
                 <td><strong>Tom Reynolds</strong></td>
                 <td>26/03</td>
@@ -380,7 +600,7 @@
                 <td><span class="status s-pending">Pending</span></td>
                 <td style="color:#ccc;">›</td>
               </tr>
-              <tr>
+              <tr class="data-row">
                 <td><div class="cb" onclick="toggleCb(this)"></div></td>
                 <td><strong>Jake Chen</strong></td>
                 <td>26/03</td>
@@ -394,8 +614,8 @@
                 <td style="color:#ccc;">›</td>
               </tr>
 
-              <tr class="date-group" style="cursor:default;"><td colspan="11">Tuesday, 25 Mar <span class="dg-count">3</span></td></tr>
-              <tr>
+              <tr class="date-group"><td colspan="11">Tuesday, 25 Mar <span class="dg-count">3</span></td></tr>
+              <tr class="data-row">
                 <td><div class="cb checked" onclick="toggleCb(this)"></div></td>
                 <td><strong>Tom Reynolds</strong></td>
                 <td>25/03</td>
@@ -408,7 +628,7 @@
                 <td><span class="status s-approved">Approved</span></td>
                 <td style="color:#ccc;">›</td>
               </tr>
-              <tr>
+              <tr class="data-row">
                 <td><div class="cb checked" onclick="toggleCb(this)"></div></td>
                 <td><strong>Jake Chen</strong></td>
                 <td>25/03</td>
@@ -421,7 +641,7 @@
                 <td><span class="status s-approved">Approved</span></td>
                 <td style="color:#ccc;">›</td>
               </tr>
-              <tr>
+              <tr class="data-row">
                 <td><div class="cb checked" onclick="toggleCb(this)"></div></td>
                 <td><strong>Maria Santos</strong></td>
                 <td>25/03</td>
@@ -435,8 +655,8 @@
                 <td style="color:#ccc;">›</td>
               </tr>
 
-              <tr class="date-group" style="cursor:default;"><td colspan="11">Monday, 24 Mar <span class="dg-count">1</span></td></tr>
-              <tr>
+              <tr class="date-group"><td colspan="11">Monday, 24 Mar <span class="dg-count">1</span></td></tr>
+              <tr class="data-row">
                 <td><div class="cb checked" onclick="toggleCb(this)"></div></td>
                 <td><strong>Maria Santos</strong></td>
                 <td>24/03</td>
@@ -452,21 +672,20 @@
             </tbody>
           </table>
         </div>
-
       </div>
 
       <div class="bottom-actions">
-        <button class="btn btn-outline" onclick="go('screen-list')">Cancel</button>
+        <button class="btn btn-outline" onclick="go('screen-list')">← Back</button>
         <button class="btn btn-success" onclick="approveAll()">✓ Approve Selected</button>
-        <button class="btn btn-primary" onclick="go('screen-cert')">Create Payment Certificate →</button>
+        <button class="btn btn-primary" onclick="go('screen-cert')">Create Certificate of Assessment →</button>
       </div>
     </div>
 
-    <!-- ========== SCREEN 3: Payment Certificate ========== -->
+    <!-- ========== SCREEN 3: Certificate of Assessment ========== -->
     <div class="screen" id="screen-cert">
       <div class="detail-header">
         <a class="back" onclick="go('screen-company')">←</a>
-        <h2 style="flex:1;">Payment Certificate — BlueTech Electrical</h2>
+        <h2 style="flex:1;">Certificate of Assessment — BlueTech Electrical</h2>
         <span class="status s-draft" style="font-size: 13px;">Draft</span>
       </div>
 
@@ -484,22 +703,22 @@
           <div class="linkage-node active">
             <div class="ln-icon">⏱</div>
             <div class="ln-label">Timesheets</div>
-            <div class="ln-value">4 approved · 86.5h</div>
-            <div class="ln-status" style="color: #f7941d;">● Creating cert</div>
+            <div class="ln-value">4 approved · 51.5h</div>
+            <div class="ln-status" style="color: #f7941d;">● Assessed</div>
           </div>
           <div class="linkage-arrow connected">→</div>
           <div class="linkage-node active">
             <div class="ln-icon">📄</div>
-            <div class="ln-label">Payment Certificate</div>
-            <div class="ln-value">CERT-0018</div>
+            <div class="ln-label">Certificate of Assessment</div>
+            <div class="ln-value">COA-0018</div>
             <div class="ln-status" style="color: #f7941d;">● Draft</div>
           </div>
           <div class="linkage-arrow">→</div>
           <div class="linkage-node pending">
             <div class="ln-icon">💰</div>
-            <div class="ln-label">Bill</div>
+            <div class="ln-label">Bill / Invoice</div>
             <div class="ln-value">—</div>
-            <div class="ln-status" style="color: #999;">Awaiting invoice</div>
+            <div class="ln-status" style="color: #999;">Subbie submits with COA</div>
           </div>
         </div>
 
@@ -510,9 +729,9 @@
             <div class="ic-sub">ABN 51 824 753 901</div>
           </div>
           <div class="info-card">
-            <div class="ic-label">Certificate Period</div>
+            <div class="ic-label">Assessment Period</div>
             <div class="ic-value">24/03/2026 — 26/03/2026</div>
-            <div class="ic-sub">3 days</div>
+            <div class="ic-sub">Based on approved timesheets</div>
           </div>
           <div class="info-card">
             <div class="ic-label">Purchase Order</div>
@@ -523,7 +742,7 @@
 
         <!-- Certificate line items -->
         <div class="cert-summary">
-          <h3>Certificate Line Items</h3>
+          <h3>Assessed Line Items</h3>
           <div class="table-wrapper" style="margin-bottom: 0;">
             <table>
               <thead>
@@ -531,28 +750,28 @@
                   <th>Worker</th>
                   <th>Days</th>
                   <th class="text-right">Hours</th>
-                  <th>Rate</th>
+                  <th>Rate (from PO)</th>
                   <th class="text-right">Amount (ex GST)</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
+                <tr class="data-row">
                   <td><strong>Tom Reynolds</strong></td>
-                  <td>2 days (25-26 Mar)</td>
+                  <td>2 days (25–26 Mar)</td>
                   <td class="text-right">18.5h</td>
                   <td>$80.00/hr</td>
                   <td class="text-right"><strong>$1,480.00</strong></td>
                 </tr>
-                <tr>
+                <tr class="data-row">
                   <td><strong>Jake Chen</strong></td>
-                  <td>2 days (25-26 Mar)</td>
+                  <td>2 days (25–26 Mar)</td>
                   <td class="text-right">16.5h</td>
                   <td>$80.00/hr</td>
                   <td class="text-right"><strong>$1,320.00</strong></td>
                 </tr>
-                <tr>
+                <tr class="data-row">
                   <td><strong>Maria Santos</strong></td>
-                  <td>2 days (24-25 Mar)</td>
+                  <td>2 days (24–25 Mar)</td>
                   <td class="text-right">16.5h</td>
                   <td>$80.00/hr</td>
                   <td class="text-right"><strong>$1,320.00</strong></td>
@@ -571,7 +790,7 @@
         <div class="cert-summary">
           <h3>PO Budget Impact</h3>
           <div class="cert-row"><span class="cr-label">PO-0042 Total Value</span><span class="cr-value">$48,500.00</span></div>
-          <div class="cert-row"><span class="cr-label">Previously Certified</span><span class="cr-value">$12,640.00</span></div>
+          <div class="cert-row"><span class="cr-label">Previously Assessed</span><span class="cr-value">$12,640.00</span></div>
           <div class="cert-row"><span class="cr-label">This Certificate</span><span class="cr-value" style="color: #f7941d;">$4,120.00</span></div>
           <div class="cert-row"><span class="cr-label">Remaining on PO</span><span class="cr-value">$31,740.00</span></div>
           <div style="margin-top: 8px; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
@@ -583,26 +802,36 @@
           </div>
         </div>
 
+        <!-- What happens next -->
+        <div class="cert-summary" style="border-left: 4px solid #1565c0;">
+          <h3>What happens next?</h3>
+          <div style="font-size: 13px; color: #555; line-height: 1.6;">
+            <p><strong>1.</strong> Approve this certificate of assessment</p>
+            <p><strong>2.</strong> Send COA to BlueTech Electrical — they attach it to their invoice</p>
+            <p><strong>3.</strong> When their invoice/bill arrives, link it to this COA to complete the AP cycle</p>
+          </div>
+        </div>
+
       </div>
 
       <div class="bottom-actions">
         <button class="btn btn-outline" onclick="go('screen-company')">Back</button>
         <button class="btn btn-outline">Save as Draft</button>
-        <button class="btn btn-success" onclick="go('screen-cert-approved')">✓ Approve Certificate</button>
+        <button class="btn btn-success" onclick="go('screen-cert-approved')">✓ Approve & Send to Supplier</button>
       </div>
     </div>
 
-    <!-- ========== SCREEN 4: Approved Cert — Link to Bill ========== -->
+    <!-- ========== SCREEN 4: Approved COA — Link to Bill ========== -->
     <div class="screen" id="screen-cert-approved">
       <div class="detail-header">
         <a class="back" onclick="go('screen-company')">←</a>
-        <h2 style="flex:1;">Payment Certificate — BlueTech Electrical</h2>
-        <span class="status s-approved" style="font-size: 13px;">Approved</span>
+        <h2 style="flex:1;">Certificate of Assessment — BlueTech Electrical</h2>
+        <span class="status s-approved" style="font-size: 13px;">Approved & Sent</span>
       </div>
 
       <div class="content" style="padding-top: 20px;">
 
-        <!-- AP Linkage Diagram — cert approved, bill pending -->
+        <!-- AP Linkage Diagram — COA approved -->
         <div class="linkage">
           <div class="linkage-node linked">
             <div class="ln-icon">📋</div>
@@ -614,28 +843,36 @@
           <div class="linkage-node linked">
             <div class="ln-icon">⏱</div>
             <div class="ln-label">Timesheets</div>
-            <div class="ln-value">4 approved · 86.5h</div>
-            <div class="ln-status" style="color: #2e7d32;">✓ Certified</div>
+            <div class="ln-value">4 approved · 51.5h</div>
+            <div class="ln-status" style="color: #2e7d32;">✓ Assessed</div>
           </div>
           <div class="linkage-arrow connected">→</div>
           <div class="linkage-node linked">
             <div class="ln-icon">📄</div>
-            <div class="ln-label">Payment Certificate</div>
-            <div class="ln-value">CERT-0018 · $4,532.00</div>
-            <div class="ln-status" style="color: #2e7d32;">✓ Approved</div>
+            <div class="ln-label">Certificate of Assessment</div>
+            <div class="ln-value">COA-0018 · $4,532.00</div>
+            <div class="ln-status" style="color: #2e7d32;">✓ Sent to supplier</div>
           </div>
           <div class="linkage-arrow">→</div>
           <div class="linkage-node pending" id="bill-node">
             <div class="ln-icon">💰</div>
-            <div class="ln-label">Bill</div>
+            <div class="ln-label">Bill / Invoice</div>
             <div class="ln-value" id="bill-value">—</div>
-            <div class="ln-status" id="bill-status" style="color: #999;">Awaiting invoice</div>
+            <div class="ln-status" id="bill-status" style="color: #999;">Awaiting invoice from subbie</div>
+          </div>
+        </div>
+
+        <div style="background: #e8f5e9; border: 1px solid #4caf50; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; font-size: 13px; display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 18px;">✉️</span>
+          <div>
+            <strong style="color: #2e7d32;">Certificate sent to BlueTech Electrical</strong>
+            <div style="color: #555; margin-top: 2px;">Sent 26/03/2026 at 2:45 PM to accounts@bluetech.com.au. They can attach this to their invoice.</div>
           </div>
         </div>
 
         <!-- Certificate summary (read only) -->
         <div class="cert-summary">
-          <h3>Certificate Summary — CERT-0018</h3>
+          <h3>Certificate Summary — COA-0018</h3>
           <div class="cert-row"><span class="cr-label">Supplier</span><span class="cr-value">BlueTech Electrical Pty Ltd</span></div>
           <div class="cert-row"><span class="cr-label">Period</span><span class="cr-value">24/03/2026 — 26/03/2026</span></div>
           <div class="cert-row"><span class="cr-label">Workers</span><span class="cr-value">3 (Tom Reynolds, Jake Chen, Maria Santos)</span></div>
@@ -647,12 +884,12 @@
 
         <!-- Link to bill section -->
         <div class="cert-summary" id="link-bill-section">
-          <h3>Link to Bill</h3>
-          <p style="font-size: 13px; color: #666; margin-bottom: 14px;">When BlueTech Electrical sends their invoice, link it here to complete the AP cycle.</p>
+          <h3>Link Incoming Bill</h3>
+          <p style="font-size: 13px; color: #666; margin-bottom: 14px;">When BlueTech sends their invoice (with COA-0018 attached), link it here to complete the AP cycle.</p>
           <div style="display: flex; gap: 12px; align-items: center;">
             <select class="filter-select" id="bill-select" style="flex: 1; padding: 12px 16px; font-size: 14px;">
               <option value="">Select a bill to link...</option>
-              <option value="BILL-0089">BILL-0089 — BlueTech Electrical — $4,532.00 (26/03/2026)</option>
+              <option value="BILL-0089">BILL-0089 — BlueTech Electrical — $4,532.00 (27/03/2026)</option>
               <option value="BILL-0085">BILL-0085 — BlueTech Electrical — $4,532.00 (24/03/2026)</option>
             </select>
             <button class="btn btn-blue" onclick="linkBill()">Link Bill</button>
@@ -661,22 +898,22 @@
 
         <!-- Linked bill success (hidden initially) -->
         <div class="cert-summary" id="linked-bill-section" style="display: none; border-color: #4caf50;">
-          <h3 style="color: #2e7d32;">✓ Bill Linked Successfully</h3>
+          <h3 style="color: #2e7d32;">✓ Bill Linked — AP Cycle Complete</h3>
           <div class="cert-row"><span class="cr-label">Bill</span><span class="cr-value">BILL-0089</span></div>
           <div class="cert-row"><span class="cr-label">Bill Amount</span><span class="cr-value">$4,532.00</span></div>
-          <div class="cert-row"><span class="cr-label">Certificate Amount</span><span class="cr-value">$4,532.00</span></div>
+          <div class="cert-row"><span class="cr-label">COA Amount</span><span class="cr-value">$4,532.00</span></div>
           <div class="cert-row"><span class="cr-label">Variance</span><span class="cr-value" style="color: #2e7d32;">$0.00 — Amounts match ✓</span></div>
           <div style="margin-top: 12px; padding: 12px; background: #e8f5e9; border-radius: 6px; font-size: 12px; color: #2e7d32; font-weight: 500;">
-            AP cycle complete: PO-0042 → Timesheets (51.5h) → CERT-0018 → BILL-0089
+            AP cycle complete: PO-0042 → Timesheets (51.5h) → COA-0018 → BILL-0089
           </div>
         </div>
 
       </div>
 
-      <div class="bottom-actions" id="cert-actions">
-        <button class="btn btn-outline" onclick="go('screen-company')">Back to Timesheets</button>
-        <button class="btn btn-outline">Download PDF</button>
-        <button class="btn btn-primary">Send to Supplier</button>
+      <div class="bottom-actions">
+        <button class="btn btn-outline" onclick="go('screen-company')">← Back to Timesheets</button>
+        <button class="btn btn-outline">📄 Download PDF</button>
+        <button class="btn btn-primary">📧 Resend to Supplier</button>
       </div>
     </div>
 
@@ -693,47 +930,102 @@ function go(id) {
   window.scrollTo(0, 0);
 }
 
-function switchMode(el, mode) {
+function switchMode(mode) {
   document.querySelectorAll('.big-toggle-btn').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
+  event.currentTarget.classList.add('active');
+
+  document.getElementById('tab-employees').classList.toggle('active', mode === 'employees');
+  document.getElementById('tab-subbies').classList.toggle('active', mode === 'subbies');
+  document.getElementById('emp-bottom-actions').style.display = mode === 'employees' ? 'flex' : 'none';
+  document.getElementById('sub-bottom-actions').style.display = mode === 'subbies' ? 'flex' : 'none';
 }
 
-function toggleCb(el) {
-  el.classList.toggle('checked');
-}
+function toggleCb(el) { el.classList.toggle('checked'); }
 
-function toggleAll(el) {
+function toggleAllEmp(el) {
   el.classList.toggle('checked');
   const checked = el.classList.contains('checked');
-  document.querySelectorAll('tbody .cb').forEach(cb => {
-    if (checked) cb.classList.add('checked');
-    else cb.classList.remove('checked');
+  document.querySelectorAll('#tab-employees .cb').forEach(cb => {
+    if (cb !== el) { if (checked) cb.classList.add('checked'); else cb.classList.remove('checked'); }
+  });
+}
+
+function toggleAllSub(el) {
+  el.classList.toggle('checked');
+  const checked = el.classList.contains('checked');
+  document.querySelectorAll('#screen-company .cb').forEach(cb => {
+    if (cb !== el) { if (checked) cb.classList.add('checked'); else cb.classList.remove('checked'); }
   });
 }
 
 function approveAll() {
-  document.querySelectorAll('.s-pending').forEach(s => {
+  document.querySelectorAll('#screen-company .s-pending').forEach(s => {
     s.className = 'status s-approved';
     s.textContent = 'Approved';
   });
-  showToast('Timesheets approved successfully');
+  showToast('Timesheets approved');
+}
+
+function payrollLock() {
+  document.querySelectorAll('#tab-employees .data-row').forEach(row => {
+    const cb = row.querySelector('.cb');
+    if (cb && cb.classList.contains('checked')) {
+      const status = row.querySelector('.status');
+      if (status && !status.classList.contains('s-unapproved')) {
+        status.className = 'status s-locked';
+        status.textContent = 'Payroll Locked';
+      }
+    }
+  });
+  showToast('Selected timesheets locked for payroll');
+}
+
+function notifySupervisor() {
+  const alert = document.getElementById('unapproved-alert');
+  if (alert) {
+    alert.style.background = '#e8f5e9';
+    alert.style.borderColor = '#4caf50';
+    alert.querySelector('.alert-title').textContent = 'Notification sent to supervisors';
+    alert.querySelector('.alert-title').style.color = '#2e7d32';
+    alert.querySelector('.alert-detail').textContent = 'Supervisors have been notified to review and approve outstanding timesheets.';
+    alert.querySelector('.alert-icon').style.background = '#4caf50';
+    alert.querySelector('.alert-icon').textContent = '✓';
+    const btn = alert.querySelector('.btn');
+    if (btn) btn.style.display = 'none';
+  }
+  showToast('Supervisor notification sent');
+}
+
+function toggleExport() {
+  document.getElementById('export-menu').classList.toggle('show');
+}
+
+function doExport(type) {
+  document.getElementById('export-menu').classList.remove('show');
+  const labels = { summary: 'Timesheet Summary PDF', xero: 'Xero payroll CSV', myob: 'MYOB payroll CSV' };
+  showToast('Exporting ' + labels[type] + '...');
+}
+
+function linkPO() {
+  showToast('PO-0042 already linked to BlueTech Electrical');
 }
 
 function linkBill() {
   const select = document.getElementById('bill-select');
   if (!select.value) { showToast('Please select a bill to link'); return; }
-
   document.getElementById('link-bill-section').style.display = 'none';
   document.getElementById('linked-bill-section').style.display = 'block';
-
   const billNode = document.getElementById('bill-node');
   billNode.classList.remove('pending');
   billNode.classList.add('linked');
   document.getElementById('bill-value').textContent = 'BILL-0089 · $4,532.00';
   document.getElementById('bill-status').textContent = '✓ Linked';
   document.getElementById('bill-status').style.color = '#2e7d32';
-
   showToast('Bill linked — AP cycle complete');
+}
+
+function scrollToUnapproved() {
+  document.getElementById('unapproved-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function showToast(msg) {
@@ -742,6 +1034,13 @@ function showToast(msg) {
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3000);
 }
+
+// Close export menu on outside click
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.export-dropdown')) {
+    document.getElementById('export-menu').classList.remove('show');
+  }
+});
 </script>
 
 </body>
