@@ -188,6 +188,20 @@
     box-shadow: 0 -2px 8px rgba(0,0,0,.06); z-index: 10;
   }
 
+  /* Bottom bar tooltips */
+  .ba-tooltip-wrap { position: relative; }
+  .ba-tooltip { display: none; position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; white-space: nowrap; z-index: 60; max-width: 340px; white-space: normal; text-align: center; line-height: 1.4; }
+  .ba-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #333; }
+  .ba-tooltip-wrap:hover .ba-tooltip { display: block; }
+
+  /* Export prompt banner */
+  .export-prompt-show { display: flex !important; animation: slideDown 0.3s ease-out; }
+  @keyframes slideDown { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  /* Pulsing export button */
+  .btn-pulse { animation: btnPulse 1.5s ease-in-out infinite; }
+  @keyframes btnPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(247,148,29,0.5); } 50% { box-shadow: 0 0 0 8px rgba(247,148,29,0); } }
+
   /* Export dropdown */
   .export-dropdown { position: relative; display: inline-block; }
   .export-menu { display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12); min-width: 220px; z-index: 50; overflow: hidden; }
@@ -783,10 +797,13 @@
 
       <!-- Bottom actions for employees tab -->
       <div class="bottom-actions" id="emp-bottom-actions">
-        <button class="btn btn-outline" onclick="notifySupervisor()">📧 Notify Supervisors</button>
-        <button class="btn btn-blue" onclick="payrollLock()">🔒 Payroll Lock Selected</button>
-        <div class="export-dropdown">
-          <button class="btn btn-primary" onclick="toggleExport()">↓ Export ▾</button>
+        <div style="position: relative;" class="ba-tooltip-wrap">
+          <button class="btn btn-outline" onclick="notifySupervisor()">📧 Notify Supervisors</button>
+          <div class="ba-tooltip">Send reminder to project lead contacts to approve timesheets for pay period</div>
+        </div>
+        <button class="btn btn-blue" onclick="payrollLock()" id="btn-payroll-lock">🔒 Payroll Lock Selected</button>
+        <div class="export-dropdown" id="export-area">
+          <button class="btn btn-primary" onclick="toggleExport()" id="btn-export">↓ Export ▾</button>
           <div class="export-menu" id="export-menu">
             <div class="export-menu-item" onclick="doExport('summary')">
               <span class="emi-icon">📊</span>
@@ -801,6 +818,12 @@
               <div><strong>Export for MYOB</strong><div class="emi-desc">CSV file formatted for MYOB payroll import</div></div>
             </div>
           </div>
+        </div>
+        <!-- Export prompt banner (hidden until payroll lock) -->
+        <div id="export-prompt" style="display:none; position: absolute; bottom: 100%; left: 0; right: 0; background: #fff8f0; border: 2px solid #f7941d; border-bottom: none; padding: 10px 28px; display: none; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: #e65100;">
+          <span style="font-size: 18px;">→</span>
+          <span>Timesheets locked. Now export your payroll file.</span>
+          <button class="btn btn-sm btn-primary" onclick="toggleExport()" style="margin-left: auto;">Export Now ▾</button>
         </div>
       </div>
 
@@ -1314,6 +1337,15 @@ function payrollLock() {
   });
   if (locked > 0) {
     setEmpStep(2);
+    // Show export prompt banner
+    var prompt = document.getElementById('export-prompt');
+    prompt.classList.add('export-prompt-show');
+    // Pulse the export button
+    document.getElementById('btn-export').classList.add('btn-pulse');
+    // Grey out the payroll lock button
+    var lockBtn = document.getElementById('btn-payroll-lock');
+    lockBtn.style.opacity = '0.5';
+    lockBtn.style.pointerEvents = 'none';
     showToast(locked + ' approved timesheet' + (locked > 1 ? 's' : '') + ' locked for payroll');
   } else {
     showToast('No approved timesheets selected to lock');
