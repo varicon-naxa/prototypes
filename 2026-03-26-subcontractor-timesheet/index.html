@@ -805,9 +805,11 @@
 
       <!-- Bottom actions for employees tab -->
       <div class="bottom-actions" id="emp-bottom-actions">
-        <div style="margin-right: auto; font-size: 12px; color: #888;">
+        <div style="margin-right: auto; font-size: 12px; color: #888; display: flex; gap: 12px;">
+          <a href="#" onclick="selectAllUnapproved(); return false;" style="color: #e65100; text-decoration: none; font-weight: 600;">Select unapproved</a>
           <a href="#" onclick="selectAllApproved(); return false;" style="color: #f7941d; text-decoration: none; font-weight: 600;">Select all approved</a>
         </div>
+        <button class="btn btn-success" onclick="approveSelectedEmp()" id="btn-approve-emp">✓ Approve Selected</button>
         <div style="position: relative;" class="ba-tooltip-wrap">
           <button class="btn btn-outline" onclick="notifySupervisor()" id="btn-notify">📧 Notify Supervisors</button>
           <div class="ba-tooltip">Send reminder to project lead contacts to approve timesheets for pay period</div>
@@ -1463,6 +1465,49 @@ function payrollLock() {
     showToast(locked + ' approved timesheet' + (locked > 1 ? 's' : '') + ' locked for payroll');
   } else {
     showToast('No approved timesheets selected to lock');
+  }
+}
+
+function selectAllUnapproved() {
+  document.querySelectorAll('#tab-employees .data-row').forEach(function(row) {
+    var status = row.querySelector('.status');
+    var cb = row.querySelector('.cb');
+    if (status && cb) {
+      if (status.classList.contains('s-unapproved')) {
+        cb.classList.add('checked');
+      } else {
+        cb.classList.remove('checked');
+      }
+    }
+  });
+  showToast('Unapproved timesheets selected');
+}
+
+function approveSelectedEmp() {
+  var count = 0;
+  document.querySelectorAll('#tab-employees .data-row').forEach(function(row) {
+    var cb = row.querySelector('.cb');
+    var status = row.querySelector('.status');
+    if (cb && cb.classList.contains('checked') && status && status.classList.contains('s-unapproved')) {
+      status.className = 'status s-approved';
+      status.textContent = 'Approved';
+      row.style.background = '';
+      count++;
+    }
+  });
+  if (count > 0) {
+    // Update summary cards
+    setEmpStep(1);
+    // Check if all approved now
+    var remaining = document.querySelectorAll('#tab-employees .s-unapproved').length;
+    if (remaining === 0) {
+      // Hide alert banner
+      var alert = document.getElementById('unapproved-alert');
+      if (alert) alert.style.display = 'none';
+    }
+    showToast(count + ' timesheet' + (count > 1 ? 's' : '') + ' approved');
+  } else {
+    showToast('No unapproved timesheets selected');
   }
 }
 
