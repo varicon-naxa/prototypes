@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Subcontractor Timesheet</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; transition: background 0.15s; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+  .sidebar-item.active .icon { opacity: 1; }
+
+  /* Main */
+  .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+  .screen { display: none; flex: 1; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  /* Page header */
+  .page-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 28px 0; }
+  .page-header h1 { font-size: 22px; font-weight: 600; }
+  .header-actions { display: flex; gap: 10px; }
+  .btn { padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 2px solid; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-outline { background: #fff; border-color: #d0d0d0; color: #555; }
+  .btn-outline:hover { background: #f5f5f5; }
+  .btn-primary { background: #f7941d; border-color: #f7941d; color: #fff; }
+  .btn-primary:hover { background: #e8850f; }
+  .btn-success { background: #4caf50; border-color: #4caf50; color: #fff; }
+  .btn-success:hover { background: #43a047; }
+  .btn-blue { background: #1565c0; border-color: #1565c0; color: #fff; }
+  .btn-blue:hover { background: #0d47a1; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; padding: 0 28px; border-bottom: 2px solid #e0e0e0; margin-top: 16px; }
+  .tab { padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #888; transition: all 0.2s; }
+  .tab.active { color: #f7941d; border-bottom-color: #f7941d; }
+  .tab:hover { color: #f7941d; }
+  .tab .count { font-weight: 400; color: #999; margin-left: 4px; }
+  .tab.active .count { color: #f7941d; }
+  .tab .badge { background: #f7941d; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; margin-left: 4px; }
+
+  /* Content area */
+  .content { flex: 1; padding: 20px 28px 100px; overflow-y: auto; }
+
+  /* Summary cards */
+  .summary-row { display: flex; gap: 16px; margin-bottom: 20px; }
+  .summary-card { flex: 1; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; }
+  .summary-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .si-orange { background: #fff3e0; }
+  .si-green { background: #e8f5e9; }
+  .si-blue { background: #e3f2fd; }
+  .si-red { background: #fde8e8; }
+  .summary-card .sc-value { font-size: 20px; font-weight: 700; }
+  .summary-card .sc-label { font-size: 11px; color: #888; font-weight: 600; margin-top: 2px; }
+
+  /* Toolbar */
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .filter-select {
+    padding: 8px 32px 8px 12px; border: 1px solid #d0d0d0; border-radius: 6px;
+    font-size: 13px; background: #fff; appearance: none; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+  }
+  .toolbar-search {
+    display: flex; align-items: center; border: 1px solid #d0d0d0; border-radius: 6px;
+    padding: 0 10px; background: #fff; margin-left: auto;
+  }
+  .toolbar-search input { border: none; outline: none; padding: 8px 6px; font-size: 13px; width: 180px; }
+
+  /* Table */
+  .table-wrapper { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: #fafafa; }
+  th { text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; white-space: nowrap; }
+  td { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover { background: #fafafa; cursor: pointer; }
+  .text-right { text-align: right; }
+
+  /* Status badges */
+  .status { padding: 4px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .s-approved { background: #e8f5e9; color: #2e7d32; }
+  .s-pending { background: #fff3e0; color: #e65100; }
+  .s-unapproved { background: #fde8e8; color: #c62828; }
+  .s-locked { background: #e3f2fd; color: #1565c0; }
+  .s-draft { background: #f0f0f0; color: #666; }
+
+  /* Company cards (for company selection) */
+  .company-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .company-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px; cursor: pointer; transition: all 0.15s; }
+  .company-card:hover { border-color: #f7941d; box-shadow: 0 2px 12px rgba(247,148,29,0.12); }
+  .cc-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .cc-avatar { width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; color: #fff; }
+  .cc-name { font-size: 15px; font-weight: 600; }
+  .cc-abn { font-size: 11px; color: #888; margin-top: 2px; }
+  .cc-stats { display: flex; gap: 16px; padding-top: 12px; border-top: 1px solid #f0f0f0; }
+  .cc-stat-label { font-size: 10px; color: #888; font-weight: 600; text-transform: uppercase; }
+  .cc-stat-value { font-size: 14px; font-weight: 700; margin-top: 2px; }
+
+  /* Detail header */
+  .detail-header { padding: 16px 28px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 12px; }
+  .detail-header .back { font-size: 20px; cursor: pointer; color: #f7941d; text-decoration: none; }
+  .detail-header h2 { font-size: 17px; font-weight: 600; flex: 1; }
+  .detail-header .dh-meta { font-size: 12px; color: #888; }
+
+  /* Info cards row */
+  .info-row { display: flex; gap: 16px; margin-bottom: 20px; }
+  .info-card { flex: 1; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px 16px; }
+  .info-card .ic-label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; }
+  .info-card .ic-value { font-size: 14px; font-weight: 600; margin-top: 4px; }
+  .info-card .ic-sub { font-size: 11px; color: #888; margin-top: 2px; }
+
+  /* Linkage diagram */
+  .linkage { display: flex; align-items: center; gap: 0; margin-bottom: 24px; background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px 24px; }
+  .linkage-node { flex: 1; text-align: center; padding: 12px; border-radius: 8px; }
+  .linkage-node.active { background: #fff8f0; border: 2px solid #f7941d; }
+  .linkage-node.linked { background: #e8f5e9; border: 2px solid #4caf50; }
+  .linkage-node.pending { background: #f5f5f5; border: 2px dashed #ccc; }
+  .ln-icon { font-size: 24px; margin-bottom: 6px; }
+  .ln-label { font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; }
+  .ln-value { font-size: 13px; font-weight: 600; margin-top: 4px; }
+  .ln-status { font-size: 10px; margin-top: 4px; }
+  .linkage-arrow { font-size: 20px; color: #ccc; padding: 0 8px; flex-shrink: 0; }
+  .linkage-arrow.connected { color: #4caf50; }
+
+  /* Cert summary */
+  .cert-summary { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px 24px; margin-bottom: 20px; }
+  .cert-summary h3 { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+  .cert-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+  .cert-row:last-child { border-bottom: none; }
+  .cert-row .cr-label { color: #666; }
+  .cert-row .cr-value { font-weight: 600; }
+  .cert-row.total { font-size: 15px; font-weight: 700; border-top: 2px solid #333; padding-top: 12px; margin-top: 4px; }
+
+  /* Bottom action bar */
+  .bottom-actions {
+    position: fixed; bottom: 0; left: 200px; right: 0;
+    padding: 14px 28px; background: #fff; border-top: 1px solid #e0e0e0;
+    display: flex; gap: 12px; justify-content: flex-end; align-items: center;
+    box-shadow: 0 -2px 8px rgba(0,0,0,.06); z-index: 10;
+  }
+
+  /* Date group header */
+  .date-group { padding: 10px 16px; background: #fafafa; font-size: 12px; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 8px; }
+  .date-group .dg-count { background: #f7941d; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; }
+
+  /* Checkbox */
+  .cb { width: 16px; height: 16px; border: 2px solid #ccc; border-radius: 3px; cursor: pointer; flex-shrink: 0; }
+  .cb.checked { background: #f7941d; border-color: #f7941d; position: relative; }
+  .cb.checked::after { content: ''; position: absolute; left: 3px; top: 0; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 13px; font-weight: 500; display: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+  .toast.show { display: block; animation: fadeIn 0.3s; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+  /* Prototype notice */
+  .proto-notice { position: fixed; top: 0; left: 0; right: 0; background: #1a1a2e; color: #f7941d; text-align: center; padding: 6px; font-size: 11px; font-weight: 600; z-index: 200; }
+  .proto-notice a { color: #fff; margin-left: 8px; }
+</style>
+</head>
+<body>
+
+<div class="proto-notice">PROTOTYPE — Subcontractor Timesheet <a href="../">Back to all prototypes</a></div>
+
+<div class="layout" style="margin-top: 28px;">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Cookie's Civil</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item active"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">🏖</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Docket</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">🚚</span> Delivery Docket</div>
+    <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+    <div class="sidebar-item"><span class="icon">📝</span> Forms</div>
+    <div class="sidebar-item"><span class="icon">🔧</span> Equipment</div>
+    <div class="sidebar-item"><span class="icon">👥</span> Suppliers</div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+
+    <!-- ========== SCREEN 1: Timesheet List with Subcontractors tab ========== -->
+    <div class="screen active" id="screen-list">
+      <div class="page-header">
+        <h1>Timesheet</h1>
+        <div class="header-actions">
+          <button class="btn btn-outline">↓ Export</button>
+          <button class="btn btn-primary" onclick="go('screen-add')">+ Add Timesheet</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab" onclick="switchListTab(this, 'employees')">Timesheet <span class="count">(7)</span></div>
+        <div class="tab" onclick="switchListTab(this, 'emp-tab')">Employees <span class="count">(4)</span></div>
+        <div class="tab active" onclick="switchListTab(this, 'subcontractors')">Subcontractors <span class="badge">3</span></div>
+      </div>
+
+      <div class="content">
+
+        <!-- Subcontractors tab content -->
+        <div id="tab-subcontractors">
+          <div class="summary-row">
+            <div class="summary-card">
+              <div class="summary-icon si-orange">👷</div>
+              <div><div class="sc-value">3</div><div class="sc-label">Companies</div></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-icon si-blue">📋</div>
+              <div><div class="sc-value">12</div><div class="sc-label">Timesheets This Week</div></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-icon si-green">✓</div>
+              <div><div class="sc-value">8</div><div class="sc-label">Approved</div></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-icon si-red">⏳</div>
+              <div><div class="sc-value">4</div><div class="sc-label">Pending Approval</div></div>
+            </div>
+          </div>
+
+          <div class="toolbar">
+            <select class="filter-select"><option>All Projects</option><option>(VAR004) Bourke Street</option><option>(VAR005) Ring Road</option></select>
+            <select class="filter-select"><option>This Week</option><option>Last Week</option><option>This Month</option><option>Custom Range</option></select>
+            <div class="toolbar-search"><svg viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input placeholder="Search companies..."></div>
+          </div>
+
+          <div class="company-grid">
+            <!-- Company 1 -->
+            <div class="company-card" onclick="go('screen-company')">
+              <div class="cc-top">
+                <div class="cc-avatar" style="background: #1565c0;">BT</div>
+                <div>
+                  <div class="cc-name">BlueTech Electrical</div>
+                  <div class="cc-abn">ABN 51 824 753 901</div>
+                </div>
+              </div>
+              <div class="cc-stats">
+                <div><div class="cc-stat-label">This Week</div><div class="cc-stat-value">6 timesheets</div></div>
+                <div><div class="cc-stat-label">Hours</div><div class="cc-stat-value">86.5h</div></div>
+                <div><div class="cc-stat-label">Pending</div><div class="cc-stat-value" style="color: #e65100;">2</div></div>
+                <div><div class="cc-stat-label">Linked PO</div><div class="cc-stat-value">PO-0042</div></div>
+              </div>
+            </div>
+
+            <!-- Company 2 -->
+            <div class="company-card">
+              <div class="cc-top">
+                <div class="cc-avatar" style="background: #2e7d32;">ML</div>
+                <div>
+                  <div class="cc-name">Mitchell Labour Hire</div>
+                  <div class="cc-abn">ABN 33 102 456 789</div>
+                </div>
+              </div>
+              <div class="cc-stats">
+                <div><div class="cc-stat-label">This Week</div><div class="cc-stat-value">4 timesheets</div></div>
+                <div><div class="cc-stat-label">Hours</div><div class="cc-stat-value">62.0h</div></div>
+                <div><div class="cc-stat-label">Pending</div><div class="cc-stat-value" style="color: #e65100;">1</div></div>
+                <div><div class="cc-stat-label">Linked PO</div><div class="cc-stat-value">PO-0051</div></div>
+              </div>
+            </div>
+
+            <!-- Company 3 -->
+            <div class="company-card">
+              <div class="cc-top">
+                <div class="cc-avatar" style="background: #e65100;">SD</div>
+                <div>
+                  <div class="cc-name">Steve Davidson</div>
+                  <div class="cc-abn">ABN 12 345 678 901 (Sole Trader)</div>
+                </div>
+              </div>
+              <div class="cc-stats">
+                <div><div class="cc-stat-label">This Week</div><div class="cc-stat-value">2 timesheets</div></div>
+                <div><div class="cc-stat-label">Hours</div><div class="cc-stat-value">17.0h</div></div>
+                <div><div class="cc-stat-label">Pending</div><div class="cc-stat-value" style="color: #e65100;">1</div></div>
+                <div><div class="cc-stat-label">Linked PO</div><div class="cc-stat-value">PO-0063</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========== SCREEN 2: Company Timesheet Detail ========== -->
+    <div class="screen" id="screen-company">
+      <div class="detail-header">
+        <a class="back" onclick="go('screen-list')">←</a>
+        <div class="cc-avatar" style="background: #1565c0; width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #fff;">BT</div>
+        <div style="flex:1;">
+          <h2>BlueTech Electrical</h2>
+          <div class="dh-meta">ABN 51 824 753 901 &nbsp;·&nbsp; Linked to PO-0042</div>
+        </div>
+        <button class="btn btn-primary" onclick="go('screen-cert')">Create Payment Certificate</button>
+      </div>
+
+      <div class="content" style="padding-top: 20px;">
+        <div class="info-row">
+          <div class="info-card">
+            <div class="ic-label">Purchase Order</div>
+            <div class="ic-value">PO-0042</div>
+            <div class="ic-sub">Electrical works — Bourke Street · $48,500.00</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">Period</div>
+            <div class="ic-value">20/03/2026 — 26/03/2026</div>
+            <div class="ic-sub">This week · 6 timesheets</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">Total Hours</div>
+            <div class="ic-value">86.5 hours</div>
+            <div class="ic-sub">3 workers · Avg 28.8h each</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">Estimated Cost</div>
+            <div class="ic-value">$6,928.00</div>
+            <div class="ic-sub">Based on PO rate: $80/hr</div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <select class="filter-select"><option>All Workers</option><option>Tom Reynolds</option><option>Jake Chen</option><option>Maria Santos</option></select>
+          <select class="filter-select"><option>All Statuses</option><option>Approved</option><option>Pending</option><option>Unapproved</option></select>
+          <button class="btn btn-outline" style="margin-left: auto;" onclick="approveAll()">✓ Approve Selected</button>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:32px;"><div class="cb" onclick="toggleAll(this)"></div></th>
+                <th>Worker</th>
+                <th>Date</th>
+                <th>Project</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Break</th>
+                <th class="text-right">Hours</th>
+                <th>Task / Cost Centre</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="date-group" style="cursor:default;"><td colspan="11">Wednesday, 26 Mar <span class="dg-count">2</span></td></tr>
+              <tr>
+                <td><div class="cb" onclick="toggleCb(this)"></div></td>
+                <td><strong>Tom Reynolds</strong></td>
+                <td>26/03</td>
+                <td>(VAR004) Bourke Stre...</td>
+                <td>06:00 AM</td>
+                <td>03:30 PM</td>
+                <td>30m</td>
+                <td class="text-right"><strong>9h 0m</strong></td>
+                <td>Electrical Rough-In</td>
+                <td><span class="status s-pending">Pending</span></td>
+                <td style="color:#ccc;">›</td>
+              </tr>
+              <tr>
+                <td><div class="cb" onclick="toggleCb(this)"></div></td>
+                <td><strong>Jake Chen</strong></td>
+                <td>26/03</td>
+                <td>(VAR004) Bourke Stre...</td>
+                <td>06:00 AM</td>
+                <td>02:30 PM</td>
+                <td>30m</td>
+                <td class="text-right"><strong>8h 0m</strong></td>
+                <td>Conduit Installation</td>
+                <td><span class="status s-pending">Pending</span></td>
+                <td style="color:#ccc;">›</td>
+              </tr>
+
+              <tr class="date-group" style="cursor:default;"><td colspan="11">Tuesday, 25 Mar <span class="dg-count">3</span></td></tr>
+              <tr>
+                <td><div class="cb checked" onclick="toggleCb(this)"></div></td>
+                <td><strong>Tom Reynolds</strong></td>
+                <td>25/03</td>
+                <td>(VAR004) Bourke Stre...</td>
+                <td>06:00 AM</td>
+                <td>04:00 PM</td>
+                <td>30m</td>
+                <td class="text-right"><strong>9h 30m</strong></td>
+                <td>Electrical Rough-In</td>
+                <td><span class="status s-approved">Approved</span></td>
+                <td style="color:#ccc;">›</td>
+              </tr>
+              <tr>
+                <td><div class="cb checked" onclick="toggleCb(this)"></div></td>
+                <td><strong>Jake Chen</strong></td>
+                <td>25/03</td>
+                <td>(VAR004) Bourke Stre...</td>
+                <td>06:30 AM</td>
+                <td>03:30 PM</td>
+                <td>30m</td>
+                <td class="text-right"><strong>8h 30m</strong></td>
+                <td>Conduit Installation</td>
+                <td><span class="status s-approved">Approved</span></td>
+                <td style="color:#ccc;">›</td>
+              </tr>
+              <tr>
+                <td><div class="cb checked" onclick="toggleCb(this)"></div></td>
+                <td><strong>Maria Santos</strong></td>
+                <td>25/03</td>
+                <td>(VAR004) Bourke Stre...</td>
+                <td>07:00 AM</td>
+                <td>03:00 PM</td>
+                <td>30m</td>
+                <td class="text-right"><strong>7h 30m</strong></td>
+                <td>Panel Wiring</td>
+                <td><span class="status s-approved">Approved</span></td>
+                <td style="color:#ccc;">›</td>
+              </tr>
+
+              <tr class="date-group" style="cursor:default;"><td colspan="11">Monday, 24 Mar <span class="dg-count">1</span></td></tr>
+              <tr>
+                <td><div class="cb checked" onclick="toggleCb(this)"></div></td>
+                <td><strong>Maria Santos</strong></td>
+                <td>24/03</td>
+                <td>(VAR004) Bourke Stre...</td>
+                <td>07:00 AM</td>
+                <td>04:30 PM</td>
+                <td>30m</td>
+                <td class="text-right"><strong>9h 0m</strong></td>
+                <td>Panel Wiring</td>
+                <td><span class="status s-approved">Approved</span></td>
+                <td style="color:#ccc;">›</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+      <div class="bottom-actions">
+        <button class="btn btn-outline" onclick="go('screen-list')">Cancel</button>
+        <button class="btn btn-success" onclick="approveAll()">✓ Approve Selected</button>
+        <button class="btn btn-primary" onclick="go('screen-cert')">Create Payment Certificate →</button>
+      </div>
+    </div>
+
+    <!-- ========== SCREEN 3: Payment Certificate ========== -->
+    <div class="screen" id="screen-cert">
+      <div class="detail-header">
+        <a class="back" onclick="go('screen-company')">←</a>
+        <h2 style="flex:1;">Payment Certificate — BlueTech Electrical</h2>
+        <span class="status s-draft" style="font-size: 13px;">Draft</span>
+      </div>
+
+      <div class="content" style="padding-top: 20px;">
+
+        <!-- AP Linkage Diagram -->
+        <div class="linkage">
+          <div class="linkage-node linked">
+            <div class="ln-icon">📋</div>
+            <div class="ln-label">Purchase Order</div>
+            <div class="ln-value">PO-0042</div>
+            <div class="ln-status" style="color: #2e7d32;">✓ Linked</div>
+          </div>
+          <div class="linkage-arrow connected">→</div>
+          <div class="linkage-node active">
+            <div class="ln-icon">⏱</div>
+            <div class="ln-label">Timesheets</div>
+            <div class="ln-value">4 approved · 86.5h</div>
+            <div class="ln-status" style="color: #f7941d;">● Creating cert</div>
+          </div>
+          <div class="linkage-arrow connected">→</div>
+          <div class="linkage-node active">
+            <div class="ln-icon">📄</div>
+            <div class="ln-label">Payment Certificate</div>
+            <div class="ln-value">CERT-0018</div>
+            <div class="ln-status" style="color: #f7941d;">● Draft</div>
+          </div>
+          <div class="linkage-arrow">→</div>
+          <div class="linkage-node pending">
+            <div class="ln-icon">💰</div>
+            <div class="ln-label">Bill</div>
+            <div class="ln-value">—</div>
+            <div class="ln-status" style="color: #999;">Awaiting invoice</div>
+          </div>
+        </div>
+
+        <div class="info-row">
+          <div class="info-card">
+            <div class="ic-label">Supplier</div>
+            <div class="ic-value">BlueTech Electrical Pty Ltd</div>
+            <div class="ic-sub">ABN 51 824 753 901</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">Certificate Period</div>
+            <div class="ic-value">24/03/2026 — 26/03/2026</div>
+            <div class="ic-sub">3 days</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">Purchase Order</div>
+            <div class="ic-value">PO-0042 — Electrical Works</div>
+            <div class="ic-sub">(VAR004) Bourke Street Remediation</div>
+          </div>
+        </div>
+
+        <!-- Certificate line items -->
+        <div class="cert-summary">
+          <h3>Certificate Line Items</h3>
+          <div class="table-wrapper" style="margin-bottom: 0;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Worker</th>
+                  <th>Days</th>
+                  <th class="text-right">Hours</th>
+                  <th>Rate</th>
+                  <th class="text-right">Amount (ex GST)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Tom Reynolds</strong></td>
+                  <td>2 days (25-26 Mar)</td>
+                  <td class="text-right">18.5h</td>
+                  <td>$80.00/hr</td>
+                  <td class="text-right"><strong>$1,480.00</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>Jake Chen</strong></td>
+                  <td>2 days (25-26 Mar)</td>
+                  <td class="text-right">16.5h</td>
+                  <td>$80.00/hr</td>
+                  <td class="text-right"><strong>$1,320.00</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>Maria Santos</strong></td>
+                  <td>2 days (24-25 Mar)</td>
+                  <td class="text-right">16.5h</td>
+                  <td>$80.00/hr</td>
+                  <td class="text-right"><strong>$1,320.00</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="padding: 12px 16px; border-top: 1px solid #e0e0e0;">
+            <div class="cert-row"><span class="cr-label">Subtotal (51.5 hours)</span><span class="cr-value">$4,120.00</span></div>
+            <div class="cert-row"><span class="cr-label">GST (10%)</span><span class="cr-value">$412.00</span></div>
+            <div class="cert-row total"><span class="cr-label">Total (inc GST)</span><span class="cr-value">$4,532.00</span></div>
+          </div>
+        </div>
+
+        <!-- PO Budget Impact -->
+        <div class="cert-summary">
+          <h3>PO Budget Impact</h3>
+          <div class="cert-row"><span class="cr-label">PO-0042 Total Value</span><span class="cr-value">$48,500.00</span></div>
+          <div class="cert-row"><span class="cr-label">Previously Certified</span><span class="cr-value">$12,640.00</span></div>
+          <div class="cert-row"><span class="cr-label">This Certificate</span><span class="cr-value" style="color: #f7941d;">$4,120.00</span></div>
+          <div class="cert-row"><span class="cr-label">Remaining on PO</span><span class="cr-value">$31,740.00</span></div>
+          <div style="margin-top: 8px; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+            <div style="height: 100%; width: 34.5%; background: linear-gradient(90deg, #4caf50 75%, #f7941d 75%); border-radius: 4px;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: #888; margin-top: 4px;">
+            <span>34.5% of PO committed</span>
+            <span>65.5% remaining</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="bottom-actions">
+        <button class="btn btn-outline" onclick="go('screen-company')">Back</button>
+        <button class="btn btn-outline">Save as Draft</button>
+        <button class="btn btn-success" onclick="go('screen-cert-approved')">✓ Approve Certificate</button>
+      </div>
+    </div>
+
+    <!-- ========== SCREEN 4: Approved Cert — Link to Bill ========== -->
+    <div class="screen" id="screen-cert-approved">
+      <div class="detail-header">
+        <a class="back" onclick="go('screen-company')">←</a>
+        <h2 style="flex:1;">Payment Certificate — BlueTech Electrical</h2>
+        <span class="status s-approved" style="font-size: 13px;">Approved</span>
+      </div>
+
+      <div class="content" style="padding-top: 20px;">
+
+        <!-- AP Linkage Diagram — cert approved, bill pending -->
+        <div class="linkage">
+          <div class="linkage-node linked">
+            <div class="ln-icon">📋</div>
+            <div class="ln-label">Purchase Order</div>
+            <div class="ln-value">PO-0042</div>
+            <div class="ln-status" style="color: #2e7d32;">✓ Linked</div>
+          </div>
+          <div class="linkage-arrow connected">→</div>
+          <div class="linkage-node linked">
+            <div class="ln-icon">⏱</div>
+            <div class="ln-label">Timesheets</div>
+            <div class="ln-value">4 approved · 86.5h</div>
+            <div class="ln-status" style="color: #2e7d32;">✓ Certified</div>
+          </div>
+          <div class="linkage-arrow connected">→</div>
+          <div class="linkage-node linked">
+            <div class="ln-icon">📄</div>
+            <div class="ln-label">Payment Certificate</div>
+            <div class="ln-value">CERT-0018 · $4,532.00</div>
+            <div class="ln-status" style="color: #2e7d32;">✓ Approved</div>
+          </div>
+          <div class="linkage-arrow">→</div>
+          <div class="linkage-node pending" id="bill-node">
+            <div class="ln-icon">💰</div>
+            <div class="ln-label">Bill</div>
+            <div class="ln-value" id="bill-value">—</div>
+            <div class="ln-status" id="bill-status" style="color: #999;">Awaiting invoice</div>
+          </div>
+        </div>
+
+        <!-- Certificate summary (read only) -->
+        <div class="cert-summary">
+          <h3>Certificate Summary — CERT-0018</h3>
+          <div class="cert-row"><span class="cr-label">Supplier</span><span class="cr-value">BlueTech Electrical Pty Ltd</span></div>
+          <div class="cert-row"><span class="cr-label">Period</span><span class="cr-value">24/03/2026 — 26/03/2026</span></div>
+          <div class="cert-row"><span class="cr-label">Workers</span><span class="cr-value">3 (Tom Reynolds, Jake Chen, Maria Santos)</span></div>
+          <div class="cert-row"><span class="cr-label">Total Hours</span><span class="cr-value">51.5 hours</span></div>
+          <div class="cert-row"><span class="cr-label">Subtotal</span><span class="cr-value">$4,120.00</span></div>
+          <div class="cert-row"><span class="cr-label">GST</span><span class="cr-value">$412.00</span></div>
+          <div class="cert-row total"><span class="cr-label">Total (inc GST)</span><span class="cr-value">$4,532.00</span></div>
+        </div>
+
+        <!-- Link to bill section -->
+        <div class="cert-summary" id="link-bill-section">
+          <h3>Link to Bill</h3>
+          <p style="font-size: 13px; color: #666; margin-bottom: 14px;">When BlueTech Electrical sends their invoice, link it here to complete the AP cycle.</p>
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <select class="filter-select" id="bill-select" style="flex: 1; padding: 12px 16px; font-size: 14px;">
+              <option value="">Select a bill to link...</option>
+              <option value="BILL-0089">BILL-0089 — BlueTech Electrical — $4,532.00 (26/03/2026)</option>
+              <option value="BILL-0085">BILL-0085 — BlueTech Electrical — $4,532.00 (24/03/2026)</option>
+            </select>
+            <button class="btn btn-blue" onclick="linkBill()">Link Bill</button>
+          </div>
+        </div>
+
+        <!-- Linked bill success (hidden initially) -->
+        <div class="cert-summary" id="linked-bill-section" style="display: none; border-color: #4caf50;">
+          <h3 style="color: #2e7d32;">✓ Bill Linked Successfully</h3>
+          <div class="cert-row"><span class="cr-label">Bill</span><span class="cr-value">BILL-0089</span></div>
+          <div class="cert-row"><span class="cr-label">Bill Amount</span><span class="cr-value">$4,532.00</span></div>
+          <div class="cert-row"><span class="cr-label">Certificate Amount</span><span class="cr-value">$4,532.00</span></div>
+          <div class="cert-row"><span class="cr-label">Variance</span><span class="cr-value" style="color: #2e7d32;">$0.00 — Amounts match ✓</span></div>
+          <div style="margin-top: 12px; padding: 12px; background: #e8f5e9; border-radius: 6px; font-size: 12px; color: #2e7d32; font-weight: 500;">
+            AP cycle complete: PO-0042 → Timesheets (51.5h) → CERT-0018 → BILL-0089
+          </div>
+        </div>
+
+      </div>
+
+      <div class="bottom-actions" id="cert-actions">
+        <button class="btn btn-outline" onclick="go('screen-company')">Back to Timesheets</button>
+        <button class="btn btn-outline">Download PDF</button>
+        <button class="btn btn-primary">Send to Supplier</button>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function go(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function switchListTab(el, tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function toggleCb(el) {
+  el.classList.toggle('checked');
+}
+
+function toggleAll(el) {
+  el.classList.toggle('checked');
+  const checked = el.classList.contains('checked');
+  document.querySelectorAll('tbody .cb').forEach(cb => {
+    if (checked) cb.classList.add('checked');
+    else cb.classList.remove('checked');
+  });
+}
+
+function approveAll() {
+  document.querySelectorAll('.s-pending').forEach(s => {
+    s.className = 'status s-approved';
+    s.textContent = 'Approved';
+  });
+  showToast('Timesheets approved successfully');
+}
+
+function linkBill() {
+  const select = document.getElementById('bill-select');
+  if (!select.value) { showToast('Please select a bill to link'); return; }
+
+  document.getElementById('link-bill-section').style.display = 'none';
+  document.getElementById('linked-bill-section').style.display = 'block';
+
+  const billNode = document.getElementById('bill-node');
+  billNode.classList.remove('pending');
+  billNode.classList.add('linked');
+  document.getElementById('bill-value').textContent = 'BILL-0089 · $4,532.00';
+  document.getElementById('bill-status').textContent = '✓ Linked';
+  document.getElementById('bill-status').style.color = '#2e7d32';
+
+  showToast('Bill linked — AP cycle complete');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+
+</body>
+</html>
