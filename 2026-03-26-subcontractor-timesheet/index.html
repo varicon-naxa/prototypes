@@ -202,15 +202,30 @@
   .btn-pulse { animation: btnPulse 1.5s ease-in-out infinite; }
   @keyframes btnPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(247,148,29,0.5); } 50% { box-shadow: 0 0 0 8px rgba(247,148,29,0); } }
 
-  /* Export dropdown */
-  .export-dropdown { position: relative; display: inline-block; }
-  .export-menu { display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12); min-width: 220px; z-index: 50; overflow: hidden; }
-  .export-menu.show { display: block; }
-  .export-menu-item { padding: 12px 16px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #f0f0f0; }
-  .export-menu-item:last-child { border-bottom: none; }
-  .export-menu-item:hover { background: #f9f9f9; }
-  .export-menu-item .emi-icon { font-size: 16px; width: 20px; text-align: center; }
-  .export-menu-item .emi-desc { font-size: 11px; color: #888; }
+  /* Export modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300; align-items: center; justify-content: center; }
+  .modal-overlay.show { display: flex; animation: fadeInModal 0.2s; }
+  @keyframes fadeInModal { from { opacity: 0; } to { opacity: 1; } }
+  .modal { background: #fff; border-radius: 12px; width: 520px; max-width: 90vw; box-shadow: 0 8px 32px rgba(0,0,0,.2); overflow: hidden; }
+  .modal-header { padding: 20px 24px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; }
+  .modal-header h3 { font-size: 18px; font-weight: 700; }
+  .modal-close { width: 32px; height: 32px; border: none; background: #f0f0f0; border-radius: 6px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #666; }
+  .modal-close:hover { background: #e0e0e0; }
+  .modal-body { padding: 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid #e0e0e0; display: flex; justify-content: flex-end; gap: 10px; }
+
+  .export-option { display: flex; align-items: center; gap: 16px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 10px; cursor: pointer; margin-bottom: 12px; transition: all 0.15s; }
+  .export-option:hover { border-color: #f7941d; background: #fffbf5; }
+  .export-option.selected { border-color: #f7941d; background: #fff8f0; }
+  .export-option .eo-radio { width: 20px; height: 20px; border: 2px solid #ccc; border-radius: 50%; flex-shrink: 0; transition: all 0.15s; }
+  .export-option.selected .eo-radio { border: 6px solid #f7941d; }
+  .export-option .eo-icon { font-size: 28px; }
+  .export-option .eo-title { font-size: 14px; font-weight: 700; }
+  .export-option .eo-desc { font-size: 12px; color: #666; margin-top: 2px; }
+  .export-option .eo-default { font-size: 10px; font-weight: 600; color: #f7941d; background: #fff3e0; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
+
+  /* Done button state */
+  .btn-done { background: #4caf50 !important; border-color: #4caf50 !important; color: #fff !important; pointer-events: none; opacity: 0.8; }
 
   /* Supervisor prompt */
   .supervisor-row { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #fff8f0; border-bottom: 1px solid #f0e0c0; font-size: 12px; color: #e65100; }
@@ -811,34 +826,15 @@
 
       <!-- Bottom actions for employees tab -->
       <div class="bottom-actions" id="emp-bottom-actions">
+        <div style="margin-right: auto; font-size: 12px; color: #888;">
+          <a href="#" onclick="selectAllApproved(); return false;" style="color: #f7941d; text-decoration: none; font-weight: 600;">Select all approved</a>
+        </div>
         <div style="position: relative;" class="ba-tooltip-wrap">
-          <button class="btn btn-outline" onclick="notifySupervisor()">📧 Notify Supervisors</button>
+          <button class="btn btn-outline" onclick="notifySupervisor()" id="btn-notify">📧 Notify Supervisors</button>
           <div class="ba-tooltip">Send reminder to project lead contacts to approve timesheets for pay period</div>
         </div>
         <button class="btn btn-blue" onclick="payrollLock()" id="btn-payroll-lock">🔒 Payroll Lock Selected</button>
-        <div class="export-dropdown" id="export-area">
-          <button class="btn btn-primary" onclick="toggleExport()" id="btn-export">↓ Export ▾</button>
-          <div class="export-menu" id="export-menu">
-            <div class="export-menu-item" onclick="doExport('summary')">
-              <span class="emi-icon">📊</span>
-              <div><strong>Timesheet Summary</strong><div class="emi-desc">PDF summary of all timesheets for the period</div></div>
-            </div>
-            <div class="export-menu-item" onclick="doExport('xero')">
-              <span class="emi-icon">🔵</span>
-              <div><strong>Export for Xero</strong><div class="emi-desc">CSV file formatted for Xero payroll import</div></div>
-            </div>
-            <div class="export-menu-item" onclick="doExport('myob')">
-              <span class="emi-icon">🟣</span>
-              <div><strong>Export for MYOB</strong><div class="emi-desc">CSV file formatted for MYOB payroll import</div></div>
-            </div>
-          </div>
-        </div>
-        <!-- Export prompt banner (hidden until payroll lock) -->
-        <div id="export-prompt" style="display:none; position: absolute; bottom: 100%; left: 0; right: 0; background: #fff8f0; border: 2px solid #f7941d; border-bottom: none; padding: 10px 28px; display: none; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; color: #e65100;">
-          <span style="font-size: 18px;">→</span>
-          <span>Timesheets locked. Now export your payroll file.</span>
-          <button class="btn btn-sm btn-primary" onclick="toggleExport()" style="margin-left: auto;">Export Now ▾</button>
-        </div>
+        <button class="btn btn-primary" onclick="openExportModal()" id="btn-export">↓ Export</button>
       </div>
 
       <!-- Bottom actions for subbies tab (hidden initially) -->
@@ -1326,6 +1322,44 @@
 
 </div>
 
+<!-- Export Modal -->
+<div class="modal-overlay" id="export-modal" onclick="if(event.target===this)closeExportModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Export Timesheets</h3>
+      <button class="modal-close" onclick="closeExportModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="export-option selected" onclick="selectExportOption(this, 'payroll')">
+        <div class="eo-radio"></div>
+        <div class="eo-icon">📥</div>
+        <div style="flex:1;">
+          <div class="eo-title">Download Payroll File <span class="eo-default">Default</span></div>
+          <div class="eo-desc">Export locked timesheets as a CSV file for import into your payroll system</div>
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <select class="filter-select" id="payroll-format" style="font-size: 12px; padding: 6px 28px 6px 10px;">
+              <option>Xero Payroll</option>
+              <option>MYOB Payroll</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="export-option" onclick="selectExportOption(this, 'summary')">
+        <div class="eo-radio"></div>
+        <div class="eo-icon">📊</div>
+        <div style="flex:1;">
+          <div class="eo-title">Export Timesheet Summary</div>
+          <div class="eo-desc">PDF summary of all timesheets for the period — includes approved, locked, and unapproved</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeExportModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="doExportFromModal()">Download</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1433,19 +1467,31 @@ function payrollLock() {
   });
   if (locked > 0) {
     setEmpStep(2);
-    // Show export prompt banner
-    var prompt = document.getElementById('export-prompt');
-    prompt.classList.add('export-prompt-show');
     // Pulse the export button
     document.getElementById('btn-export').classList.add('btn-pulse');
-    // Grey out the payroll lock button
+    // Mark payroll lock button as done
     var lockBtn = document.getElementById('btn-payroll-lock');
-    lockBtn.style.opacity = '0.5';
-    lockBtn.style.pointerEvents = 'none';
+    lockBtn.innerHTML = '✓ Payroll Locked';
+    lockBtn.classList.add('btn-done');
     showToast(locked + ' approved timesheet' + (locked > 1 ? 's' : '') + ' locked for payroll');
   } else {
     showToast('No approved timesheets selected to lock');
   }
+}
+
+function selectAllApproved() {
+  document.querySelectorAll('#tab-employees .data-row').forEach(function(row) {
+    var status = row.querySelector('.status');
+    var cb = row.querySelector('.cb');
+    if (status && cb) {
+      if (status.classList.contains('s-approved')) {
+        cb.classList.add('checked');
+      } else {
+        cb.classList.remove('checked');
+      }
+    }
+  });
+  showToast('All approved timesheets selected');
 }
 
 function notifySupervisor() {
@@ -1461,18 +1507,43 @@ function notifySupervisor() {
     const btn = alert.querySelector('.btn');
     if (btn) btn.style.display = 'none';
   }
+  // Mark button as done
+  var notifyBtn = document.getElementById('btn-notify');
+  notifyBtn.innerHTML = '✓ Notified';
+  notifyBtn.classList.add('btn-done');
   showToast('Supervisor notification sent');
 }
 
-function toggleExport() {
-  document.getElementById('export-menu').classList.toggle('show');
+var selectedExportType = 'payroll';
+
+function openExportModal() {
+  document.getElementById('export-modal').classList.add('show');
 }
 
-function doExport(type) {
-  document.getElementById('export-menu').classList.remove('show');
-  const labels = { summary: 'Timesheet Summary PDF', xero: 'Xero payroll CSV', myob: 'MYOB payroll CSV' };
+function closeExportModal() {
+  document.getElementById('export-modal').classList.remove('show');
+}
+
+function selectExportOption(el, type) {
+  selectedExportType = type;
+  document.querySelectorAll('.export-option').forEach(function(o) { o.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+
+function doExportFromModal() {
+  closeExportModal();
   setEmpStep(3);
-  showToast('Exporting ' + labels[type] + '...');
+  if (selectedExportType === 'payroll') {
+    var format = document.getElementById('payroll-format').value;
+    showToast('Downloading ' + format + ' payroll file...');
+  } else {
+    showToast('Downloading Timesheet Summary PDF...');
+  }
+  // Mark export button as done
+  var exportBtn = document.getElementById('btn-export');
+  exportBtn.innerHTML = '✓ Exported';
+  exportBtn.classList.add('btn-done');
+  exportBtn.classList.remove('btn-pulse');
 }
 
 function linkPO() {
@@ -1597,11 +1668,9 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-// Close export menu on outside click
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('.export-dropdown')) {
-    document.getElementById('export-menu').classList.remove('show');
-  }
+// Close export modal on Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeExportModal();
 });
 </script>
 
