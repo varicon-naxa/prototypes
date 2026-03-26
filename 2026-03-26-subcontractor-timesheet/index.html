@@ -227,6 +227,11 @@
   /* Done button state */
   .btn-done { background: #4caf50 !important; border-color: #4caf50 !important; color: #fff !important; pointer-events: none; opacity: 0.8; }
 
+  /* Current step emphasis */
+  .btn-current-step { position: relative; animation: btnPulse 1.5s ease-in-out infinite; }
+  .btn-next-step:not(.btn-done) { opacity: 0.5; }
+  .btn-step-label { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; color: #f7941d; }
+
   /* Supervisor prompt */
   .supervisor-row { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #fff8f0; border-bottom: 1px solid #f0e0c0; font-size: 12px; color: #e65100; }
   .supervisor-row:hover { background: #fff3e0 !important; }
@@ -805,17 +810,17 @@
 
       <!-- Bottom actions for employees tab -->
       <div class="bottom-actions" id="emp-bottom-actions">
-        <div style="margin-right: auto; font-size: 12px; color: #888; display: flex; gap: 12px;">
-          <a href="#" onclick="selectAllUnapproved(); return false;" style="color: #e65100; text-decoration: none; font-weight: 600;">Select unapproved</a>
+        <div style="margin-right: auto; font-size: 12px; color: #888; display: flex; gap: 12px;" id="select-links">
+          <a href="#" onclick="selectAllUnapproved(); return false;" id="link-select-unapproved" style="color: #e65100; text-decoration: none; font-weight: 600;">Select unapproved</a>
           <a href="#" onclick="selectAllApproved(); return false;" style="color: #f7941d; text-decoration: none; font-weight: 600;">Select all approved</a>
         </div>
-        <button class="btn btn-success" onclick="approveSelectedEmp()" id="btn-approve-emp">✓ Approve Selected</button>
-        <div style="position: relative;" class="ba-tooltip-wrap">
+        <button class="btn btn-success btn-current-step" onclick="approveSelectedEmp()" id="btn-approve-emp">✓ Approve Selected</button>
+        <div style="position: relative;" class="ba-tooltip-wrap" id="notify-wrap">
           <button class="btn btn-outline" onclick="notifySupervisor()" id="btn-notify">📧 Notify Supervisors</button>
           <div class="ba-tooltip">Send reminder to project lead contacts to approve timesheets for pay period</div>
         </div>
-        <button class="btn btn-blue" onclick="payrollLock()" id="btn-payroll-lock">🔒 Payroll Lock Selected</button>
-        <button class="btn btn-primary" onclick="openExportModal()" id="btn-export">↓ Export</button>
+        <button class="btn btn-blue btn-next-step" onclick="payrollLock()" id="btn-payroll-lock">🔒 Payroll Lock Selected</button>
+        <button class="btn btn-outline btn-next-step" onclick="openExportModal()" id="btn-export" style="opacity: 0.5; pointer-events: none;">↓ Export</button>
       </div>
 
       <!-- Bottom actions for subbies tab (hidden initially) -->
@@ -1456,12 +1461,19 @@ function payrollLock() {
   });
   if (locked > 0) {
     setEmpStep(2);
-    // Pulse the export button
-    document.getElementById('btn-export').classList.add('btn-pulse');
     // Mark payroll lock button as done
     var lockBtn = document.getElementById('btn-payroll-lock');
     lockBtn.innerHTML = '✓ Payroll Locked';
     lockBtn.classList.add('btn-done');
+    lockBtn.classList.remove('btn-current-step');
+    // Activate export as current step
+    var exportBtn = document.getElementById('btn-export');
+    exportBtn.classList.add('btn-current-step');
+    exportBtn.classList.remove('btn-next-step');
+    exportBtn.style.opacity = '1';
+    exportBtn.style.pointerEvents = 'auto';
+    exportBtn.classList.remove('btn-outline');
+    exportBtn.classList.add('btn-primary');
     showToast(locked + ' approved timesheet' + (locked > 1 ? 's' : '') + ' locked for payroll');
   } else {
     showToast('No approved timesheets selected to lock');
@@ -1496,18 +1508,40 @@ function approveSelectedEmp() {
     }
   });
   if (count > 0) {
-    // Update summary cards
     setEmpStep(1);
-    // Check if all approved now
-    var remaining = document.querySelectorAll('#tab-employees .s-unapproved').length;
-    if (remaining === 0) {
-      // Hide alert banner
-      var alert = document.getElementById('unapproved-alert');
-      if (alert) alert.style.display = 'none';
-    }
+    updateEmpBottomBar();
     showToast(count + ' timesheet' + (count > 1 ? 's' : '') + ' approved');
   } else {
     showToast('No unapproved timesheets selected');
+  }
+}
+
+function updateEmpBottomBar() {
+  var unapproved = document.querySelectorAll('#tab-employees .s-unapproved').length;
+  var approveBtn = document.getElementById('btn-approve-emp');
+  var notifyWrap = document.getElementById('notify-wrap');
+  var lockBtn = document.getElementById('btn-payroll-lock');
+  var exportBtn = document.getElementById('btn-export');
+  var selectUnapproved = document.getElementById('link-select-unapproved');
+
+  if (unapproved === 0) {
+    // All approved — hide notify, mark approve done, activate payroll lock
+    notifyWrap.style.display = 'none';
+    selectUnapproved.style.display = 'none';
+    if (!approveBtn.classList.contains('btn-done')) {
+      approveBtn.innerHTML = '✓ All Approved';
+      approveBtn.classList.add('btn-done');
+      approveBtn.classList.remove('btn-current-step');
+    }
+    // Hide alert banner
+    var alert = document.getElementById('unapproved-alert');
+    if (alert) alert.style.display = 'none';
+    // Activate payroll lock as current step
+    if (!lockBtn.classList.contains('btn-done')) {
+      lockBtn.classList.add('btn-current-step');
+      lockBtn.classList.remove('btn-next-step');
+      lockBtn.style.opacity = '1';
+    }
   }
 }
 
