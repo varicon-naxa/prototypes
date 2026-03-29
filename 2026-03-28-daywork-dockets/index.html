@@ -716,7 +716,20 @@ tbody tr.section-header td{font-weight:700;color:#1b2a4a;padding:10px 14px;borde
     <div class="page" id="page4cc">
       <div class="card-section">
         <h2 class="section-title"><i class="fas fa-calculator" style="color:#f5a623;margin-right:8px"></i>Create Your Budget</h2>
-        <p class="section-subtitle">Set a budget for each line item. Use Lump Sum, Margin %, or Resource Breakdown.</p>
+        <p class="section-subtitle">Set a budget for each line item. Choose how to break down costs.</p>
+
+        <!-- Global budget mode toggle -->
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding:14px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600;color:#1b2a4a">Cost Breakdown Method</div>
+            <div style="font-size:11px;color:#64748b">Apply to all line items. Costs are estimated at ~90% of charge rate.</div>
+          </div>
+          <div class="type-toggle" id="globalBudgetToggle" style="font-size:13px">
+            <span class="active" onclick="setGlobalBudgetMode('lump')">Lump Sum</span>
+            <span onclick="setGlobalBudgetMode('resources')">Resources</span>
+          </div>
+        </div>
+
         <div class="table-wrapper">
           <table class="budget-table">
             <thead><tr>
@@ -725,8 +738,7 @@ tbody tr.section-header td{font-weight:700;color:#1b2a4a;padding:10px 14px;borde
               <th>BOQ Qty</th>
               <th style="text-align:right">BOQ Rate ($)</th>
               <th style="text-align:right">BOQ Total ($)</th>
-              <th>Budget Type</th>
-              <th style="text-align:right">Budget Amount ($)</th>
+              <th id="budgetColHeader" style="text-align:right">Budget Amount ($)</th>
             </tr></thead>
             <tbody id="budgetTableCC"></tbody>
           </table>
@@ -1660,18 +1672,55 @@ function buildBudgetCC() {
   renderCCRows();
 }
 
+let globalBudgetMode = 'lump'; // 'lump' or 'resources'
+
+function setGlobalBudgetMode(mode) {
+  globalBudgetMode = mode;
+  document.querySelectorAll('#globalBudgetToggle span').forEach(s => s.classList.remove('active'));
+  document.querySelector(`#globalBudgetToggle span:${mode === 'lump' ? 'first-child' : 'last-child'}`).classList.add('active');
+  renderCCRows();
+}
+
 function renderCCRows() {
   const data = getActiveData('cc');
   const isManual = boqSource.cc === 'create';
   const tbody = document.getElementById('budgetTableCC');
+  const isResources = globalBudgetMode === 'resources';
+
+  // Update header
+  document.getElementById('budgetColHeader').innerHTML = isResources ? 'Budget Breakdown ($)' : 'Budget Amount ($)';
 
   tbody.innerHTML = data.map((r, i) => {
     if (r.isHeader) {
-      return `<tr class="section-header"><td colspan="7" style="padding-left:4px"><span style="margin-right:10px;color:#94a3b8">${r.code}</span>${r.desc}</td></tr>`;
+      return `<tr class="section-header"><td colspan="6" style="padding-left:4px"><span style="margin-right:10px;color:#94a3b8">${r.code}</span>${r.desc}</td></tr>`;
     }
     const boqAmt = r.amount || 0;
     const rateStr = (r.rate || 0).toLocaleString('en-US',{minimumFractionDigits:2});
     const amtStr = boqAmt.toLocaleString();
+    // Budget at ~90% of BOQ
+    const budgetTotal = Math.round(boqAmt * 0.9);
+
+    let budgetCell;
+    if (isResources) {
+      // Split into 5 categories at ~90% total
+      const labour = Math.round(budgetTotal * 0.30);
+      const plant = Math.round(budgetTotal * 0.25);
+      const materials = Math.round(budgetTotal * 0.25);
+      const subbie = Math.round(budgetTotal * 0.12);
+      const misc = budgetTotal - labour - plant - materials - subbie;
+      budgetCell = `<td style="vertical-align:top">
+        <div style="font-size:12px;line-height:1.8">
+          <div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#64748b">Labour</span><input class="dw-min-input" style="width:80px;text-align:right;font-size:12px" value="${labour.toLocaleString()}" oninput="calcCC()" data-cc-amount="${i}" data-res="labour"></div>
+          <div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#64748b">Plant & Equipment</span><input class="dw-min-input" style="width:80px;text-align:right;font-size:12px" value="${plant.toLocaleString()}" oninput="calcCC()" data-res="plant"></div>
+          <div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#64748b">Materials</span><input class="dw-min-input" style="width:80px;text-align:right;font-size:12px" value="${materials.toLocaleString()}" oninput="calcCC()" data-res="materials"></div>
+          <div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#64748b">Subcontractor</span><input class="dw-min-input" style="width:80px;text-align:right;font-size:12px" value="${subbie.toLocaleString()}" oninput="calcCC()" data-res="subbie"></div>
+          <div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#64748b">Miscellaneous</span><input class="dw-min-input" style="width:80px;text-align:right;font-size:12px" value="${misc.toLocaleString()}" oninput="calcCC()" data-res="misc"></div>
+          <div style="display:flex;justify-content:space-between;gap:12px;border-top:1px solid #e2e8f0;padding-top:4px;margin-top:4px"><strong style="color:#1b2a4a">Total</strong><strong style="color:#1b2a4a" data-cc-amount="${i}">$${budgetTotal.toLocaleString()}</strong></div>
+        </div>
+      </td>`;
+    } else {
+      budgetCell = `<td style="text-align:right"><input class="budget-input" placeholder="0.00" value="${budgetTotal ? budgetTotal.toLocaleString() : ''}" oninput="calcCC()" data-cc-amount="${i}"></td>`;
+    }
 
     return `<tr id="ccRow${i}">
       <td style="font-weight:600">${r.code || ''}</td>
@@ -1691,29 +1740,7 @@ function renderCCRows() {
         : rateStr
       }</td>
       <td style="text-align:right;font-weight:600;color:#3b82f6" data-boq-total-cc="${i}">${amtStr}</td>
-      <td>
-        <div class="type-toggle" id="toggleCC${i}">
-          <span class="active" onclick="setBudgetType('cc',${i},'lump')">Lump Sum</span>
-          <span onclick="setBudgetType('cc',${i},'margin')">Margin %</span>
-          <span onclick="setBudgetType('cc',${i},'resource')">Resources</span>
-        </div>
-        <div id="marginCC${i}" style="display:none;margin-top:6px">
-          <div style="display:flex;align-items:center;gap:6px">
-            <input class="margin-input" placeholder="0" oninput="applyMargin('cc',${i},this.value)" data-margin-cc="${i}"> <span style="font-size:12px;color:#64748b">%</span>
-          </div>
-        </div>
-        <div id="resourcesCC${i}" style="display:none" class="resource-rows">
-          <div style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:#1e40af;display:flex;align-items:center;gap:6px"><i class="fas fa-info-circle"></i> If you are splitting this line item across multiple cost centres, it is best to use the resource breakdown on the Cost Centres page (next step).</div>
-          <div class="resource-row">
-            <input class="res-name" placeholder="Resource" value="Labour">
-            <input class="res-qty" placeholder="Qty" value="20">
-            <input class="res-rate" placeholder="Rate" value="48.00">
-            <span class="res-total">$960</span>
-          </div>
-          <button class="add-resource-btn" onclick="addResourceCC(${i})"><i class="fas fa-plus"></i> Add Resource</button>
-        </div>
-      </td>
-      <td style="text-align:right"><input class="budget-input" placeholder="0.00" value="${boqAmt ? boqAmt.toLocaleString() : ''}" oninput="calcCC()" data-cc-amount="${i}"></td>
+      ${budgetCell}
     </tr>`;
   }).join('');
 
