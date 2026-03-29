@@ -2984,13 +2984,13 @@ function renderDWTable() {
         <table class="dw-table">
           <thead><tr>
             <th class="col-num">#</th>
-            <th class="col-item">Rate Item</th>
+            ${cat === 'Labour' ? '<th style="min-width:140px">Charge Resource Name</th>' : '<th class="col-item">Rate Item</th>'}
             ${cat === 'Plant & Equipment' ? '<th style="min-width:320px">Rates</th>' : ''}
             ${cat !== 'Plant & Equipment' && showRateType ? '<th style="width:110px">Pricing</th>' : ''}
             ${cat !== 'Plant & Equipment' ? `<th class="col-rate" style="text-align:right">${showRateType ? 'Rate / Markup' : 'Rate'}</th>` : ''}
             ${cat !== 'Plant & Equipment' ? '<th class="col-period">Period</th>' : ''}
             ${cat !== 'Plant & Equipment' ? '<th class="col-min">Min.</th>' : ''}
-            <th class="col-resources">Varicon Resources</th>
+            ${cat === 'Labour' ? '<th style="min-width:200px">Cost Resource (optional)</th><th style="min-width:160px">Assign Employee</th>' : '<th class="col-resources">Varicon Resources</th>'}
             <th class="col-status">✓</th>
           </tr></thead>
           <tbody>`;
@@ -3010,7 +3010,7 @@ function renderDWTable() {
           const typeLabel = rl.hireType === 'wet' ? 'Wet' : 'Dry';
           return `<div class="rate-line">
             <span class="rl-type ${typeClass}">${typeLabel}</span>
-            <span class="rl-rate">$${rl.rate.toFixed(2)}</span>
+            <span class="rl-rate"><input class="dw-min-input" style="width:80px;text-align:right;font-weight:600" value="${rl.rate.toFixed(2)}" onchange="dwRates[${i}].rateLines[${li}].rate=parseFloat(this.value)||0"></span>
             <span class="rl-period"><select class="dw-period-select" style="width:80px" onchange="dwRates[${i}].rateLines[${li}].ratePeriod=this.value">
               <option value="hr" ${rl.ratePeriod === 'hr' ? 'selected' : ''}>Hourly</option>
               <option value="day" ${rl.ratePeriod === 'day' ? 'selected' : ''}>Daily</option>
@@ -3045,7 +3045,7 @@ function renderDWTable() {
           </td>`;
         } else {
           if (showRateType) rateTypeCell = `<td><span style="background:#fff7ed;color:#b45309;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600">Fixed $/unit</span></td>`;
-          rateCell = `<td class="col-rate" style="text-align:right;font-weight:600">$${(r.rate || 0).toFixed(2)}</td>`;
+          rateCell = `<td class="col-rate" style="text-align:right"><input class="dw-min-input" style="width:90px;text-align:right;font-weight:600" value="${(r.rate || 0).toFixed(2)}" onchange="dwRates[${i}].rate=parseFloat(this.value)||0"></td>`;
         }
       }
 
@@ -3101,56 +3101,69 @@ function renderDWTable() {
         ${dropdown}
       </td>`;
 
-      // Labour override expand link
+      // Labour: platform-style with Cost Resource + Assign Employee columns
+      let labourCells = '';
       let overrideLink = '';
       if (cat === 'Labour') {
-        const ovCount = r.personOverrides.length;
-        overrideLink = `<br><span class="expand-override" onclick="toggleOverrideRow(${i})">
-          <i class="fas fa-user-edit" style="font-size:10px"></i> ${ovCount > 0 ? ovCount + ' override' + (ovCount > 1 ? 's' : '') : 'Person overrides'}
-          <i class="fas fa-chevron-${dwExpandedOverrides[i] ? 'up' : 'down'}" style="font-size:9px"></i>
-        </span>`;
+        // Cost Resource column (same tag pattern but in its own column)
+        const labourTags = r.resources.map((res, ri) => {
+          const isAi = r.aiSuggested && r.aiSuggested.includes(res);
+          return `<span class="resource-tag">${res}${isAi ? ' <span class="ai-badge">AI</span>' : ''} <i class="fas fa-times tag-x" onclick="removeDWResource(${i},${ri})"></i></span>`;
+        }).join('');
+        let labourDropdown = '';
+        if (dwOpenDropdown === i) {
+          const pool = variconResources['Labour'] || [];
+          const opts = pool.map(res => {
+            const already = r.resources.includes(res);
+            return `<div class="res-opt ${already ? 'already' : ''}" onclick="${already ? '' : `addDWResource(${i},'${res.replace(/'/g, "\\'")}')`}">
+              ${already ? '<i class="fas fa-check opt-check"></i>' : '<i class="far fa-square" style="color:#cbd5e1;font-size:12px"></i>'} ${res}
+            </div>`;
+          }).join('');
+          labourDropdown = `<div class="res-dropdown" id="resDrop${i}">
+            <input type="text" placeholder="Search resources..." oninput="filterResDropdown(${i},this.value)" onclick="event.stopPropagation()">
+            <div id="resOpts${i}">${opts}</div>
+          </div>`;
+        }
+        // Assign Employee dropdown
+        const addedNames = (r.personOverrides || []).map(o => o.name);
+        const empOpts = sampleEmployees.map(e =>
+          `<option value="${e.name}|${e.classification}" ${addedNames.includes(e.name) ? 'selected' : ''}>${e.name}</option>`
+        ).join('');
+        const assignedBadges = (r.personOverrides || []).map((ov, oi) =>
+          `<span style="display:inline-block;background:#fefce8;border:1px solid #fcd34d;padding:2px 8px;border-radius:10px;font-size:11px;margin:1px 2px">${ov.name} <i class="fas fa-times tag-x" style="color:#f59e0b" onclick="removeOverride(${i},${oi})"></i></span>`
+        ).join('');
+
+        labourCells = `
+          <td style="position:relative">
+            <div class="resource-tags">${labourTags}
+              <button class="add-res-btn" onclick="event.stopPropagation();toggleResDropdown(${i})"><i class="fas fa-plus"></i></button>
+            </div>${labourDropdown}
+          </td>
+          <td style="position:relative">
+            <div class="resource-tags">${assignedBadges}
+              <select class="dw-period-select" style="width:140px;font-size:11px" onchange="addEmployeeFromSelect(${i},this.value);this.value=''">
+                <option value="">Select Employee...</option>
+                ${sampleEmployees.filter(e => !addedNames.includes(e.name)).map(e => `<option value="${e.name}|${e.classification}">${e.name}</option>`).join('')}
+              </select>
+            </div>
+          </td>`;
       }
 
       html += `<tr>
         <td class="col-num">${localIdx + 1}</td>
-        <td class="col-item"><strong>${r.item}</strong>${overrideLink}</td>
+        <td class="col-item"><strong>${r.item}</strong></td>
         ${plantRateCell}
         ${rateTypeCell}
         ${rateCell}
         ${periodCell}
         ${minCell}
-        ${resCell}
+        ${cat === 'Labour' ? labourCells : resCell}
         <td class="col-status">${statusIcon}</td>
       </tr>`;
 
-      // Person override sub-row (Labour only)
-      if (cat === 'Labour' && dwExpandedOverrides[i]) {
-        const overrides = r.personOverrides.map((ov, oi) =>
-          `<div class="override-item">
-            <span class="override-name">${ov.name}</span>
-            <span class="override-normal">normally: ${ov.classification}</span>
-            <button class="override-remove" onclick="removeOverride(${i},${oi})"><i class="fas fa-times"></i> Remove</button>
-          </div>`
-        ).join('');
-        // Employee picker (exclude already added)
-        const addedNames = r.personOverrides.map(o => o.name);
-        const available = sampleEmployees.filter(e => !addedNames.includes(e.name));
-        const empOpts = available.map(e =>
-          `<option value="${e.name}|${e.classification}">${e.name} — ${e.classification}</option>`
-        ).join('');
-        html += `<tr class="override-row">
-          <td colspan="99" style="padding-left:48px">
-            <div style="font-size:12px;font-weight:600;color:#92400e;margin-bottom:6px"><i class="fas fa-user-edit" style="margin-right:4px"></i> Person Overrides — charge these people at the "${r.item}" rate on this project</div>
-            ${overrides}
-            ${available.length > 0 ? `<div style="display:flex;align-items:center;gap:8px;margin-top:6px">
-              <select id="empPicker${i}" class="dw-period-select" style="width:260px">
-                <option value="">Select employee...</option>
-                ${empOpts}
-              </select>
-              <button class="add-override-btn" onclick="addOverride(${i})"><i class="fas fa-plus"></i> Add Override</button>
-            </div>` : '<div style="font-size:11px;color:#94a3b8;margin-top:4px">All employees added</div>'}
-          </td>
-        </tr>`;
+      // Person override sub-row (non-Labour categories only - Labour uses inline employee column)
+      if (cat !== 'Labour' && cat !== 'Plant & Equipment' && cat !== 'Materials' && cat !== 'Subcontractors') {
+        // placeholder for future categories
       }
     });
 
@@ -3281,6 +3294,16 @@ function addOverride(i) {
   if (!picker || !picker.value) return;
   const [name, classification] = picker.value.split('|');
   dwRates[i].personOverrides.push({ name, classification });
+  renderDWTable();
+}
+
+function addEmployeeFromSelect(i, val) {
+  if (!val) return;
+  const [name, classification] = val.split('|');
+  if (!dwRates[i].personOverrides) dwRates[i].personOverrides = [];
+  if (!dwRates[i].personOverrides.find(o => o.name === name)) {
+    dwRates[i].personOverrides.push({ name, classification });
+  }
   renderDWTable();
 }
 
