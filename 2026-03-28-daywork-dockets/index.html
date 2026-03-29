@@ -850,12 +850,50 @@ tbody tr.section-header td{font-weight:700;color:#1b2a4a;padding:10px 14px;borde
             <div class="template-bar-left"><i class="fas fa-file-excel"></i><span>Need a template? Download our dayworks rate schedule template.</span></div>
             <button class="template-download-btn"><i class="fas fa-download"></i> Download Template</button>
           </div>
+
+          <!-- State 1: Dropzone -->
           <div class="dropzone" id="dwDropzone" onclick="document.getElementById('dwFileInput').click()">
             <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
             <h3>Drop your rate schedule here</h3>
             <p>or <span class="browse-link">browse files</span></p>
-            <p class="file-types">Supports .xlsx, .xls, .csv</p>
-            <input type="file" id="dwFileInput" accept=".xlsx,.xls,.csv" onchange="simulateDWUpload()">
+            <p class="file-types">Supports .xlsx, .xls, .csv, .pdf</p>
+            <input type="file" id="dwFileInput" accept=".xlsx,.xls,.csv,.pdf" onchange="simulateDWUpload()">
+          </div>
+
+          <!-- State 2: Uploading / Processing -->
+          <div id="dwUploadProgress" style="display:none">
+            <div style="border:2px solid #e2e8f0;border-radius:12px;padding:20px 24px;background:#fff">
+              <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+                <div id="dwFileIcon" style="width:44px;height:44px;border-radius:8px;background:#f0fdf4;display:flex;align-items:center;justify-content:center;font-size:20px;color:#16a34a"><i class="fas fa-file-excel"></i></div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:600;font-size:14px;color:#1b2a4a" id="dwFileName">Schedule_of_Rates.xlsx</div>
+                  <div style="font-size:12px;color:#94a3b8" id="dwFileSize">142 KB</div>
+                </div>
+                <button class="btn btn-outline" style="font-size:11px;padding:4px 10px;color:#ef4444;border-color:#fecaca" onclick="resetDWUpload()"><i class="fas fa-times"></i> Remove</button>
+              </div>
+              <!-- Progress bar -->
+              <div style="background:#f1f5f9;border-radius:6px;height:8px;overflow:hidden;margin-bottom:8px">
+                <div id="dwProgressBar" style="height:100%;background:linear-gradient(90deg,#f5a623,#16a34a);border-radius:6px;width:0%;transition:width 0.4s ease"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:12px">
+                <span id="dwProgressLabel" style="color:#64748b">Uploading...</span>
+                <span id="dwProgressPct" style="color:#1b2a4a;font-weight:600">0%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- State 3: Upload Complete -->
+          <div id="dwUploadComplete" style="display:none">
+            <div style="border:2px solid #22c55e;border-radius:12px;padding:20px 24px;background:#f0fdf4">
+              <div style="display:flex;align-items:center;gap:14px">
+                <div style="width:44px;height:44px;border-radius:8px;background:#dcfce7;display:flex;align-items:center;justify-content:center;font-size:20px;color:#16a34a"><i class="fas fa-check-circle"></i></div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:600;font-size:14px;color:#1b2a4a" id="dwFileNameDone">Schedule_of_Rates.xlsx</div>
+                  <div style="font-size:12px;color:#16a34a;font-weight:500" id="dwParseResult">21 rate items found across 3 categories</div>
+                </div>
+                <button class="btn btn-outline" style="font-size:11px;padding:4px 10px;color:#64748b" onclick="resetDWUpload()"><i class="fas fa-redo"></i> Replace</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2544,10 +2582,88 @@ function setDWSource(src) {
 }
 
 function simulateDWUpload() {
-  // Simulate loading the sample rates
-  dwRates = dwSampleRates.map(r => ({ ...r, resource: '' }));
-  showToast('Rate schedule uploaded — 21 items found');
-  renderDWTable();
+  const fileInput = document.getElementById('dwFileInput');
+  let fileName = 'Schedule_of_Rates.xlsx';
+  let fileSize = '142 KB';
+  let fileIcon = '<i class="fas fa-file-excel"></i>';
+  let iconBg = '#f0fdf4';
+  let iconColor = '#16a34a';
+
+  if (fileInput.files && fileInput.files[0]) {
+    const f = fileInput.files[0];
+    fileName = f.name;
+    fileSize = f.size > 1048576 ? (f.size / 1048576).toFixed(1) + ' MB' : Math.round(f.size / 1024) + ' KB';
+    if (f.name.endsWith('.pdf')) {
+      fileIcon = '<i class="fas fa-file-pdf"></i>';
+      iconBg = '#fef2f2'; iconColor = '#ef4444';
+    } else if (f.name.endsWith('.csv')) {
+      fileIcon = '<i class="fas fa-file-csv"></i>';
+      iconBg = '#eff6ff'; iconColor = '#3b82f6';
+    }
+  }
+
+  // Show progress state
+  document.getElementById('dwDropzone').style.display = 'none';
+  document.getElementById('dwUploadProgress').style.display = 'block';
+  document.getElementById('dwUploadComplete').style.display = 'none';
+  document.getElementById('dwFileName').textContent = fileName;
+  document.getElementById('dwFileSize').textContent = fileSize;
+  document.getElementById('dwFileIcon').innerHTML = fileIcon;
+  document.getElementById('dwFileIcon').style.background = iconBg;
+  document.getElementById('dwFileIcon').style.color = iconColor;
+
+  // Animate progress
+  let progress = 0;
+  const bar = document.getElementById('dwProgressBar');
+  const label = document.getElementById('dwProgressLabel');
+  const pct = document.getElementById('dwProgressPct');
+
+  const steps = [
+    { to: 35, label: 'Uploading...', delay: 400 },
+    { to: 60, label: 'Uploading...', delay: 300 },
+    { to: 75, label: 'Processing file...', delay: 500 },
+    { to: 90, label: 'Extracting rate items...', delay: 600 },
+    { to: 100, label: 'Complete', delay: 400 },
+  ];
+
+  let i = 0;
+  function tick() {
+    if (i >= steps.length) {
+      // Show complete state
+      setTimeout(() => {
+        document.getElementById('dwUploadProgress').style.display = 'none';
+        document.getElementById('dwUploadComplete').style.display = 'block';
+        document.getElementById('dwFileNameDone').textContent = fileName;
+
+        const labour = dwSampleRates.filter(r => r.category === 'Labour').length;
+        const plant = dwSampleRates.filter(r => r.category === 'Plant & Equipment').length;
+        const materials = dwSampleRates.filter(r => r.category === 'Materials').length;
+        document.getElementById('dwParseResult').textContent =
+          `${dwSampleRates.length} rate items found — ${labour} Labour, ${plant} Plant & Equipment, ${materials} Materials`;
+
+        dwRates = dwSampleRates.map(r => ({ ...r, resource: '' }));
+        renderDWTable();
+      }, 300);
+      return;
+    }
+    const step = steps[i];
+    bar.style.width = step.to + '%';
+    pct.textContent = step.to + '%';
+    label.textContent = step.label;
+    i++;
+    setTimeout(tick, step.delay);
+  }
+  setTimeout(tick, 200);
+}
+
+function resetDWUpload() {
+  document.getElementById('dwDropzone').style.display = '';
+  document.getElementById('dwUploadProgress').style.display = 'none';
+  document.getElementById('dwUploadComplete').style.display = 'none';
+  document.getElementById('dwRateTable').style.display = 'none';
+  document.getElementById('dwSummary').style.display = 'none';
+  document.getElementById('dwFileInput').value = '';
+  dwRates = [];
 }
 
 function buildDWRateTable() {
