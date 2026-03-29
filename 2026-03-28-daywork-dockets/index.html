@@ -981,6 +981,20 @@ tbody tr.section-header td{font-weight:700;color:#1b2a4a;padding:10px 14px;borde
               <button class="btn btn-outline" style="font-size:12px;padding:6px 12px" onclick="autoMapDW()"><i class="fas fa-wand-magic-sparkles"></i> Auto-Map</button>
             </div>
           </div>
+          <!-- Project-level markup default -->
+          <div id="dwMarkupBar" style="display:none;margin-bottom:16px">
+            <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px">
+              <i class="fas fa-percent" style="color:#3b82f6;font-size:16px"></i>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:600;color:#1e40af">Project Default Markup</div>
+                <div style="font-size:11px;color:#64748b">Applied to all Cost + % items unless overridden at item level</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <input class="dw-min-input" style="width:60px;font-size:14px;font-weight:600" id="dwMarkupInput" value="15" onchange="setProjectMarkup(this.value)">
+                <span style="font-size:14px;font-weight:600;color:#1b2a4a">%</span>
+              </div>
+            </div>
+          </div>
           <div id="dwMappingContainer"></div>
           <button class="add-line-btn" onclick="addDWRateRow()" style="margin-top:12px"><i class="fas fa-plus"></i> Add Rate Item</button>
         </div>
@@ -994,7 +1008,7 @@ tbody tr.section-header td{font-weight:700;color:#1b2a4a;padding:10px 14px;borde
             <div class="s-value" id="dwLabourCount">0</div>
           </div>
           <div class="summary-card">
-            <div class="s-label">Plant & Equipment</div>
+            <div class="s-label">Plant & Subbies</div>
             <div class="s-value" id="dwPlantCount">0</div>
           </div>
           <div class="summary-card">
@@ -2568,11 +2582,17 @@ const dwSampleRates = [
   { item: 'Skid Steer / Bobcat', category: 'Plant & Equipment', ratePeriod: 'hr', rate: 120.00, minimumCharge: 4, hireType: 'wet' },
   { item: 'Compactor — Plate', category: 'Plant & Equipment', ratePeriod: 'day', rate: 95.00, minimumCharge: 1, hireType: 'dry' },
   { item: 'Generator 25kVA', category: 'Plant & Equipment', ratePeriod: 'day', rate: 180.00, minimumCharge: 1, hireType: 'dry' },
-  { item: 'Aggregate — 20mm', category: 'Materials', ratePeriod: 'tonne', rate: 65.00, minimumCharge: null, hireType: null },
-  { item: 'Sand — Fill', category: 'Materials', ratePeriod: 'tonne', rate: 48.00, minimumCharge: null, hireType: null },
-  { item: 'Concrete 25MPa', category: 'Materials', ratePeriod: 'm³', rate: 295.00, minimumCharge: null, hireType: null },
-  { item: 'Geofabric', category: 'Materials', ratePeriod: 'm²', rate: 8.50, minimumCharge: null, hireType: null },
-  { item: 'Pipe — 300mm RCP', category: 'Materials', ratePeriod: 'lm', rate: 125.00, minimumCharge: null, hireType: null },
+  { item: 'Aggregate — 20mm', category: 'Materials', ratePeriod: 'tonne', rate: 65.00, minimumCharge: null, hireType: null, rateType: 'fixed' },
+  { item: 'Sand — Fill', category: 'Materials', ratePeriod: 'tonne', rate: 48.00, minimumCharge: null, hireType: null, rateType: 'fixed' },
+  { item: 'Concrete 25MPa', category: 'Materials', ratePeriod: 'm³', rate: 295.00, minimumCharge: null, hireType: null, rateType: 'fixed' },
+  { item: 'Geofabric', category: 'Materials', ratePeriod: 'm²', rate: null, minimumCharge: null, hireType: null, rateType: 'costplus', markupPct: null },
+  { item: 'Pipe — 300mm RCP', category: 'Materials', ratePeriod: 'lm', rate: null, minimumCharge: null, hireType: null, rateType: 'costplus', markupPct: null },
+  { item: 'Reo Mesh & Bar', category: 'Materials', ratePeriod: 'tonne', rate: null, minimumCharge: null, hireType: null, rateType: 'costplus', markupPct: 20 },
+  { item: 'Stabilisation — Lime', category: 'Subcontractors', ratePeriod: 'm²', rate: 18.50, minimumCharge: null, hireType: null, rateType: 'fixed' },
+  { item: 'Traffic Management', category: 'Subcontractors', ratePeriod: 'day', rate: 2800.00, minimumCharge: 1, hireType: null, rateType: 'fixed' },
+  { item: 'Survey — Set Out', category: 'Subcontractors', ratePeriod: 'day', rate: null, minimumCharge: null, hireType: null, rateType: 'costplus', markupPct: null },
+  { item: 'Line Marking', category: 'Subcontractors', ratePeriod: 'lm', rate: null, minimumCharge: null, hireType: null, rateType: 'costplus', markupPct: 10 },
+  { item: 'Concrete Pumping', category: 'Subcontractors', ratePeriod: 'hr', rate: 280.00, minimumCharge: 4, hireType: null, rateType: 'fixed' },
 ];
 
 // Varicon resources the user can map to (one-to-many)
@@ -2600,6 +2620,12 @@ const variconResources = {
     'Geofabric A34', 'Pipe — 300mm RCP', 'Pipe — 450mm RCP', 'Pipe — 300mm PVC',
     'Reo — N12 Bar', 'Reo — SL82 Mesh',
   ],
+  'Subcontractors': [
+    'Stabilised Pavements of Aust', 'Civil Traffic Services',
+    'Dial Before You Dig', 'Fulton Hogan — Line Marking',
+    'Johnson Survey Group', 'Concrete Pumping Services',
+    'BGC Contracting', 'Programmed Skilled Workforce',
+  ],
 };
 
 // Sample employees for person override
@@ -2616,7 +2642,8 @@ const sampleEmployees = [
 
 let dwRates = [];
 let dwSource = 'upload';
-let dwSectionCollapsed = { 'Labour': false, 'Plant & Equipment': false, 'Materials': false };
+let dwSectionCollapsed = { 'Labour': false, 'Plant & Equipment': false, 'Materials': false, 'Subcontractors': false };
+let dwProjectMarkup = 15; // default project-level markup %
 let dwOpenDropdown = null; // track open resource dropdown
 let dwExpandedOverrides = {}; // track expanded override rows
 
@@ -2694,9 +2721,10 @@ function simulateDWUpload() {
         const wet = dwSampleRates.filter(r => r.hireType === 'wet').length;
         const dry = dwSampleRates.filter(r => r.hireType === 'dry').length;
         const materials = dwSampleRates.filter(r => r.category === 'Materials').length;
+        const subbies = dwSampleRates.filter(r => r.category === 'Subcontractors').length;
         document.getElementById('dwParseResult').textContent =
-          `${dwSampleRates.length} rate items — ${labour} Labour, ${plant} Plant & Equipment (${wet} wet, ${dry} dry), ${materials} Materials`;
-        dwRates = dwSampleRates.map(r => ({ ...r, resources: [], personOverrides: [] }));
+          `${dwSampleRates.length} rate items — ${labour} Labour, ${plant} Plant (${wet} wet, ${dry} dry), ${materials} Materials, ${subbies} Subcontractors`;
+        dwRates = dwSampleRates.map(r => ({ ...r, resources: [], personOverrides: [], rateType: r.rateType || 'fixed', markupPct: r.markupPct !== undefined ? r.markupPct : null }));
         renderDWTable();
       }, 300);
       return;
@@ -2733,8 +2761,10 @@ function toggleDWSection(cat) {
 function renderDWTable() {
   document.getElementById('dwRateTable').style.display = 'block';
   document.getElementById('dwSummary').style.display = 'block';
+  const hasCostPlus = dwRates.some(r => r.rateType === 'costplus');
+  document.getElementById('dwMarkupBar').style.display = hasCostPlus ? 'block' : 'none';
   const container = document.getElementById('dwMappingContainer');
-  const categories = ['Labour', 'Plant & Equipment', 'Materials'];
+  const categories = ['Labour', 'Plant & Equipment', 'Materials', 'Subcontractors'];
   let html = '';
 
   categories.forEach(cat => {
@@ -2742,7 +2772,8 @@ function renderDWTable() {
     if (items.length === 0) return;
     const mappedInCat = items.filter(r => r.resources.length > 0).length;
     const collapsed = dwSectionCollapsed[cat];
-    const catIcon = cat === 'Labour' ? 'fa-hard-hat' : cat === 'Plant & Equipment' ? 'fa-truck-monster' : 'fa-boxes-stacked';
+    const catIcon = cat === 'Labour' ? 'fa-hard-hat' : cat === 'Plant & Equipment' ? 'fa-truck-monster' : cat === 'Subcontractors' ? 'fa-people-arrows' : 'fa-boxes-stacked';
+    const showRateType = cat === 'Materials' || cat === 'Subcontractors';
 
     html += `<div class="dw-section">
       <div class="dw-section-header ${collapsed ? 'collapsed' : ''}" onclick="toggleDWSection('${cat}')">
@@ -2757,7 +2788,8 @@ function renderDWTable() {
             <th class="col-num">#</th>
             <th class="col-item">Rate Item</th>
             ${cat === 'Plant & Equipment' ? '<th class="col-hire">Hire Type</th>' : ''}
-            <th class="col-rate" style="text-align:right">Rate</th>
+            ${showRateType ? '<th style="width:110px">Pricing</th>' : ''}
+            <th class="col-rate" style="text-align:right">${showRateType ? 'Rate / Markup' : 'Rate'}</th>
             <th class="col-period">Period</th>
             <th class="col-min">Min.</th>
             <th class="col-resources">Varicon Resources</th>
@@ -2786,8 +2818,38 @@ function renderDWTable() {
         </td>`;
       }
 
+      // Rate type (Materials & Subcontractors only)
+      let rateTypeCell = '';
+      if (showRateType) {
+        const isFixed = r.rateType === 'fixed';
+        const isCostPlus = r.rateType === 'costplus';
+        rateTypeCell = `<td>
+          <div class="hire-toggle">
+            <span class="${isFixed ? 'active-dry' : ''}" onclick="setRateType(${i},'fixed')">Fixed $/unit</span>
+            <span class="${isCostPlus ? 'active-wet' : ''}" onclick="setRateType(${i},'costplus')">Cost + %</span>
+          </div>
+        </td>`;
+      }
+
+      // Rate / Markup cell
+      let rateCell;
+      if (r.rateType === 'costplus') {
+        const effectiveMarkup = r.markupPct !== null ? r.markupPct : dwProjectMarkup;
+        const isOverride = r.markupPct !== null;
+        rateCell = `<td class="col-rate" style="text-align:right">
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
+            <span style="font-size:11px;color:#94a3b8">Cost +</span>
+            <input class="dw-min-input" style="width:50px" value="${effectiveMarkup}" onchange="setItemMarkup(${i},this.value)">
+            <span style="font-size:11px;color:#94a3b8">%</span>
+          </div>
+          <div style="font-size:10px;color:${isOverride ? '#f5a623' : '#94a3b8'};text-align:right;margin-top:2px">${isOverride ? 'item override' : 'project default'}</div>
+        </td>`;
+      } else {
+        rateCell = `<td class="col-rate" style="text-align:right;font-weight:600">$${(r.rate || 0).toFixed(2)}</td>`;
+      }
+
       // Period
-      const isTimeBased = cat !== 'Materials';
+      const isTimeBased = cat === 'Labour' || cat === 'Plant & Equipment';
       let periodCell;
       if (isTimeBased) {
         periodCell = `<td class="col-period"><select class="dw-period-select" onchange="dwRates[${i}].ratePeriod=this.value">
@@ -2851,7 +2913,8 @@ function renderDWTable() {
         <td class="col-num">${localIdx + 1}</td>
         <td class="col-item"><strong>${r.item}</strong>${overrideLink}</td>
         ${hireCell}
-        <td class="col-rate" style="text-align:right;font-weight:600">$${r.rate.toFixed(2)}</td>
+        ${rateTypeCell}
+        ${rateCell}
         ${periodCell}
         ${minCell}
         ${resCell}
@@ -2874,7 +2937,7 @@ function renderDWTable() {
           `<option value="${e.name}|${e.classification}">${e.name} — ${e.classification}</option>`
         ).join('');
         html += `<tr class="override-row">
-          <td colspan="${cat === 'Plant & Equipment' ? 8 : 7}" style="padding-left:48px">
+          <td colspan="99" style="padding-left:48px">
             <div style="font-size:12px;font-weight:600;color:#92400e;margin-bottom:6px"><i class="fas fa-user-edit" style="margin-right:4px"></i> Person Overrides — charge these people at the "${r.item}" rate on this project</div>
             ${overrides}
             ${available.length > 0 ? `<div style="display:flex;align-items:center;gap:8px;margin-top:6px">
@@ -2898,6 +2961,26 @@ function renderDWTable() {
 
 function setHireType(i, type) {
   dwRates[i].hireType = type;
+  renderDWTable();
+}
+
+function setRateType(i, type) {
+  dwRates[i].rateType = type;
+  if (type === 'costplus') {
+    dwRates[i].rate = null;
+    if (dwRates[i].markupPct === undefined) dwRates[i].markupPct = null;
+  }
+  renderDWTable();
+}
+
+function setItemMarkup(i, val) {
+  const num = parseFloat(val);
+  dwRates[i].markupPct = (!isNaN(num) && num !== dwProjectMarkup) ? num : null;
+  renderDWTable();
+}
+
+function setProjectMarkup(val) {
+  dwProjectMarkup = parseFloat(val) || 15;
   renderDWTable();
 }
 
@@ -2970,6 +3053,12 @@ function autoMapDW() {
     'Concrete 25MPa': ['Concrete 25MPa'],
     'Geofabric': ['Geofabric A34'],
     'Pipe — 300mm RCP': ['Pipe — 300mm RCP'],
+    'Reo Mesh & Bar': ['Reo — N12 Bar', 'Reo — SL82 Mesh'],
+    'Stabilisation — Lime': ['Stabilised Pavements of Aust'],
+    'Traffic Management': ['Civil Traffic Services'],
+    'Survey — Set Out': ['Johnson Survey Group'],
+    'Line Marking': ['Fulton Hogan — Line Marking'],
+    'Concrete Pumping': ['Concrete Pumping Services'],
   };
   let mappedItems = 0;
   let totalLinks = 0;
@@ -2993,10 +3082,11 @@ function updateDWSummary() {
   const labour = dwRates.filter(r => r.category === 'Labour').length;
   const plant = dwRates.filter(r => r.category === 'Plant & Equipment').length;
   const material = dwRates.filter(r => r.category === 'Materials').length;
+  const subbies = dwRates.filter(r => r.category === 'Subcontractors').length;
   const mapped = dwRates.filter(r => r.resources.length > 0).length;
   const overrides = dwRates.reduce((sum, r) => sum + (r.personOverrides ? r.personOverrides.length : 0), 0);
   document.getElementById('dwLabourCount').textContent = labour;
-  document.getElementById('dwPlantCount').textContent = plant;
+  document.getElementById('dwPlantCount').textContent = plant + subbies;
   document.getElementById('dwMaterialCount').textContent = material;
   document.getElementById('dwTotalMapped').textContent = `${mapped} / ${dwRates.length}`;
   document.getElementById('dwOverrideCount').textContent = overrides;
@@ -3015,11 +3105,12 @@ function buildDWReview() {
 
   // Build review table grouped by category
   const container = document.getElementById('dwReviewContainer');
-  const categories = ['Labour', 'Plant & Equipment', 'Materials'];
+  const categories = ['Labour', 'Plant & Equipment', 'Materials', 'Subcontractors'];
   let html = '';
   categories.forEach(cat => {
     const items = dwRates.filter(r => r.category === cat);
     if (items.length === 0) return;
+    const showRT = cat === 'Materials' || cat === 'Subcontractors';
     html += `<div style="margin-bottom:16px">
       <h4 style="font-size:13px;font-weight:600;color:#1b2a4a;margin-bottom:8px;padding:8px 12px;background:#f8fafc;border-radius:6px">${cat} (${items.length})</h4>
       <div class="table-wrapper"><table>
@@ -3027,7 +3118,8 @@ function buildDWReview() {
           <th style="color:#fff;width:36px">#</th>
           <th style="color:#fff">Rate Item</th>
           ${cat === 'Plant & Equipment' ? '<th style="color:#fff;width:80px">Hire</th>' : ''}
-          <th style="color:#fff;width:100px;text-align:right">Rate</th>
+          ${showRT ? '<th style="color:#fff;width:90px">Pricing</th>' : ''}
+          <th style="color:#fff;width:110px;text-align:right">Rate / Markup</th>
           <th style="color:#fff;width:80px">Period</th>
           <th style="color:#fff;width:70px">Min.</th>
           <th style="color:#fff">Mapped Resources</th>
@@ -3044,11 +3136,22 @@ function buildDWReview() {
       const hireCell = cat === 'Plant & Equipment'
         ? `<td style="font-size:12px">${r.hireType === 'wet' ? '<span style="color:#3b82f6;font-weight:600">Wet</span>' : r.hireType === 'dry' ? '<span style="color:#f5a623;font-weight:600">Dry</span>' : '—'}</td>`
         : '';
+      const rtCell = showRT
+        ? `<td style="font-size:11px">${r.rateType === 'costplus' ? '<span style="color:#3b82f6;font-weight:600">Cost + %</span>' : '<span style="color:#f5a623;font-weight:600">Fixed</span>'}</td>`
+        : '';
+      let rateDisplay;
+      if (r.rateType === 'costplus') {
+        const pct = r.markupPct !== null ? r.markupPct : dwProjectMarkup;
+        rateDisplay = `Cost + ${pct}%`;
+      } else {
+        rateDisplay = `$${(r.rate || 0).toFixed(2)}`;
+      }
       html += `<tr>
         <td style="color:#94a3b8;font-size:12px">${idx + 1}</td>
         <td><strong>${r.item}</strong></td>
         ${hireCell}
-        <td style="text-align:right;font-weight:600">$${r.rate.toFixed(2)}</td>
+        ${rtCell}
+        <td style="text-align:right;font-weight:600">${rateDisplay}</td>
         <td style="font-size:12px">${r.ratePeriod === 'hr' ? 'Hourly' : r.ratePeriod === 'day' ? 'Daily' : r.ratePeriod === 'week' ? 'Weekly' : r.ratePeriod === 'month' ? 'Monthly' : 'per ' + r.ratePeriod}</td>
         <td style="font-size:12px">${r.minimumCharge ? r.minimumCharge + ' ' + r.ratePeriod : '—'}</td>
         <td>${resList}</td>
