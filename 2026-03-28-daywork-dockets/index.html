@@ -753,6 +753,7 @@ tbody tr.section-header td{font-weight:700;color:#1b2a4a;padding:10px 14px;borde
         </div>
 
         <!-- Assignment table -->
+        <div id="assignTableWrapper" style="opacity:.4;pointer-events:none;transition:opacity .3s">
         <div class="table-wrapper">
           <table class="budget-table">
             <thead><tr>
@@ -765,6 +766,7 @@ tbody tr.section-header td{font-weight:700;color:#1b2a4a;padding:10px 14px;borde
             </tr></thead>
             <tbody id="assignTableCC"></tbody>
           </table>
+        </div>
         </div>
 
         <!-- Unmapped Cost Centres -->
@@ -1746,17 +1748,25 @@ function buildAssignCCPage() {
   const ccOptions = () => selectedCC.map(c => `<option>${c}</option>`).join('') + '<option value="__addcc">+ Add Cost Centre</option>';
   const zoneOptions = () => zones.map(z => `<option>${z}</option>`).join('') + '<option value="__add">+ Add Zone</option>';
 
+  let currentSectionCode = '';
   const tbody = document.getElementById('assignTableCC');
   tbody.innerHTML = data.map((r, i) => {
     if (r.isHeader) {
-      return `<tr class="section-header"><td colspan="7" style="padding-left:4px"><span style="margin-right:10px;color:#94a3b8">${r.code}</span>${r.desc}</td></tr>`;
+      currentSectionCode = r.code;
+      return `<tr class="section-header">
+        <td colspan="4" style="padding-left:4px"><span style="margin-right:10px;color:#94a3b8">${r.code}</span>${r.desc}</td>
+        <td><select class="budget-select" style="font-size:12px;font-weight:600" data-section-cc="${r.code}" onchange="applySectionCC('${r.code}',this.value)">
+          <option value="">— Assign All —</option>${ccOptions()}</select></td>
+        <td><select class="budget-select" style="font-size:12px" data-section-zone="${r.code}" onchange="applySectionZone('${r.code}',this.value)">
+          <option value="">— Assign All —</option>${zoneOptions()}</select></td>
+      </tr>`;
     }
     // Read budget amount from the budget page inputs
     const amtInput = document.querySelector(`[data-cc-amount="${i}"]`);
     const budgetAmt = amtInput ? (parseFloat(amtInput.value.replace(/,/g,'')) || 0) : 0;
     const boqAmt = r.amount || 0;
 
-    return `<tr>
+    return `<tr data-section="${currentSectionCode}">
       <td style="font-weight:600">${r.code || ''}</td>
       <td><div class="item-desc">${r.desc || '—'}</div><div class="item-code">${r.unit || ''}</div></td>
       <td style="text-align:right;font-weight:600;color:#3b82f6;white-space:nowrap">$${boqAmt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
@@ -2149,6 +2159,12 @@ function renderCCGridAssign() {
       <div><div class="cc-label">${cc.name}</div><div class="cc-desc">${cc.desc}</div></div>
     </div>`;
   }).join('');
+  // Enable/disable assignment table based on selection
+  const wrapper = document.getElementById('assignTableWrapper');
+  if (wrapper) {
+    if (selectedCC.length > 0) { wrapper.style.opacity = '1'; wrapper.style.pointerEvents = 'auto'; }
+    else { wrapper.style.opacity = '.4'; wrapper.style.pointerEvents = 'none'; }
+  }
 }
 
 function toggleCCAssign(name) {
@@ -2166,6 +2182,23 @@ function toggleCCAssign(name) {
   refreshSplitCCSelects(null);
   refreshUnmappedCCSelects(null);
   calcAssign();
+}
+
+function applySectionCC(sectionCode, value) {
+  if (!value) return;
+  document.querySelectorAll(`tr[data-section="${sectionCode}"] [data-assign-cc]`).forEach(sel => {
+    if (selectedCC.includes(value)) sel.value = value;
+  });
+  calcAssign();
+  showToast(`Applied "${value}" to all items in section ${sectionCode}`);
+}
+
+function applySectionZone(sectionCode, value) {
+  if (!value) return;
+  document.querySelectorAll(`tr[data-section="${sectionCode}"] [data-assign-zone]`).forEach(sel => {
+    sel.value = value;
+  });
+  showToast(`Applied "${value}" zone to all items in section ${sectionCode}`);
 }
 
 function addCustomCCAssign() {
