@@ -1026,20 +1026,29 @@ tbody tr.section-header td{font-weight:700;color:#1b2a4a;padding:10px 14px;borde
             </div>
           </div>
           <!-- Project-level markup default -->
+          <!-- Project markup bar — always shown, AI pre-fills if found in contract -->
           <div id="dwMarkupBar" style="display:none;margin-bottom:16px">
-            <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px">
-              <i class="fas fa-percent" style="color:#3b82f6;font-size:16px"></i>
-              <div style="flex:1">
-                <div style="font-size:13px;font-weight:600;color:#1e40af">Project Default Markup</div>
-                <div style="font-size:11px;color:#64748b">Applied to all Cost + % items unless overridden at item level</div>
+            <div style="padding:16px 18px;background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px">
+              <div style="display:flex;align-items:center;gap:12px">
+                <i class="fas fa-percent" style="color:#3b82f6;font-size:16px"></i>
+                <div style="flex:1">
+                  <div style="font-size:13px;font-weight:600;color:#1e40af">Project Default Markup</div>
+                  <div style="font-size:11px;color:#64748b">Applied to cost-plus materials and subcontractor items. Set the % or mark as N/A if not applicable.</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input class="dw-min-input" style="width:60px;font-size:14px;font-weight:600" id="dwMarkupInput" value="" placeholder="%" oninput="onMarkupInput(this.value)">
+                  <span style="font-size:14px;font-weight:600;color:#1b2a4a">%</span>
+                  <span style="color:#cbd5e1;margin:0 4px">|</span>
+                  <button id="dwMarkupNABtn" class="btn btn-outline" style="font-size:12px;padding:5px 12px;white-space:nowrap" onclick="setMarkupNA()">N/A</button>
+                </div>
               </div>
-              <div style="display:flex;align-items:center;gap:6px">
-                <input class="dw-min-input" style="width:60px;font-size:14px;font-weight:600" id="dwMarkupInput" value="15" onchange="setProjectMarkup(this.value)">
-                <span style="font-size:14px;font-weight:600;color:#1b2a4a">%</span>
+              <div id="dwMarkupAiBadge" style="display:none;margin-top:8px;display:none">
+                <span style="background:#7c4dff;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-right:4px">AI</span>
+                <span style="font-size:11px;color:#64748b">Detected 15% markup in uploaded schedule</span>
               </div>
             </div>
           </div>
-          <div id="dwMappingContainer"></div>
+          <div id="dwMappingContainer" style="opacity:.4;pointer-events:none;transition:opacity .3s"></div>
           <button class="add-line-btn" onclick="addDWRateRow()" style="margin-top:12px"><i class="fas fa-plus"></i> Add Rate Item</button>
         </div>
       </div>
@@ -2896,6 +2905,13 @@ function simulateDWUpload() {
           `${dwSampleRates.length} rate items — ${labour} Labour, ${plant} Plant & Equipment (${wet} wet+dry, ${dry} dry only), ${materials} Materials, ${subbies} Subcontractors`;
         dwRates = dwSampleRates.map(r => ({ ...r, resources: [], personOverrides: [], rateType: r.rateType || 'fixed', markupPct: r.markupPct !== undefined ? r.markupPct : null, aiSuggested: [], rateLines: r.rateLines ? r.rateLines.map(rl => ({...rl})) : undefined }));
         autoMapDW(true);
+        // AI prefill markup if cost+ items found
+        if (dwRates.some(r => r.rateType === 'costplus')) {
+          setTimeout(aiPrefillMarkup, 200);
+        } else {
+          dwMarkupResolved = true;
+          enableMappingContainer();
+        }
         renderDWTable();
       }, 300);
       return;
@@ -2937,6 +2953,11 @@ function renderDWTable() {
   if (dwRates.length > 0) {
     rateEl.style.opacity = '1'; rateEl.style.pointerEvents = 'auto';
     sumEl.style.opacity = '1'; sumEl.style.pointerEvents = 'auto';
+  }
+  // Keep mapping container greyed if markup not resolved
+  if (dwMarkupResolved) {
+    const mc = document.getElementById('dwMappingContainer');
+    mc.style.opacity = '1'; mc.style.pointerEvents = 'auto';
   }
   const hasCostPlus = dwRates.some(r => r.rateType === 'costplus');
   document.getElementById('dwMarkupBar').style.display = hasCostPlus ? 'block' : 'none';
@@ -3173,9 +3194,51 @@ function setItemMarkup(i, val) {
   renderDWTable();
 }
 
+let dwMarkupResolved = false; // true once user sets markup or clicks N/A
+
 function setProjectMarkup(val) {
-  dwProjectMarkup = parseFloat(val) || 15;
+  dwProjectMarkup = parseFloat(val) || 0;
   renderDWTable();
+}
+
+function onMarkupInput(val) {
+  const num = parseFloat(val);
+  if (!isNaN(num) && num >= 0) {
+    dwProjectMarkup = num;
+    dwMarkupResolved = true;
+    document.getElementById('dwMarkupNABtn').classList.remove('selected');
+    document.getElementById('dwMarkupNABtn').style.background = '';
+    enableMappingContainer();
+    renderDWTable();
+  }
+}
+
+function setMarkupNA() {
+  dwProjectMarkup = 0;
+  dwMarkupResolved = true;
+  document.getElementById('dwMarkupInput').value = '';
+  document.getElementById('dwMarkupInput').placeholder = 'N/A';
+  const btn = document.getElementById('dwMarkupNABtn');
+  btn.style.background = '#1b2a4a';
+  btn.style.color = '#fff';
+  btn.style.borderColor = '#1b2a4a';
+  enableMappingContainer();
+  renderDWTable();
+}
+
+function enableMappingContainer() {
+  const mc = document.getElementById('dwMappingContainer');
+  mc.style.opacity = '1';
+  mc.style.pointerEvents = 'auto';
+}
+
+function aiPrefillMarkup() {
+  // Simulate AI finding markup in uploaded document
+  document.getElementById('dwMarkupInput').value = '15';
+  document.getElementById('dwMarkupAiBadge').style.display = 'block';
+  dwProjectMarkup = 15;
+  dwMarkupResolved = true;
+  enableMappingContainer();
 }
 
 function toggleResDropdown(i) {
