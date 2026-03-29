@@ -359,6 +359,7 @@ tbody tr.section-header td{font-weight:700;color:#1b2a4a;padding:10px 14px;borde
 .resource-tag{display:inline-flex;align-items:center;gap:5px;background:#eff6ff;color:#3b82f6;padding:4px 10px;border-radius:14px;font-size:11px;font-weight:500;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
 .resource-tag .tag-x{cursor:pointer;color:#93c5fd;font-size:10px;flex-shrink:0}
 .resource-tag .tag-x:hover{color:#ef4444}
+.resource-tag .ai-badge{background:#7c4dff;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:2px;letter-spacing:.3px}
 .resource-tag.plant-tag{background:#fff7ed;color:#b45309}
 .resource-tag.mat-tag{background:#f0fdf4;color:#166534}
 .add-res-btn{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px dashed #cbd5e1;border-radius:14px;font-size:11px;color:#94a3b8;cursor:pointer;background:transparent;font-family:inherit;white-space:nowrap}
@@ -2820,7 +2821,8 @@ function simulateDWUpload() {
         const subbies = dwSampleRates.filter(r => r.category === 'Subcontractors').length;
         document.getElementById('dwParseResult').textContent =
           `${dwSampleRates.length} rate items — ${labour} Labour, ${plant} Plant (${wet} wet, ${dry} dry), ${materials} Materials, ${subbies} Subcontractors`;
-        dwRates = dwSampleRates.map(r => ({ ...r, resources: [], personOverrides: [], rateType: r.rateType || 'fixed', markupPct: r.markupPct !== undefined ? r.markupPct : null }));
+        dwRates = dwSampleRates.map(r => ({ ...r, resources: [], personOverrides: [], rateType: r.rateType || 'fixed', markupPct: r.markupPct !== undefined ? r.markupPct : null, aiSuggested: [] }));
+        autoMapDW(true);
         renderDWTable();
       }, 300);
       return;
@@ -2973,10 +2975,11 @@ function renderDWTable() {
       }
 
       // Resource tags
-      const tagClass = cat === 'Plant & Equipment' ? 'plant-tag' : cat === 'Materials' ? 'mat-tag' : '';
-      const tags = r.resources.map((res, ri) =>
-        `<span class="resource-tag ${tagClass}">${res} <i class="fas fa-times tag-x" onclick="removeDWResource(${i},${ri})"></i></span>`
-      ).join('');
+      const tagClass = cat === 'Plant & Equipment' ? 'plant-tag' : cat === 'Materials' ? 'mat-tag' : cat === 'Subcontractors' ? 'plant-tag' : '';
+      const tags = r.resources.map((res, ri) => {
+        const isAi = r.aiSuggested && r.aiSuggested.includes(res);
+        return `<span class="resource-tag ${tagClass}">${res}${isAi ? ' <span class="ai-badge">AI</span>' : ''} <i class="fas fa-times tag-x" onclick="removeDWResource(${i},${ri})"></i></span>`;
+      }).join('');
       const dropdownOpen = dwOpenDropdown === i;
       let dropdown = '';
       if (dropdownOpen) {
@@ -3109,7 +3112,10 @@ function addDWResource(i, res) {
 }
 
 function removeDWResource(i, ri) {
-  dwRates[i].resources.splice(ri, 1);
+  const removed = dwRates[i].resources.splice(ri, 1)[0];
+  if (dwRates[i].aiSuggested) {
+    dwRates[i].aiSuggested = dwRates[i].aiSuggested.filter(r => r !== removed);
+  }
   renderDWTable();
 }
 
@@ -3131,7 +3137,7 @@ function removeOverride(i, oi) {
   renderDWTable();
 }
 
-function autoMapDW() {
+function autoMapDW(silent) {
   const mapping = {
     'Labourer': ['General Labourer', 'CW1 — General Operative'],
     'Leading Hand': ['Leading Hand'],
@@ -3167,12 +3173,15 @@ function autoMapDW() {
   dwRates.forEach(r => {
     if (mapping[r.item]) {
       r.resources = [...mapping[r.item]];
+      r.aiSuggested = [...mapping[r.item]];
       mappedItems++;
       totalLinks += r.resources.length;
     }
   });
-  renderDWTable();
-  showToast(`Auto-mapped ${mappedItems} of ${dwRates.length} items (${totalLinks} resource links)`);
+  if (!silent) {
+    renderDWTable();
+    showToast(`Auto-mapped ${mappedItems} of ${dwRates.length} items (${totalLinks} resource links)`);
+  }
 }
 
 function addDWRateRow() {
