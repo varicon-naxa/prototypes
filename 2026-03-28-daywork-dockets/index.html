@@ -776,13 +776,22 @@ tbody tr.section-header td{font-weight:700;color:#1b2a4a;padding:10px 14px;borde
         <h2 class="section-title"><i class="fas fa-layer-group" style="color:#f5a623;margin-right:8px"></i>Assign Cost Centres & Zones</h2>
         <p class="section-subtitle">Map each budget line item to a cost centre and zone. You can split items across multiple cost centres.</p>
 
-        <!-- Cost Centre selection -->
+        <!-- Cost Centre selection — compact tag + dropdown -->
         <div style="margin-bottom:20px">
-          <h3 style="font-size:14px;font-weight:600;color:#1b2a4a;margin-bottom:12px">Available Cost Centres</h3>
-          <div class="cc-grid" id="ccGridAssign"></div>
-          <div class="add-cc-row">
-            <input type="text" id="newCCInputAssign" placeholder="Add a custom cost centre...">
-            <button class="btn btn-primary" onclick="addCustomCCAssign()" style="padding:10px 16px"><i class="fas fa-plus"></i> Add</button>
+          <h3 style="font-size:14px;font-weight:600;color:#1b2a4a;margin-bottom:10px">Cost Centres</h3>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px" id="ccTagsAssign"></div>
+          <div style="position:relative;display:inline-block" id="ccDropdownWrap">
+            <button class="btn btn-outline" style="font-size:13px;padding:8px 16px" onclick="toggleCCDropdown()"><i class="fas fa-plus" style="margin-right:4px"></i> Add Cost Centre</button>
+            <div id="ccDropdownPanel" style="display:none;position:absolute;top:100%;left:0;margin-top:4px;width:320px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:100">
+              <input type="text" id="ccDropdownSearch" placeholder="Search cost centres..." style="width:100%;padding:10px 12px;border:none;border-bottom:1px solid #f1f5f9;font-size:13px;font-family:inherit;outline:none;border-radius:8px 8px 0 0" oninput="filterCCDropdown(this.value)">
+              <div id="ccDropdownOpts" style="max-height:200px;overflow-y:auto"></div>
+              <div style="padding:8px 12px;border-top:1px solid #f1f5f9">
+                <div style="display:flex;gap:6px">
+                  <input type="text" id="newCCInputAssign" placeholder="Custom name..." style="flex:1;padding:6px 10px;border:1px solid #e2e8f0;border-radius:4px;font-size:12px;font-family:inherit;outline:none">
+                  <button class="btn btn-primary" onclick="addCustomCCAssign()" style="font-size:11px;padding:6px 12px"><i class="fas fa-plus"></i></button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2219,14 +2228,22 @@ function refreshSplitCCSelects(newName) {
 }
 
 function renderCCGridAssign() {
-  const grid = document.getElementById('ccGridAssign');
-  grid.innerHTML = defaultCostCenters.map((cc) => {
-    const checked = selectedCC.includes(cc.name);
-    return `<div class="cc-item ${checked?'checked':''}" onclick="toggleCCAssign('${cc.name.replace(/'/g,"\\'")}')">
-      <div class="cc-check"><i class="fas fa-check"></i></div>
-      <div><div class="cc-label">${cc.name}</div><div class="cc-desc">${cc.desc}</div></div>
-    </div>`;
-  }).join('');
+  // Render selected CCs as tags
+  const tagContainer = document.getElementById('ccTagsAssign');
+  if (tagContainer) {
+    tagContainer.innerHTML = selectedCC.map(name => {
+      const cc = defaultCostCenters.find(c => c.name === name);
+      const desc = cc ? cc.desc : 'Custom';
+      return `<span class="resource-tag plant-tag" style="font-size:12px;padding:6px 12px">
+        ${name} <i class="fas fa-times tag-x" onclick="removeCCAssign('${name.replace(/'/g,"\\'")}')"></i>
+      </span>`;
+    }).join('');
+    if (selectedCC.length === 0) {
+      tagContainer.innerHTML = '<span style="font-size:13px;color:#94a3b8;font-style:italic">No cost centres selected. Click "Add Cost Centre" to begin.</span>';
+    }
+  }
+  // Render dropdown options
+  renderCCDropdownOpts('');
   // Enable/disable assignment table based on selection
   const wrapper = document.getElementById('assignTableWrapper');
   if (wrapper) {
@@ -2235,22 +2252,57 @@ function renderCCGridAssign() {
   }
 }
 
-function toggleCCAssign(name) {
+function toggleCCDropdown() {
+  const panel = document.getElementById('ccDropdownPanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  if (panel.style.display === 'block') {
+    document.getElementById('ccDropdownSearch').value = '';
+    renderCCDropdownOpts('');
+    document.getElementById('ccDropdownSearch').focus();
+  }
+}
+
+function renderCCDropdownOpts(query) {
+  const container = document.getElementById('ccDropdownOpts');
+  if (!container) return;
+  const q = query.toLowerCase();
+  container.innerHTML = defaultCostCenters.filter(cc => cc.name.toLowerCase().includes(q) || cc.desc.toLowerCase().includes(q)).map(cc => {
+    const isSelected = selectedCC.includes(cc.name);
+    return `<div class="res-opt" style="padding:8px 12px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px" onclick="toggleCCFromDropdown('${cc.name.replace(/'/g,"\\'")}')">
+      <i class="fas ${isSelected ? 'fa-check-square' : 'fa-square'}" style="color:${isSelected ? '#f5a623' : '#cbd5e1'};font-size:14px"></i>
+      <div><div style="font-weight:500;color:#1b2a4a">${cc.name}</div><div style="font-size:11px;color:#94a3b8">${cc.desc}</div></div>
+    </div>`;
+  }).join('');
+}
+
+function filterCCDropdown(query) {
+  renderCCDropdownOpts(query);
+}
+
+function toggleCCFromDropdown(name) {
   const idx = selectedCC.indexOf(name);
   if (idx >= 0) selectedCC.splice(idx, 1); else selectedCC.push(name);
   renderCCGridAssign();
-  // Refresh dropdowns in the assign table
-  const opts = selectedCC.map(c => `<option>${c}</option>`).join('') + '<option value="__addcc">+ Add Cost Centre</option>';
-  document.querySelectorAll('[data-assign-cc]').forEach(s => {
-    const cur = s.value;
-    s.innerHTML = opts;
-    if (selectedCC.includes(cur)) s.value = cur;
-  });
-  // Also refresh split row dropdowns and unmapped CC dropdowns
-  refreshSplitCCSelects(null);
-  refreshUnmappedCCSelects(null);
+  refreshAssignCCSelects(null);
   calcAssign();
 }
+
+function removeCCAssign(name) {
+  const idx = selectedCC.indexOf(name);
+  if (idx >= 0) selectedCC.splice(idx, 1);
+  renderCCGridAssign();
+  refreshAssignCCSelects(null);
+  calcAssign();
+}
+
+// Close CC dropdown on outside click
+document.addEventListener('click', (e) => {
+  const panel = document.getElementById('ccDropdownPanel');
+  const wrap = document.getElementById('ccDropdownWrap');
+  if (panel && wrap && !wrap.contains(e.target) && panel.style.display === 'block') {
+    panel.style.display = 'none';
+  }
+});
 
 function applySectionCC(sectionCode, value) {
   if (!value) return;
