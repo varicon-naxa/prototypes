@@ -627,7 +627,7 @@ tbody tr.section-header td{font-weight:700;color:#1b2a4a;padding:10px 14px;borde
           <button class="btn btn-secondary" onclick="goToStep(2)"><i class="fas fa-arrow-left"></i> Back</button>
           <div style="display:flex;gap:10px">
             <button class="btn btn-outline"><i class="fas fa-save"></i> Save Draft</button>
-            <button class="btn btn-primary" onclick="goToStep(4)"><i class="fas fa-arrow-right"></i> Review Budget</button>
+            <button class="btn btn-success" onclick="submitBudget()"><i class="fas fa-check"></i> Save & Finish</button>
           </div>
         </div>
       </div>
@@ -841,7 +841,7 @@ tbody tr.section-header td{font-weight:700;color:#1b2a4a;padding:10px 14px;borde
           <button class="btn btn-secondary" onclick="goToStep(3)"><i class="fas fa-arrow-left"></i> Back</button>
           <div style="display:flex;gap:10px">
             <button class="btn btn-outline"><i class="fas fa-save"></i> Save Draft</button>
-            <button class="btn btn-primary" onclick="goToStep(5)"><i class="fas fa-arrow-right"></i> Review Budget</button>
+            <button class="btn btn-success" id="ccFinishBtn" onclick="ccFinishOrNext()"><i class="fas fa-check"></i> Save & Finish</button>
           </div>
         </div>
       </div>
@@ -1109,7 +1109,7 @@ tbody tr.section-header td{font-weight:700;color:#1b2a4a;padding:10px 14px;borde
 
       <div class="actions-bar">
         <button class="btn btn-secondary" onclick="dwBack()"><i class="fas fa-arrow-left"></i> Back</button>
-        <button class="btn btn-primary" id="btnNextDW" disabled onclick="dwNext()">Next <i class="fas fa-arrow-right"></i></button>
+        <button class="btn btn-success" id="btnNextDW" disabled onclick="dwFinishOrNext()"><i class="fas fa-check"></i> Save & Finish</button>
       </div>
     </div>
 
@@ -1242,7 +1242,6 @@ function renderStepper() {
       { num: 1, label: 'Budget Type' },
       { num: 2, label: 'Add BOQ' },
       { num: 3, label: 'Create Budget' },
-      { num: 4, label: 'Review' },
     ];
   } else if (currentPath === 'cc') {
     steps = [
@@ -1250,13 +1249,11 @@ function renderStepper() {
       { num: 2, label: 'Add BOQ' },
       { num: 3, label: 'Create Budget' },
       { num: 4, label: 'Cost Centres' },
-      { num: 5, label: 'Review' },
     ];
   } else if (currentPath === 'dw') {
     steps = [
       { num: 1, label: 'Budget Type' },
       { num: 2, label: 'Dayworks Setup' },
-      { num: 3, label: 'Review' },
     ];
   } else if (currentPath === 'cc_dw') {
     steps = [
@@ -1265,7 +1262,6 @@ function renderStepper() {
       { num: 3, label: 'Create Budget' },
       { num: 4, label: 'Cost Centres' },
       { num: 5, label: 'Dayworks Setup' },
-      { num: 6, label: 'Review' },
     ];
   } else if (currentPath === 'wbs_dw') {
     steps = [
@@ -1273,13 +1269,11 @@ function renderStepper() {
       { num: 2, label: 'Add BOQ' },
       { num: 3, label: 'Create Budget' },
       { num: 4, label: 'Dayworks Setup' },
-      { num: 5, label: 'Review' },
     ];
   } else if (currentPath === 'cp') {
     steps = [
       { num: 1, label: 'Budget Type' },
       { num: 2, label: 'Setup' },
-      { num: 3, label: 'Review' },
     ];
   } else {
     steps = [
@@ -1819,6 +1813,17 @@ function buildAssignCCPage() {
     selectedCC = defaultCostCenters.map(c => c.name);
   }
   renderCCGridAssign();
+  // Update finish button text based on path
+  const finBtn = document.getElementById('ccFinishBtn');
+  if (finBtn) {
+    if (currentPath === 'cc_dw') {
+      finBtn.innerHTML = '<i class="fas fa-arrow-right"></i> Next — Dayworks Setup';
+      finBtn.className = 'btn btn-primary';
+    } else {
+      finBtn.innerHTML = '<i class="fas fa-check"></i> Save & Finish';
+      finBtn.className = 'btn btn-success';
+    }
+  }
   const data = getActiveData('cc');
   const ccOptions = () => selectedCC.map(c => `<option>${c}</option>`).join('') + '<option value="__addcc">+ Add Cost Centre</option>';
   const zoneOptions = () => zones.map(z => `<option>${z}</option>`).join('') + '<option value="__add">+ Add Zone</option>';
@@ -3577,6 +3582,23 @@ function buildDWReview() {
   }
 }
 
+function submitBudget() {
+  document.getElementById('modalMsg').textContent = 'Your budget has been saved successfully.';
+  document.getElementById('successModal').classList.add('show');
+}
+
+function ccFinishOrNext() {
+  if (currentPath === 'cc_dw') {
+    goToStep(5); // go to Dayworks Setup
+  } else {
+    submitBudget();
+  }
+}
+
+function dwFinishOrNext() {
+  submitBudget(); // DW setup is always the last step
+}
+
 function dwBack() {
   if (currentPath === 'dw') goToStep(1);
   else if (currentPath === 'cc_dw') goToStep(4);
@@ -3584,19 +3606,7 @@ function dwBack() {
   else goToStep(1);
 }
 
-function dwNext() {
-  if (currentPath === 'dw') goToStep(3);
-  else if (currentPath === 'cc_dw') goToStep(6);
-  else if (currentPath === 'wbs_dw') goToStep(5);
-  else goToStep(3);
-}
-
-function dwReviewBack() {
-  if (currentPath === 'dw') goToStep(2);
-  else if (currentPath === 'cc_dw') goToStep(5);
-  else if (currentPath === 'wbs_dw') goToStep(4);
-  else goToStep(2);
-}
+// dwNext and dwReviewBack removed — review step eliminated
 
 function submitDWSetup() {
   document.getElementById('modalMsg').textContent = 'Your dayworks rate schedule has been saved and mapped to Varicon resources.';
