@@ -804,8 +804,7 @@ tbody tr.section-header td{font-weight:700;color:#1b2a4a;padding:10px 14px;borde
               <th>Description</th>
               <th style="text-align:right">BOQ Total ($)</th>
               <th style="text-align:right">Budget ($)</th>
-              <th>Cost Centre</th>
-              <th>Zone</th>
+              <th colspan="2">Cost Centre Allocation</th>
             </tr></thead>
             <tbody id="assignTableCC"></tbody>
           </table>
@@ -1830,11 +1829,7 @@ function buildAssignCCPage() {
     if (r.isHeader) {
       currentSectionCode = r.code;
       return `<tr class="section-header">
-        <td colspan="4" style="padding-left:4px"><span style="margin-right:10px;color:#94a3b8">${r.code}</span>${r.desc}</td>
-        <td><select class="budget-select" style="font-size:12px;font-weight:600" data-section-cc="${r.code}" onchange="applySectionCC('${r.code}',this.value)">
-          <option value="">— Assign All —</option>${ccOptions()}</select></td>
-        <td><select class="budget-select" style="font-size:12px" data-section-zone="${r.code}" onchange="applySectionZone('${r.code}',this.value)">
-          <option value="">— Assign All —</option>${zoneOptions()}</select></td>
+        <td colspan="6" style="padding-left:4px"><span style="margin-right:10px;color:#94a3b8">${r.code}</span>${r.desc}</td>
       </tr>`;
     }
     // Read budget amount from the budget page inputs
@@ -1843,23 +1838,36 @@ function buildAssignCCPage() {
     const budgetAmt = parseFloat(rawVal.replace(/[$,]/g,'')) || 0;
     const boqAmt = r.amount || 0;
 
+    // Default: spread budget across all selected CCs by % allocation
+    const numCC = selectedCC.length || 1;
+    // Use realistic proportions based on CC type
+    const ccWeights = {};
+    const weightMap = { 'Earthworks': 20, 'Concrete': 15, 'Steel & Rebar': 12, 'Formwork': 8, 'Labour': 18, 'Plant & Equipment': 12, 'Drainage': 8, 'Overheads / Prelims': 7 };
+    let totalWeight = 0;
+    selectedCC.forEach(cc => { const w = weightMap[cc] || 10; ccWeights[cc] = w; totalWeight += w; });
+
+    const ccRows = selectedCC.map((cc, ci) => {
+      const pct = Math.round((ccWeights[cc] / totalWeight) * 100);
+      const amt = ci < numCC - 1 ? Math.round(budgetAmt * ccWeights[cc] / totalWeight) : 0;
+      const isLast = ci === numCC - 1;
+      // Last CC gets remainder to avoid rounding issues
+      const prevAmts = selectedCC.slice(0, ci).reduce((sum, c) => sum + Math.round(budgetAmt * ccWeights[c] / totalWeight), 0);
+      const thisAmt = isLast ? budgetAmt - prevAmts : amt;
+      return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <select class="budget-select" data-assign-cc="${i}" style="min-width:140px"><option selected>${cc}</option>${ccOptions()}</select>
+        <input class="budget-input" placeholder="0" style="width:90px" value="${thisAmt.toLocaleString()}" oninput="calcAssign()" data-primary-cc-amount="${i}_${ci}">
+        <span style="font-size:11px;color:#94a3b8;min-width:35px">${pct}%</span>
+        <select class="budget-select" data-assign-zone="${i}_${ci}" style="min-width:110px">${zoneOptions()}</select>
+      </div>`;
+    }).join('');
+
     return `<tr data-section="${currentSectionCode}">
       <td style="font-weight:600">${r.code || ''}</td>
       <td><div class="item-desc">${r.desc || '—'}</div><div class="item-code">${r.unit || ''}</div></td>
       <td style="text-align:right;font-weight:600;color:#3b82f6;white-space:nowrap">$${boqAmt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
       <td style="text-align:right;font-weight:600;white-space:nowrap" data-assign-budget="${i}" data-budget-val="${budgetAmt}">$${budgetAmt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
-      <td>
-        <div id="assignPrimaryRow${i}" style="display:flex;align-items:center;gap:6px">
-          <select class="budget-select" data-assign-cc="${i}">${ccOptions()}</select>
-          <input class="budget-input" placeholder="0.00" style="width:100px" value="${budgetAmt ? budgetAmt.toLocaleString() : ''}" oninput="calcSplitAmount(${i});calcAssign()" data-primary-cc-amount="${i}">
-        </div>
-        <div id="assignSplitRows${i}"></div>
-        <button class="split-add-cc-btn" id="addCCBtn${i}" onclick="addAssignSplit(${i})"><i class="fas fa-plus"></i> Add Cost Centre</button>
-        <div class="split-remaining" id="splitRemaining${i}" style="margin-top:4px"></div>
-      </td>
-      <td style="vertical-align:top">
-        <div id="assignPrimaryZone${i}"><select class="budget-select" data-assign-zone="${i}">${zoneOptions()}</select></div>
-        <div id="assignSplitZones${i}"></div>
+      <td colspan="2">
+        ${ccRows}
       </td>
     </tr>`;
   }).join('');
