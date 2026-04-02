@@ -5051,9 +5051,99 @@ function renderVarFiles() {
   }).join('');
 }
 
+var submittedVariations = [];
+var variationCounter = 0;
+
 function submitVariation() {
+  variationCounter++;
+  var titleInput = document.querySelector('#varBuildOverlay .editable-input');
+  var varTitle = titleInput ? titleInput.value.trim() : '';
+  if (!varTitle) varTitle = 'Variation ' + variationCounter;
+
+  // Calculate total from visible section
+  var total = 0;
+  var isLumpSum = pendingVarPricingMethod === 'lumpsum';
+  if (isLumpSum) {
+    document.querySelectorAll('#varLumpSumBody .budget-input').forEach(function(inp) {
+      total += parseFloat(inp.value.replace(/,/g,'')) || 0;
+    });
+  } else {
+    // Sum all rate build inputs
+    document.querySelectorAll('#varRateLabourBody .editable-input[placeholder="Hrs"], #varRatePlantBody .editable-input[placeholder="Hrs"]').forEach(function(inp) {
+      total += parseFloat(inp.value) * 48 || 0; // simplified calc
+    });
+    document.querySelectorAll('#varRateMaterialBody .budget-input').forEach(function(inp) {
+      total += parseFloat(inp.value.replace(/,/g,'')) || 0;
+    });
+  }
+  if (total === 0) total = 25000; // default demo amount if nothing entered
+
+  var variation = {
+    id: 'VO-' + String(variationCounter).padStart(3, '0'),
+    title: varTitle,
+    type: pendingVarType,
+    method: pendingVarPricingMethod,
+    amount: total,
+    files: varFiles.length
+  };
+  submittedVariations.push(variation);
+
   closeVariationBuild();
-  showToast('Variation submitted successfully');
+  appendVariationToTable(variation);
+  showToast('Variation "' + variation.id + ' — ' + varTitle + '" submitted ($' + total.toLocaleString('en-US',{minimumFractionDigits:2}) + ')');
+}
+
+function appendVariationToTable(v) {
+  var isCC = currentPath === 'cc';
+
+  // Append to BOQ view table
+  var tbody = document.getElementById('bvTableBody');
+  if (tbody) {
+    var typeLabel = v.type === 'priced' ? 'Priced' : v.type === 'dayworks' ? 'Dayworks' : 'Cost Plus';
+    var colCount = isCC ? 8 : 7;
+    var ccTd = isCC ? '<td class="right" style="font-size:12px;color:#64748b">—</td>' : '';
+
+    // Section header row
+    var headerRow = document.createElement('tr');
+    headerRow.className = 'section-header level-1';
+    headerRow.style.background = '#1e3a5f';
+    headerRow.innerHTML = '<td style="padding:11px 14px"><i class="fas fa-file-signature" style="color:#f5a623"></i></td>' +
+      '<td style="padding:11px 14px;color:rgba(255,255,255,.6)">' + v.id + '</td>' +
+      '<td style="padding:11px 14px;color:#fff;font-weight:600">' + v.title + ' <span style="font-size:11px;font-weight:400;color:#f5a623;margin-left:8px;background:rgba(245,166,35,.15);padding:2px 8px;border-radius:4px">' + typeLabel + '</span></td>' +
+      '<td class="right" style="padding:11px 14px;color:#fff;white-space:nowrap;font-weight:600">$' + v.amount.toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
+      '<td class="right" style="padding:11px 14px;color:#fff;white-space:nowrap">—</td>' +
+      ccTd +
+      '<td class="right" style="padding:11px 14px;color:rgba(255,255,255,.5)">$0.00</td>' +
+      '<td class="right" style="padding:11px 14px;color:#86efac">—</td>';
+    tbody.appendChild(headerRow);
+
+    // Files indicator if any
+    if (v.files > 0) {
+      var fileRow = document.createElement('tr');
+      fileRow.style.background = '#f0f7ff';
+      fileRow.innerHTML = '<td></td><td></td>' +
+        '<td colspan="' + (colCount - 2) + '" style="padding:6px 14px;font-size:12px;color:#3b82f6">' +
+        '<i class="fas fa-paperclip" style="margin-right:6px"></i>' + v.files + ' supporting document' + (v.files > 1 ? 's' : '') + ' attached</td>';
+      tbody.appendChild(fileRow);
+    }
+  }
+
+  // Also add to CC view if applicable
+  if (isCC) {
+    var ccBody = document.getElementById('bvCCTableBody');
+    if (ccBody) {
+      var tr = document.createElement('tr');
+      tr.style.background = '#f0f7ff';
+      tr.innerHTML = '<td style="padding:11px 14px"><i class="fas fa-file-signature" style="color:#f5a623"></i></td>' +
+        '<td style="padding:11px 14px;font-weight:600;color:#1b2a4a">' + v.id + ' — ' + v.title + ' <span style="font-size:11px;color:#f5a623;background:#fff7ed;padding:2px 8px;border-radius:4px">Variation</span></td>' +
+        '<td class="right" style="padding:11px 14px;white-space:nowrap;font-weight:600">$' + v.amount.toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
+        '<td class="right" style="padding:11px 14px;white-space:nowrap">—</td>' +
+        '<td class="right" style="padding:11px 14px;white-space:nowrap;color:#94a3b8">$0.00</td>' +
+        '<td class="right" style="padding:11px 14px;white-space:nowrap;color:#16a34a">—</td>' +
+        '<td class="right" style="padding:11px 14px;color:#16a34a">—</td>';
+      ccBody.appendChild(tr);
+    }
+  }
 }
 
 function addVarRateRow(type) {
