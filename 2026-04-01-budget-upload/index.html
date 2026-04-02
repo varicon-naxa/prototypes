@@ -368,6 +368,27 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
 .var-type-arrow{color:#cbd5e1;font-size:14px;flex-shrink:0}
 .var-type-card:hover .var-type-arrow{color:#f5a623}
 
+/* Rate Mapping */
+.rate-mapping-overlay{display:none;position:fixed;inset:0;background:#f0f2f5;z-index:200;overflow-y:auto}
+.rate-mapping-overlay.show{display:block}
+.rate-mapping-header{background:#1b2a4a;color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.rate-mapping-header h2{font-size:18px;font-weight:600;margin:0}
+.rate-mapping-content{max-width:1200px;margin:24px auto;padding:0 24px}
+.mapping-layout{display:grid;grid-template-columns:1fr 320px;gap:24px}
+.mapping-tables{display:flex;flex-direction:column;gap:24px}
+.mapping-sidebar{position:sticky;top:80px;align-self:start}
+.mapping-sidebar h3{font-size:14px;font-weight:600;color:#1b2a4a;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.draggable-rate{display:flex;align-items:center;padding:10px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:6px;cursor:grab;transition:all .15s}
+.draggable-rate:hover{border-color:#f5a623;box-shadow:0 2px 8px rgba(245,166,35,.1)}
+.draggable-rate:active{cursor:grabbing;opacity:.8}
+.mapping-dropzone{padding:10px 12px;border:2px dashed #e2e8f0;border-radius:6px;min-height:40px;transition:all .15s;margin-bottom:6px}
+.mapping-dropzone.dragover{border-color:#f5a623;background:#fffbf0}
+.dropzone-placeholder{font-size:12px;color:#94a3b8;display:flex;align-items:center}
+.mapped-rate{display:flex;align-items:center;font-size:13px;color:#1b2a4a}
+.mapping-select{font-size:12px!important;min-width:100%!important}
+.mapping-section-title{font-size:15px;font-weight:600;color:#1b2a4a;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.mapping-section-title i{font-size:16px}
+
 /* Hide all pages by default */
 .page{display:none}
 .page.active{display:block}
@@ -1404,6 +1425,112 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
         </div>
         <div class="var-type-arrow"><i class="fas fa-chevron-right"></i></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Rate Mapping Full-Page Overlay ═══ -->
+<div class="rate-mapping-overlay" id="rateMappingOverlay">
+  <span id="rateMappingStep" style="display:none">mapping</span>
+  <div class="rate-mapping-header">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="cursor:pointer" onclick="closeRateMappingOverlay()"><i class="fas fa-arrow-left"></i></span>
+      <h2><i class="fas fa-link" style="margin-right:8px;color:#f5a623"></i>Plant & Labour Rate Mapping</h2>
+    </div>
+    <button class="btn btn-primary" onclick="saveMappings()"><i class="fas fa-check"></i> Save Mappings</button>
+  </div>
+
+  <div class="rate-mapping-content">
+    <!-- Step 1: Upload rates (if not already uploaded) -->
+    <div id="rateUploadSection" style="display:none">
+      <div class="card-section" style="max-width:700px;margin:0 auto">
+        <h2 class="section-title"><i class="fas fa-cloud-arrow-up" style="color:#f5a623;margin-right:8px"></i>Upload Schedule of Rates</h2>
+        <p class="section-subtitle">You need to upload your schedule of rates before mapping them to project resources.</p>
+        <div class="dropzone" onclick="simulateRateUpload()" style="cursor:pointer">
+          <div class="upload-icon"><i class="fas fa-cloud-arrow-up"></i></div>
+          <h3>Drag & drop your rates file here</h3>
+          <p>or <span class="browse-link">browse</span> to choose a file</p>
+          <p class="file-types">.CSV, .XLSX, .XLS — Max 10MB</p>
+        </div>
+        <div id="rateUploadPreview" style="display:none;margin-top:16px">
+          <div class="file-preview">
+            <div class="file-icon"><i class="fas fa-file-excel" style="color:#16a34a;font-size:18px"></i></div>
+            <div class="file-info"><div class="file-name">Schedule_of_Rates.xlsx</div><div class="file-size">42 KB</div></div>
+            <div class="file-status" style="color:#16a34a"><i class="fas fa-check-circle"></i> Ready</div>
+          </div>
+          <div class="actions-bar" style="margin-top:16px">
+            <div></div>
+            <button class="btn btn-primary" onclick="skipToMapping()"><i class="fas fa-arrow-right"></i> Continue to Mapping</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Mapping interface -->
+    <div id="rateMappingSection" style="display:none">
+      <div class="mapping-layout">
+        <!-- Left: Mapping tables -->
+        <div class="mapping-tables">
+          <!-- Plant Mapping -->
+          <div class="card-section">
+            <div class="mapping-section-title"><i class="fas fa-truck-monster" style="color:#f5a623"></i> Plant & Equipment</div>
+            <p style="font-size:12px;color:#64748b;margin-bottom:14px">Drag rates from the sidebar or use the dropdown to map each piece of plant to its rate.</p>
+            <div class="table-wrapper">
+              <table class="budget-table">
+                <thead><tr><th>Project Plant</th><th>Mapped Rate</th><th class="right">Rate ($/hr)</th></tr></thead>
+                <tbody id="plantMappingBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Labour Mapping -->
+          <div class="card-section">
+            <div class="mapping-section-title"><i class="fas fa-hard-hat" style="color:#3b82f6"></i> Labour</div>
+            <p style="font-size:12px;color:#64748b;margin-bottom:14px">Map each labour role on your project to the corresponding rate from your schedule.</p>
+            <div class="table-wrapper">
+              <table class="budget-table">
+                <thead><tr><th>Project Role</th><th>Mapped Rate</th><th class="right">Rate ($/hr)</th></tr></thead>
+                <tbody id="labourMappingBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Available rates sidebar -->
+        <div class="mapping-sidebar">
+          <div class="card-section" style="padding:16px">
+            <h3><i class="fas fa-truck-monster" style="color:#f5a623"></i> Available Plant Rates</h3>
+            <p style="font-size:11px;color:#94a3b8;margin-bottom:10px">Drag onto a plant item to map</p>
+            <div id="availPlantRates"></div>
+          </div>
+          <div class="card-section" style="padding:16px;margin-top:16px">
+            <h3><i class="fas fa-hard-hat" style="color:#3b82f6"></i> Available Labour Rates</h3>
+            <p style="font-size:11px;color:#94a3b8;margin-bottom:10px">Drag onto a labour role to map</p>
+            <div id="availLabourRates"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Plant Mapping Modal ═══ -->
+<div class="modal-overlay" id="plantMappingModal">
+  <div class="modal" style="width:480px;text-align:left">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div style="width:44px;height:44px;border-radius:10px;background:#fff7ed;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-truck-monster" style="font-size:20px;color:#f5a623"></i></div>
+      <div>
+        <h3 style="font-size:16px;font-weight:600;color:#1b2a4a;margin:0">Plant Rate Mapping</h3>
+        <p style="font-size:13px;color:#64748b;margin:0">Have you mapped the plant on your project to their plant rates?</p>
+      </div>
+    </div>
+    <p style="font-size:13px;color:#64748b;line-height:1.6;margin-bottom:20px;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
+      <i class="fas fa-info-circle" style="color:#3b82f6;margin-right:6px"></i>
+      Mapping plant to their rates ensures accurate costing for dayworks and priced variations. You can set this up in the <strong>Equipment</strong> section.
+    </p>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="plantMappingResponse(false)"><i class="fas fa-times"></i> Not Yet — Remind Me Later</button>
+      <button class="btn btn-primary" onclick="plantMappingResponse(true)"><i class="fas fa-check"></i> Yes, Already Mapped</button>
     </div>
   </div>
 </div>
@@ -4277,6 +4404,7 @@ function setDWSource(source) {
 function handleDWUpload() {
   document.getElementById('dropzoneDW').style.display = 'none';
   document.getElementById('dwRatesPreview').style.display = 'block';
+  hasRatesUploaded = true;
   showToast('Dayworks rates uploaded — 9 items found');
 }
 
@@ -4381,8 +4509,213 @@ function closeVariationModal() {
 
 function selectVariationType(type) {
   closeVariationModal();
-  var labels = { priced: 'Priced Variation', dayworks: 'Dayworks Variation', costplus: 'Cost Plus Variation' };
-  showToast(labels[type] + ' — coming soon');
+  if (type === 'priced' || type === 'dayworks') {
+    showPlantMappingModal(type);
+  } else {
+    var labels = { priced: 'Priced Variation', dayworks: 'Dayworks Variation', costplus: 'Cost Plus Variation' };
+    showToast(labels[type] + ' — coming soon');
+  }
+}
+
+function showPlantMappingModal(varType) {
+  document.getElementById('plantMappingModal').classList.add('show');
+  document.getElementById('plantMappingModal').dataset.varType = varType;
+}
+
+function closePlantMappingModal() {
+  document.getElementById('plantMappingModal').classList.remove('show');
+}
+
+// Sample project plant & labour
+var projectPlant = [
+  { id: 'P1', name: '20T Excavator', rate: null },
+  { id: 'P2', name: '5T Excavator', rate: null },
+  { id: 'P3', name: 'Bobcat / Skid Steer', rate: null },
+  { id: 'P4', name: '10T Tipper Truck', rate: null },
+  { id: 'P5', name: 'Concrete Pump', rate: null },
+  { id: 'P6', name: 'Roller / Compactor', rate: null },
+];
+var projectLabour = [
+  { id: 'L1', name: 'Site Foreman', rate: null },
+  { id: 'L2', name: 'General Labourer', rate: null },
+  { id: 'L3', name: 'Skilled Labourer', rate: null },
+  { id: 'L4', name: 'Concrete Finisher', rate: null },
+  { id: 'L5', name: 'Steel Fixer', rate: null },
+];
+
+// Sample uploaded rates (from schedule of rates)
+var uploadedPlantRates = [
+  { name: '20T Excavator — Dry Hire', dryHire: 180, wetHire: 260 },
+  { name: '5T Excavator — Dry Hire', dryHire: 120, wetHire: 195 },
+  { name: 'Bobcat — Dry Hire', dryHire: 95, wetHire: 165 },
+  { name: 'Tipper 10T — Dry Hire', dryHire: 140, wetHire: 210 },
+  { name: 'Concrete Pump (per hour)', dryHire: 250, wetHire: 250 },
+  { name: 'Roller — Smooth Drum', dryHire: 110, wetHire: 185 },
+  { name: 'Compactor — Plate', dryHire: 45, wetHire: 45 },
+];
+var uploadedLabourRates = [
+  { name: 'Foreman', ordinary: 85, ot15: 127.50, ot2: 170, minHrs: 8 },
+  { name: 'General Labourer', ordinary: 55, ot15: 82.50, ot2: 110, minHrs: 8 },
+  { name: 'Skilled Labourer', ordinary: 65, ot15: 97.50, ot2: 130, minHrs: 8 },
+  { name: 'Concrete Finisher', ordinary: 72, ot15: 108, ot2: 144, minHrs: 8 },
+  { name: 'Steel Fixer', ordinary: 75, ot15: 112.50, ot2: 150, minHrs: 8 },
+  { name: 'Carpenter / Formworker', ordinary: 70, ot15: 105, ot2: 140, minHrs: 8 },
+];
+
+var hasRatesUploaded = false; // set true when DW rates uploaded during budget setup
+
+function plantMappingResponse(mapped) {
+  var varType = document.getElementById('plantMappingModal').dataset.varType;
+  closePlantMappingModal();
+  if (mapped) {
+    var labels = { priced: 'Priced Variation', dayworks: 'Dayworks Variation' };
+    showToast(labels[varType] + ' — proceeding');
+  } else {
+    // Check if rates have been uploaded
+    if (hasRatesUploaded || selectedSchedule === 'dw') {
+      // Go straight to mapping page
+      showRateMappingPage();
+    } else {
+      // Need to upload rates first
+      showRateUploadForMapping();
+    }
+  }
+}
+
+function showRateUploadForMapping() {
+  document.getElementById('rateMappingOverlay').classList.add('show');
+  document.getElementById('rateMappingStep').textContent = 'upload';
+  document.getElementById('rateUploadSection').style.display = '';
+  document.getElementById('rateMappingSection').style.display = 'none';
+}
+
+function showRateMappingPage() {
+  document.getElementById('rateMappingOverlay').classList.add('show');
+  document.getElementById('rateMappingStep').textContent = 'mapping';
+  document.getElementById('rateUploadSection').style.display = 'none';
+  document.getElementById('rateMappingSection').style.display = '';
+  buildMappingTables();
+}
+
+function closeRateMappingOverlay() {
+  document.getElementById('rateMappingOverlay').classList.remove('show');
+}
+
+function skipToMapping() {
+  hasRatesUploaded = true;
+  document.getElementById('rateUploadSection').style.display = 'none';
+  document.getElementById('rateMappingSection').style.display = '';
+  buildMappingTables();
+}
+
+function buildMappingTables() {
+  // Plant mapping
+  var plantBody = document.getElementById('plantMappingBody');
+  plantBody.innerHTML = projectPlant.map(function(p, i) {
+    return '<tr data-plant-row="' + i + '">' +
+      '<td style="font-weight:500;color:#1b2a4a">' + p.name + '</td>' +
+      '<td><div class="mapping-dropzone" id="plantDrop' + i + '" ondrop="dropRate(event,\'plant\',' + i + ')" ondragover="event.preventDefault();this.classList.add(\'dragover\')" ondragleave="this.classList.remove(\'dragover\')">' +
+        '<span class="dropzone-placeholder"><i class="fas fa-arrows-alt" style="margin-right:6px"></i>Drag a rate here or select below</span>' +
+      '</div>' +
+      '<select class="budget-select mapping-select" onchange="selectPlantRate(' + i + ',this)">' +
+        '<option value="">— Select Rate —</option>' +
+        uploadedPlantRates.map(function(r, ri) { return '<option value="' + ri + '">' + r.name + ' ($' + r.dryHire + ' dry / $' + r.wetHire + ' wet)</option>'; }).join('') +
+      '</select></td>' +
+      '<td class="right" id="plantRateVal' + i + '" style="color:#94a3b8">—</td>' +
+    '</tr>';
+  }).join('');
+
+  // Labour mapping
+  var labourBody = document.getElementById('labourMappingBody');
+  labourBody.innerHTML = projectLabour.map(function(l, i) {
+    return '<tr data-labour-row="' + i + '">' +
+      '<td style="font-weight:500;color:#1b2a4a">' + l.name + '</td>' +
+      '<td><div class="mapping-dropzone" id="labourDrop' + i + '" ondrop="dropRate(event,\'labour\',' + i + ')" ondragover="event.preventDefault();this.classList.add(\'dragover\')" ondragleave="this.classList.remove(\'dragover\')">' +
+        '<span class="dropzone-placeholder"><i class="fas fa-arrows-alt" style="margin-right:6px"></i>Drag a rate here or select below</span>' +
+      '</div>' +
+      '<select class="budget-select mapping-select" onchange="selectLabourRate(' + i + ',this)">' +
+        '<option value="">— Select Rate —</option>' +
+        uploadedLabourRates.map(function(r, ri) { return '<option value="' + ri + '">' + r.name + ' ($' + r.ordinary + '/hr)</option>'; }).join('') +
+      '</select></td>' +
+      '<td class="right" id="labourRateVal' + i + '" style="color:#94a3b8">—</td>' +
+    '</tr>';
+  }).join('');
+
+  // Available rates (draggable)
+  var plantRatesList = document.getElementById('availPlantRates');
+  plantRatesList.innerHTML = uploadedPlantRates.map(function(r, i) {
+    return '<div class="draggable-rate" draggable="true" ondragstart="dragRate(event,\'plant\',' + i + ')">' +
+      '<i class="fas fa-grip-vertical" style="color:#cbd5e1;margin-right:8px"></i>' +
+      '<div style="flex:1"><div style="font-weight:500;font-size:13px;color:#1b2a4a">' + r.name + '</div>' +
+      '<div style="font-size:11px;color:#64748b">Dry: $' + r.dryHire + '/hr · Wet: $' + r.wetHire + '/hr</div></div>' +
+    '</div>';
+  }).join('');
+
+  var labourRatesList = document.getElementById('availLabourRates');
+  labourRatesList.innerHTML = uploadedLabourRates.map(function(r, i) {
+    return '<div class="draggable-rate" draggable="true" ondragstart="dragRate(event,\'labour\',' + i + ')">' +
+      '<i class="fas fa-grip-vertical" style="color:#cbd5e1;margin-right:8px"></i>' +
+      '<div style="flex:1"><div style="font-weight:500;font-size:13px;color:#1b2a4a">' + r.name + '</div>' +
+      '<div style="font-size:11px;color:#64748b">$' + r.ordinary + '/hr · OT1.5: $' + r.ot15 + ' · OT2: $' + r.ot2 + '</div></div>' +
+    '</div>';
+  }).join('');
+}
+
+function dragRate(e, type, idx) {
+  e.dataTransfer.setData('text/plain', type + ':' + idx);
+}
+
+function dropRate(e, targetType, targetIdx) {
+  e.preventDefault();
+  var el = e.currentTarget;
+  el.classList.remove('dragover');
+  var data = e.dataTransfer.getData('text/plain').split(':');
+  var srcType = data[0], srcIdx = parseInt(data[1]);
+
+  if (targetType === 'plant' && srcType === 'plant') {
+    var rate = uploadedPlantRates[srcIdx];
+    el.innerHTML = '<div class="mapped-rate"><i class="fas fa-link" style="color:#16a34a;margin-right:6px"></i><strong>' + rate.name + '</strong><span style="color:#ef4444;cursor:pointer;margin-left:auto" onclick="clearMapping(\'plant\',' + targetIdx + ')"><i class="fas fa-times"></i></span></div>';
+    document.getElementById('plantRateVal' + targetIdx).innerHTML = '<span style="color:#1b2a4a;font-weight:600">$' + rate.dryHire + ' / $' + rate.wetHire + '</span>';
+  } else if (targetType === 'labour' && srcType === 'labour') {
+    var rate = uploadedLabourRates[srcIdx];
+    el.innerHTML = '<div class="mapped-rate"><i class="fas fa-link" style="color:#16a34a;margin-right:6px"></i><strong>' + rate.name + '</strong><span style="color:#ef4444;cursor:pointer;margin-left:auto" onclick="clearMapping(\'labour\',' + targetIdx + ')"><i class="fas fa-times"></i></span></div>';
+    document.getElementById('labourRateVal' + targetIdx).innerHTML = '<span style="color:#1b2a4a;font-weight:600">$' + rate.ordinary + '/hr</span>';
+  }
+}
+
+function selectPlantRate(plantIdx, sel) {
+  if (!sel.value) { clearMapping('plant', plantIdx); return; }
+  var rate = uploadedPlantRates[parseInt(sel.value)];
+  var dropzone = document.getElementById('plantDrop' + plantIdx);
+  dropzone.innerHTML = '<div class="mapped-rate"><i class="fas fa-link" style="color:#16a34a;margin-right:6px"></i><strong>' + rate.name + '</strong><span style="color:#ef4444;cursor:pointer;margin-left:auto" onclick="clearMapping(\'plant\',' + plantIdx + ')"><i class="fas fa-times"></i></span></div>';
+  document.getElementById('plantRateVal' + plantIdx).innerHTML = '<span style="color:#1b2a4a;font-weight:600">$' + rate.dryHire + ' / $' + rate.wetHire + '</span>';
+}
+
+function selectLabourRate(labourIdx, sel) {
+  if (!sel.value) { clearMapping('labour', labourIdx); return; }
+  var rate = uploadedLabourRates[parseInt(sel.value)];
+  var dropzone = document.getElementById('labourDrop' + labourIdx);
+  dropzone.innerHTML = '<div class="mapped-rate"><i class="fas fa-link" style="color:#16a34a;margin-right:6px"></i><strong>' + rate.name + '</strong><span style="color:#ef4444;cursor:pointer;margin-left:auto" onclick="clearMapping(\'labour\',' + labourIdx + ')"><i class="fas fa-times"></i></span></div>';
+  document.getElementById('labourRateVal' + labourIdx).innerHTML = '<span style="color:#1b2a4a;font-weight:600">$' + rate.ordinary + '/hr</span>';
+}
+
+function clearMapping(type, idx) {
+  var dropzone = document.getElementById(type + 'Drop' + idx);
+  dropzone.innerHTML = '<span class="dropzone-placeholder"><i class="fas fa-arrows-alt" style="margin-right:6px"></i>Drag a rate here or select below</span>';
+  document.getElementById(type + 'RateVal' + idx).innerHTML = '<span style="color:#94a3b8">—</span>';
+  // Reset the select too
+  var row = dropzone.closest('tr');
+  if (row) { var sel = row.querySelector('select'); if (sel) sel.value = ''; }
+}
+
+function simulateRateUpload() {
+  document.getElementById('rateUploadPreview').style.display = '';
+  showToast('Schedule of rates uploaded — 7 plant rates, 6 labour rates found');
+}
+
+function saveMappings() {
+  closeRateMappingOverlay();
+  showToast('Plant & labour rates mapped successfully');
 }
 
 function showToast(msg) {
