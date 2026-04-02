@@ -1520,16 +1520,22 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
       <div style="width:44px;height:44px;border-radius:10px;background:#fff7ed;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-truck-monster" style="font-size:20px;color:#f5a623"></i></div>
       <div>
-        <h3 style="font-size:16px;font-weight:600;color:#1b2a4a;margin:0">Plant Rate Mapping</h3>
-        <p style="font-size:13px;color:#64748b;margin:0">Have you mapped the plant on your project to their plant rates?</p>
+        <h3 style="font-size:16px;font-weight:600;color:#1b2a4a;margin:0">Plant & Labour Rate Mapping</h3>
+        <p style="font-size:13px;color:#64748b;margin:0">Have you mapped the plant and labour on your project to their rates?</p>
+      </div>
+    </div>
+    <div id="newResourceWarning" style="display:none;margin-bottom:14px;padding:12px;background:#fef3c7;border:1px solid #fbbf24;border-radius:8px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#92400e;font-weight:500">
+        <i class="fas fa-exclamation-triangle" style="color:#f59e0b"></i>
+        New resources have been added to your project and need to be mapped.
       </div>
     </div>
     <p style="font-size:13px;color:#64748b;line-height:1.6;margin-bottom:20px;padding:12px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
       <i class="fas fa-info-circle" style="color:#3b82f6;margin-right:6px"></i>
-      Mapping plant to their rates ensures accurate costing for dayworks and priced variations. You can set this up in the <strong>Equipment</strong> section.
+      Mapping plant and labour to their rates ensures accurate costing for dayworks and priced variations. You can set this up in the <strong>Equipment</strong> section.
     </p>
     <div style="display:flex;gap:10px;justify-content:flex-end">
-      <button class="btn btn-secondary" onclick="plantMappingResponse(false)"><i class="fas fa-times"></i> Not Yet — Remind Me Later</button>
+      <button class="btn btn-secondary" onclick="plantMappingResponse(false)"><i class="fas fa-times"></i> Not Yet</button>
       <button class="btn btn-primary" onclick="plantMappingResponse(true)"><i class="fas fa-check"></i> Yes, Already Mapped</button>
     </div>
   </div>
@@ -4510,7 +4516,13 @@ function closeVariationModal() {
 function selectVariationType(type) {
   closeVariationModal();
   if (type === 'priced' || type === 'dayworks') {
-    showPlantMappingModal(type);
+    if (allResourcesMapped && !hasNewUnmappedResources) {
+      // All mapped, no new resources — skip modal
+      var labels = { priced: 'Priced Variation', dayworks: 'Dayworks Variation' };
+      showToast(labels[type] + ' — proceeding');
+    } else {
+      showPlantMappingModal(type);
+    }
   } else {
     var labels = { priced: 'Priced Variation', dayworks: 'Dayworks Variation', costplus: 'Cost Plus Variation' };
     showToast(labels[type] + ' — coming soon');
@@ -4520,6 +4532,8 @@ function selectVariationType(type) {
 function showPlantMappingModal(varType) {
   document.getElementById('plantMappingModal').classList.add('show');
   document.getElementById('plantMappingModal').dataset.varType = varType;
+  // Show warning if new resources added since last mapping
+  document.getElementById('newResourceWarning').style.display = hasNewUnmappedResources ? '' : 'none';
 }
 
 function closePlantMappingModal() {
@@ -4563,6 +4577,8 @@ var uploadedLabourRates = [
 ];
 
 var hasRatesUploaded = false; // set true when DW rates uploaded during budget setup
+var allResourcesMapped = false;
+var hasNewUnmappedResources = false;
 
 function plantMappingResponse(mapped) {
   var varType = document.getElementById('plantMappingModal').dataset.varType;
@@ -4573,13 +4589,25 @@ function plantMappingResponse(mapped) {
   } else {
     // Check if rates have been uploaded
     if (hasRatesUploaded || selectedSchedule === 'dw') {
-      // Go straight to mapping page
       showRateMappingPage();
     } else {
-      // Need to upload rates first
       showRateUploadForMapping();
     }
   }
+}
+
+function addNewPlant(name) {
+  projectPlant.push({ id: 'P' + (projectPlant.length + 1), name: name, rate: null });
+  allResourcesMapped = false;
+  hasNewUnmappedResources = true;
+  showToast('New plant "' + name + '" added — needs rate mapping');
+}
+
+function addNewLabour(name) {
+  projectLabour.push({ id: 'L' + (projectLabour.length + 1), name: name, rate: null });
+  allResourcesMapped = false;
+  hasNewUnmappedResources = true;
+  showToast('New labour "' + name + '" added — needs rate mapping');
 }
 
 function showRateUploadForMapping() {
@@ -4714,6 +4742,8 @@ function simulateRateUpload() {
 }
 
 function saveMappings() {
+  allResourcesMapped = true;
+  hasNewUnmappedResources = false;
   closeRateMappingOverlay();
   showToast('Plant & labour rates mapped successfully');
 }
