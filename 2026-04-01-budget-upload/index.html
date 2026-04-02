@@ -1600,6 +1600,34 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
       </div>
     </div>
 
+    <!-- Budget Mapping -->
+    <div class="card-section" style="margin-bottom:20px">
+      <h3 style="font-size:15px;font-weight:600;color:#1b2a4a;margin-bottom:4px"><i class="fas fa-map-pin" style="color:#f5a623;margin-right:8px"></i>Budget Mapping</h3>
+      <p style="font-size:12px;color:#94a3b8;margin-bottom:14px">Assign this variation to a cost centre, zone, and allocation method. This will prefill in the budget page.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px" id="varBudgetMappingGrid">
+        <div>
+          <label style="font-size:12px;font-weight:500;color:#64748b;display:block;margin-bottom:4px">Cost Centre</label>
+          <select class="budget-select" id="varMapCC" style="width:100%" onchange="handleVarMapCCChange(this)"></select>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:500;color:#64748b;display:block;margin-bottom:4px">Zone</label>
+          <select class="budget-select" id="varMapZone" style="width:100%" onchange="handleVarMapZoneChange(this)"></select>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:500;color:#64748b;display:block;margin-bottom:4px">Budget ($)</label>
+          <input class="budget-input" id="varMapBudget" placeholder="Auto-calculated from items" style="width:100%;padding:8px 10px" readonly>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:500;color:#64748b;display:block;margin-bottom:4px">Allocation</label>
+          <select class="budget-select" id="varMapAlloc" style="width:100%">
+            <option value="standalone">Not mapped to BOQ</option>
+            <option value="even">Even Split</option>
+            <option value="proportional">Proportional</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
     <!-- Lump Sum Section -->
     <div id="varLumpSumSection" style="display:none">
       <div class="card-section">
@@ -4984,9 +5012,57 @@ function saveMappings() {
   setTimeout(function() { showVariationBuildPage(); }, 400);
 }
 
+function populateVarMappingDropdowns() {
+  var ccSel = document.getElementById('varMapCC');
+  var zoneSel = document.getElementById('varMapZone');
+  ccSel.innerHTML = '<option value="">— Select —</option>' +
+    selectedCC.map(function(c) { return '<option>' + c + '</option>'; }).join('') +
+    '<option value="__addcc">+ Add Cost Centre</option>';
+  zoneSel.innerHTML = zones.map(function(z) { return '<option>' + z + '</option>'; }).join('') +
+    '<option value="__add">+ Add Zone</option>';
+  document.getElementById('varMapBudget').value = '';
+  document.getElementById('varMapAlloc').value = 'standalone';
+}
+
+function handleVarMapCCChange(sel) {
+  if (sel.value === '__addcc') {
+    var name = prompt('Enter new cost centre name:');
+    if (name && !selectedCC.includes(name)) {
+      selectedCC.push(name);
+      if (!defaultCostCenters.find(function(c) { return c.name === name; })) defaultCostCenters.push({ name: name, desc: 'Custom' });
+      populateVarMappingDropdowns();
+      sel.value = name;
+      showToast('Cost centre "' + name + '" added');
+    } else { sel.value = ''; }
+  }
+}
+
+function handleVarMapZoneChange(sel) {
+  if (sel.value === '__add') {
+    var name = prompt('Enter new zone name:');
+    if (name && !zones.includes(name)) {
+      zones.push(name);
+      populateVarMappingDropdowns();
+      sel.value = name;
+      showToast('Zone "' + name + '" added');
+    } else { sel.value = 'Project Wide'; }
+  }
+}
+
+function updateVarMapBudget() {
+  var totalEl = document.getElementById('varLumpSumTotal');
+  var val = '';
+  if (totalEl && document.getElementById('varLumpSumSection').style.display !== 'none') {
+    val = totalEl.textContent;
+  }
+  var budgetInput = document.getElementById('varMapBudget');
+  if (budgetInput) budgetInput.value = val;
+}
+
 function showVariationBuildPage() {
   varFiles = [];
   renderVarFiles();
+  populateVarMappingDropdowns();
   var isLumpSum = pendingVarPricingMethod === 'lumpsum';
   var isDayworks = pendingVarType === 'dayworks';
   document.getElementById('varBuildOverlay').classList.add('show');
@@ -5090,6 +5166,11 @@ function submitVariationWithStatus(status) {
   }
   if (total === 0) total = 25000; // default demo amount if nothing entered
 
+  // Capture mapping from build page
+  var mapCC = document.getElementById('varMapCC');
+  var mapZone = document.getElementById('varMapZone');
+  var mapAlloc = document.getElementById('varMapAlloc');
+
   var variation = {
     id: 'VO-' + String(variationCounter).padStart(3, '0'),
     title: varTitle,
@@ -5097,7 +5178,10 @@ function submitVariationWithStatus(status) {
     method: pendingVarPricingMethod,
     amount: total,
     files: varFiles.length,
-    status: status
+    status: status,
+    mappedCC: mapCC ? mapCC.value : '',
+    mappedZone: mapZone ? mapZone.value : 'Project Wide',
+    mappedAlloc: mapAlloc ? mapAlloc.value : 'standalone'
   };
   submittedVariations.push(variation);
 
@@ -5143,11 +5227,21 @@ function appendVariationToTable(v) {
       tbody.appendChild(fileRow);
     }
 
-    // Mapping row — CC, Description, Zone, Budget, Allocation
-    var varMapId = 'varMap' + variationCounter;
-    var ccOpts = selectedCC.map(function(c) { return '<option>' + c + '</option>'; }).join('') + '<option value="__addcc">+ Add Cost Centre</option>';
-    var zoneOpts = zones.map(function(z) { return '<option>' + z + '</option>'; }).join('') + '<option value="__add">+ Add Zone</option>';
-    var allocOpts = '<option value="standalone">Not mapped to BOQ</option><option value="even">Even Split</option><option value="proportional">Proportional</option>';
+    // Mapping row — CC, Description, Zone, Budget, Allocation (prefilled from build page)
+    var mCC = v.mappedCC || '';
+    var mZone = v.mappedZone || 'Project Wide';
+    var mAlloc = v.mappedAlloc || 'standalone';
+
+    var ccOpts = '<option value=""' + (mCC === '' ? ' selected' : '') + '>— Select —</option>' +
+      selectedCC.map(function(c) { return '<option' + (c === mCC ? ' selected' : '') + '>' + c + '</option>'; }).join('') +
+      '<option value="__addcc">+ Add Cost Centre</option>';
+    var zoneOpts = zones.map(function(z) { return '<option' + (z === mZone ? ' selected' : '') + '>' + z + '</option>'; }).join('') +
+      '<option value="__add">+ Add Zone</option>';
+    var allocOpts = '<option value="standalone"' + (mAlloc === 'standalone' ? ' selected' : '') + '>Not mapped to BOQ</option>' +
+      '<option value="even"' + (mAlloc === 'even' ? ' selected' : '') + '>Even Split</option>' +
+      '<option value="proportional"' + (mAlloc === 'proportional' ? ' selected' : '') + '>Proportional</option>';
+
+    var prefillNote = (mCC && mCC !== '__addcc') ? '<div style="font-size:11px;color:#16a34a;margin-top:6px"><i class="fas fa-check-circle" style="margin-right:4px"></i>Prefilled from variation build</div>' : '';
 
     var mapRow = document.createElement('tr');
     mapRow.style.background = '#fffbf0';
@@ -5155,9 +5249,10 @@ function appendVariationToTable(v) {
     mapRow.innerHTML = '<td style="padding:10px 14px"><i class="fas fa-map-pin" style="color:#f5a623;font-size:12px"></i></td>' +
       '<td colspan="2" style="padding:10px 8px">' +
         '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
-          '<div style="min-width:140px"><div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Cost Centre</div><select class="budget-select" style="width:100%" onchange="handleBudgetCCChange(this,-1)">' + '<option value="">— Select —</option>' + ccOpts + '</select></div>' +
-          '<div style="flex:1;min-width:160px"><div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Description</div><input class="editable-input" placeholder="e.g. Variation scope notes..." style="width:100%;padding:6px 8px;font-size:12px"></div>' +
+          '<div style="min-width:140px"><div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Cost Centre</div><select class="budget-select" style="width:100%" onchange="handleBudgetCCChange(this,-1)">' + ccOpts + '</select></div>' +
+          '<div style="flex:1;min-width:160px"><div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Description</div><input class="editable-input" placeholder="e.g. Variation scope notes..." style="width:100%;padding:6px 8px;font-size:12px" value="' + (v.title || '') + '"></div>' +
         '</div>' +
+        prefillNote +
       '</td>' +
       '<td style="padding:10px 8px">' +
         '<div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Zone</div>' +
@@ -5247,6 +5342,9 @@ function calcVarLumpSum() {
   });
   var totalEl = document.getElementById('varLumpSumTotal');
   if (totalEl) totalEl.textContent = '$' + total.toLocaleString('en-US',{minimumFractionDigits:2});
+  // Update mapping budget
+  var mapBudget = document.getElementById('varMapBudget');
+  if (mapBudget) mapBudget.value = '$' + total.toLocaleString('en-US',{minimumFractionDigits:2});
 }
 
 function showToast(msg) {
