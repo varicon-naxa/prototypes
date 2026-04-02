@@ -389,6 +389,22 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
 .mapping-section-title{font-size:15px;font-weight:600;color:#1b2a4a;margin-bottom:12px;display:flex;align-items:center;gap:8px}
 .mapping-section-title i{font-size:16px}
 
+/* Variation file dropzone */
+.var-dropzone{border:2px dashed #e2e8f0;border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s}
+.var-dropzone:hover,.var-dropzone.dragover{border-color:#f5a623;background:#fffbf0}
+.var-file-item{display:flex;align-items:center;gap:12px;padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px}
+.var-file-item .vf-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.var-file-item .vf-icon.pdf{background:#fee2e2;color:#ef4444}
+.var-file-item .vf-icon.doc{background:#dbeafe;color:#3b82f6}
+.var-file-item .vf-icon.xls{background:#dcfce7;color:#16a34a}
+.var-file-item .vf-icon.img{background:#fef3c7;color:#f59e0b}
+.var-file-item .vf-icon.other{background:#f1f5f9;color:#64748b}
+.var-file-item .vf-info{flex:1;min-width:0}
+.var-file-item .vf-name{font-size:13px;font-weight:500;color:#1b2a4a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.var-file-item .vf-size{font-size:11px;color:#94a3b8}
+.var-file-item .vf-remove{color:#ef4444;cursor:pointer;font-size:14px;padding:4px;flex-shrink:0}
+.var-file-item .vf-remove:hover{color:#dc2626}
+
 /* Info tooltip */
 .info-tooltip{position:relative;display:inline-block;vertical-align:middle;margin-left:6px}
 .info-tooltip .info-tooltip-text{visibility:hidden;opacity:0;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#1b2a4a;color:#fff;font-size:12px;font-weight:400;line-height:1.5;padding:10px 14px;border-radius:8px;width:260px;text-align:left;z-index:20;box-shadow:0 4px 16px rgba(0,0,0,.15);transition:opacity .15s,visibility .15s;pointer-events:none}
@@ -1582,6 +1598,20 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
         <label style="font-size:12px;font-weight:500;color:#64748b;display:block;margin-bottom:4px">Description</label>
         <textarea class="editable-input" placeholder="Describe the scope of the variation..." style="width:100%;padding:10px 12px;min-height:60px;resize:vertical;font-family:Inter,sans-serif"></textarea>
       </div>
+    </div>
+
+    <!-- Supporting Documents -->
+    <div class="card-section" style="margin-bottom:20px">
+      <h3 style="font-size:15px;font-weight:600;color:#1b2a4a;margin-bottom:4px"><i class="fas fa-paperclip" style="color:#f5a623;margin-right:8px"></i>Supporting Documents</h3>
+      <p style="font-size:12px;color:#94a3b8;margin-bottom:14px">Attach any relevant files — quotes, drawings, emails, photos, etc. These will be stored with this variation.</p>
+      <div class="var-dropzone" id="varFileDropzone" onclick="document.getElementById('varFileInput').click()" ondrop="handleVarFileDrop(event)" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')">
+        <i class="fas fa-cloud-arrow-up" style="font-size:28px;color:#f5a623;margin-bottom:8px"></i>
+        <div style="font-size:14px;font-weight:500;color:#1b2a4a">Drag & drop files here</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:4px">or <span style="color:#f5a623;font-weight:500;cursor:pointer">browse</span> to choose files</div>
+        <div style="font-size:11px;color:#cbd5e1;margin-top:6px">PDF, DOCX, XLSX, JPG, PNG — Max 25MB per file</div>
+        <input type="file" id="varFileInput" multiple style="display:none" onchange="handleVarFileSelect(this)">
+      </div>
+      <div id="varFileList" style="margin-top:10px"></div>
     </div>
 
     <!-- Lump Sum Section -->
@@ -4955,6 +4985,8 @@ function saveMappings() {
 }
 
 function showVariationBuildPage() {
+  varFiles = [];
+  renderVarFiles();
   var isLumpSum = pendingVarPricingMethod === 'lumpsum';
   var isDayworks = pendingVarType === 'dayworks';
   document.getElementById('varBuildOverlay').classList.add('show');
@@ -4971,6 +5003,52 @@ function showVariationBuildPage() {
 
 function closeVariationBuild() {
   document.getElementById('varBuildOverlay').classList.remove('show');
+}
+
+var varFiles = [];
+
+function handleVarFileDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  if (e.dataTransfer.files) addVarFiles(e.dataTransfer.files);
+}
+
+function handleVarFileSelect(input) {
+  if (input.files) addVarFiles(input.files);
+  input.value = '';
+}
+
+function addVarFiles(fileList) {
+  for (var i = 0; i < fileList.length; i++) {
+    var f = fileList[i];
+    varFiles.push({ name: f.name, size: f.size, type: f.type || 'application/octet-stream' });
+  }
+  renderVarFiles();
+  showToast(fileList.length + ' file' + (fileList.length > 1 ? 's' : '') + ' attached');
+}
+
+function removeVarFile(idx) {
+  varFiles.splice(idx, 1);
+  renderVarFiles();
+}
+
+function renderVarFiles() {
+  var container = document.getElementById('varFileList');
+  if (varFiles.length === 0) { container.innerHTML = ''; return; }
+  container.innerHTML = varFiles.map(function(f, i) {
+    var ext = f.name.split('.').pop().toLowerCase();
+    var iconClass = 'other', icon = 'fa-file';
+    if (ext === 'pdf') { iconClass = 'pdf'; icon = 'fa-file-pdf'; }
+    else if (ext === 'doc' || ext === 'docx') { iconClass = 'doc'; icon = 'fa-file-word'; }
+    else if (ext === 'xls' || ext === 'xlsx' || ext === 'csv') { iconClass = 'xls'; icon = 'fa-file-excel'; }
+    else if (['jpg','jpeg','png','gif','bmp','webp'].indexOf(ext) >= 0) { iconClass = 'img'; icon = 'fa-file-image'; }
+    var sizeStr = f.size > 1048576 ? (f.size / 1048576).toFixed(1) + ' MB' : Math.round(f.size / 1024) + ' KB';
+    return '<div class="var-file-item">' +
+      '<div class="vf-icon ' + iconClass + '"><i class="fas ' + icon + '"></i></div>' +
+      '<div class="vf-info"><div class="vf-name">' + f.name + '</div><div class="vf-size">' + sizeStr + '</div></div>' +
+      '<span class="vf-remove" onclick="removeVarFile(' + i + ')"><i class="fas fa-trash-alt"></i></span>' +
+    '</div>';
+  }).join('');
 }
 
 function submitVariation() {
