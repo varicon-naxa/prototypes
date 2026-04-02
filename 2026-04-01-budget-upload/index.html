@@ -1610,18 +1610,18 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
             <tbody id="varLumpSumBody">
               <tr>
                 <td><input class="editable-input" placeholder="Description" style="width:100%"></td>
-                <td><input class="editable-input short" placeholder="Qty" style="width:60px" value="1"></td>
+                <td><input class="editable-input short" placeholder="Qty" style="width:60px" value="1" oninput="calcVarLumpSum()"></td>
                 <td><input class="editable-input" placeholder="Unit" style="width:60px" value="item"></td>
-                <td style="text-align:right"><input class="budget-input" placeholder="0.00" style="width:110px"></td>
-                <td style="text-align:right;font-weight:600">$0.00</td>
-                <td><span style="color:#ef4444;cursor:pointer" onclick="this.closest('tr').remove()"><i class="fas fa-trash-alt"></i></span></td>
+                <td style="text-align:right"><input class="budget-input" placeholder="0.00" style="width:110px" oninput="calcVarLumpSum()"></td>
+                <td style="text-align:right;font-weight:600" class="var-ls-amount">$0.00</td>
+                <td><span style="color:#ef4444;cursor:pointer" onclick="this.closest('tr').remove();calcVarLumpSum()"><i class="fas fa-trash-alt"></i></span></td>
               </tr>
             </tbody>
           </table>
         </div>
         <button class="add-line-btn" onclick="addVarLumpSumRow()"><i class="fas fa-plus"></i> Add Line Item</button>
         <div class="budget-summary" style="margin-top:16px">
-          <div class="summary-card primary"><div class="s-label">Variation Total</div><div class="s-value">$0.00</div></div>
+          <div class="summary-card primary"><div class="s-label">Variation Total</div><div class="s-value" id="varLumpSumTotal">$0.00</div></div>
         </div>
       </div>
     </div>
@@ -5064,13 +5064,17 @@ function submitVariation() {
   var total = 0;
   var isLumpSum = pendingVarPricingMethod === 'lumpsum';
   if (isLumpSum) {
-    document.querySelectorAll('#varLumpSumBody .budget-input').forEach(function(inp) {
-      total += parseFloat(inp.value.replace(/,/g,'')) || 0;
+    // Sum Qty × Rate for each row
+    document.querySelectorAll('#varLumpSumBody tr').forEach(function(tr) {
+      var inputs = tr.querySelectorAll('input');
+      var qty = inputs[1] ? (parseFloat(inputs[1].value) || 0) : 0;
+      var rate = inputs[3] ? (parseFloat(inputs[3].value.replace(/,/g,'')) || 0) : 0;
+      total += qty * rate;
     });
   } else {
     // Sum all rate build inputs
     document.querySelectorAll('#varRateLabourBody .editable-input[placeholder="Hrs"], #varRatePlantBody .editable-input[placeholder="Hrs"]').forEach(function(inp) {
-      total += parseFloat(inp.value) * 48 || 0; // simplified calc
+      total += parseFloat(inp.value) * 48 || 0;
     });
     document.querySelectorAll('#varRateMaterialBody .budget-input').forEach(function(inp) {
       total += parseFloat(inp.value.replace(/,/g,'')) || 0;
@@ -5177,12 +5181,28 @@ function addVarLumpSumRow() {
   var tbody = document.getElementById('varLumpSumBody');
   var tr = document.createElement('tr');
   tr.innerHTML = '<td><input class="editable-input" placeholder="Description" style="width:100%"></td>' +
-    '<td><input class="editable-input short" placeholder="Qty" style="width:60px" value="1"></td>' +
+    '<td><input class="editable-input short" placeholder="Qty" style="width:60px" value="1" oninput="calcVarLumpSum()"></td>' +
     '<td><input class="editable-input" placeholder="Unit" style="width:60px" value="item"></td>' +
-    '<td style="text-align:right"><input class="budget-input" placeholder="0.00" style="width:110px"></td>' +
-    '<td style="text-align:right;font-weight:600">$0.00</td>' +
-    '<td><span style="color:#ef4444;cursor:pointer" onclick="this.closest(\'tr\').remove()"><i class="fas fa-trash-alt"></i></span></td>';
+    '<td style="text-align:right"><input class="budget-input" placeholder="0.00" style="width:110px" oninput="calcVarLumpSum()"></td>' +
+    '<td style="text-align:right;font-weight:600" class="var-ls-amount">$0.00</td>' +
+    '<td><span style="color:#ef4444;cursor:pointer" onclick="this.closest(\'tr\').remove();calcVarLumpSum()"><i class="fas fa-trash-alt"></i></span></td>';
   tbody.appendChild(tr);
+}
+
+function calcVarLumpSum() {
+  var total = 0;
+  document.querySelectorAll('#varLumpSumBody tr').forEach(function(tr) {
+    var inputs = tr.querySelectorAll('input');
+    // inputs: [0]=desc, [1]=qty, [2]=unit, [3]=rate
+    var qty = inputs[1] ? (parseFloat(inputs[1].value) || 0) : 0;
+    var rate = inputs[3] ? (parseFloat(inputs[3].value.replace(/,/g,'')) || 0) : 0;
+    var amount = qty * rate;
+    total += amount;
+    var amountCell = tr.querySelector('.var-ls-amount');
+    if (amountCell) amountCell.textContent = '$' + amount.toLocaleString('en-US',{minimumFractionDigits:2});
+  });
+  var totalEl = document.getElementById('varLumpSumTotal');
+  if (totalEl) totalEl.textContent = '$' + total.toLocaleString('en-US',{minimumFractionDigits:2});
 }
 
 function showToast(msg) {
