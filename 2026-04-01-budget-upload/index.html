@@ -1575,7 +1575,7 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
       </div>
     </div>
     <div style="display:flex;gap:10px">
-      <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="closeVariationBuild()"><i class="fas fa-save"></i> Save Draft</button>
+      <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.3)" onclick="submitVariationDraft()"><i class="fas fa-save"></i> Save Draft</button>
       <button class="btn btn-primary" onclick="submitVariation()"><i class="fas fa-check"></i> Submit Variation</button>
     </div>
   </div>
@@ -5054,7 +5054,15 @@ function renderVarFiles() {
 var submittedVariations = [];
 var variationCounter = 0;
 
+function submitVariationDraft() {
+  submitVariationWithStatus('draft');
+}
+
 function submitVariation() {
+  submitVariationWithStatus('submitted');
+}
+
+function submitVariationWithStatus(status) {
   variationCounter++;
   var titleInput = document.querySelector('#varBuildOverlay .editable-input');
   var varTitle = titleInput ? titleInput.value.trim() : '';
@@ -5088,13 +5096,15 @@ function submitVariation() {
     type: pendingVarType,
     method: pendingVarPricingMethod,
     amount: total,
-    files: varFiles.length
+    files: varFiles.length,
+    status: status
   };
   submittedVariations.push(variation);
 
   closeVariationBuild();
   appendVariationToTable(variation);
-  showToast('Variation "' + variation.id + ' — ' + varTitle + '" submitted ($' + total.toLocaleString('en-US',{minimumFractionDigits:2}) + ')');
+  var statusLabel = status === 'draft' ? 'saved as draft' : 'submitted';
+  showToast('Variation "' + variation.id + ' — ' + varTitle + '" ' + statusLabel + ' ($' + total.toLocaleString('en-US',{minimumFractionDigits:2}) + ')');
 }
 
 function appendVariationToTable(v) {
@@ -5104,16 +5114,18 @@ function appendVariationToTable(v) {
   var tbody = document.getElementById('bvTableBody');
   if (tbody) {
     var typeLabel = v.type === 'priced' ? 'Priced' : v.type === 'dayworks' ? 'Dayworks' : 'Cost Plus';
+    var isDraft = v.status === 'draft';
+    var draftBadge = isDraft ? ' <span style="font-size:11px;font-weight:500;color:#fff;margin-left:6px;background:#94a3b8;padding:2px 8px;border-radius:4px">Draft</span>' : '';
     var colCount = isCC ? 8 : 7;
     var ccTd = isCC ? '<td class="right" style="font-size:12px;color:#64748b">—</td>' : '';
 
     // Section header row
     var headerRow = document.createElement('tr');
     headerRow.className = 'section-header level-1';
-    headerRow.style.background = '#1e3a5f';
+    headerRow.style.background = isDraft ? '#475569' : '#1e3a5f';
     headerRow.innerHTML = '<td style="padding:11px 14px"><i class="fas fa-file-signature" style="color:#f5a623"></i></td>' +
       '<td style="padding:11px 14px;color:rgba(255,255,255,.6)">' + v.id + '</td>' +
-      '<td style="padding:11px 14px;color:#fff;font-weight:600">' + v.title + ' <span style="font-size:11px;font-weight:400;color:#f5a623;margin-left:8px;background:rgba(245,166,35,.15);padding:2px 8px;border-radius:4px">' + typeLabel + '</span></td>' +
+      '<td style="padding:11px 14px;color:#fff;font-weight:600">' + v.title + ' <span style="font-size:11px;font-weight:400;color:#f5a623;margin-left:8px;background:rgba(245,166,35,.15);padding:2px 8px;border-radius:4px">' + typeLabel + '</span>' + draftBadge + '</td>' +
       '<td class="right" style="padding:11px 14px;color:#fff;white-space:nowrap;font-weight:600">$' + v.amount.toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
       '<td class="right" style="padding:11px 14px;color:#fff;white-space:nowrap">—</td>' +
       ccTd +
@@ -5139,7 +5151,7 @@ function appendVariationToTable(v) {
       var tr = document.createElement('tr');
       tr.style.background = '#f0f7ff';
       tr.innerHTML = '<td style="padding:11px 14px"><i class="fas fa-file-signature" style="color:#f5a623"></i></td>' +
-        '<td style="padding:11px 14px;font-weight:600;color:#1b2a4a">' + v.id + ' — ' + v.title + ' <span style="font-size:11px;color:#f5a623;background:#fff7ed;padding:2px 8px;border-radius:4px">Variation</span></td>' +
+        '<td style="padding:11px 14px;font-weight:600;color:#1b2a4a">' + v.id + ' — ' + v.title + ' <span style="font-size:11px;color:#f5a623;background:#fff7ed;padding:2px 8px;border-radius:4px">Variation</span>' + (v.status === 'draft' ? ' <span style="font-size:11px;color:#fff;background:#94a3b8;padding:2px 8px;border-radius:4px">Draft</span>' : '') + '</td>' +
         '<td class="right" style="padding:11px 14px;white-space:nowrap;font-weight:600">$' + v.amount.toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
         '<td class="right" style="padding:11px 14px;white-space:nowrap">—</td>' +
         '<td class="right" style="padding:11px 14px;white-space:nowrap;color:#94a3b8">$0.00</td>' +
