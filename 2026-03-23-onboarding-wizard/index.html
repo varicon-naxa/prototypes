@@ -964,7 +964,7 @@
                 <th>Phone</th>
                 <th>Email</th>
                 <th>Employment Type</th>
-                <th>Role <span class="info-tip">?<span class="tooltip">Enter each employee's role (e.g. Supervisor, Operator, Foreman, Engineer, Leading Hand). Once a role is added it becomes available to select for other employees.</span></span></th>
+                <th style="position:relative;">Role <span class="info-tip">?<span class="tooltip" style="left:0; transform:none;">Enter each employee's role (e.g. Supervisor, Operator, Foreman, Engineer, Leading Hand). Once a role is added it becomes available to select for other employees.</span></span></th>
                 <th>Rate/hr</th>
                 <th style="width:80px; text-align:center;">Status</th>
               </tr>
@@ -1498,31 +1498,48 @@ function getAllRoles() {
   return [...defaultRoles, ...customRoles];
 }
 
-function buildRoleInput(id) {
-  return '<input type="text" class="form-select emp-role-input" id="' + id + '" list="roleDatalist" placeholder="Type or select..." style="min-width:130px; font-size:13px;" onchange="onEmpRoleBlur(this)" onblur="onEmpRoleBlur(this)">';
+function buildRoleSelect(id) {
+  const roles = getAllRoles();
+  let html = '<select class="form-select emp-role-select" id="' + id + '" style="min-width:130px;" onchange="onEmpRoleChange(this)">';
+  html += '<option value="">Select role...</option>';
+  roles.forEach(r => { html += '<option value="' + r + '">' + r + '</option>'; });
+  html += '<option value="__add_new__">+ Add new role...</option>';
+  html += '</select>';
+  return html;
 }
 
-function rebuildRoleDatalist() {
-  let dl = document.getElementById('roleDatalist');
-  if (!dl) {
-    dl = document.createElement('datalist');
-    dl.id = 'roleDatalist';
-    document.body.appendChild(dl);
-  }
-  const roles = getAllRoles();
-  dl.innerHTML = '';
-  roles.forEach(r => {
-    const opt = document.createElement('option');
-    opt.value = r;
-    dl.appendChild(opt);
+function rebuildAllRoleSelects() {
+  document.querySelectorAll('.emp-role-select').forEach(sel => {
+    const currentVal = sel.value;
+    const roles = getAllRoles();
+    sel.innerHTML = '<option value="">Select role...</option>';
+    roles.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r;
+      opt.textContent = r;
+      sel.appendChild(opt);
+    });
+    const addOpt = document.createElement('option');
+    addOpt.value = '__add_new__';
+    addOpt.textContent = '+ Add new role...';
+    sel.appendChild(addOpt);
+    if (currentVal && currentVal !== '__add_new__') sel.value = currentVal;
   });
 }
 
-function onEmpRoleBlur(input) {
-  const val = input.value.trim();
-  if (val && !getAllRoles().includes(val)) {
-    customRoles.push(val);
-    rebuildRoleDatalist();
+function onEmpRoleChange(sel) {
+  if (sel.value === '__add_new__') {
+    const newRole = prompt('Enter new employment role:');
+    if (newRole && newRole.trim()) {
+      const role = newRole.trim();
+      if (!getAllRoles().includes(role)) {
+        customRoles.push(role);
+        rebuildAllRoleSelects();
+      }
+      sel.value = role;
+    } else {
+      sel.value = '';
+    }
   }
 }
 
@@ -1565,13 +1582,13 @@ function buildEmpTable() {
         '<option>Salary</option>' +
         '<option>Subcontractor</option>' +
       '</select></td>' +
-      '<td>' + buildRoleInput('empRole' + i) + '</td>' +
+      '<td>' + buildRoleSelect('empRole' + i) + '</td>' +
       '<td><div style="display:flex; align-items:center; gap:2px;"><span style="color:#888; font-size:13px;">$</span><input type="text" class="form-select" placeholder="0.00" style="min-width:70px; width:80px; font-size:13px; text-align:right;"></div></td>' +
       '<td style="text-align:center;"><span style="display:inline-block; padding:4px 10px; background:#f5f5f5; border:1px solid #d0d0d0; border-radius:4px; font-size:12px; color:#999; font-weight:600;">Inactive</span></td>';
     tbody.appendChild(row);
   });
   document.getElementById('empCount').textContent = xeroEmployees.length + ' employees';
-  rebuildRoleDatalist();
+  rebuildAllRoleSelects();
 }
 
 function runEmpSyncAnimation() {
