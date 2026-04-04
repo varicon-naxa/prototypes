@@ -959,11 +959,12 @@
           <table class="codes-table" id="empTable">
             <thead>
               <tr>
+                <th style="width:40px; text-align:center;"><input type="checkbox" checked id="empSelectAll" onchange="toggleAllEmployees(this)" style="width:16px; height:16px; accent-color:#f7941d;"></th>
                 <th>Employee ID</th>
                 <th>Phone</th>
                 <th>Email</th>
                 <th>Employment Type</th>
-                <th>Role</th>
+                <th>Role <span class="info-tip">?<span class="tooltip">Enter each employee's role (e.g. Supervisor, Operator, Foreman, Engineer, Leading Hand). Once a role is added it becomes available to select for other employees.</span></span></th>
                 <th>Rate/hr</th>
                 <th style="width:80px; text-align:center;">Status</th>
               </tr>
@@ -1483,7 +1484,6 @@ function onProjectManualToggle() {
 const xeroEmployees = [
   { first: 'James', last: 'Baker', phone: '+61435265342', email: 'james@dropbear.com.au' },
   { first: 'Ford', last: 'Hoogendoorn', phone: '+61435265341', email: 'ford@dropbear.com.au' },
-  { first: 'Sid', last: 'Shrestha', phone: '+61432145668', email: 'sid@dropbear.com.au' },
   { first: 'Megan', last: 'Taylor', phone: '+61412987654', email: 'megan.taylor@dropbear.com.au' },
   { first: 'Chris', last: 'Nguyen', phone: '+61423876543', email: 'chris.nguyen@dropbear.com.au' },
   { first: 'Sarah', last: 'Patel', phone: '+61434765432', email: 'sarah.patel@dropbear.com.au' },
@@ -1491,56 +1491,60 @@ const xeroEmployees = [
   { first: 'Nina', last: 'Wong', phone: '+61456543210', email: 'nina.wong@dropbear.com.au' },
 ];
 
-const defaultRoles = ['Supervisor', 'Operator', 'Foreman', 'Engineer', 'Leading Hand', 'Labourer'];
+const defaultRoles = [];
 let customRoles = [];
 
 function getAllRoles() {
   return [...defaultRoles, ...customRoles];
 }
 
-function buildRoleSelect(id) {
-  const roles = getAllRoles();
-  let html = '<select class="form-select emp-role-select" id="' + id + '" style="min-width:150px;" onchange="onEmpRoleChange(this)">';
-  html += '<option value="">Select role...</option>';
-  roles.forEach(r => { html += '<option value="' + r + '">' + r + '</option>'; });
-  html += '<option value="__add_new__">+ Add new role...</option>';
-  html += '</select>';
-  return html;
+function buildRoleInput(id) {
+  return '<input type="text" class="form-select emp-role-input" id="' + id + '" list="roleDatalist" placeholder="Type or select..." style="min-width:130px; font-size:13px;" onchange="onEmpRoleBlur(this)" onblur="onEmpRoleBlur(this)">';
 }
 
-function rebuildAllRoleSelects() {
-  document.querySelectorAll('.emp-role-select').forEach(sel => {
-    const currentVal = sel.value;
-    const roles = getAllRoles();
-    sel.innerHTML = '<option value="">Select role...</option>';
-    roles.forEach(r => {
-      const opt = document.createElement('option');
-      opt.value = r;
-      opt.textContent = r;
-      sel.appendChild(opt);
-    });
-    const addOpt = document.createElement('option');
-    addOpt.value = '__add_new__';
-    addOpt.textContent = '+ Add new role...';
-    sel.appendChild(addOpt);
-    if (currentVal && currentVal !== '__add_new__') sel.value = currentVal;
+function rebuildRoleDatalist() {
+  let dl = document.getElementById('roleDatalist');
+  if (!dl) {
+    dl = document.createElement('datalist');
+    dl.id = 'roleDatalist';
+    document.body.appendChild(dl);
+  }
+  const roles = getAllRoles();
+  dl.innerHTML = '';
+  roles.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r;
+    dl.appendChild(opt);
   });
 }
 
-function onEmpRoleChange(sel) {
-  if (sel.value === '__add_new__') {
-    const newRole = prompt('Enter new employment role:');
-    if (newRole && newRole.trim()) {
-      const role = newRole.trim();
-      if (!getAllRoles().includes(role)) {
-        customRoles.push(role);
-        rebuildAllRoleSelects();
-      }
-      sel.value = role;
-    } else {
-      sel.value = '';
-    }
+function onEmpRoleBlur(input) {
+  const val = input.value.trim();
+  if (val && !getAllRoles().includes(val)) {
+    customRoles.push(val);
+    rebuildRoleDatalist();
   }
+}
+
+function onEmpSelectChange(cb) {
+  const row = cb.closest('tr');
+  if (cb.checked) {
+    row.style.opacity = '1';
+    row.querySelectorAll('input:not(.emp-select-cb), select').forEach(el => el.disabled = false);
+  } else {
+    row.style.opacity = '0.4';
+    row.querySelectorAll('input:not(.emp-select-cb), select').forEach(el => el.disabled = true);
+  }
+  // Update select-all checkbox
+  const all = document.querySelectorAll('.emp-select-cb');
+  document.getElementById('empSelectAll').checked = [...all].every(c => c.checked);
+}
+
+function toggleAllEmployees(headerCb) {
+  document.querySelectorAll('.emp-select-cb').forEach(cb => {
+    cb.checked = headerCb.checked;
+    onEmpSelectChange(cb);
+  });
 }
 
 function buildEmpTable() {
@@ -1550,6 +1554,7 @@ function buildEmpTable() {
     const empId = emp.first + ' ' + emp.last;
     const row = document.createElement('tr');
     row.innerHTML =
+      '<td style="text-align:center;"><input type="checkbox" checked class="emp-select-cb" style="width:16px; height:16px; accent-color:#f7941d;" onchange="onEmpSelectChange(this)"></td>' +
       '<td style="font-weight:600;">' + empId + '</td>' +
       '<td><input type="text" class="form-select" value="' + emp.phone + '" style="min-width:140px; font-size:13px;"></td>' +
       '<td><input type="text" class="form-select" value="' + emp.email + '" style="min-width:180px; font-size:13px;"></td>' +
@@ -1560,12 +1565,13 @@ function buildEmpTable() {
         '<option>Salary</option>' +
         '<option>Subcontractor</option>' +
       '</select></td>' +
-      '<td>' + buildRoleSelect('empRole' + i) + '</td>' +
+      '<td>' + buildRoleInput('empRole' + i) + '</td>' +
       '<td><div style="display:flex; align-items:center; gap:2px;"><span style="color:#888; font-size:13px;">$</span><input type="text" class="form-select" placeholder="0.00" style="min-width:70px; width:80px; font-size:13px; text-align:right;"></div></td>' +
       '<td style="text-align:center;"><span style="display:inline-block; padding:4px 10px; background:#f5f5f5; border:1px solid #d0d0d0; border-radius:4px; font-size:12px; color:#999; font-weight:600;">Inactive</span></td>';
     tbody.appendChild(row);
   });
   document.getElementById('empCount').textContent = xeroEmployees.length + ' employees';
+  rebuildRoleDatalist();
 }
 
 function runEmpSyncAnimation() {
