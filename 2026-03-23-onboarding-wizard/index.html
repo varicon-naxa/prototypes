@@ -120,6 +120,34 @@
     background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 10px center; min-width: 220px;
   }
+  /* Custom role dropdown */
+  .role-dropdown { position: relative; min-width: 140px; }
+  .role-dropdown .role-trigger {
+    padding: 8px 32px 8px 12px; border: 1px solid #d0d0d0; border-radius: 6px;
+    font-size: 13px; background: #fff; cursor: pointer; min-height: 34px;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .role-dropdown .role-trigger.placeholder { color: #999; }
+  .role-dropdown .role-trigger:focus, .role-dropdown.open .role-trigger { border-color: #f7941d; outline: none; }
+  .role-dropdown .role-menu {
+    display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+    background: #fff; border: 1px solid #d0d0d0; border-top: none; border-radius: 0 0 6px 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-height: 200px; overflow-y: auto;
+  }
+  .role-dropdown.open .role-menu { display: block; }
+  .role-dropdown .role-option {
+    padding: 10px 14px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f5f5f5;
+  }
+  .role-dropdown .role-option:hover { background: #f5f5f5; }
+  .role-dropdown .role-option:last-child { border-bottom: none; }
+  .role-dropdown .role-add {
+    padding: 10px 14px; font-size: 13px; cursor: pointer; color: #f7941d; font-weight: 600;
+    border-top: 1px solid #e0e0e0; display: flex; align-items: center; gap: 6px;
+  }
+  .role-dropdown .role-add:hover { background: #fff8f0; }
+
   .toggle { width: 44px; height: 24px; background: #ccc; border-radius: 12px; position: relative; cursor: pointer; transition: background 0.2s; }
   .toggle.on { background: #f7941d; }
   .toggle::after { content: ''; position: absolute; width: 20px; height: 20px; background: #fff; border-radius: 50%; top: 2px; left: 2px; transition: transform 0.2s; }
@@ -1498,50 +1526,66 @@ function getAllRoles() {
   return [...defaultRoles, ...customRoles];
 }
 
-function buildRoleSelect(id) {
-  const roles = getAllRoles();
-  let html = '<select class="form-select emp-role-select" id="' + id + '" style="min-width:130px;" onchange="onEmpRoleChange(this)">';
-  html += '<option value="">Select role...</option>';
-  roles.forEach(r => { html += '<option value="' + r + '">' + r + '</option>'; });
-  html += '<option value="__add_new__">+ Add new role...</option>';
-  html += '</select>';
-  return html;
+function buildRoleDropdown(id) {
+  return '<div class="role-dropdown" id="' + id + '" data-value="">' +
+    '<div class="role-trigger placeholder" onclick="toggleRoleMenu(this.parentElement)">Select role...</div>' +
+    '<div class="role-menu"></div>' +
+  '</div>';
 }
 
-function rebuildAllRoleSelects() {
-  document.querySelectorAll('.emp-role-select').forEach(sel => {
-    const currentVal = sel.value;
-    const roles = getAllRoles();
-    sel.innerHTML = '<option value="">Select role...</option>';
-    roles.forEach(r => {
-      const opt = document.createElement('option');
-      opt.value = r;
-      opt.textContent = r;
-      sel.appendChild(opt);
-    });
-    const addOpt = document.createElement('option');
-    addOpt.value = '__add_new__';
-    addOpt.textContent = '+ Add new role...';
-    sel.appendChild(addOpt);
-    if (currentVal && currentVal !== '__add_new__') sel.value = currentVal;
-  });
-}
-
-function onEmpRoleChange(sel) {
-  if (sel.value === '__add_new__') {
-    const newRole = prompt('Enter new employment role:');
-    if (newRole && newRole.trim()) {
-      const role = newRole.trim();
-      if (!getAllRoles().includes(role)) {
-        customRoles.push(role);
-        rebuildAllRoleSelects();
-      }
-      sel.value = role;
-    } else {
-      sel.value = '';
-    }
+function toggleRoleMenu(dropdown) {
+  const wasOpen = dropdown.classList.contains('open');
+  // Close all open dropdowns first
+  document.querySelectorAll('.role-dropdown.open').forEach(d => d.classList.remove('open'));
+  if (!wasOpen) {
+    rebuildRoleMenu(dropdown);
+    dropdown.classList.add('open');
   }
 }
+
+function rebuildRoleMenu(dropdown) {
+  const menu = dropdown.querySelector('.role-menu');
+  const roles = getAllRoles();
+  menu.innerHTML = '';
+  roles.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'role-option';
+    div.textContent = r;
+    div.onclick = function() { selectRole(dropdown, r); };
+    menu.appendChild(div);
+  });
+  const addDiv = document.createElement('div');
+  addDiv.className = 'role-add';
+  addDiv.innerHTML = '<span>+</span> Create / Add New Role';
+  addDiv.onclick = function(e) { e.stopPropagation(); addNewRole(dropdown); };
+  menu.appendChild(addDiv);
+}
+
+function selectRole(dropdown, role) {
+  dropdown.setAttribute('data-value', role);
+  const trigger = dropdown.querySelector('.role-trigger');
+  trigger.textContent = role;
+  trigger.classList.remove('placeholder');
+  dropdown.classList.remove('open');
+}
+
+function addNewRole(dropdown) {
+  const newRole = prompt('Enter new employment role:');
+  if (newRole && newRole.trim()) {
+    const role = newRole.trim();
+    if (!getAllRoles().includes(role)) {
+      customRoles.push(role);
+    }
+    selectRole(dropdown, role);
+  }
+}
+
+// Close role dropdowns when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.role-dropdown')) {
+    document.querySelectorAll('.role-dropdown.open').forEach(d => d.classList.remove('open'));
+  }
+});
 
 function onEmpSelectChange(cb) {
   const row = cb.closest('tr');
@@ -1582,13 +1626,12 @@ function buildEmpTable() {
         '<option>Salary</option>' +
         '<option>Subcontractor</option>' +
       '</select></td>' +
-      '<td>' + buildRoleSelect('empRole' + i) + '</td>' +
+      '<td>' + buildRoleDropdown('empRole' + i) + '</td>' +
       '<td><div style="display:flex; align-items:center; gap:2px;"><span style="color:#888; font-size:13px;">$</span><input type="text" class="form-select" placeholder="0.00" style="min-width:70px; width:80px; font-size:13px; text-align:right;"></div></td>' +
       '<td style="text-align:center;"><span style="display:inline-block; padding:4px 10px; background:#f5f5f5; border:1px solid #d0d0d0; border-radius:4px; font-size:12px; color:#999; font-weight:600;">Inactive</span></td>';
     tbody.appendChild(row);
   });
   document.getElementById('empCount').textContent = xeroEmployees.length + ' employees';
-  rebuildAllRoleSelects();
 }
 
 function runEmpSyncAnimation() {
