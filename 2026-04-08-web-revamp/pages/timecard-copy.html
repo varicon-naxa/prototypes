@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Copy Timesheet — Varicon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, sans-serif; background: #F4F5F7; color: #374151; font-size: 13px; min-height: 100vh; }
+
+  /* Top bar */
+  .topbar { background: #fff; border-bottom: 1px solid #E5E7EB; height: 52px; display: flex; align-items: center; padding: 0 24px; gap: 12px; position: sticky; top: 0; z-index: 100; }
+  .topbar-back { background: none; border: none; cursor: pointer; color: #374151; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; padding: 6px 8px; border-radius: 5px; transition: background .15s; }
+  .topbar-back:hover { background: #F3F4F6; }
+  .topbar-title { font-size: 16px; font-weight: 700; color: #1A2332; }
+  .topbar-spacer { flex: 1; }
+  .topbar-btn { height: 34px; border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0 16px; border: 1px solid #E5E7EB; background: #fff; color: #374151; transition: background .15s, border-color .15s; }
+  .topbar-btn:hover { background: #F9FAFB; }
+  .topbar-btn.primary { background: #F5A623; border-color: #F5A623; color: #fff; }
+  .topbar-btn.primary:hover { background: #D4891A; border-color: #D4891A; }
+  .topbar-btn.primary:disabled { background: #FDE68A; border-color: #FDE68A; color: #fff; cursor: not-allowed; }
+
+  /* Page content */
+  .page { max-width: 1100px; margin: 28px auto; padding: 0 24px 40px; }
+
+  /* Controls card */
+  .controls-card { background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; padding: 20px 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .controls-row { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+  .ctrl-group { display: flex; flex-direction: column; gap: 5px; }
+  .ctrl-label { font-size: 11px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; }
+  .ctrl-select { height: 36px; border: 1px solid #E5E7EB; border-radius: 5px; font-size: 13px; padding: 0 10px; background: #fff; color: #374151; outline: none; cursor: pointer; min-width: 180px; }
+  .ctrl-select:focus { border-color: #F5A623; box-shadow: 0 0 0 3px rgba(245,166,35,.1); }
+  .ctrl-date { height: 36px; border: 1px solid #E5E7EB; border-radius: 5px; font-size: 13px; padding: 0 10px 0 34px; background: #fff; color: #374151; outline: none; cursor: pointer; min-width: 160px; font-family: 'Inter', sans-serif; }
+  .ctrl-date:focus { border-color: #F5A623; box-shadow: 0 0 0 3px rgba(245,166,35,.1); }
+  .ctrl-date-wrap { position: relative; }
+  .ctrl-date-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #6B7280; }
+
+  /* Table card */
+  .table-card { background: #fff; border: 1px solid #E5E7EB; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.06); overflow: hidden; }
+  .table-header { padding: 14px 20px; border-bottom: 1px solid #E5E7EB; display: flex; align-items: center; justify-content: space-between; }
+  .table-title { font-size: 13px; font-weight: 600; color: #1A2332; }
+  .table-count { font-size: 12px; color: #6B7280; }
+  .scroll-wrap { overflow-x: auto; }
+
+  table { width: 100%; border-collapse: collapse; min-width: 820px; }
+  thead tr { background: #EAECEF; }
+  th { font-size: 11px; font-weight: 600; color: #374151; padding: 10px 14px; text-align: left; white-space: nowrap; border-right: 1px solid #D1D5DB; }
+  th:last-child { border-right: none; }
+  th.center { text-align: center; }
+  td { padding: 12px 14px; border-bottom: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; vertical-align: middle; }
+  td:last-child { border-right: none; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #F9FAFB; }
+
+  /* Checkbox */
+  .cb { width: 16px; height: 16px; border: 2px solid #CBD5E1; border-radius: 3px; cursor: pointer; accent-color: #F5A623; }
+  .cb:checked { accent-color: #F5A623; }
+
+  /* Employee cell */
+  .emp-wrap { display: flex; align-items: center; gap: 10px; }
+  .emp-avatar { width: 34px; height: 34px; border-radius: 50%; background: #E5E7EB; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #374151; flex-shrink: 0; }
+  .emp-name { font-size: 13px; font-weight: 600; color: #1A2332; }
+  .emp-sub { font-size: 11px; color: #6B7280; margin-top: 1px; }
+  .badge-pill { display: inline-flex; align-items: center; gap: 4px; height: 22px; border-radius: 11px; padding: 0 8px; font-size: 11px; font-weight: 600; cursor: pointer; }
+  .badge-task { background: #DBEAFE; color: #1D4ED8; border: 1px solid #BFDBFE; }
+  .badge-eq   { background: #FEF3DC; color: #92400E; border: 1px solid #FDE68A; }
+
+  /* Time cell */
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; color: #1A2332; }
+  .mono-muted { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #6B7280; }
+
+  /* Checkbox cells (WBS / Equipment / Allowance) */
+  .cell-check { text-align: center; }
+  .sq-cb { width: 16px; height: 16px; border: 1.5px solid #CBD5E1; border-radius: 3px; cursor: pointer; accent-color: #F5A623; display: block; margin: auto; }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 48px 24px; color: #6B7280; }
+  .empty svg { opacity: .2; margin-bottom: 10px; }
+
+  /* Summary bar */
+  .summary-bar { display: flex; align-items: center; gap: 6px; padding: 10px 20px; border-top: 1px solid #E5E7EB; background: #F9FAFB; border-radius: 0 0 8px 8px; font-size: 12px; color: #6B7280; }
+  .summary-pill { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid #E5E7EB; border-radius: 4px; padding: 3px 9px; font-size: 11px; font-weight: 500; }
+  .summary-pill strong { font-size: 12px; font-weight: 700; color: #1A2332; }
+
+  /* Select-all header checkbox area */
+  .th-cb { width: 44px; text-align: center; border-right: 1px solid #D1D5DB; }
+  .td-cb { width: 44px; text-align: center; border-right: 1px solid #E5E7EB; }
+
+  /* Expand chevron */
+  .chev-btn { background: none; border: none; cursor: pointer; color: #9CA3AF; padding: 4px; border-radius: 3px; display: flex; align-items: center; justify-content: center; }
+  .chev-btn:hover { color: #374151; background: #F3F4F6; }
+
+  /* Toast */
+  #tc-copy-toast { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #fff; border: 1px solid #E5E7EB; border-radius: 6px; padding: 12px 20px; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 6px rgba(0,0,0,.07), 0 10px 40px rgba(0,0,0,.12); min-width: 260px; animation: tcFadeIn .2s ease; }
+  @keyframes tcFadeIn { from { opacity:0; transform:translateX(-50%) translateY(-6px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <button class="topbar-back" onclick="window.close()">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 3L5 8l5 5"/></svg>
+    Back
+  </button>
+  <div style="width:1px;height:20px;background:#E5E7EB;"></div>
+  <span class="topbar-title">Copy Timesheet</span>
+  <div class="topbar-spacer"></div>
+  <button class="topbar-btn" onclick="window.close()">CANCEL</button>
+  <button class="topbar-btn primary" id="copy-btn" onclick="doCopyTimesheet()" disabled>COPY TIMESHEET</button>
+</div>
+
+<div class="page">
+
+  <!-- Controls -->
+  <div class="controls-card">
+    <div class="controls-row">
+      <div class="ctrl-group">
+        <span class="ctrl-label">Select Project</span>
+        <select class="ctrl-select" id="cp-project" onchange="loadSourceData()">
+          <option value="">(Assets Management) Assets Management</option>
+          <option value="bis">(20292) BIS Project</option>
+          <option value="civil">(10041) Civil Construct</option>
+        </select>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">Copy From</span>
+        <div class="ctrl-date-wrap">
+          <svg class="ctrl-date-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M5 1v3M11 1v3M2 7h12"/></svg>
+          <input type="date" class="ctrl-date" id="cp-from" onchange="loadSourceData()">
+        </div>
+      </div>
+      <div class="ctrl-group">
+        <span class="ctrl-label">Copy To</span>
+        <div class="ctrl-date-wrap">
+          <svg class="ctrl-date-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="11" rx="1.5"/><path d="M5 1v3M11 1v3M2 7h12"/></svg>
+          <input type="date" class="ctrl-date" id="cp-to" onchange="checkReady()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-card">
+    <div class="table-header">
+      <div>
+        <span class="table-title">Timesheet Entries</span>
+        <span class="table-count" id="cp-count" style="margin-left:8px;"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span id="cp-sel-label" style="font-size:12px;color:#6B7280;display:none;"></span>
+        <button onclick="selectAllRows()" style="background:none;border:none;cursor:pointer;font-size:12px;font-weight:600;color:#F5A623;padding:0;" onmouseenter="this.style.color='#D4891A'" onmouseleave="this.style.color='#F5A623'">Select All</button>
+        <span style="color:#E5E7EB;">|</span>
+        <button onclick="clearAllRows()" style="background:none;border:none;cursor:pointer;font-size:12px;font-weight:600;color:#6B7280;padding:0;" onmouseenter="this.style.color='#374151'" onmouseleave="this.style.color='#6B7280'">Clear</button>
+      </div>
+    </div>
+    <div class="scroll-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="th-cb"><input type="checkbox" class="cb" id="cb-all" onchange="toggleAll(this.checked)"></th>
+            <th>Employee</th>
+            <th class="center">Start</th>
+            <th class="center">End</th>
+            <th class="center">Break</th>
+            <th class="center">Total Time</th>
+            <th style="width:40px;border-right:none;"></th>
+          </tr>
+        </thead>
+        <tbody id="cp-tbody">
+          <tr>
+            <td colspan="7" class="empty">
+              <div>
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" display="block" style="margin:0 auto 10px;">
+                  <circle cx="24" cy="24" r="22" stroke="#6B7280" stroke-width="2"/>
+                  <circle cx="24" cy="24" r="8" stroke="#6B7280" stroke-width="2"/>
+                  <path d="M24 14v10l6 6" stroke="#6B7280" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <div style="font-size:13px;margin-bottom:4px;">Select a project and date to load timesheet entries.</div>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="summary-bar" id="cp-summary" style="display:none;">
+      <span style="font-weight:500;color:#374151;margin-right:4px;">Summary:</span>
+      <div class="summary-pill"><span>Employees</span><strong id="sum-emp">0</strong></div>
+      <div class="summary-pill"><svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="#6B7280" stroke-width="1.4"><circle cx="7" cy="7" r="5.5"/><path d="M7 4v3l2 2"/></svg><span>Total Hours</span><strong id="sum-hrs" style="font-family:'JetBrains Mono',monospace;">0h 0m</strong></div>
+      <div class="summary-pill"><span>Selected</span><strong id="sum-sel">0</strong></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ── Sample data ── */
+var sampleEntries = [
+  { id:'ID:007',   name:'Boni Khatiwada', role:'Labour',   start:'07:00', end:'15:40', brk:'45', wbs:false, equipment:false, allowance:false },
+  { id:'ID:Anu12', name:'Anu Praz',       role:'employee', start:'07:00', end:'15:40', brk:'45', wbs:false, equipment:false, allowance:false },
+  { id:'ID:3333',  name:'James Kula',     role:'Admin',    start:'08:00', end:'16:00', brk:'30', wbs:false, equipment:false, allowance:false },
+];
+
+var loadedEntries = [];
+var selectedIds   = [];
+
+/* ── Init dates ── */
+(function() {
+  var today = new Date();
+  var fmt = function(d) { return d.toISOString().split('T')[0]; };
+  var yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  document.getElementById('cp-from').value = fmt(yesterday);
+  document.getElementById('cp-to').value   = fmt(today);
+  loadSourceData();
+})();
+
+function loadSourceData() {
+  var from = document.getElementById('cp-from').value;
+  if (!from) { clearTable(); return; }
+
+  // Simulate loaded entries from selected date
+  loadedEntries = sampleEntries.map(function(e) { return Object.assign({}, e); });
+  selectedIds   = loadedEntries.map(function(e) { return e.id; });
+  renderTable();
+  checkReady();
+}
+
+function renderTable() {
+  var tbody = document.getElementById('cp-tbody');
+  var count = document.getElementById('cp-count');
+  var summary = document.getElementById('cp-summary');
+
+  if (!loadedEntries.length) { clearTable(); return; }
+
+  count.textContent = loadedEntries.length + ' ' + (loadedEntries.length === 1 ? 'entry' : 'entries');
+  summary.style.display = 'flex';
+  updateSummary();
+
+  tbody.innerHTML = loadedEntries.map(function(r, i) {
+    var initials = r.name.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
+    var isSel = selectedIds.includes(r.id);
+    var total = calcTotal(r.start, r.end, parseInt(r.brk)||0);
+    var equipBadge = r.equipment
+      ? '<span class="badge-pill" style="background:#DBEAFE;color:#1D4ED8;border:1px solid #BFDBFE;margin-left:5px;">'
+        + '<svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="10" r="2"/><circle cx="11" cy="10" r="2"/><path d="M2 10V6l3-3h4l2 3v1"/><path d="M5 10H2"/></svg>'
+        + ' 1</span>'
+      : '';
+    var allowBadge = r.allowance
+      ? '<span class="badge-pill" style="background:#EDE9FE;color:#6D28D9;border:1px solid #DDD6FE;margin-left:5px;">'
+        + '<svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="5.5"/><path d="M7 4v6M5 5.5h3a1 1 0 010 2H6a1 1 0 000 2h3"/></svg>'
+        + ' 1</span>'
+      : '';
+
+    return '<tr id="cp-row-' + i + '" style="' + (isSel ? 'background:#FFFDF5;' : '') + '">'
+      + '<td class="td-cb"><input type="checkbox" class="cb" ' + (isSel?'checked':'') + ' onchange="toggleRow(\'' + r.id + '\',this.checked,' + i + ')"></td>'
+      + '<td>'
+        + '<div class="emp-wrap">'
+          + '<div class="emp-avatar">' + initials + '</div>'
+          + '<div>'
+            + '<div style="display:flex;align-items:center;gap:2px;flex-wrap:wrap;">'
+              + '<span class="emp-name">' + r.name + '</span>'
+              + equipBadge + allowBadge
+            + '</div>'
+            + '<div class="emp-sub">' + r.role + ' · <span style="font-family:\'JetBrains Mono\',monospace;">' + r.id + '</span></div>'
+          + '</div>'
+        + '</div>'
+      + '</td>'
+      + '<td class="cell-check"><span class="mono">' + fmt12(r.start) + '</span></td>'
+      + '<td class="cell-check"><span class="mono">' + fmt12(r.end) + '</span></td>'
+      + '<td class="cell-check"><span class="mono-muted">' + (r.brk && r.brk !== '—' ? '0h ' + r.brk + 'm' : '—') + '</span></td>'
+      + '<td class="cell-check"><span class="mono" style="color:#10B981;">' + (total||'—') + '</span></td>'
+      + '<td style="text-align:center;"><button class="chev-btn"><svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5l4 4 4-4"/></svg></button></td>'
+      + '</tr>';
+  }).join('');
+
+  // Sync select-all checkbox
+  document.getElementById('cb-all').checked = selectedIds.length === loadedEntries.length;
+  document.getElementById('cb-all').indeterminate = selectedIds.length > 0 && selectedIds.length < loadedEntries.length;
+}
+
+function toggleRow(id, checked, idx) {
+  if (checked) { if (!selectedIds.includes(id)) selectedIds.push(id); }
+  else { selectedIds = selectedIds.filter(function(s){return s !== id;}); }
+  var row = document.getElementById('cp-row-' + idx);
+  if (row) row.style.background = checked ? '#FFFDF5' : '';
+  document.getElementById('cb-all').checked = selectedIds.length === loadedEntries.length;
+  document.getElementById('cb-all').indeterminate = selectedIds.length > 0 && selectedIds.length < loadedEntries.length;
+  updateSummary();
+  checkReady();
+}
+
+function toggleAll(checked) {
+  selectedIds = checked ? loadedEntries.map(function(e){return e.id;}) : [];
+  renderTable();
+  checkReady();
+}
+
+function selectAllRows() {
+  selectedIds = loadedEntries.map(function(e){return e.id;});
+  renderTable(); checkReady();
+}
+
+function clearAllRows() {
+  selectedIds = [];
+  renderTable(); checkReady();
+}
+
+function updateSummary() {
+  var sel = loadedEntries.filter(function(e){ return selectedIds.includes(e.id); });
+  var totalMins = sel.reduce(function(s, r) {
+    var t = calcTotal(r.start, r.end, parseInt(r.brk)||0);
+    if (!t || t === '—') return s;
+    var m = t.match(/(\d+)h\s*(\d+)m/);
+    return s + (m ? parseInt(m[1])*60 + parseInt(m[2]) : 0);
+  }, 0);
+  document.getElementById('sum-emp').textContent = sel.length;
+  document.getElementById('sum-hrs').textContent = Math.floor(totalMins/60) + 'h ' + (totalMins%60) + 'm';
+  document.getElementById('sum-sel').textContent = selectedIds.length;
+  var lbl = document.getElementById('cp-sel-label');
+  if (lbl) { lbl.textContent = selectedIds.length + ' selected'; lbl.style.display = selectedIds.length ? '' : 'none'; }
+}
+
+function checkReady() {
+  var btn = document.getElementById('copy-btn');
+  var to = document.getElementById('cp-to').value;
+  btn.disabled = !(to && selectedIds.length > 0);
+}
+
+function doCopyTimesheet() {
+  var to = document.getElementById('cp-to').value;
+  var sel = loadedEntries.filter(function(e){ return selectedIds.includes(e.id); });
+  showToast(sel.length + ' timesheet entr' + (sel.length===1?'y':'ies') + ' copied to ' + fmtDate(to));
+  setTimeout(function(){ window.close(); }, 1800);
+}
+
+function clearTable() {
+  document.getElementById('cp-tbody').innerHTML = '<tr><td colspan="10" class="empty"><div style="font-size:13px;color:#9CA3AF;">No entries found for the selected date.</div></td></tr>';
+  document.getElementById('cp-count').textContent = '';
+  document.getElementById('cp-summary').style.display = 'none';
+  document.getElementById('copy-btn').disabled = true;
+}
+
+/* ── Helpers ── */
+function fmt12(t24) {
+  if (!t24) return '—';
+  var p = t24.split(':'), h = parseInt(p[0]), m = parseInt(p[1]);
+  var ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return h + ':' + (m < 10 ? '0' + m : m) + ' ' + ap;
+}
+
+function calcTotal(start, end, brkMins) {
+  if (!start || !end) return '';
+  var s = start.split(':'), e = end.split(':');
+  var sm = parseInt(s[0])*60 + parseInt(s[1]);
+  var em = parseInt(e[0])*60 + parseInt(e[1]);
+  if (em <= sm) em += 1440;
+  var t = em - sm - (brkMins||0);
+  if (t <= 0) return '—';
+  return Math.floor(t/60) + 'h ' + (t%60) + 'm';
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  var parts = d.split('-');
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return parseInt(parts[2]) + ' ' + months[parseInt(parts[1])-1] + ' ' + parts[0];
+}
+
+function showToast(msg) {
+  var ex = document.getElementById('tc-copy-toast');
+  if (ex) ex.remove();
+  var t = document.createElement('div');
+  t.id = 'tc-copy-toast';
+  t.innerHTML = '<span style="width:22px;height:22px;background:#10B981;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'
+    + '<svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.2"><path d="M2 6l3 3 5-5"/></svg></span>'
+    + '<div><div style="font-size:13px;font-weight:600;color:#1A2332;">Success</div><div style="font-size:12px;color:#6B7280;">' + msg + '</div></div>';
+  document.body.appendChild(t);
+}
+</script>
+</body>
+</html>

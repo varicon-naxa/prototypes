@@ -1,0 +1,1745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Timesheet Management</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; transition: background 0.15s; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+  .sidebar-item.active .icon { opacity: 1; }
+
+  /* Main */
+  .main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+  .screen { display: none; flex: 1; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  /* Page header */
+  .page-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 28px 0; }
+  .page-header h1 { font-size: 22px; font-weight: 600; }
+  .header-actions { display: flex; gap: 10px; }
+
+  /* Buttons */
+  .btn { padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 2px solid; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-outline { background: #fff; border-color: #d0d0d0; color: #555; }
+  .btn-outline:hover { background: #f5f5f5; }
+  .btn-primary { background: #f7941d; border-color: #f7941d; color: #fff; }
+  .btn-primary:hover { background: #e8850f; }
+  .btn-success { background: #4caf50; border-color: #4caf50; color: #fff; }
+  .btn-success:hover { background: #43a047; }
+  .btn-blue { background: #1565c0; border-color: #1565c0; color: #fff; }
+  .btn-blue:hover { background: #0d47a1; }
+  .btn-danger { background: #e53935; border-color: #e53935; color: #fff; }
+  .btn-danger:hover { background: #c62828; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+  /* Big toggle */
+  .big-toggle { display: flex; margin: 16px 28px 0; background: #e8e8e8; border-radius: 10px; padding: 4px; }
+  .big-toggle-btn { flex: 1; padding: 14px 20px; border-radius: 8px; font-size: 15px; font-weight: 700; text-align: center; cursor: pointer; transition: all 0.2s; color: #888; }
+  .big-toggle-btn.active { background: #fff; color: #333; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  .big-toggle-btn:not(.active):hover { color: #555; }
+  .big-toggle-btn .bt-count { font-weight: 400; font-size: 13px; color: #999; margin-left: 4px; }
+  .big-toggle-btn.active .bt-count { color: #f7941d; }
+
+  /* Content area */
+  .content { flex: 1; padding: 20px 28px 100px; overflow-y: auto; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Summary cards */
+  .summary-row { display: flex; gap: 16px; margin-bottom: 20px; }
+  .summary-card { flex: 1; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; }
+  .summary-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .si-orange { background: #fff3e0; }
+  .si-green { background: #e8f5e9; }
+  .si-blue { background: #e3f2fd; }
+  .si-red { background: #fde8e8; }
+  .si-purple { background: #f3e5f5; }
+  .summary-card .sc-value { font-size: 20px; font-weight: 700; }
+  .summary-card .sc-label { font-size: 11px; color: #888; font-weight: 600; margin-top: 2px; }
+
+  /* Alert banner */
+  .alert-banner {
+    display: flex; align-items: center; gap: 14px; padding: 14px 20px;
+    border-radius: 10px; margin-bottom: 20px; cursor: pointer; transition: all 0.15s;
+  }
+  .alert-warning { background: #fff3e0; border: 2px solid #f7941d; }
+  .alert-warning:hover { background: #ffe8cc; }
+  .alert-icon {
+    width: 40px; height: 40px; border-radius: 50%; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; flex-shrink: 0;
+  }
+  .alert-text { flex: 1; }
+  .alert-text .alert-title { font-size: 14px; font-weight: 700; }
+  .alert-text .alert-detail { font-size: 12px; color: #555; margin-top: 2px; }
+  .alert-arrow { font-size: 20px; color: #999; }
+
+  /* Toolbar */
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .filter-select {
+    padding: 8px 32px 8px 12px; border: 1px solid #d0d0d0; border-radius: 6px;
+    font-size: 13px; background: #fff; appearance: none; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+  }
+  .toolbar-search {
+    display: flex; align-items: center; border: 1px solid #d0d0d0; border-radius: 6px;
+    padding: 0 10px; background: #fff; margin-left: auto;
+  }
+  .toolbar-search input { border: none; outline: none; padding: 8px 6px; font-size: 13px; width: 180px; }
+
+  /* Table */
+  .table-wrapper { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: #fafafa; }
+  th { text-align: left; padding: 12px 16px; font-size: 12px; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; white-space: nowrap; }
+  td { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  tr.data-row:hover { background: #fafafa; cursor: pointer; }
+  .text-right { text-align: right; }
+
+  /* Status badges */
+  .status { padding: 4px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .s-approved { background: #e8f5e9; color: #2e7d32; }
+  .s-pending { background: #fff3e0; color: #e65100; }
+  .s-unapproved { background: #fde8e8; color: #c62828; }
+  .s-locked { background: #e3f2fd; color: #1565c0; }
+  .s-draft { background: #f0f0f0; color: #666; }
+
+  /* Date group header */
+  .date-group td { padding: 10px 16px; background: #fafafa; font-size: 12px; font-weight: 600; color: #666; }
+  .date-group:hover { background: #fafafa !important; cursor: default !important; }
+  .dg-count { background: #f7941d; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; margin-left: 6px; }
+
+  /* Checkbox */
+  .cb { width: 16px; height: 16px; border: 2px solid #ccc; border-radius: 3px; cursor: pointer; flex-shrink: 0; display: inline-block; }
+  .cb.checked { background: #f7941d; border-color: #f7941d; position: relative; }
+  .cb.checked::after { content: ''; position: absolute; left: 3px; top: 0; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+
+  /* Company cards */
+  .company-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .company-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px; cursor: pointer; transition: all 0.15s; }
+  .company-card:hover { border-color: #f7941d; box-shadow: 0 2px 12px rgba(247,148,29,0.12); }
+  .company-card.selected { border-color: #f7941d; border-width: 2px; box-shadow: 0 2px 12px rgba(247,148,29,0.15); }
+  .cc-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .cc-avatar { width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; color: #fff; flex-shrink: 0; }
+  .cc-name { font-size: 15px; font-weight: 600; }
+  .cc-abn { font-size: 11px; color: #888; margin-top: 2px; }
+  .cc-type { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; margin-top: 4px; display: inline-block; }
+  .cc-type-abn { background: #fff3e0; color: #e65100; }
+  .cc-type-lh { background: #e3f2fd; color: #1565c0; }
+  .cc-stats { display: flex; gap: 16px; padding-top: 12px; border-top: 1px solid #f0f0f0; }
+  .cc-stat-label { font-size: 10px; color: #888; font-weight: 600; text-transform: uppercase; }
+  .cc-stat-value { font-size: 14px; font-weight: 700; margin-top: 2px; }
+
+  /* Detail header */
+  .detail-header { padding: 16px 28px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 12px; }
+  .detail-header .back { font-size: 20px; cursor: pointer; color: #f7941d; text-decoration: none; }
+  .detail-header h2 { font-size: 17px; font-weight: 600; flex: 1; }
+  .detail-header .dh-meta { font-size: 12px; color: #888; }
+
+  /* Info cards row */
+  .info-row { display: flex; gap: 16px; margin-bottom: 20px; }
+  .info-card { flex: 1; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px 16px; }
+  .info-card .ic-label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; }
+  .info-card .ic-value { font-size: 14px; font-weight: 600; margin-top: 4px; }
+  .info-card .ic-sub { font-size: 11px; color: #888; margin-top: 2px; }
+
+  /* Linkage diagram */
+  .linkage { display: flex; align-items: center; gap: 0; margin-bottom: 24px; background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px 24px; }
+  .linkage-node { flex: 1; text-align: center; padding: 12px; border-radius: 8px; }
+  .linkage-node.active { background: #fff8f0; border: 2px solid #f7941d; }
+  .linkage-node.linked { background: #e8f5e9; border: 2px solid #4caf50; }
+  .linkage-node.pending { background: #f5f5f5; border: 2px dashed #ccc; }
+  .linkage-node.optional { background: #f9f9f9; border: 2px dashed #bbb; }
+  .ln-icon { font-size: 24px; margin-bottom: 6px; }
+  .ln-label { font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; }
+  .ln-value { font-size: 13px; font-weight: 600; margin-top: 4px; }
+  .ln-status { font-size: 10px; margin-top: 4px; }
+  .linkage-arrow { font-size: 20px; color: #ccc; padding: 0 8px; flex-shrink: 0; }
+  .linkage-arrow.connected { color: #4caf50; }
+
+  /* Cert summary */
+  .cert-summary { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px 24px; margin-bottom: 20px; }
+  .cert-summary h3 { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+  .cert-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+  .cert-row:last-child { border-bottom: none; }
+  .cert-row .cr-label { color: #666; }
+  .cert-row .cr-value { font-weight: 600; }
+  .cert-row.total { font-size: 15px; font-weight: 700; border-top: 2px solid #333; padding-top: 12px; margin-top: 4px; }
+
+  /* Bottom action bar */
+  .bottom-actions {
+    position: fixed; bottom: 0; left: 200px; right: 0;
+    padding: 14px 28px; background: #fff; border-top: 1px solid #e0e0e0;
+    display: flex; gap: 12px; justify-content: flex-end; align-items: center;
+    box-shadow: 0 -2px 8px rgba(0,0,0,.06); z-index: 10;
+  }
+
+  /* Bottom bar tooltips */
+  .ba-tooltip-wrap { position: relative; }
+  .ba-tooltip { display: none; position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 500; white-space: nowrap; z-index: 60; max-width: 340px; white-space: normal; text-align: center; line-height: 1.4; }
+  .ba-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #333; }
+  .ba-tooltip-wrap:hover .ba-tooltip { display: block; }
+
+  /* Export prompt banner */
+  .export-prompt-show { display: flex !important; animation: slideDown 0.3s ease-out; }
+  @keyframes slideDown { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  /* Pulsing export button */
+  .btn-pulse { animation: btnPulse 1.5s ease-in-out infinite; }
+  @keyframes btnPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(247,148,29,0.5); } 50% { box-shadow: 0 0 0 8px rgba(247,148,29,0); } }
+
+  /* Export modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300; align-items: center; justify-content: center; }
+  .modal-overlay.show { display: flex; animation: fadeInModal 0.2s; }
+  @keyframes fadeInModal { from { opacity: 0; } to { opacity: 1; } }
+  .modal { background: #fff; border-radius: 12px; width: 520px; max-width: 90vw; box-shadow: 0 8px 32px rgba(0,0,0,.2); overflow: hidden; }
+  .modal-header { padding: 20px 24px; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; }
+  .modal-header h3 { font-size: 18px; font-weight: 700; }
+  .modal-close { width: 32px; height: 32px; border: none; background: #f0f0f0; border-radius: 6px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #666; }
+  .modal-close:hover { background: #e0e0e0; }
+  .modal-body { padding: 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid #e0e0e0; display: flex; justify-content: flex-end; gap: 10px; }
+
+  .export-option { display: flex; align-items: center; gap: 16px; padding: 16px; border: 2px solid #e0e0e0; border-radius: 10px; cursor: pointer; margin-bottom: 12px; transition: all 0.15s; }
+  .export-option:hover { border-color: #f7941d; background: #fffbf5; }
+  .export-option.selected { border-color: #f7941d; background: #fff8f0; }
+  .export-option .eo-radio { width: 20px; height: 20px; border: 2px solid #ccc; border-radius: 50%; flex-shrink: 0; transition: all 0.15s; }
+  .export-option.selected .eo-radio { border: 6px solid #f7941d; }
+  .export-option .eo-icon { font-size: 28px; }
+  .export-option .eo-title { font-size: 14px; font-weight: 700; }
+  .export-option .eo-desc { font-size: 12px; color: #666; margin-top: 2px; }
+  .export-option .eo-default { font-size: 10px; font-weight: 600; color: #f7941d; background: #fff3e0; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
+
+  /* Done button state */
+  .btn-done { background: #4caf50 !important; border-color: #4caf50 !important; color: #fff !important; pointer-events: none; opacity: 0.8; }
+
+  /* Current step emphasis */
+  .btn-current-step { position: relative; animation: btnPulse 1.5s ease-in-out infinite; }
+  .btn-next-step:not(.btn-done) { opacity: 0.5; }
+  .btn-step-label { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; color: #f7941d; }
+
+  /* Supervisor prompt */
+  .supervisor-row { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #fff8f0; border-bottom: 1px solid #f0e0c0; font-size: 12px; color: #e65100; }
+  .supervisor-row:hover { background: #fff3e0 !important; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 13px; font-weight: 500; display: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+  .toast.show { display: block; animation: fadeIn 0.3s; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+  /* Stepper (from onboarding wizard) */
+  .wizard-stepper { display: flex; align-items: center; justify-content: center; padding: 20px 32px 16px; background: #fafafa; border-bottom: 1px solid #e0e0e0; flex-shrink: 0; }
+  .wiz-step { display: flex; align-items: center; gap: 8px; cursor: default; }
+  .wiz-step-circle { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #d0d0d0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: #999; background: #fff; transition: all 0.3s; flex-shrink: 0; }
+  .wiz-step-circle.active { border-color: #f7941d; color: #f7941d; background: #fff8f0; }
+  .wiz-step-circle.done { border-color: #4caf50; color: #fff; background: #4caf50; }
+  .wiz-step-circle.warn { border-color: #f7941d; color: #fff; background: #f7941d; }
+  .wiz-step-label { font-size: 11px; font-weight: 600; letter-spacing: 0.3px; color: #999; white-space: nowrap; transition: color 0.3s; }
+  .wiz-step-label.active { color: #f7941d; }
+  .wiz-step-label.done { color: #4caf50; }
+  .wiz-step-label.warn { color: #f7941d; }
+  .wiz-step-line.warn { background: #f7941d; }
+
+  /* Stepper tooltip */
+  .wiz-step { position: relative; }
+  .wiz-tooltip { display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 11px; font-weight: 500; white-space: nowrap; z-index: 50; }
+  .wiz-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #333; }
+  .wiz-step:hover .wiz-tooltip { display: block; }
+  .wiz-tooltip.warn-tip { background: #e65100; }
+  .wiz-tooltip.warn-tip::after { border-top-color: #e65100; }
+
+  /* Pulsing export prompt */
+  .wiz-step-circle.pulse { animation: stepPulse 1.5s ease-in-out infinite; }
+  @keyframes stepPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(247,148,29,0.4); } 50% { box-shadow: 0 0 0 8px rgba(247,148,29,0); } }
+  .wiz-step-line { width: 48px; height: 2px; background: #d0d0d0; margin: 0 8px; transition: background 0.3s; }
+  .wiz-step-line.done { background: #4caf50; }
+
+  /* Prototype notice */
+  .proto-notice { position: fixed; top: 0; left: 0; right: 0; background: #1a1a2e; color: #f7941d; text-align: center; padding: 6px; font-size: 11px; font-weight: 600; z-index: 200; }
+  .proto-notice a { color: #fff; margin-left: 8px; }
+
+  /* Flow overview */
+  .flow-overview { min-height: 100vh; background: #f5f5f5; padding: 40px; }
+  .flow-title { font-size: 28px; font-weight: 700; margin-bottom: 6px; }
+  .flow-subtitle { font-size: 14px; color: #888; margin-bottom: 36px; }
+  .flow-section { margin-bottom: 48px; }
+  .flow-section-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+  .flow-section-desc { font-size: 13px; color: #666; margin-bottom: 20px; }
+  .flow-tag { padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+  .ft-emp { background: #e3f2fd; color: #1565c0; }
+  .ft-sub { background: #fff3e0; color: #e65100; }
+
+  .flow-steps { display: flex; align-items: flex-start; gap: 0; overflow-x: auto; padding-bottom: 12px; }
+  .flow-step { min-width: 220px; max-width: 220px; flex-shrink: 0; }
+  .flow-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px; cursor: pointer; transition: all 0.15s; min-height: 180px; display: flex; flex-direction: column; }
+  .flow-card:hover { border-color: #f7941d; box-shadow: 0 2px 12px rgba(247,148,29,0.12); transform: translateY(-2px); }
+  .flow-step-num { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; color: #fff; margin-bottom: 10px; flex-shrink: 0; }
+  .fsn-blue { background: #1565c0; }
+  .fsn-orange { background: #f7941d; }
+  .fsn-green { background: #4caf50; }
+  .fsn-purple { background: #7b1fa2; }
+  .flow-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+  .flow-card p { font-size: 12px; color: #666; line-height: 1.5; flex: 1; }
+  .flow-card .fc-actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .flow-card .fc-action { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; background: #f5f5f5; color: #666; }
+  .flow-card .fc-action.primary { background: #fff3e0; color: #e65100; }
+  .flow-card .fc-action.success { background: #e8f5e9; color: #2e7d32; }
+  .flow-card .fc-action.blue { background: #e3f2fd; color: #1565c0; }
+
+  .flow-arrow { display: flex; align-items: center; justify-content: center; min-width: 36px; padding-top: 60px; font-size: 24px; color: #ccc; flex-shrink: 0; }
+  .flow-arrow.green { color: #4caf50; }
+
+  .flow-enter-btn { display: inline-flex; align-items: center; gap: 8px; margin-top: 28px; padding: 14px 28px; background: #f7941d; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.15s; }
+  .flow-enter-btn:hover { background: #e8850f; }
+
+  .flow-legend { display: flex; gap: 24px; margin-bottom: 32px; padding: 14px 18px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; }
+  .flow-legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; color: #555; }
+  .flow-legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+  .flow-divider { height: 1px; background: #e0e0e0; margin: 8px 0 40px; }
+</style>
+</head>
+<body>
+
+<div class="proto-notice">PROTOTYPE — Timesheet Management <a href="#" onclick="backToOverview(); return false;">Flow Overview</a> · <a href="../">All Prototypes</a></div>
+
+<!-- ========== FLOW OVERVIEW ========== -->
+<div class="flow-overview" id="flow-overview" style="margin-top: 28px;">
+
+  <div class="flow-title">Timesheet Management — Flow Overview</div>
+  <div class="flow-subtitle">Two parallel workflows within the same Timesheet module. Click any step to jump to that screen.</div>
+
+  <div class="flow-legend">
+    <div class="flow-legend-item"><div class="flow-legend-dot" style="background:#1565c0;"></div> View / Review</div>
+    <div class="flow-legend-item"><div class="flow-legend-dot" style="background:#f7941d;"></div> Action Required</div>
+    <div class="flow-legend-item"><div class="flow-legend-dot" style="background:#4caf50;"></div> Completion / Output</div>
+    <div class="flow-legend-item"><div class="flow-legend-dot" style="background:#7b1fa2;"></div> Export / Send</div>
+  </div>
+
+  <!-- EMPLOYEES FLOW -->
+  <div class="flow-section">
+    <div class="flow-section-title"><span class="flow-tag ft-emp">EMPLOYEES</span> Payroll Timesheet Flow</div>
+    <div class="flow-section-desc">Supervisors approve timesheets on-site → Office reviews, locks for payroll → Exports to Xero/MYOB</div>
+
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="flow-card" onclick="enterProto('employees')">
+          <div class="flow-step-num fsn-orange">1</div>
+          <h4>Timesheets Approved</h4>
+          <p>Supervisors approve timesheets on-site. If any are still unapproved, an alert prompts you to notify the supervisor — but you can still progress.</p>
+          <div class="fc-actions">
+            <span class="fc-action success">Approved by supervisor</span>
+            <span class="fc-action primary">Notify if unapproved</span>
+          </div>
+        </div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-card" onclick="enterProto('employees')">
+          <div class="flow-step-num fsn-blue">2</div>
+          <h4>Lock for Payroll</h4>
+          <p>Select approved timesheets and lock them for payroll. Only approved timesheets can be locked. Locked timesheets can't be edited.</p>
+          <div class="fc-actions">
+            <span class="fc-action">Select approved rows</span>
+            <span class="fc-action primary">Payroll Lock</span>
+            <span class="fc-action">Unapproved = skipped</span>
+          </div>
+        </div>
+      </div>
+      <div class="flow-arrow green">→</div>
+      <div class="flow-step">
+        <div class="flow-card" onclick="enterProto('employees')">
+          <div class="flow-step-num fsn-purple">3</div>
+          <h4>Export</h4>
+          <p>Export timesheet data for payroll processing or as a summary report.</p>
+          <div class="fc-actions">
+            <span class="fc-action blue">Xero Payroll CSV</span>
+            <span class="fc-action blue">MYOB Payroll CSV</span>
+            <span class="fc-action blue">Timesheet Summary</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-divider"></div>
+
+  <!-- SUBBIES FLOW -->
+  <div class="flow-section">
+    <div class="flow-section-title"><span class="flow-tag ft-sub">SUBBIES / LABOUR HIRE</span> Accounts Payable Flow</div>
+    <div class="flow-section-desc">Replaces the delivery docket in the standard AP cycle. PO → Timesheet → Certificate of Assessment → Bill</div>
+
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="flow-card" onclick="enterProto('subbies')">
+          <div class="flow-step-num fsn-blue">1</div>
+          <h4>Select Company</h4>
+          <p>Choose a subcontractor (ABN sole trader) or labour hire company.</p>
+          <div class="fc-actions">
+            <span class="fc-action">Labour Hire</span>
+            <span class="fc-action">Sole Trader (ABN)</span>
+          </div>
+        </div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-card" onclick="enterProtoScreen('screen-link-po')">
+          <div class="flow-step-num fsn-orange">2</div>
+          <h4>Link to PO</h4>
+          <p>Attach the company's timesheets to a purchase order. Sets the hourly rate and tracks costs against PO budget.</p>
+          <div class="fc-actions">
+            <span class="fc-action primary">Select PO</span>
+            <span class="fc-action">Rate from PO</span>
+            <span class="fc-action">Or skip</span>
+          </div>
+        </div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-card" onclick="enterProtoScreen('screen-company')">
+          <div class="flow-step-num fsn-orange">3</div>
+          <h4>Review Timesheets</h4>
+          <p>View all timesheets for the company. Approve hours submitted by their workers. PO rate auto-applied.</p>
+          <div class="fc-actions">
+            <span class="fc-action success">Approve</span>
+            <span class="fc-action">PO rate auto-applied</span>
+          </div>
+        </div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-card" onclick="enterProtoScreen('screen-cert')">
+          <div class="flow-step-num fsn-green">4</div>
+          <h4>Certificate of Assessment</h4>
+          <p>Generate a COA from approved timesheets. Shows line items, PO rates, totals, and budget impact.</p>
+          <div class="fc-actions">
+            <span class="fc-action success">Create COA</span>
+            <span class="fc-action">PO budget tracker</span>
+          </div>
+        </div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-card" onclick="enterProtoScreen('screen-cert')">
+          <div class="flow-step-num fsn-purple">5</div>
+          <h4>Send to Supplier</h4>
+          <p>Approve and send COA to the subbie. They attach it to their invoice.</p>
+          <div class="fc-actions">
+            <span class="fc-action blue">Email COA</span>
+            <span class="fc-action blue">Download PDF</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-divider"></div>
+
+  <!-- AP comparison -->
+  <div class="flow-section">
+    <div class="flow-section-title">How it fits: Standard AP vs Labour AP</div>
+    <div style="display: flex; gap: 24px; margin-top: 12px;">
+      <div style="flex: 1; background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px;">
+        <div style="font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; margin-bottom: 12px;">Standard AP (Materials)</div>
+        <div style="display: flex; align-items: center; gap: 0; justify-content: center;">
+          <div style="text-align: center; padding: 12px 16px; background: #e3f2fd; border-radius: 8px; border: 2px solid #1565c0;">
+            <div style="font-size: 20px;">📋</div>
+            <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">Purchase Order</div>
+          </div>
+          <div style="padding: 0 10px; color: #1565c0; font-size: 20px;">→</div>
+          <div style="text-align: center; padding: 12px 16px; background: #e3f2fd; border-radius: 8px; border: 2px solid #1565c0;">
+            <div style="font-size: 20px;">🚚</div>
+            <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">Delivery Docket</div>
+          </div>
+          <div style="padding: 0 10px; color: #1565c0; font-size: 20px;">→</div>
+          <div style="text-align: center; padding: 12px 16px; background: #e3f2fd; border-radius: 8px; border: 2px solid #1565c0;">
+            <div style="font-size: 20px;">💰</div>
+            <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">Bill</div>
+          </div>
+        </div>
+      </div>
+      <div style="flex: 1; background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px;">
+        <div style="font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; margin-bottom: 12px;">Labour AP (This Prototype)</div>
+        <div style="display: flex; align-items: center; gap: 0; justify-content: center;">
+          <div style="text-align: center; padding: 12px 16px; background: #fff3e0; border-radius: 8px; border: 2px solid #f7941d;">
+            <div style="font-size: 20px;">📋</div>
+            <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">Purchase Order</div>
+          </div>
+          <div style="padding: 0 10px; color: #f7941d; font-size: 20px;">→</div>
+          <div style="text-align: center; padding: 12px 16px; background: #fff3e0; border-radius: 8px; border: 2px solid #f7941d;">
+            <div style="font-size: 20px;">⏱</div>
+            <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">Timesheet</div>
+          </div>
+          <div style="padding: 0 10px; color: #f7941d; font-size: 20px;">→</div>
+          <div style="text-align: center; padding: 12px 16px; background: #fff3e0; border-radius: 8px; border: 2px solid #f7941d;">
+            <div style="font-size: 20px;">📄</div>
+            <div style="font-size: 11px; font-weight: 700; margin-top: 4px;">Certificate of Assessment</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button class="flow-enter-btn" onclick="enterProto('employees')">Enter Prototype →</button>
+
+</div>
+
+<!-- ========== INTERACTIVE PROTOTYPE ========== -->
+<div class="layout" style="margin-top: 28px; display: none;" id="proto-layout">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Cookie's Civil</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item active"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">🏖</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Docket</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">🚚</span> Delivery Docket</div>
+    <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+    <div class="sidebar-item"><span class="icon">📝</span> Forms</div>
+    <div class="sidebar-item"><span class="icon">🔧</span> Equipment</div>
+    <div class="sidebar-item"><span class="icon">👥</span> Suppliers</div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+
+    <!-- Persistent header + toggle + stepper (always visible) -->
+    <div id="persistent-header">
+      <div class="page-header">
+        <h1>Timesheet</h1>
+        <div class="header-actions" id="header-actions-area"></div>
+      </div>
+
+      <div class="big-toggle" id="big-toggle">
+        <div class="big-toggle-btn active" onclick="switchMode('employees')">Employees <span class="bt-count">(4)</span></div>
+        <div class="big-toggle-btn" onclick="switchMode('subbies')">Subbies / Labour Hire <span class="bt-count">(3)</span></div>
+      </div>
+
+      <!-- Employee stepper -->
+      <div class="wizard-stepper" id="emp-stepper">
+        <div class="wiz-step">
+          <div class="wiz-step-circle active" id="emp-sc1">1</div>
+          <div class="wiz-step-label active" id="emp-sl1">Approve</div>
+          <div class="wiz-tooltip warn-tip" id="emp-tip1">⚠ 2 unapproved timesheets</div>
+        </div>
+        <div class="wiz-step-line" id="emp-line1"></div>
+        <div class="wiz-step">
+          <div class="wiz-step-circle" id="emp-sc2">2</div>
+          <div class="wiz-step-label" id="emp-sl2">Payroll Lock</div>
+          <div class="wiz-tooltip" id="emp-tip2">Lock approved timesheets for payroll</div>
+        </div>
+        <div class="wiz-step-line" id="emp-line2"></div>
+        <div class="wiz-step">
+          <div class="wiz-step-circle" id="emp-sc3">3</div>
+          <div class="wiz-step-label" id="emp-sl3">Export</div>
+          <div class="wiz-tooltip" id="emp-tip3">Export for Xero, MYOB, or summary</div>
+        </div>
+      </div>
+
+      <!-- Subbie stepper -->
+      <div class="wizard-stepper" id="sub-stepper" style="display: none;">
+        <div class="wiz-step"><div class="wiz-step-circle active" id="sub-sc1">1</div><div class="wiz-step-label active" id="sub-sl1">Select Company</div></div>
+        <div class="wiz-step-line" id="sub-line1"></div>
+        <div class="wiz-step"><div class="wiz-step-circle" id="sub-sc2">2</div><div class="wiz-step-label" id="sub-sl2">Link to PO</div></div>
+        <div class="wiz-step-line" id="sub-line2"></div>
+        <div class="wiz-step"><div class="wiz-step-circle" id="sub-sc3">3</div><div class="wiz-step-label" id="sub-sl3">Review Timesheets</div></div>
+        <div class="wiz-step-line" id="sub-line3"></div>
+        <div class="wiz-step"><div class="wiz-step-circle" id="sub-sc4">4</div><div class="wiz-step-label" id="sub-sl4">Certificate of Assessment</div></div>
+        <div class="wiz-step-line" id="sub-line4"></div>
+        <div class="wiz-step"><div class="wiz-step-circle" id="sub-sc5">5</div><div class="wiz-step-label" id="sub-sl5">Send to Supplier</div></div>
+      </div>
+    </div>
+
+    <!-- ========== SCREEN 1: Timesheet List ========== -->
+    <div class="screen active" id="screen-list">
+
+      <div class="content">
+
+        <!-- ===== EMPLOYEES TAB ===== -->
+        <div class="tab-content active" id="tab-employees">
+
+          <!-- Unapproved alert -->
+          <div class="alert-banner alert-warning" id="unapproved-alert" onclick="scrollToUnapproved()">
+            <div class="alert-icon" style="background: #f7941d;">!</div>
+            <div class="alert-text">
+              <div class="alert-title">2 unapproved timesheets need supervisor review</div>
+              <div class="alert-detail">James Baker has 2 timesheets from Tuesday not yet approved. Notify supervisor?</div>
+            </div>
+            <button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); notifySupervisor()">Notify Supervisor</button>
+            <span class="alert-arrow">›</span>
+          </div>
+
+          <div class="summary-row">
+            <div class="summary-card">
+              <div class="summary-icon si-blue">📋</div>
+              <div><div class="sc-value">7</div><div class="sc-label">Total Timesheets</div></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-icon si-green">✓</div>
+              <div><div class="sc-value">4</div><div class="sc-label">Approved</div></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-icon si-orange">⏳</div>
+              <div><div class="sc-value">2</div><div class="sc-label">Unapproved</div></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-icon si-purple">🔒</div>
+              <div><div class="sc-value">1</div><div class="sc-label">Payroll Locked</div></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-icon si-blue">⏱</div>
+              <div><div class="sc-value">46h 45m</div><div class="sc-label">Total Work Time</div></div>
+            </div>
+          </div>
+
+          <div class="toolbar">
+            <select class="filter-select"><option>All Projects</option><option>(VAR004) Bourke Street</option><option>(VAR005) Ring Road</option></select>
+            <select class="filter-select"><option>Fri 20/03 — Thu 26/03</option><option>Fri 13/03 — Thu 20/03</option><option>Custom Range</option></select>
+            <select class="filter-select"><option>All Statuses</option><option>Approved</option><option>Unapproved</option><option>Payroll Locked</option></select>
+            <div class="toolbar-search"><svg viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input placeholder="Search employees..."></div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:32px;"><div class="cb" onclick="toggleAllEmp(this)"></div></th>
+                  <th>Employee</th>
+                  <th>Project</th>
+                  <th>Approver</th>
+                  <th>Submitted Time</th>
+                  <th>Approved Time</th>
+                  <th>Task / Cost Centre</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Wednesday 25 Mar -->
+                <tr class="date-group"><td colspan="9">Wednesday, 25 Mar <span class="dg-count">1</span></td></tr>
+                <tr class="data-row">
+                  <td><div class="cb checked"></div></td>
+                  <td><strong>Ford Hoogendoorn</strong><br><span style="font-size:11px; color:#888;">Supervisor</span></td>
+                  <td>(VAR004) Bourke Stre...</td>
+                  <td>Varicon Info</td>
+                  <td>06:00 AM — 03:15 PM<br><span style="font-size:11px; color:#888;">8h 45m · ☕ 30m</span></td>
+                  <td>06:00 AM — 03:15 PM<br><span style="font-size:11px; color:#888;">8h 45m · ☕ 30m</span></td>
+                  <td>—</td>
+                  <td><span class="status s-locked">Payroll Locked</span></td>
+                  <td style="color:#ccc;">›</td>
+                </tr>
+
+                <!-- Tuesday 24 Mar -->
+                <tr class="date-group"><td colspan="9">Tuesday, 24 Mar <span class="dg-count">6</span></td></tr>
+                <tr class="data-row">
+                  <td><div class="cb"></div></td>
+                  <td><strong>Cris Baker</strong><br><span style="font-size:11px; color:#888;">Engineer</span></td>
+                  <td>(VAR004) Bourke Stre...</td>
+                  <td>Varicon Info</td>
+                  <td>07:00 AM — 04:30 PM<br><span style="font-size:11px; color:#888;">9h 0m · ☕ 30m</span></td>
+                  <td>07:00 AM — 04:30 PM<br><span style="font-size:11px; color:#888;">9h 0m · ☕ 30m</span></td>
+                  <td>Unassigned Task — Pa...</td>
+                  <td><span class="status s-approved">Approved</span></td>
+                  <td style="color:#ccc;">›</td>
+                </tr>
+                <tr class="data-row">
+                  <td><div class="cb"></div></td>
+                  <td><strong>Ford Hoogendoorn</strong><br><span style="font-size:11px; color:#888;">Supervisor</span></td>
+                  <td>(VAR004) Bourke Stre...</td>
+                  <td>Varicon Info</td>
+                  <td>07:00 AM — 04:30 PM<br><span style="font-size:11px; color:#888;">9h 0m · ☕ 30m</span></td>
+                  <td>07:00 AM — 04:30 PM<br><span style="font-size:11px; color:#888;">9h 0m · ☕ 30m</span></td>
+                  <td>Unassigned Task — Pa...</td>
+                  <td><span class="status s-approved">Approved</span></td>
+                  <td style="color:#ccc;">›</td>
+                </tr>
+                <tr class="data-row">
+                  <td><div class="cb"></div></td>
+                  <td><strong>George Carpenter</strong><br><span style="font-size:11px; color:#888;">Labourer</span></td>
+                  <td>(VAR004) Bourke Stre...</td>
+                  <td>Varicon Info</td>
+                  <td>07:00 AM — 06:30 PM<br><span style="font-size:11px; color:#888;">11h 0m · ☕ 30m</span></td>
+                  <td>07:00 AM — 06:30 PM<br><span style="font-size:11px; color:#888;">11h 0m · ☕ 30m</span></td>
+                  <td>Unassigned Task — Pa...</td>
+                  <td><span class="status s-approved">Approved</span></td>
+                  <td style="color:#ccc;">›</td>
+                </tr>
+                <tr class="data-row">
+                  <td><div class="cb"></div></td>
+                  <td><strong>James Baker</strong><br><span style="font-size:11px; color:#888;">Labourer</span></td>
+                  <td>(VAR004) Bourke Stre...</td>
+                  <td>Varicon Info</td>
+                  <td>07:00 AM — 04:30 PM<br><span style="font-size:11px; color:#888;">9h 0m · ☕ 30m</span></td>
+                  <td>07:00 AM — 04:30 PM<br><span style="font-size:11px; color:#888;">9h 0m · ☕ 30m</span></td>
+                  <td>Unassigned Task — Pa...</td>
+                  <td><span class="status s-approved">Approved</span></td>
+                  <td style="color:#ccc;">›</td>
+                </tr>
+
+                <tr class="data-row">
+                  <td><div class="cb"></div></td>
+                  <td><strong>James Baker</strong><br><span style="font-size:11px; color:#888;">Labourer</span></td>
+                  <td>(VAR004) Bourke Stre...</td>
+                  <td>—</td>
+                  <td>10:45 AM — 02:45 PM<br><span style="font-size:11px; color:#888;">3h 30m · ☕ 30m</span></td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td><span class="status s-unapproved">Unapproved</span></td>
+                  <td style="color:#ccc;">›</td>
+                </tr>
+                <tr class="data-row">
+                  <td><div class="cb"></div></td>
+                  <td><strong>James Baker</strong><br><span style="font-size:11px; color:#888;">Labourer</span></td>
+                  <td>(VAR004) Bourke Stre...</td>
+                  <td>—</td>
+                  <td>03:05 PM — 03:04 PM <span style="color:#e53935; font-size:11px;">+1 day</span><br><span style="font-size:11px; color:#888;">23h 59m · ☕ 0m</span></td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td><span class="status s-unapproved">Unapproved</span></td>
+                  <td style="color:#ccc;">›</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ===== SUBBIES / LABOUR HIRE TAB ===== -->
+        <div class="tab-content" id="tab-subbies">
+
+          <div class="summary-row">
+            <div class="summary-card">
+              <div class="summary-icon si-orange">👷</div>
+              <div><div class="sc-value">3</div><div class="sc-label">Companies</div></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-icon si-blue">📋</div>
+              <div><div class="sc-value">12</div><div class="sc-label">Timesheets This Week</div></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-icon si-green">✓</div>
+              <div><div class="sc-value">8</div><div class="sc-label">Approved</div></div>
+            </div>
+            <div class="summary-card">
+              <div class="summary-icon si-red">⏳</div>
+              <div><div class="sc-value">4</div><div class="sc-label">Pending Approval</div></div>
+            </div>
+          </div>
+
+          <p style="font-size: 13px; color: #666; margin-bottom: 16px; font-weight: 500;">Select a company to manage their timesheets, link to purchase orders, and create certificates of assessment.</p>
+
+          <div class="toolbar">
+            <select class="filter-select"><option>All Projects</option><option>(VAR004) Bourke Street</option><option>(VAR005) Ring Road</option></select>
+            <select class="filter-select"><option>This Week</option><option>Last Week</option><option>This Month</option><option>Custom Range</option></select>
+            <div class="toolbar-search"><svg viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input placeholder="Search companies..."></div>
+          </div>
+
+          <div class="company-grid">
+            <div class="company-card" onclick="go('screen-link-po')">
+              <div class="cc-top">
+                <div class="cc-avatar" style="background: #1565c0;">BT</div>
+                <div>
+                  <div class="cc-name">BlueTech Electrical</div>
+                  <div class="cc-abn">ABN 51 824 753 901</div>
+                  <div class="cc-type cc-type-lh">Labour Hire</div>
+                </div>
+              </div>
+              <div class="cc-stats">
+                <div><div class="cc-stat-label">This Week</div><div class="cc-stat-value">6 timesheets</div></div>
+                <div><div class="cc-stat-label">Hours</div><div class="cc-stat-value">86.5h</div></div>
+                <div><div class="cc-stat-label">Pending</div><div class="cc-stat-value" style="color: #e65100;">2</div></div>
+                <div><div class="cc-stat-label">Linked PO</div><div class="cc-stat-value">PO-0042</div></div>
+              </div>
+            </div>
+
+            <div class="company-card" onclick="go('screen-company')">
+              <div class="cc-top">
+                <div class="cc-avatar" style="background: #2e7d32;">ML</div>
+                <div>
+                  <div class="cc-name">Mitchell Labour Hire</div>
+                  <div class="cc-abn">ABN 33 102 456 789</div>
+                  <div class="cc-type cc-type-lh">Labour Hire</div>
+                </div>
+              </div>
+              <div class="cc-stats">
+                <div><div class="cc-stat-label">This Week</div><div class="cc-stat-value">4 timesheets</div></div>
+                <div><div class="cc-stat-label">Hours</div><div class="cc-stat-value">62.0h</div></div>
+                <div><div class="cc-stat-label">Pending</div><div class="cc-stat-value" style="color: #e65100;">1</div></div>
+                <div><div class="cc-stat-label">Linked PO</div><div class="cc-stat-value">PO-0051</div></div>
+              </div>
+            </div>
+
+            <div class="company-card" onclick="go('screen-company')">
+              <div class="cc-top">
+                <div class="cc-avatar" style="background: #e65100;">SD</div>
+                <div>
+                  <div class="cc-name">Steve Davidson</div>
+                  <div class="cc-abn">ABN 12 345 678 901</div>
+                  <div class="cc-type cc-type-abn">Sole Trader (ABN)</div>
+                </div>
+              </div>
+              <div class="cc-stats">
+                <div><div class="cc-stat-label">This Week</div><div class="cc-stat-value">2 timesheets</div></div>
+                <div><div class="cc-stat-label">Hours</div><div class="cc-stat-value">17.0h</div></div>
+                <div><div class="cc-stat-label">Pending</div><div class="cc-stat-value" style="color: #e65100;">1</div></div>
+                <div><div class="cc-stat-label">Linked PO</div><div class="cc-stat-value" style="color: #ccc;">None</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Bottom actions for employees tab -->
+      <div class="bottom-actions" id="emp-bottom-actions">
+        <div style="margin-right: auto; font-size: 12px; color: #888; display: flex; gap: 12px;" id="select-links">
+          <a href="#" onclick="selectAllUnapproved(); return false;" id="link-select-unapproved" style="color: #e65100; text-decoration: none; font-weight: 600;">Select unapproved</a>
+          <a href="#" onclick="selectAllApproved(); return false;" style="color: #f7941d; text-decoration: none; font-weight: 600;">Select all approved</a>
+        </div>
+        <button class="btn btn-success btn-current-step" onclick="approveSelectedEmp()" id="btn-approve-emp">✓ Approve Selected</button>
+        <div style="position: relative;" class="ba-tooltip-wrap" id="notify-wrap">
+          <button class="btn btn-outline" onclick="notifySupervisor()" id="btn-notify">📧 Notify Supervisors</button>
+          <div class="ba-tooltip">Send reminder to project lead contacts to approve timesheets for pay period</div>
+        </div>
+        <button class="btn btn-blue btn-next-step" onclick="payrollLock()" id="btn-payroll-lock">🔒 Payroll Lock Selected</button>
+        <button class="btn btn-outline btn-next-step" onclick="openExportModal()" id="btn-export" style="opacity: 0.5; pointer-events: none;">↓ Export</button>
+      </div>
+
+      <!-- Bottom actions for subbies tab (hidden initially) -->
+      <div class="bottom-actions" id="sub-bottom-actions" style="display: none;">
+      </div>
+    </div>
+
+    <!-- ========== SCREEN 1B: Link to Purchase Order ========== -->
+    <div class="screen" id="screen-link-po">
+      <div class="detail-header">
+        <a class="back" onclick="go('screen-list')">←</a>
+        <div class="cc-avatar" style="background: #1565c0; width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #fff;">BT</div>
+        <div style="flex:1;">
+          <h2>BlueTech Electrical</h2>
+          <div class="dh-meta">ABN 51 824 753 901 · Labour Hire</div>
+        </div>
+      </div>
+
+      <div class="content" style="padding-top: 20px;">
+        <div style="max-width: 680px; margin: 0 auto;">
+
+          <div style="text-align: center; margin-bottom: 28px;">
+            <div style="font-size: 36px; margin-bottom: 8px;">📋</div>
+            <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">Link to Purchase Order</h2>
+            <p style="font-size: 14px; color: #666; line-height: 1.5;">Link BlueTech Electrical's timesheets to a purchase order. This sets the hourly rate and tracks costs against the PO budget.</p>
+          </div>
+
+          <!-- PO selection cards -->
+          <div style="margin-bottom: 16px; font-size: 12px; font-weight: 600; color: #888; text-transform: uppercase;">Available Purchase Orders for BlueTech Electrical</div>
+
+          <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
+            <!-- PO option 1 -->
+            <div class="company-card" id="po-card-1" onclick="selectPO(this, 1)" style="margin: 0; border-width: 2px;">
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="width: 20px; height: 20px; border: 2px solid #ccc; border-radius: 50; flex-shrink: 0;" id="po-radio-1"></div>
+                <div style="flex: 1;">
+                  <div style="font-size: 15px; font-weight: 700;">PO-0042 — Electrical Works</div>
+                  <div style="font-size: 12px; color: #888; margin-top: 2px;">(VAR004) Bourke Street Remediation</div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="font-size: 15px; font-weight: 700;">$48,500.00</div>
+                  <div style="font-size: 11px; color: #2e7d32;">65.5% remaining</div>
+                </div>
+              </div>
+              <div style="display: flex; gap: 24px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f0f0; font-size: 12px; color: #666;">
+                <span>Rate: <strong>$80.00/hr</strong></span>
+                <span>Created: 15/03/2026</span>
+                <span>Approved: <span style="color: #2e7d32;">✓ Yes</span></span>
+              </div>
+            </div>
+
+            <!-- PO option 2 -->
+            <div class="company-card" id="po-card-2" onclick="selectPO(this, 2)" style="margin: 0; border-width: 2px;">
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="width: 20px; height: 20px; border: 2px solid #ccc; border-radius: 50; flex-shrink: 0;" id="po-radio-2"></div>
+                <div style="flex: 1;">
+                  <div style="font-size: 15px; font-weight: 700;">PO-0067 — Additional Electrical — Stage 2</div>
+                  <div style="font-size: 12px; color: #888; margin-top: 2px;">(VAR004) Bourke Street Remediation</div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="font-size: 15px; font-weight: 700;">$22,000.00</div>
+                  <div style="font-size: 11px; color: #2e7d32;">100% remaining</div>
+                </div>
+              </div>
+              <div style="display: flex; gap: 24px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f0f0; font-size: 12px; color: #666;">
+                <span>Rate: <strong>$85.00/hr</strong></span>
+                <span>Created: 22/03/2026</span>
+                <span>Approved: <span style="color: #2e7d32;">✓ Yes</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Or skip -->
+          <div style="text-align: center; margin-bottom: 24px;">
+            <div style="font-size: 12px; color: #999; margin-bottom: 8px;">— or —</div>
+            <button class="btn btn-outline btn-sm" onclick="go('screen-company')" style="color: #888;">Skip — no PO for this company</button>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="bottom-actions">
+        <button class="btn btn-outline" onclick="go('screen-list')">← Back</button>
+        <button class="btn btn-primary" id="btn-link-po" style="opacity: 0.5; pointer-events: none;" onclick="confirmLinkPO()">Link PO & Continue →</button>
+      </div>
+    </div>
+
+    <!-- ========== SCREEN 2: Company Timesheet Detail ========== -->
+    <div class="screen" id="screen-company">
+      <div class="detail-header">
+        <a class="back" onclick="go('screen-list')">←</a>
+        <div class="cc-avatar" style="background: #1565c0; width: 36px; height: 36px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #fff;">BT</div>
+        <div style="flex:1;">
+          <h2>BlueTech Electrical</h2>
+          <div class="dh-meta">ABN 51 824 753 901 &nbsp;·&nbsp; Labour Hire</div>
+        </div>
+        <button class="btn btn-primary" onclick="go('screen-cert')">Create Certificate of Assessment</button>
+      </div>
+
+      <div class="content" style="padding-top: 20px;">
+
+        <!-- PO linkage info -->
+        <div class="info-row">
+          <div class="info-card" style="border-left: 4px solid #4caf50;">
+            <div class="ic-label">Linked Purchase Order</div>
+            <div class="ic-value">PO-0042 — Electrical Works</div>
+            <div class="ic-sub">(VAR004) Bourke Street Remediation · $48,500.00 · 65.5% remaining</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">Period</div>
+            <div class="ic-value">20/03/2026 — 26/03/2026</div>
+            <div class="ic-sub">This week · 6 timesheets</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">Total Hours</div>
+            <div class="ic-value">86.5 hours</div>
+            <div class="ic-sub">3 workers · Avg 28.8h each</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">Estimated Cost</div>
+            <div class="ic-value">$6,928.00</div>
+            <div class="ic-sub">Based on PO rate: $80/hr</div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <select class="filter-select"><option>All Workers</option><option>Tom Reynolds</option><option>Jake Chen</option><option>Maria Santos</option></select>
+          <select class="filter-select"><option>All Statuses</option><option>Approved</option><option>Pending</option></select>
+          <div style="margin-left: auto; display: flex; gap: 8px;">
+            <button class="btn btn-outline btn-sm" onclick="linkPO()">📋 Link to PO</button>
+            <button class="btn btn-success btn-sm" onclick="approveAll()">✓ Approve Selected</button>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:32px;"><div class="cb" onclick="toggleAllSub(this)"></div></th>
+                <th>Worker</th>
+                <th>Date</th>
+                <th>Project</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Break</th>
+                <th class="text-right">Hours</th>
+                <th>Task / Cost Centre</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="date-group"><td colspan="11">Wednesday, 26 Mar <span class="dg-count">2</span></td></tr>
+              <tr class="data-row">
+                <td><div class="cb" onclick="toggleCb(this)"></div></td>
+                <td><strong>Tom Reynolds</strong></td>
+                <td>26/03</td>
+                <td>(VAR004) Bourke Stre...</td>
+                <td>06:00 AM</td>
+                <td>03:30 PM</td>
+                <td>30m</td>
+                <td class="text-right"><strong>9h 0m</strong></td>
+                <td>Electrical Rough-In</td>
+                <td><span class="status s-pending">Pending</span></td>
+                <td style="color:#ccc;">›</td>
+              </tr>
+              <tr class="data-row">
+                <td><div class="cb" onclick="toggleCb(this)"></div></td>
+                <td><strong>Jake Chen</strong></td>
+                <td>26/03</td>
+                <td>(VAR004) Bourke Stre...</td>
+                <td>06:00 AM</td>
+                <td>02:30 PM</td>
+                <td>30m</td>
+                <td class="text-right"><strong>8h 0m</strong></td>
+                <td>Conduit Installation</td>
+                <td><span class="status s-pending">Pending</span></td>
+                <td style="color:#ccc;">›</td>
+              </tr>
+
+              <tr class="date-group"><td colspan="11">Tuesday, 25 Mar <span class="dg-count">3</span></td></tr>
+              <tr class="data-row">
+                <td><div class="cb checked" onclick="toggleCb(this)"></div></td>
+                <td><strong>Tom Reynolds</strong></td>
+                <td>25/03</td>
+                <td>(VAR004) Bourke Stre...</td>
+                <td>06:00 AM</td>
+                <td>04:00 PM</td>
+                <td>30m</td>
+                <td class="text-right"><strong>9h 30m</strong></td>
+                <td>Electrical Rough-In</td>
+                <td><span class="status s-approved">Approved</span></td>
+                <td style="color:#ccc;">›</td>
+              </tr>
+              <tr class="data-row">
+                <td><div class="cb checked" onclick="toggleCb(this)"></div></td>
+                <td><strong>Jake Chen</strong></td>
+                <td>25/03</td>
+                <td>(VAR004) Bourke Stre...</td>
+                <td>06:30 AM</td>
+                <td>03:30 PM</td>
+                <td>30m</td>
+                <td class="text-right"><strong>8h 30m</strong></td>
+                <td>Conduit Installation</td>
+                <td><span class="status s-approved">Approved</span></td>
+                <td style="color:#ccc;">›</td>
+              </tr>
+              <tr class="data-row">
+                <td><div class="cb checked" onclick="toggleCb(this)"></div></td>
+                <td><strong>Maria Santos</strong></td>
+                <td>25/03</td>
+                <td>(VAR004) Bourke Stre...</td>
+                <td>07:00 AM</td>
+                <td>03:00 PM</td>
+                <td>30m</td>
+                <td class="text-right"><strong>7h 30m</strong></td>
+                <td>Panel Wiring</td>
+                <td><span class="status s-approved">Approved</span></td>
+                <td style="color:#ccc;">›</td>
+              </tr>
+
+              <tr class="date-group"><td colspan="11">Monday, 24 Mar <span class="dg-count">1</span></td></tr>
+              <tr class="data-row">
+                <td><div class="cb checked" onclick="toggleCb(this)"></div></td>
+                <td><strong>Maria Santos</strong></td>
+                <td>24/03</td>
+                <td>(VAR004) Bourke Stre...</td>
+                <td>07:00 AM</td>
+                <td>04:30 PM</td>
+                <td>30m</td>
+                <td class="text-right"><strong>9h 0m</strong></td>
+                <td>Panel Wiring</td>
+                <td><span class="status s-approved">Approved</span></td>
+                <td style="color:#ccc;">›</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="bottom-actions">
+        <button class="btn btn-outline" onclick="go('screen-list')">← Back</button>
+        <button class="btn btn-success" onclick="approveAll()">✓ Approve Selected</button>
+        <button class="btn btn-primary" onclick="go('screen-cert')">Create Certificate of Assessment →</button>
+      </div>
+    </div>
+
+    <!-- ========== SCREEN 3: Certificate of Assessment ========== -->
+    <div class="screen" id="screen-cert">
+      <div class="detail-header">
+        <a class="back" onclick="go('screen-company')">←</a>
+        <h2 style="flex:1;">Certificate of Assessment — BlueTech Electrical</h2>
+        <span class="status s-draft" style="font-size: 13px;">Draft</span>
+      </div>
+
+      <div class="content" style="padding-top: 20px;">
+
+        <!-- AP Linkage Diagram -->
+        <div class="linkage">
+          <div class="linkage-node linked">
+            <div class="ln-icon">📋</div>
+            <div class="ln-label">Purchase Order</div>
+            <div class="ln-value">PO-0042</div>
+            <div class="ln-status" style="color: #2e7d32;">✓ Linked</div>
+          </div>
+          <div class="linkage-arrow connected">→</div>
+          <div class="linkage-node active">
+            <div class="ln-icon">⏱</div>
+            <div class="ln-label">Timesheets</div>
+            <div class="ln-value">4 approved · 51.5h</div>
+            <div class="ln-status" style="color: #f7941d;">● Assessed</div>
+          </div>
+          <div class="linkage-arrow connected">→</div>
+          <div class="linkage-node active">
+            <div class="ln-icon">📄</div>
+            <div class="ln-label">Certificate of Assessment</div>
+            <div class="ln-value">COA-0018</div>
+            <div class="ln-status" style="color: #f7941d;">● Draft</div>
+          </div>
+        </div>
+
+        <div class="info-row">
+          <div class="info-card">
+            <div class="ic-label">Supplier</div>
+            <div class="ic-value">BlueTech Electrical Pty Ltd</div>
+            <div class="ic-sub">ABN 51 824 753 901</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">Assessment Period</div>
+            <div class="ic-value">24/03/2026 — 26/03/2026</div>
+            <div class="ic-sub">Based on approved timesheets</div>
+          </div>
+          <div class="info-card">
+            <div class="ic-label">Purchase Order</div>
+            <div class="ic-value">PO-0042 — Electrical Works</div>
+            <div class="ic-sub">(VAR004) Bourke Street Remediation</div>
+          </div>
+        </div>
+
+        <!-- Certificate line items -->
+        <div class="cert-summary">
+          <h3>Assessed Line Items</h3>
+          <div class="table-wrapper" style="margin-bottom: 0;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Worker</th>
+                  <th>Days</th>
+                  <th class="text-right">Hours</th>
+                  <th>Rate (from PO)</th>
+                  <th class="text-right">Amount (ex GST)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="data-row">
+                  <td><strong>Tom Reynolds</strong></td>
+                  <td>2 days (25–26 Mar)</td>
+                  <td class="text-right">18.5h</td>
+                  <td>$80.00/hr</td>
+                  <td class="text-right"><strong>$1,480.00</strong></td>
+                </tr>
+                <tr class="data-row">
+                  <td><strong>Jake Chen</strong></td>
+                  <td>2 days (25–26 Mar)</td>
+                  <td class="text-right">16.5h</td>
+                  <td>$80.00/hr</td>
+                  <td class="text-right"><strong>$1,320.00</strong></td>
+                </tr>
+                <tr class="data-row">
+                  <td><strong>Maria Santos</strong></td>
+                  <td>2 days (24–25 Mar)</td>
+                  <td class="text-right">16.5h</td>
+                  <td>$80.00/hr</td>
+                  <td class="text-right"><strong>$1,320.00</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="padding: 12px 16px; border-top: 1px solid #e0e0e0;">
+            <div class="cert-row"><span class="cr-label">Subtotal (51.5 hours)</span><span class="cr-value">$4,120.00</span></div>
+            <div class="cert-row"><span class="cr-label">GST (10%)</span><span class="cr-value">$412.00</span></div>
+            <div class="cert-row total"><span class="cr-label">Total (inc GST)</span><span class="cr-value">$4,532.00</span></div>
+          </div>
+        </div>
+
+        <!-- PO Budget Impact -->
+        <div class="cert-summary">
+          <h3>PO Budget Impact</h3>
+          <div class="cert-row"><span class="cr-label">PO-0042 Total Value</span><span class="cr-value">$48,500.00</span></div>
+          <div class="cert-row"><span class="cr-label">Previously Assessed</span><span class="cr-value">$12,640.00</span></div>
+          <div class="cert-row"><span class="cr-label">This Certificate</span><span class="cr-value" style="color: #f7941d;">$4,120.00</span></div>
+          <div class="cert-row"><span class="cr-label">Remaining on PO</span><span class="cr-value">$31,740.00</span></div>
+          <div style="margin-top: 8px; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+            <div style="height: 100%; width: 34.5%; background: linear-gradient(90deg, #4caf50 75%, #f7941d 75%); border-radius: 4px;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: #888; margin-top: 4px;">
+            <span>34.5% of PO committed</span>
+            <span>65.5% remaining</span>
+          </div>
+        </div>
+
+        <!-- What happens next -->
+        <div class="cert-summary" style="border-left: 4px solid #1565c0;">
+          <h3>What happens next?</h3>
+          <div style="font-size: 13px; color: #555; line-height: 1.6;">
+            <p><strong>1.</strong> Approve this certificate of assessment</p>
+            <p><strong>2.</strong> Send COA to BlueTech Electrical — they attach it to their invoice</p>
+            <p><strong>3.</strong> When their invoice/bill arrives, link it to this COA to complete the AP cycle</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="bottom-actions">
+        <button class="btn btn-outline" onclick="go('screen-company')">Back</button>
+        <button class="btn btn-outline">Save as Draft</button>
+        <button class="btn btn-success" onclick="openSendModal()">✓ Approve & Send to Supplier</button>
+      </div>
+    </div>
+
+    <!-- ========== SCREEN 4: Approved COA — Link to Bill ========== -->
+    <div class="screen" id="screen-cert-approved">
+      <div class="detail-header">
+        <a class="back" onclick="go('screen-company')">←</a>
+        <h2 style="flex:1;">Certificate of Assessment — BlueTech Electrical</h2>
+        <span class="status s-approved" style="font-size: 13px;">Approved & Sent</span>
+      </div>
+
+      <div class="content" style="padding-top: 20px;">
+
+        <!-- AP Linkage Diagram — COA approved -->
+        <div class="linkage">
+          <div class="linkage-node linked">
+            <div class="ln-icon">📋</div>
+            <div class="ln-label">Purchase Order</div>
+            <div class="ln-value">PO-0042</div>
+            <div class="ln-status" style="color: #2e7d32;">✓ Linked</div>
+          </div>
+          <div class="linkage-arrow connected">→</div>
+          <div class="linkage-node linked">
+            <div class="ln-icon">⏱</div>
+            <div class="ln-label">Timesheets</div>
+            <div class="ln-value">4 approved · 51.5h</div>
+            <div class="ln-status" style="color: #2e7d32;">✓ Assessed</div>
+          </div>
+          <div class="linkage-arrow connected">→</div>
+          <div class="linkage-node linked">
+            <div class="ln-icon">📄</div>
+            <div class="ln-label">Certificate of Assessment</div>
+            <div class="ln-value">COA-0018 · $4,532.00</div>
+            <div class="ln-status" style="color: #2e7d32;">✓ Sent to supplier</div>
+          </div>
+        </div>
+
+        <div style="background: #e8f5e9; border: 1px solid #4caf50; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; font-size: 13px; display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 18px;">✉️</span>
+          <div>
+            <strong style="color: #2e7d32;">Certificate sent to BlueTech Electrical</strong>
+            <div style="color: #555; margin-top: 2px;">Sent 26/03/2026 at 2:45 PM to accounts@bluetech.com.au. They can attach this to their invoice.</div>
+          </div>
+        </div>
+
+        <!-- Certificate summary (read only) -->
+        <div class="cert-summary">
+          <h3>Certificate Summary — COA-0018</h3>
+          <div class="cert-row"><span class="cr-label">Supplier</span><span class="cr-value">BlueTech Electrical Pty Ltd</span></div>
+          <div class="cert-row"><span class="cr-label">Period</span><span class="cr-value">24/03/2026 — 26/03/2026</span></div>
+          <div class="cert-row"><span class="cr-label">Workers</span><span class="cr-value">3 (Tom Reynolds, Jake Chen, Maria Santos)</span></div>
+          <div class="cert-row"><span class="cr-label">Total Hours</span><span class="cr-value">51.5 hours</span></div>
+          <div class="cert-row"><span class="cr-label">Subtotal</span><span class="cr-value">$4,120.00</span></div>
+          <div class="cert-row"><span class="cr-label">GST</span><span class="cr-value">$412.00</span></div>
+          <div class="cert-row total"><span class="cr-label">Total (inc GST)</span><span class="cr-value">$4,532.00</span></div>
+        </div>
+
+      </div>
+
+      <div class="bottom-actions">
+        <button class="btn btn-outline" onclick="go('screen-company')">← Back to Timesheets</button>
+        <button class="btn btn-outline">📄 Download PDF</button>
+        <button class="btn btn-primary" onclick="openSendModal()">📧 Resend to Supplier</button>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Export Modal -->
+<div class="modal-overlay" id="export-modal" onclick="if(event.target===this)closeExportModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Export Timesheets</h3>
+      <button class="modal-close" onclick="closeExportModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="export-option selected" onclick="selectExportOption(this, 'payroll')">
+        <div class="eo-radio"></div>
+        <div class="eo-icon">📥</div>
+        <div style="flex:1;">
+          <div class="eo-title">Download Payroll File <span class="eo-default">Default</span></div>
+          <div class="eo-desc">Export locked timesheets as a CSV file for import into your payroll system</div>
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <select class="filter-select" id="payroll-format" style="font-size: 12px; padding: 6px 28px 6px 10px;">
+              <option>Xero Payroll</option>
+              <option>MYOB Payroll</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="export-option" onclick="selectExportOption(this, 'summary')">
+        <div class="eo-radio"></div>
+        <div class="eo-icon">📊</div>
+        <div style="flex:1;">
+          <div class="eo-title">Export Timesheet Summary</div>
+          <div class="eo-desc">PDF summary of all timesheets for the period — includes approved, locked, and unapproved</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeExportModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="doExportFromModal()">Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- Send to Supplier Modal -->
+<div class="modal-overlay" id="send-modal" onclick="if(event.target===this)closeSendModal()">
+  <div class="modal" style="width: 580px;">
+    <div class="modal-header">
+      <h3>Send Certificate of Assessment</h3>
+      <button class="modal-close" onclick="closeSendModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom: 16px;">
+        <label style="font-size: 12px; font-weight: 600; color: #666; display: block; margin-bottom: 6px;">TO</label>
+        <input type="email" value="accounts@bluetech.com.au" style="width: 100%; padding: 10px 14px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 14px; font-family: inherit;">
+      </div>
+      <div style="margin-bottom: 16px;">
+        <label style="font-size: 12px; font-weight: 600; color: #666; display: block; margin-bottom: 6px;">SUBJECT</label>
+        <input type="text" value="Certificate of Assessment — COA-0018 — Bourke Street Remediation" style="width: 100%; padding: 10px 14px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 14px; font-family: inherit;">
+      </div>
+      <div style="margin-bottom: 16px;">
+        <label style="font-size: 12px; font-weight: 600; color: #666; display: block; margin-bottom: 6px;">MESSAGE</label>
+        <textarea style="width: 100%; padding: 10px 14px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 13px; font-family: inherit; min-height: 140px; line-height: 1.5; resize: vertical;">Hi BlueTech Electrical,
+
+Please find attached your Certificate of Assessment (COA-0018) for the period 24/03/2026 — 26/03/2026.
+
+Summary:
+- Workers: 3 (Tom Reynolds, Jake Chen, Maria Santos)
+- Total hours: 51.5h
+- Total (inc GST): $4,532.00
+
+Please attach this certificate when submitting your invoice for this period.
+
+Regards,
+Cookie's Civil</textarea>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: #f5f5f5; border-radius: 6px; font-size: 12px; color: #666;">
+        <span style="font-size: 16px;">📎</span>
+        <div>
+          <div style="font-weight: 600; color: #333;">COA-0018-BlueTech-Electrical.pdf</div>
+          <div>Certificate of Assessment — auto-attached</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeSendModal()">Cancel</button>
+      <button class="btn btn-outline" onclick="closeSendModal(); showToast('Certificate approved and saved as draft')">Approve Only (Don't Send)</button>
+      <button class="btn btn-success" onclick="sendToSupplier()">Approve & Send →</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function go(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+
+  // Show/hide persistent header vs detail screens
+  var ph = document.getElementById('persistent-header');
+  if (id === 'screen-list') {
+    ph.style.display = 'block';
+  } else {
+    // On detail screens, hide toggle but keep stepper visible
+    ph.style.display = 'block';
+    document.querySelector('.page-header').style.display = (id === 'screen-list') ? 'flex' : 'none';
+    document.getElementById('big-toggle').style.display = (id === 'screen-list') ? 'flex' : 'none';
+  }
+
+  // Advance subbie stepper based on screen
+  // 1=Select Company, 2=Link to PO, 3=Review Timesheets, 4=COA, 5=Send, 6=Link Bill
+  if (id === 'screen-link-po') setSubStep(1);
+  else if (id === 'screen-company') setSubStep(2);
+  else if (id === 'screen-cert') setSubStep(3);
+  else if (id === 'screen-cert-approved') setSubStep(4);
+
+  // Restore header when going back to list
+  if (id === 'screen-list') {
+    document.querySelector('.page-header').style.display = 'flex';
+    document.getElementById('big-toggle').style.display = 'flex';
+  }
+}
+
+function enterProto(tab) {
+  document.getElementById('flow-overview').style.display = 'none';
+  document.getElementById('proto-layout').style.display = 'flex';
+  switchMode(tab);
+  go('screen-list');
+}
+
+function enterProtoScreen(screenId) {
+  document.getElementById('flow-overview').style.display = 'none';
+  document.getElementById('proto-layout').style.display = 'flex';
+  go(screenId);
+}
+
+function backToOverview() {
+  document.getElementById('proto-layout').style.display = 'none';
+  document.getElementById('flow-overview').style.display = 'block';
+  window.scrollTo(0, 0);
+}
+
+function switchMode(mode) {
+  var btns = document.querySelectorAll('.big-toggle-btn');
+  btns.forEach(function(t) { t.classList.remove('active'); });
+  if (mode === 'employees') btns[0].classList.add('active');
+  else btns[1].classList.add('active');
+
+  document.getElementById('tab-employees').classList.toggle('active', mode === 'employees');
+  document.getElementById('tab-subbies').classList.toggle('active', mode === 'subbies');
+  document.getElementById('emp-bottom-actions').style.display = mode === 'employees' ? 'flex' : 'none';
+  document.getElementById('sub-bottom-actions').style.display = mode === 'subbies' ? 'flex' : 'none';
+  document.getElementById('emp-stepper').style.display = mode === 'employees' ? 'flex' : 'none';
+  document.getElementById('sub-stepper').style.display = mode === 'subbies' ? 'flex' : 'none';
+}
+
+function toggleCb(el) { el.classList.toggle('checked'); }
+
+function toggleAllEmp(el) {
+  el.classList.toggle('checked');
+  const checked = el.classList.contains('checked');
+  document.querySelectorAll('#tab-employees .cb').forEach(cb => {
+    if (cb !== el) { if (checked) cb.classList.add('checked'); else cb.classList.remove('checked'); }
+  });
+}
+
+function toggleAllSub(el) {
+  el.classList.toggle('checked');
+  const checked = el.classList.contains('checked');
+  document.querySelectorAll('#screen-company .cb').forEach(cb => {
+    if (cb !== el) { if (checked) cb.classList.add('checked'); else cb.classList.remove('checked'); }
+  });
+}
+
+function approveAll() {
+  document.querySelectorAll('#screen-company .s-pending').forEach(s => {
+    s.className = 'status s-approved';
+    s.textContent = 'Approved';
+  });
+  showToast('Timesheets approved');
+}
+
+function payrollLock() {
+  var locked = 0;
+  document.querySelectorAll('#tab-employees .data-row').forEach(row => {
+    const cb = row.querySelector('.cb');
+    if (cb && cb.classList.contains('checked')) {
+      const status = row.querySelector('.status');
+      if (status && status.classList.contains('s-approved')) {
+        status.className = 'status s-locked';
+        status.textContent = 'Payroll Locked';
+        locked++;
+      }
+    }
+  });
+  if (locked > 0) {
+    setEmpStep(2);
+    // Mark payroll lock button as done
+    var lockBtn = document.getElementById('btn-payroll-lock');
+    lockBtn.innerHTML = '✓ Payroll Locked';
+    lockBtn.classList.add('btn-done');
+    lockBtn.classList.remove('btn-current-step');
+    // Activate export as current step
+    var exportBtn = document.getElementById('btn-export');
+    exportBtn.classList.add('btn-current-step');
+    exportBtn.classList.remove('btn-next-step');
+    exportBtn.style.opacity = '1';
+    exportBtn.style.pointerEvents = 'auto';
+    exportBtn.classList.remove('btn-outline');
+    exportBtn.classList.add('btn-primary');
+    showToast(locked + ' approved timesheet' + (locked > 1 ? 's' : '') + ' locked for payroll');
+  } else {
+    showToast('No approved timesheets selected to lock');
+  }
+}
+
+function selectAllUnapproved() {
+  document.querySelectorAll('#tab-employees .data-row').forEach(function(row) {
+    var status = row.querySelector('.status');
+    var cb = row.querySelector('.cb');
+    if (status && cb) {
+      if (status.classList.contains('s-unapproved')) {
+        cb.classList.add('checked');
+      } else {
+        cb.classList.remove('checked');
+      }
+    }
+  });
+  showToast('Unapproved timesheets selected');
+}
+
+function approveSelectedEmp() {
+  var count = 0;
+  document.querySelectorAll('#tab-employees .data-row').forEach(function(row) {
+    var cb = row.querySelector('.cb');
+    var status = row.querySelector('.status');
+    if (cb && cb.classList.contains('checked') && status && status.classList.contains('s-unapproved')) {
+      status.className = 'status s-approved';
+      status.textContent = 'Approved';
+      row.style.background = '';
+      count++;
+    }
+  });
+  if (count > 0) {
+    setEmpStep(1);
+    updateEmpBottomBar();
+    showToast(count + ' timesheet' + (count > 1 ? 's' : '') + ' approved');
+  } else {
+    showToast('No unapproved timesheets selected');
+  }
+}
+
+function updateEmpBottomBar() {
+  var unapproved = document.querySelectorAll('#tab-employees .s-unapproved').length;
+  var approveBtn = document.getElementById('btn-approve-emp');
+  var notifyWrap = document.getElementById('notify-wrap');
+  var lockBtn = document.getElementById('btn-payroll-lock');
+  var exportBtn = document.getElementById('btn-export');
+  var selectUnapproved = document.getElementById('link-select-unapproved');
+
+  if (unapproved === 0) {
+    // All approved — hide notify, mark approve done, activate payroll lock
+    notifyWrap.style.display = 'none';
+    selectUnapproved.style.display = 'none';
+    if (!approveBtn.classList.contains('btn-done')) {
+      approveBtn.innerHTML = '✓ All Approved';
+      approveBtn.classList.add('btn-done');
+      approveBtn.classList.remove('btn-current-step');
+    }
+    // Hide alert banner
+    var alert = document.getElementById('unapproved-alert');
+    if (alert) alert.style.display = 'none';
+    // Activate payroll lock as current step
+    if (!lockBtn.classList.contains('btn-done')) {
+      lockBtn.classList.add('btn-current-step');
+      lockBtn.classList.remove('btn-next-step');
+      lockBtn.style.opacity = '1';
+    }
+  }
+}
+
+function selectAllApproved() {
+  document.querySelectorAll('#tab-employees .data-row').forEach(function(row) {
+    var status = row.querySelector('.status');
+    var cb = row.querySelector('.cb');
+    if (status && cb) {
+      if (status.classList.contains('s-approved')) {
+        cb.classList.add('checked');
+      } else {
+        cb.classList.remove('checked');
+      }
+    }
+  });
+  showToast('All approved timesheets selected');
+}
+
+function notifySupervisor() {
+  const alert = document.getElementById('unapproved-alert');
+  if (alert) {
+    alert.style.background = '#e8f5e9';
+    alert.style.borderColor = '#4caf50';
+    alert.querySelector('.alert-title').textContent = 'Notification sent to supervisors';
+    alert.querySelector('.alert-title').style.color = '#2e7d32';
+    alert.querySelector('.alert-detail').textContent = 'Supervisors have been notified to review and approve outstanding timesheets.';
+    alert.querySelector('.alert-icon').style.background = '#4caf50';
+    alert.querySelector('.alert-icon').textContent = '✓';
+    const btn = alert.querySelector('.btn');
+    if (btn) btn.style.display = 'none';
+  }
+  // Mark button as done
+  var notifyBtn = document.getElementById('btn-notify');
+  notifyBtn.innerHTML = '✓ Notified';
+  notifyBtn.classList.add('btn-done');
+  showToast('Supervisor notification sent');
+}
+
+var selectedExportType = 'payroll';
+
+function openExportModal() {
+  document.getElementById('export-modal').classList.add('show');
+}
+
+function closeExportModal() {
+  document.getElementById('export-modal').classList.remove('show');
+}
+
+function selectExportOption(el, type) {
+  selectedExportType = type;
+  document.querySelectorAll('.export-option').forEach(function(o) { o.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+
+function doExportFromModal() {
+  closeExportModal();
+  setEmpStep(3);
+  if (selectedExportType === 'payroll') {
+    var format = document.getElementById('payroll-format').value;
+    showToast('Downloading ' + format + ' payroll file...');
+  } else {
+    showToast('Downloading Timesheet Summary PDF...');
+  }
+  // Mark export button as done
+  var exportBtn = document.getElementById('btn-export');
+  exportBtn.innerHTML = '✓ Exported';
+  exportBtn.classList.add('btn-done');
+  exportBtn.classList.remove('btn-pulse');
+}
+
+function linkPO() {
+  showToast('PO-0042 already linked to BlueTech Electrical');
+}
+
+
+// Employee stepper: step 1=Approve, 2=Payroll Lock, 3=Export
+function setEmpStep(completedUpTo) {
+  // Check how many unapproved remain
+  var unapproved = document.querySelectorAll('#tab-employees .s-unapproved').length;
+  var hasUnapproved = unapproved > 0;
+
+  for (var i = 1; i <= 3; i++) {
+    var c = document.getElementById('emp-sc' + i);
+    var l = document.getElementById('emp-sl' + i);
+
+    if (i === 1 && hasUnapproved && completedUpTo >= 1) {
+      // Step 1 stays orange (warn) if unapproved timesheets remain
+      c.className = 'wiz-step-circle warn';
+      c.textContent = '!';
+      l.className = 'wiz-step-label warn';
+      document.getElementById('emp-tip1').textContent = '⚠ ' + unapproved + ' unapproved timesheet' + (unapproved > 1 ? 's' : '');
+      document.getElementById('emp-tip1').className = 'wiz-tooltip warn-tip';
+    } else if (i <= completedUpTo) {
+      c.className = 'wiz-step-circle done';
+      c.textContent = '✓';
+      l.className = 'wiz-step-label done';
+    } else if (i === completedUpTo + 1) {
+      c.className = 'wiz-step-circle active' + (i === 3 && completedUpTo === 2 ? ' pulse' : '');
+      c.textContent = i;
+      l.className = 'wiz-step-label active';
+    } else {
+      c.className = 'wiz-step-circle';
+      c.textContent = i;
+      l.className = 'wiz-step-label';
+    }
+
+    if (i < 3) {
+      var line = document.getElementById('emp-line' + i);
+      if (i === 1 && hasUnapproved && completedUpTo >= 1) {
+        line.className = 'wiz-step-line warn';
+      } else {
+        line.className = i <= completedUpTo ? 'wiz-step-line done' : 'wiz-step-line';
+      }
+    }
+  }
+
+  // Update tooltip for export step when it's active
+  if (completedUpTo === 2) {
+    document.getElementById('emp-tip3').textContent = '→ Export payroll file now';
+    document.getElementById('emp-tip3').className = 'wiz-tooltip warn-tip';
+  }
+}
+
+// Subbie stepper: 1=Select Company, 2=Link to PO, 3=Review Timesheets, 4=COA, 5=Send
+function setSubStep(completedUpTo) {
+  for (var i = 1; i <= 5; i++) {
+    var c = document.getElementById('sub-sc' + i);
+    var l = document.getElementById('sub-sl' + i);
+    if (i <= completedUpTo) {
+      c.className = 'wiz-step-circle done'; c.textContent = '✓';
+      l.className = 'wiz-step-label done';
+    } else if (i === completedUpTo + 1) {
+      c.className = 'wiz-step-circle active'; c.textContent = i;
+      l.className = 'wiz-step-label active';
+    } else {
+      c.className = 'wiz-step-circle'; c.textContent = i;
+      l.className = 'wiz-step-label';
+    }
+    if (i < 5) {
+      var line = document.getElementById('sub-line' + i);
+      line.className = i <= completedUpTo ? 'wiz-step-line done' : 'wiz-step-line';
+    }
+  }
+}
+
+function selectPO(card, num) {
+  // Deselect all
+  document.querySelectorAll('#screen-link-po .company-card').forEach(function(c) {
+    c.classList.remove('selected');
+  });
+  document.getElementById('po-radio-1').style.cssText = 'width:20px;height:20px;border:2px solid #ccc;border-radius:50%;flex-shrink:0;';
+  document.getElementById('po-radio-2').style.cssText = 'width:20px;height:20px;border:2px solid #ccc;border-radius:50%;flex-shrink:0;';
+  // Select this one
+  card.classList.add('selected');
+  var radio = document.getElementById('po-radio-' + num);
+  radio.style.cssText = 'width:20px;height:20px;border:6px solid #f7941d;border-radius:50%;flex-shrink:0;background:#fff;';
+  // Enable button
+  var btn = document.getElementById('btn-link-po');
+  btn.style.opacity = '1';
+  btn.style.pointerEvents = 'auto';
+}
+
+function confirmLinkPO() {
+  showToast('PO linked to BlueTech Electrical');
+  go('screen-company');
+}
+
+function scrollToUnapproved() {
+  document.getElementById('unapproved-section').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function openSendModal() {
+  document.getElementById('send-modal').classList.add('show');
+}
+
+function closeSendModal() {
+  document.getElementById('send-modal').classList.remove('show');
+}
+
+function sendToSupplier() {
+  closeSendModal();
+  setSubStep(5);
+  go('screen-cert-approved');
+  showToast('Certificate approved and sent to accounts@bluetech.com.au');
+}
+
+// Close modals on Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') { closeExportModal(); closeSendModal(); }
+});
+</script>
+
+</body>
+</html>

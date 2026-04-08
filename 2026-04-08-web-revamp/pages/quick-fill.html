@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quick Fill — Varicon SiteDiary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --amber:     #F5A623;
+    --amber-d:   #D4891A;
+    --amber-l:   #FEF3DC;
+    --tp:        #1A2332;
+    --tb:        #374151;
+    --tm:        #6B7280;
+    --td:        #9CA3AF;
+    --bg:        #F4F5F7;
+    --surface:   #FFFFFF;
+    --border:    #E5E7EB;
+    --border-d:  #D1D5DB;
+    --hover:     #F9FAFB;
+    --thead:     #EAECEF;
+    --green:     #10B981;
+    --green-bg:  #D1FAE5;
+    --red:       #EF4444;
+    --blue:      #3B82F6;
+    --blue-bg:   #DBEAFE;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--tb);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Top Bar ── */
+  .qf-topbar {
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .qf-back {
+    display: flex; align-items: center; gap: 6px;
+    color: var(--tm); font-size: 13px; font-weight: 500;
+    background: none; border: none; cursor: pointer; padding: 4px 8px 4px 0;
+    border-right: 1px solid var(--border); margin-right: 4px;
+  }
+  .qf-back:hover { color: var(--tp); }
+  .qf-title { font-size: 16px; font-weight: 700; color: var(--tp); white-space: nowrap; }
+  .qf-subtitle { font-size: 12px; color: var(--tm); margin-top: 1px; }
+
+  /* ── Controls row ── */
+  .qf-controls {
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+  .qf-ctrl-lbl { font-size: 11px; font-weight: 600; color: var(--tm); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+  .qf-input {
+    height: 34px; border: 1px solid var(--border); border-radius: 5px;
+    padding: 0 10px; font-size: 13px; font-family: inherit; color: var(--tb);
+    background: #fff; outline: none;
+  }
+  .qf-input:focus { border-color: var(--amber); box-shadow: 0 0 0 3px rgba(245,166,35,.12); }
+  .qf-divider { width: 1px; height: 22px; background: var(--border); }
+
+  /* Summary pills */
+  .qf-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--hover); border: 1px solid var(--border);
+    border-radius: 5px; padding: 5px 12px; font-size: 12px;
+  }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 5px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0 14px; height: 34px; border: none; font-family: inherit; white-space: nowrap; transition: background .15s; }
+  .btn-a  { background: var(--amber); color: #fff; }
+  .btn-a:hover { background: var(--amber-d); }
+  .btn-a:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-o  { background: #fff; color: var(--tb); border: 1px solid var(--border); }
+  .btn-o:hover { background: var(--hover); }
+  .btn-danger { background: #fff; color: var(--red); border: 1px solid var(--border); }
+  .btn-danger:hover { background: #FEF2F2; border-color: #FECACA; }
+
+  /* ── Scrollable main ── */
+  .qf-main {
+    flex: 1; overflow-y: auto; padding: 20px 24px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+
+  /* ── Section accordion ── */
+  .qf-sec {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  }
+  .qf-sec-head {
+    display: flex; align-items: center; gap: 12px;
+    padding: 13px 16px;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid transparent;
+    transition: background .1s;
+  }
+  .qf-sec-head:hover { background: var(--hover); }
+  .qf-sec-head.open { border-bottom-color: var(--border); background: var(--hover); }
+
+  .qf-sec-icon {
+    width: 32px; height: 32px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+  }
+  .qf-sec-name { font-size: 14px; font-weight: 600; color: var(--tp); }
+  .qf-sec-sub  { font-size: 11px; color: var(--tm); margin-top: 1px; }
+  .qf-count-badge {
+    background: var(--amber-l); color: var(--amber);
+    font-size: 11px; font-weight: 700; border-radius: 10px;
+    padding: 2px 8px; white-space: nowrap;
+  }
+  .qf-sel-badge {
+    background: var(--green-bg); color: #065F46;
+    font-size: 11px; font-weight: 700; border-radius: 10px;
+    padding: 2px 8px; white-space: nowrap; display: none;
+  }
+
+  .qf-sec-body { display: none; overflow-x: auto; }
+  .qf-sec-body.open { display: block; }
+
+  /* Table */
+  .qft { width: 100%; border-collapse: collapse; min-width: 600px; }
+  .qft th {
+    background: var(--thead); color: var(--tb); font-size: 12px; font-weight: 600;
+    padding: 9px 12px; text-align: left; white-space: nowrap;
+    border-right: 1px solid var(--border-d); border-bottom: 1px solid var(--border-d);
+    font-family: inherit;
+  }
+  .qft th:last-child { border-right: none; }
+  .qft td {
+    font-size: 13px; color: var(--tb); padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    vertical-align: middle; font-family: inherit;
+  }
+  .qft td:last-child { border-right: none; }
+  .qft tr:last-child td { border-bottom: none; }
+  .qft tr.row-sel td { background: #FFFDF5; }
+  .qft tr:hover td { background: var(--hover); }
+  .qft tr.row-sel:hover td { background: #FEF9ED; }
+
+  /* Amber checkbox */
+  .qf-chk {
+    width: 18px; height: 18px; border-radius: 3px;
+    border: 2px solid #CBD5E1; background: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0; transition: border-color .1s, background .1s;
+  }
+  .qf-chk.checked { border-color: var(--amber); background: var(--amber); }
+  .qf-chk.partial { border-color: var(--amber); background: #fff; }
+
+  /* Status badges */
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 4px; padding: 2px 8px; white-space: nowrap; }
+  .badge-green  { background: var(--green-bg); color: #065F46; }
+  .badge-amber  { background: var(--amber-l);  color: #92400E; }
+  .badge-blue   { background: var(--blue-bg);  color: #1D4ED8; }
+  .badge-gray   { background: var(--hover); color: var(--tm); border: 1px solid var(--border); }
+
+  /* Inline mini-badge pills */
+  .eq-badge   { background: #DBEAFE; color: #1D4ED8; font-size: 10px; font-weight: 600; border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+  .all-badge  { background: #EDE9FE; color: #6D28D9; font-size: 10px; font-weight: 600; border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+
+  /* ── Sticky footer ── */
+  .qf-footer {
+    background: #fff; border-top: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex; align-items: center; gap: 10px;
+    flex-shrink: 0;
+    box-shadow: 0 -2px 8px rgba(0,0,0,.05);
+  }
+
+  /* Avatar */
+  .av {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #E5E7EB; display: inline-flex; align-items: center;
+    justify-content: center; font-size: 10px; font-weight: 700;
+    color: var(--tb); flex-shrink: 0;
+  }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .muted { color: var(--tm); font-size: 11px; }
+</style>
+</head>
+<body>
+
+<!-- ── TOP BAR ── -->
+<div class="qf-topbar">
+  <button class="qf-back" onclick="window.close()">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3L5 7l4 4"/></svg>
+    Back
+  </button>
+
+  <div>
+    <div class="qf-title">Quick Fill</div>
+  </div>
+
+  <div style="width:1px;height:28px;background:var(--border);"></div>
+
+  <!-- From date -->
+  <div style="display:flex;align-items:center;gap:7px;">
+    <span class="qf-ctrl-lbl">Copy From</span>
+    <input type="date" id="qf-from" class="qf-input" style="width:148px;" onchange="qfLoadAll()">
+  </div>
+
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--tm)" stroke-width="1.5"><path d="M3 8h10M9 5l4 3-4 3"/></svg>
+
+  <!-- To date -->
+  <div style="display:flex;align-items:center;gap:7px;">
+    <span class="qf-ctrl-lbl">Copy To</span>
+    <input type="date" id="qf-to" class="qf-input" style="width:148px;">
+  </div>
+
+  <div style="flex:1;"></div>
+
+  <!-- Selection summary -->
+  <div id="qf-summary-pill" class="qf-pill" style="display:none;">
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="var(--green)" stroke-width="1.8"><path d="M2 7l4 4 6-6"/></svg>
+    <span id="qf-summary-txt" style="color:var(--tp);font-weight:600;"></span>
+    <span style="color:var(--tm);">selected</span>
+  </div>
+
+  <button class="btn btn-o" onclick="window.close()">CANCEL</button>
+  <button id="qf-apply-btn" class="btn btn-a" disabled onclick="qfApply()">
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="white" stroke-width="2"><path d="M2 7l4 4 6-6"/></svg>
+    APPLY QUICK FILL
+  </button>
+</div>
+
+<!-- ── MAIN SCROLLABLE ── -->
+<div class="qf-main" id="qf-main">
+
+  <!-- ════ 1. PLANT & EQUIPMENT ════ -->
+  <div class="qf-sec" id="sec-plant">
+    <div class="qf-sec-head open" onclick="qfToggleSec('plant')">
+      <div class="qf-sec-icon" style="background:#FEF3E2;">🚜</div>
+      <div style="flex:1;">
+        <div class="qf-sec-name">Plant &amp; Equipment</div>
+        <div class="qf-sec-sub">Equipment, machinery &amp; hire items</div>
+      </div>
+      <span class="qf-count-badge" id="plant-count-badge">4 items</span>
+      <span class="qf-sel-badge"   id="plant-sel-badge"></span>
+      <!-- Select All -->
+      <div style="display:flex;align-items:center;gap:6px;margin-right:4px;" onclick="event.stopPropagation();qfSecToggleAll('plant')">
+        <div class="qf-chk" id="plant-all-chk"></div>
+        <span style="font-size:12px;font-weight:500;color:var(--tm);">Select All</span>
+      </div>
+      <svg class="qf-chevron" id="plant-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--tm)" stroke-width="1.8" style="transition:transform .2s;transform:rotate(180deg)"><path d="M3 5l4 4 4-4"/></svg>
+    </div>
+    <div class="qf-sec-body open" id="plant-body">
+      <table class="qft">
+        <thead>
+          <tr>
+            <th style="width:40px;text-align:center;"></th>
+            <th style="min-width:200px;">Equipment Name</th>
+            <th style="width:110px;">Category</th>
+            <th style="width:100px;">Hire Type</th>
+            <th style="width:70px;text-align:center;">Qty</th>
+            <th style="width:80px;text-align:center;">Hours</th>
+            <th style="width:120px;">Task / CC</th>
+            <th style="width:90px;text-align:center;">Status</th>
+          </tr>
+        </thead>
+        <tbody id="plant-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════ 2. LABOUR ════ -->
+  <div class="qf-sec" id="sec-labour">
+    <div class="qf-sec-head" onclick="qfToggleSec('labour')">
+      <div class="qf-sec-icon" style="background:#F0FDF4;">👷</div>
+      <div style="flex:1;">
+        <div class="qf-sec-name">Labour</div>
+        <div class="qf-sec-sub">Workers &amp; labour resources</div>
+      </div>
+      <span class="qf-count-badge" id="labour-count-badge">5 workers</span>
+      <span class="qf-sel-badge"   id="labour-sel-badge"></span>
+      <div style="display:flex;align-items:center;gap:6px;margin-right:4px;" onclick="event.stopPropagation();qfSecToggleAll('labour')">
+        <div class="qf-chk" id="labour-all-chk"></div>
+        <span style="font-size:12px;font-weight:500;color:var(--tm);">Select All</span>
+      </div>
+      <svg class="qf-chevron" id="labour-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--tm)" stroke-width="1.8" style="transition:transform .2s;"><path d="M3 5l4 4 4-4"/></svg>
+    </div>
+    <div class="qf-sec-body" id="labour-body">
+      <table class="qft">
+        <thead>
+          <tr>
+            <th style="width:40px;text-align:center;"></th>
+            <th style="min-width:200px;">Worker Name</th>
+            <th style="width:120px;">Role</th>
+            <th style="width:150px;">Supplier</th>
+            <th style="width:80px;text-align:center;">Hours</th>
+            <th style="width:120px;">Task / CC</th>
+            <th style="width:90px;text-align:center;">Status</th>
+          </tr>
+        </thead>
+        <tbody id="labour-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════ 3. NOTES ════ -->
+  <div class="qf-sec" id="sec-notes">
+    <div class="qf-sec-head" onclick="qfToggleSec('notes')">
+      <div class="qf-sec-icon" style="background:#EFF6FF;">📝</div>
+      <div style="flex:1;">
+        <div class="qf-sec-name">Notes</div>
+        <div class="qf-sec-sub">Site diary notes &amp; observations</div>
+      </div>
+      <span class="qf-count-badge" id="notes-count-badge">3 notes</span>
+      <span class="qf-sel-badge"   id="notes-sel-badge"></span>
+      <div style="display:flex;align-items:center;gap:6px;margin-right:4px;" onclick="event.stopPropagation();qfSecToggleAll('notes')">
+        <div class="qf-chk" id="notes-all-chk"></div>
+        <span style="font-size:12px;font-weight:500;color:var(--tm);">Select All</span>
+      </div>
+      <svg class="qf-chevron" id="notes-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--tm)" stroke-width="1.8" style="transition:transform .2s;"><path d="M3 5l4 4 4-4"/></svg>
+    </div>
+    <div class="qf-sec-body" id="notes-body">
+      <table class="qft">
+        <thead>
+          <tr>
+            <th style="width:40px;text-align:center;"></th>
+            <th style="min-width:280px;">Note Content</th>
+            <th style="width:110px;">Type</th>
+            <th style="width:140px;">Author</th>
+            <th style="width:110px;">Time</th>
+            <th style="width:90px;text-align:center;">Attachments</th>
+          </tr>
+        </thead>
+        <tbody id="notes-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════ 4. MATERIALS ════ -->
+  <div class="qf-sec" id="sec-materials">
+    <div class="qf-sec-head" onclick="qfToggleSec('materials')">
+      <div class="qf-sec-icon" style="background:#FDF4FF;">📦</div>
+      <div style="flex:1;">
+        <div class="qf-sec-name">Materials</div>
+        <div class="qf-sec-sub">Material deliveries &amp; usage records</div>
+      </div>
+      <span class="qf-count-badge" id="materials-count-badge">4 items</span>
+      <span class="qf-sel-badge"   id="materials-sel-badge"></span>
+      <div style="display:flex;align-items:center;gap:6px;margin-right:4px;" onclick="event.stopPropagation();qfSecToggleAll('materials')">
+        <div class="qf-chk" id="materials-all-chk"></div>
+        <span style="font-size:12px;font-weight:500;color:var(--tm);">Select All</span>
+      </div>
+      <svg class="qf-chevron" id="materials-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--tm)" stroke-width="1.8" style="transition:transform .2s;"><path d="M3 5l4 4 4-4"/></svg>
+    </div>
+    <div class="qf-sec-body" id="materials-body">
+      <table class="qft">
+        <thead>
+          <tr>
+            <th style="width:40px;text-align:center;"></th>
+            <th style="min-width:200px;">Material Name</th>
+            <th style="width:150px;">Supplier</th>
+            <th style="width:80px;text-align:center;">Qty</th>
+            <th style="width:80px;text-align:center;">Unit</th>
+            <th style="width:120px;">Task / CC</th>
+            <th style="width:110px;text-align:center;">Delivery</th>
+          </tr>
+        </thead>
+        <tbody id="materials-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ════ 5. MISCELLANEOUS ════ -->
+  <div class="qf-sec" id="sec-misc">
+    <div class="qf-sec-head" onclick="qfToggleSec('misc')">
+      <div class="qf-sec-icon" style="background:#FFF7ED;">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--amber)" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 5h6M5 8h6M5 11h3"/></svg>
+      </div>
+      <div style="flex:1;">
+        <div class="qf-sec-name">Miscellaneous</div>
+        <div class="qf-sec-sub">Miscellaneous items &amp; cost entries</div>
+      </div>
+      <span class="qf-count-badge" id="misc-count-badge">4 items</span>
+      <span class="qf-sel-badge"   id="misc-sel-badge"></span>
+      <div style="display:flex;align-items:center;gap:6px;margin-right:4px;" onclick="event.stopPropagation();qfSecToggleAll('misc')">
+        <div class="qf-chk" id="misc-all-chk"></div>
+        <span style="font-size:12px;font-weight:500;color:var(--tm);">Select All</span>
+      </div>
+      <svg class="qf-chevron" id="misc-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--tm)" stroke-width="1.8" style="transition:transform .2s;"><path d="M3 5l4 4 4-4"/></svg>
+    </div>
+    <div class="qf-sec-body" id="misc-body">
+      <table class="qft">
+        <thead>
+          <tr>
+            <th style="width:40px;text-align:center;"></th>
+            <th style="min-width:200px;">Name</th>
+            <th style="width:140px;">Task</th>
+            <th style="width:140px;">Cost Centre</th>
+            <th style="width:80px;text-align:center;">Quantity</th>
+            <th style="width:90px;text-align:center;">Duration</th>
+            <th style="width:100px;text-align:center;">Total Hours</th>
+            <th style="width:90px;text-align:center;">Attachments</th>
+          </tr>
+        </thead>
+        <tbody id="misc-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /qf-main -->
+
+<!-- ── STICKY FOOTER ── -->
+<div class="qf-footer">
+  <div id="qf-footer-summary" style="flex:1;font-size:13px;color:var(--tm);">
+    Select items from one or more sections to copy.
+  </div>
+  <button class="btn btn-o" onclick="qfClearAll()" id="qf-clear-btn" style="display:none;">
+    Clear All
+  </button>
+  <button class="btn btn-o" onclick="window.close()">CANCEL</button>
+  <button id="qf-apply-btn2" class="btn btn-a" disabled onclick="qfApply()">
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="white" stroke-width="2"><path d="M2 7l4 4 6-6"/></svg>
+    APPLY QUICK FILL
+  </button>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════
+   SAMPLE DATA  (in production: load from API by selected from-date)
+   ═══════════════════════════════════════════ */
+var QF_DATA = {
+  plant: [
+    { id:'P1', name:'CAT 320 Excavator', category:'Excavation',  hire:'Wet Hire',  qty:1, hours:8.5, task:'CC-001 / Earthworks',  status:'Active'   },
+    { id:'P2', name:'Komatsu D65 Dozer', category:'Earthmoving', hire:'Wet Hire',  qty:1, hours:7.0, task:'CC-001 / Earthworks',  status:'Active'   },
+    { id:'P3', name:'Concrete Pump',      category:'Concrete',    hire:'Dry Hire',  qty:1, hours:4.0, task:'CC-003 / Foundations', status:'Standby'  },
+    { id:'P4', name:'Water Truck 10,000L',category:'Support',     hire:'Wet Hire',  qty:1, hours:6.5, task:'CC-005 / Access',      status:'Active'   },
+  ],
+  labour: [
+    { id:'L1', name:'James Kula',     role:'Foreman',        supplier:'BIS Labour',    hours:8.5, task:'CC-001 / Earthworks',  status:'Approved'   },
+    { id:'L2', name:'Boni Khatiwada', role:'Labour',         supplier:'BIS Labour',    hours:8.0, task:'CC-001 / Earthworks',  status:'Approved'   },
+    { id:'L3', name:'Ram Laxman',     role:'Skilled Labour', supplier:'Apex Civil',    hours:9.0, task:'CC-003 / Foundations', status:'Approved'   },
+    { id:'L4', name:'Annot KC',       role:'Labour',         supplier:'Apex Civil',    hours:8.5, task:'CC-005 / Access',      status:'Unapproved' },
+    { id:'L5', name:'Ranjita Sigdel', role:'Labour',         supplier:'BIS Labour',    hours:7.5, task:'CC-001 / Earthworks',  status:'Unapproved' },
+  ],
+  notes: [
+    { id:'N1', text:'Ground conditions confirmed suitable for earthworks. No unexpected obstacles encountered. Works proceeding as planned.', type:'Progress', author:'James Kula',     time:'07:30 AM', attachments:2 },
+    { id:'N2', text:'Concrete pour completed on Grid A foundations. Slump test passed. Waiting 24h cure before striking formwork.',          type:'Concrete',  author:'Boni Khatiwada', time:'10:15 AM', attachments:3 },
+    { id:'N3', text:'Safety toolbox talk conducted. All workers signed attendance sheet. Topic: working near plant and equipment.',           type:'Safety',    author:'James Kula',     time:'06:45 AM', attachments:0 },
+  ],
+  materials: [
+    { id:'M1', name:'Ready Mix Concrete 32MPa', supplier:'Boral Concrete',   qty:28.0, unit:'m³', task:'CC-003 / Foundations', delivery:'Delivered'  },
+    { id:'M2', name:'Reinforcing Steel D16',    supplier:'InfraBuild',        qty:2.4,  unit:'ton', task:'CC-003 / Foundations', delivery:'Delivered'  },
+    { id:'M3', name:'Geofabric 150gsm',         supplier:'Geofabric Aust.',   qty:200,  unit:'m²', task:'CC-001 / Earthworks',  delivery:'Partial'    },
+    { id:'M4', name:'Crushed Rock FCR 20mm',    supplier:'Hanson Australia',  qty:45.0, unit:'ton', task:'CC-005 / Access',      delivery:'Delivered'  },
+  ],
+  misc: [
+    { id:'X1', name:'Site Safety Inspection',   task:'CC-001 / Earthworks',  costcentre:'Earthworks',  qty:1,   duration:'2h',  totalHours:2.0,  attachments:1 },
+    { id:'X2', name:'Survey Control Check',      task:'CC-002 / Survey',      costcentre:'Survey',      qty:1,   duration:'1h',  totalHours:1.0,  attachments:0 },
+    { id:'X3', name:'Dewatering Pump Operation', task:'CC-001 / Earthworks',  costcentre:'Earthworks',  qty:2,   duration:'8h',  totalHours:16.0, attachments:0 },
+    { id:'X4', name:'Traffic Management Setup',  task:'CC-005 / Access',      costcentre:'Access Road', qty:1,   duration:'3h',  totalHours:3.0,  attachments:2 },
+  ]
+};
+
+/* Selection state: { section: Set of ids } */
+var QF_SEL = { plant: new Set(), labour: new Set(), notes: new Set(), materials: new Set(), misc: new Set() };
+
+/* ═══════════════════════════════════════════ INIT ═══ */
+window.addEventListener('DOMContentLoaded', function() {
+  var today = new Date();
+  var yest  = new Date(today); yest.setDate(yest.getDate() - 1);
+  var fmt   = function(d) { return d.toISOString().split('T')[0]; };
+  document.getElementById('qf-from').value = fmt(yest);
+  document.getElementById('qf-to').value   = fmt(today);
+  qfLoadAll();
+});
+
+function qfLoadAll() {
+  qfRenderPlant();
+  qfRenderLabour();
+  qfRenderNotes();
+  qfRenderMaterials();
+  qfRenderMisc();
+}
+
+/* ═══════════════════════════════════════════ HELPERS ═══ */
+function _chkHtml(checked, partial) {
+  var cls = checked ? 'qf-chk checked' : (partial ? 'qf-chk partial' : 'qf-chk');
+  return '<div class="' + cls + '" style="margin:auto;">'
+    + (checked ? '<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.2"><path d="M2 6l3 3 5-5"/></svg>' : '')
+    + (partial && !checked ? '<div style="width:8px;height:2px;background:var(--amber);border-radius:1px;"></div>' : '')
+    + '</div>';
+}
+
+function _avHtml(name, size) {
+  size = size || 30;
+  var initials = name.split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
+  return '<div style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:#E5E7EB;display:inline-flex;align-items:center;justify-content:center;font-size:' + Math.floor(size*0.38) + 'px;font-weight:700;color:var(--tb);flex-shrink:0;">' + initials + '</div>';
+}
+
+function _fmt12(t24) {
+  if (!t24) return '—';
+  var p = t24.split(':'), h = parseInt(p[0]), m = parseInt(p[1]);
+  var ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
+  return h + ':' + (m < 10 ? '0'+m : m) + ' ' + ap;
+}
+
+function _calcTotal(start, end, brkMins) {
+  if (!start || !end) return '—';
+  var s = start.split(':'), e = end.split(':');
+  var sm = parseInt(s[0])*60 + parseInt(s[1]);
+  var em = parseInt(e[0])*60 + parseInt(e[1]);
+  if (em <= sm) em += 1440;
+  var t = em - sm - (parseInt(brkMins) || 0);
+  if (t <= 0) return '—';
+  return Math.floor(t/60) + 'h ' + (t%60) + 'm';
+}
+
+function _statusBadge(status) {
+  var map = { 'Active':'badge-green', 'Approved':'badge-green', 'Delivered':'badge-green', 'Standby':'badge-amber', 'Unapproved':'badge-amber', 'Partial':'badge-amber', 'Clocked In':'badge-blue', 'Inactive':'badge-gray' };
+  return '<span class="badge ' + (map[status] || 'badge-gray') + '">' + status + '</span>';
+}
+
+/* ═══════════════════════════════════════════ ROW TOGGLE ═══ */
+function qfToggleRow(sec, id) {
+  if (QF_SEL[sec].has(id)) QF_SEL[sec].delete(id);
+  else QF_SEL[sec].add(id);
+  _qfRerenderSec(sec);
+  qfUpdateGlobal();
+}
+
+function qfSecToggleAll(sec) {
+  var data = QF_DATA[sec];
+  if (QF_SEL[sec].size === data.length) {
+    QF_SEL[sec].clear();
+  } else {
+    data.forEach(function(row) { QF_SEL[sec].add(row.id); });
+  }
+  _qfRerenderSec(sec);
+  qfUpdateGlobal();
+}
+
+function _qfRerenderSec(sec) {
+  var fn = { plant: qfRenderPlant, labour: qfRenderLabour, notes: qfRenderNotes, materials: qfRenderMaterials, misc: qfRenderMisc };
+  if (fn[sec]) fn[sec]();
+}
+
+/* ═══════════════════════════════════════════ SECTION TOGGLE ═══ */
+function qfToggleSec(sec) {
+  var body    = document.getElementById(sec + '-body');
+  var head    = body.previousElementSibling;
+  var chevron = document.getElementById(sec + '-chevron');
+  var isOpen  = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  head.classList.toggle('open', !isOpen);
+  if (chevron) chevron.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+}
+
+/* ═══════════════════════════════════════════ GLOBAL STATE ═══ */
+function qfUpdateGlobal() {
+  var total = 0;
+  var secs  = Object.keys(QF_SEL);
+  var activeSecs = [];
+  secs.forEach(function(s) {
+    if (QF_SEL[s].size) { total += QF_SEL[s].size; activeSecs.push(s); }
+  });
+
+  var summaryPill = document.getElementById('qf-summary-pill');
+  var summaryTxt  = document.getElementById('qf-summary-txt');
+  var footerSum   = document.getElementById('qf-footer-summary');
+  var applyBtn    = document.getElementById('qf-apply-btn');
+  var applyBtn2   = document.getElementById('qf-apply-btn2');
+  var clearBtn    = document.getElementById('qf-clear-btn');
+
+  if (total > 0) {
+    var sectionNames = activeSecs.map(function(s){ return s.charAt(0).toUpperCase()+s.slice(1); }).join(', ');
+    summaryPill.style.display = 'flex';
+    summaryTxt.textContent = total + ' item' + (total !== 1 ? 's' : '');
+    footerSum.innerHTML = '<strong style="color:var(--tp);">' + total + ' item' + (total!==1?'s':'') + '</strong> selected across <strong style="color:var(--tp);">' + activeSecs.length + ' section' + (activeSecs.length!==1?'s':'') + '</strong> — <span>' + sectionNames + '</span>';
+    applyBtn.disabled  = false;
+    applyBtn2.disabled = false;
+    clearBtn.style.display = '';
+  } else {
+    summaryPill.style.display = 'none';
+    footerSum.innerHTML = 'Select items from one or more sections to copy.';
+    applyBtn.disabled  = true;
+    applyBtn2.disabled = true;
+    clearBtn.style.display = 'none';
+  }
+}
+
+function qfClearAll() {
+  Object.keys(QF_SEL).forEach(function(s) { QF_SEL[s].clear(); });
+  qfLoadAll();
+  qfUpdateGlobal();
+}
+
+/* ═══════════════════════════════════════════ UPDATE SEC BADGES ═══ */
+function _qfUpdateSecBadge(sec, total) {
+  var data   = QF_DATA[sec];
+  var selCt  = QF_SEL[sec].size;
+  var allChk = document.getElementById(sec + '-all-chk');
+  var selBdg = document.getElementById(sec + '-sel-badge');
+
+  if (allChk) {
+    var isAll  = selCt === data.length && data.length > 0;
+    var isSome = selCt > 0 && !isAll;
+    allChk.className = 'qf-chk' + (isAll ? ' checked' : (isSome ? ' partial' : ''));
+    allChk.innerHTML = isAll
+      ? '<svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.2"><path d="M2 6l3 3 5-5"/></svg>'
+      : (isSome ? '<div style="width:8px;height:2px;background:var(--amber);border-radius:1px;"></div>' : '');
+  }
+  if (selBdg) {
+    if (selCt > 0) {
+      selBdg.style.display = '';
+      selBdg.textContent   = selCt + ' selected';
+    } else {
+      selBdg.style.display = 'none';
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════ RENDER: PLANT ═══ */
+function qfRenderPlant() {
+  var tb = document.getElementById('plant-tbody'); if (!tb) return;
+  tb.innerHTML = QF_DATA.plant.map(function(row) {
+    var sel = QF_SEL.plant.has(row.id);
+    return '<tr class="' + (sel?'row-sel':'') + '" onclick="qfToggleRow(\'plant\',\'' + row.id + '\')" style="cursor:pointer;">'
+      + '<td style="text-align:center;width:40px;">' + _chkHtml(sel) + '</td>'
+      + '<td><div style="font-weight:600;color:var(--tp);">' + row.name + '</div></td>'
+      + '<td><span style="font-size:12px;color:var(--tm);">' + row.category + '</span></td>'
+      + '<td><span style="font-size:12px;">' + row.hire + '</span></td>'
+      + '<td style="text-align:center;"><span class="mono" style="font-size:13px;font-weight:600;">' + row.qty + '</span></td>'
+      + '<td style="text-align:center;"><span class="mono" style="font-size:12px;font-weight:600;color:var(--tp);">' + row.hours + 'h</span></td>'
+      + '<td><span style="font-size:11px;color:var(--tm);">' + row.task + '</span></td>'
+      + '<td style="text-align:center;">' + _statusBadge(row.status) + '</td>'
+      + '</tr>';
+  }).join('');
+  _qfUpdateSecBadge('plant');
+}
+
+/* ═══════════════════════════════════════════ RENDER: LABOUR ═══ */
+function qfRenderLabour() {
+  var tb = document.getElementById('labour-tbody'); if (!tb) return;
+  tb.innerHTML = QF_DATA.labour.map(function(row) {
+    var sel = QF_SEL.labour.has(row.id);
+    return '<tr class="' + (sel?'row-sel':'') + '" onclick="qfToggleRow(\'labour\',\'' + row.id + '\')" style="cursor:pointer;">'
+      + '<td style="text-align:center;width:40px;">' + _chkHtml(sel) + '</td>'
+      + '<td><div style="display:flex;align-items:center;gap:8px;">' + _avHtml(row.name,28) + '<div><div style="font-weight:600;color:var(--tp);">' + row.name + '</div><div class="muted">' + row.role + '</div></div></div></td>'
+      + '<td><span style="font-size:12px;color:var(--tm);">' + row.role + '</span></td>'
+      + '<td><span style="font-size:12px;">' + row.supplier + '</span></td>'
+      + '<td style="text-align:center;"><span class="mono" style="font-size:12px;font-weight:600;color:var(--tp);">' + row.hours + 'h</span></td>'
+      + '<td><span style="font-size:11px;color:var(--tm);">' + row.task + '</span></td>'
+      + '<td style="text-align:center;">' + _statusBadge(row.status) + '</td>'
+      + '</tr>';
+  }).join('');
+  _qfUpdateSecBadge('labour');
+}
+
+/* ═══════════════════════════════════════════ RENDER: NOTES ═══ */
+function qfRenderNotes() {
+  var tb = document.getElementById('notes-tbody'); if (!tb) return;
+  tb.innerHTML = QF_DATA.notes.map(function(row) {
+    var sel = QF_SEL.notes.has(row.id);
+    var typeColor = row.type === 'Safety' ? 'badge-amber' : (row.type === 'Concrete' ? 'badge-blue' : 'badge-gray');
+    var attHtml = row.attachments
+      ? '<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--tm);"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 6.5l-4 4a3 3 0 01-4.24-4.24l5-5a2 2 0 112.83 2.83l-5 5a1 1 0 01-1.41-1.41l4-4"/></svg>' + row.attachments + '</span>'
+      : '<span class="muted">—</span>';
+    return '<tr class="' + (sel?'row-sel':'') + '" onclick="qfToggleRow(\'notes\',\'' + row.id + '\')" style="cursor:pointer;">'
+      + '<td style="text-align:center;width:40px;">' + _chkHtml(sel) + '</td>'
+      + '<td><div style="font-size:13px;color:var(--tb);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + row.text + '">' + row.text + '</div></td>'
+      + '<td><span class="badge ' + typeColor + '">' + row.type + '</span></td>'
+      + '<td><div style="display:flex;align-items:center;gap:6px;">' + _avHtml(row.author,22) + '<span style="font-size:12px;">' + row.author + '</span></div></td>'
+      + '<td><span class="mono muted" style="font-size:11px;">' + row.time + '</span></td>'
+      + '<td style="text-align:center;">' + attHtml + '</td>'
+      + '</tr>';
+  }).join('');
+  _qfUpdateSecBadge('notes');
+}
+
+/* ═══════════════════════════════════════════ RENDER: MATERIALS ═══ */
+function qfRenderMaterials() {
+  var tb = document.getElementById('materials-tbody'); if (!tb) return;
+  tb.innerHTML = QF_DATA.materials.map(function(row) {
+    var sel = QF_SEL.materials.has(row.id);
+    return '<tr class="' + (sel?'row-sel':'') + '" onclick="qfToggleRow(\'materials\',\'' + row.id + '\')" style="cursor:pointer;">'
+      + '<td style="text-align:center;width:40px;">' + _chkHtml(sel) + '</td>'
+      + '<td><div style="font-weight:600;color:var(--tp);">' + row.name + '</div></td>'
+      + '<td><span style="font-size:12px;">' + row.supplier + '</span></td>'
+      + '<td style="text-align:center;"><span class="mono" style="font-size:13px;font-weight:600;">' + row.qty + '</span></td>'
+      + '<td style="text-align:center;"><span style="font-size:12px;color:var(--tm);">' + row.unit + '</span></td>'
+      + '<td><span style="font-size:11px;color:var(--tm);">' + row.task + '</span></td>'
+      + '<td style="text-align:center;">' + _statusBadge(row.delivery) + '</td>'
+      + '</tr>';
+  }).join('');
+  _qfUpdateSecBadge('materials');
+}
+
+/* ═══════════════════════════════════════════ RENDER: MISC ═══ */
+function qfRenderMisc() {
+  var tb = document.getElementById('misc-tbody'); if (!tb) return;
+  var attSvg = '<svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 6.5l-4 4a3 3 0 01-4.24-4.24l5-5a2 2 0 112.83 2.83l-5 5a1 1 0 01-1.41-1.41l4-4"/></svg>';
+  tb.innerHTML = QF_DATA.misc.map(function(row) {
+    var sel = QF_SEL.misc.has(row.id);
+    var attHtml = row.attachments
+      ? '<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--tm);">' + attSvg + row.attachments + '</span>'
+      : '<span class="muted">—</span>';
+    return '<tr class="' + (sel?'row-sel':'') + '" onclick="qfToggleRow(\'misc\',\'' + row.id + '\')" style="cursor:pointer;">'
+      + '<td style="text-align:center;width:40px;">' + _chkHtml(sel) + '</td>'
+      + '<td><div style="font-weight:600;color:var(--tp);">' + row.name + '</div></td>'
+      + '<td><span style="font-size:12px;color:var(--tm);">' + row.task + '</span></td>'
+      + '<td><span style="font-size:12px;color:var(--tm);">' + row.costcentre + '</span></td>'
+      + '<td style="text-align:center;"><span class="mono" style="font-size:13px;font-weight:600;">' + row.qty + '</span></td>'
+      + '<td style="text-align:center;"><span class="mono" style="font-size:12px;color:var(--tp);font-weight:600;">' + row.duration + '</span></td>'
+      + '<td style="text-align:center;"><span class="mono" style="font-size:12px;font-weight:700;color:var(--tp);">' + row.totalHours + 'h</span></td>'
+      + '<td style="text-align:center;">' + attHtml + '</td>'
+      + '</tr>';
+  }).join('');
+  _qfUpdateSecBadge('misc');
+}
+
+/* ═══════════════════════════════════════════ APPLY ═══ */
+function qfApply() {
+  var total   = 0;
+  var summary = [];
+  Object.keys(QF_SEL).forEach(function(s) { if (QF_SEL[s].size) { total += QF_SEL[s].size; summary.push(QF_SEL[s].size + ' ' + s); } });
+
+  // In a real app: post to parent window via postMessage or call parent API
+  if (window.opener && typeof window.opener.showToast === 'function') {
+    window.opener.showToast('Quick Fill applied: ' + summary.join(', '));
+  }
+  alert('Quick Fill applied!\n\n' + summary.map(function(s){ return '• '+s; }).join('\n') + '\n\nTotal: ' + total + ' items copied.');
+  window.close();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,591 @@
+<!-- ═══════════════════════════ MODALS ═══════════════════════════ -->
+
+<!-- Upload Photos Modal -->
+<div id="mo-upload-photos" class="mo" style="display:none;" onclick="if(event.target===this)closeMo()">
+  <div class="mb" style="width:600px;max-height:85vh;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:15px;font-weight:700;color:var(--tp);">Upload Photos</h3>
+      <button onclick="closeMo()" class="ibtn" style="padding:4px;">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--tm)" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <div style="padding:18px;overflow-y:auto;max-height:calc(85vh - 120px);">
+      <!-- Photo preview grid + add more -->
+      <div id="upload-preview-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+        <!-- thumbnails rendered by JS -->
+      </div>
+      <div class="drop-zone" id="photo-drop-zone" onclick="document.getElementById('photo-file-inp').click()"
+           ondragover="event.preventDefault();this.classList.add('drag')"
+           ondragleave="this.classList.remove('drag')"
+           ondrop="event.preventDefault();this.classList.remove('drag');handlePhotoFiles(event.dataTransfer.files)">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="var(--tm)" stroke-width="1.3" style="margin-bottom:4px;"><rect x="3" y="5" width="22" height="18" rx="2"/><circle cx="10" cy="12" r="2.5"/><path d="M3 20l5.5-4.5 4 3.5 3.5-2.5L25 22"/></svg>
+        <div style="font-size:12px;color:var(--tb);font-weight:500;">Drop files here or click to browse</div>
+        <div style="font-size:10px;color:var(--td);margin-top:2px;">JPG, PNG, GIF · Max 20MB each</div>
+        <input type="file" id="photo-file-inp" style="display:none;" multiple accept="image/*" onchange="handlePhotoFiles(this.files)">
+      </div>
+
+      <!-- Apply details toggle -->
+      <div style="display:flex;align-items:center;gap:8px;margin-top:14px;padding:10px 0;border-top:1px solid var(--border);">
+        <label class="tgl"><input type="checkbox" id="photo-individual-toggle"><span class="tgl-s"></span></label>
+        <span style="font-size:12px;color:var(--tb);font-weight:500;">Apply Details to Individual Photos</span>
+      </div>
+
+      <!-- Details -->
+      <div style="margin-top:10px;">
+        <label style="font-size:11px;font-weight:600;color:var(--tm);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Bulk Description</label>
+        <textarea id="photo-desc" class="vi" rows="2" placeholder="Click to add description..." style="height:auto;padding:8px 10px;font-size:12px;resize:vertical;"></textarea>
+      </div>
+      <div style="margin-top:12px;">
+        <label style="font-size:11px;font-weight:600;color:var(--tm);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;">Bulk Tags</label>
+        <div style="font-size:10px;color:var(--td);margin-bottom:4px;">Add Tags Pressing Enter</div>
+        <div id="photo-tags-container" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;border:1px solid var(--border);border-radius:6px;padding:5px 8px;min-height:34px;background:#fff;cursor:text;" onclick="document.getElementById('photo-tags-input').focus()">
+          <input id="photo-tags-input" style="border:none;outline:none;font-size:12px;flex:1;min-width:80px;font-family:inherit;color:var(--tb);" placeholder="Type..." onkeydown="handlePhotoTagKey(event)">
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);background:#FAFAFA;">
+      <button class="btn btn-o" onclick="closeMo()">CANCEL</button>
+      <button class="btn btn-a" onclick="uploadPhotos()">UPLOAD</button>
+    </div>
+  </div>
+</div>
+
+<!-- Photo Lightbox Modal -->
+<div id="mo-lightbox" class="mo" style="display:none;background:rgba(0,0,0,.85);" onclick="if(event.target===this)closeMo()">
+  <div style="display:flex;height:100%;width:100%;max-width:1100px;margin:0 auto;padding:20px;gap:0;">
+    <!-- Photo area -->
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;">
+      <button onclick="navLightbox(-1)" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:18px;transition:background .15s;backdrop-filter:blur(4px);" onmouseenter="this.style.background='rgba(255,255,255,.25)'" onmouseleave="this.style.background='rgba(255,255,255,.1)'">‹</button>
+      <img id="lb-img" src="https://placehold.co/600x400/374151/94A3B8?text=Site+Photo" style="max-width:100%;max-height:75vh;border-radius:8px;object-fit:contain;">
+      <button onclick="navLightbox(1)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:18px;transition:background .15s;backdrop-filter:blur(4px);" onmouseenter="this.style.background='rgba(255,255,255,.25)'" onmouseleave="this.style.background='rgba(255,255,255,.1)'">›</button>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+        <div id="lb-counter" style="color:#94A3B8;font-size:12px;">1 of 1</div>
+        <button class="btn btn-o btn-sm" style="border-color:rgba(255,255,255,.2);color:#CBD5E1;font-size:10px;height:26px;background:rgba(255,255,255,.08);" onclick="replaceLbPhoto()">
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="3" width="10" height="8" rx="1.5"/><circle cx="4" cy="6.5" r="1.5"/><path d="M1 9l3-2.5 2.5 2 2-1.5L11 10"/></svg>
+          Replace Photo
+        </button>
+      </div>
+    </div>
+    <!-- Detail panel -->
+    <div style="width:300px;background:#fff;border-radius:0 8px 8px 0;display:flex;flex-direction:column;flex-shrink:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);">
+        <h4 style="font-size:14px;font-weight:700;color:var(--tp);">Photo Details</h4>
+        <button class="ibtn" onclick="closeMo()" style="padding:3px;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--tm)" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:14px 16px;">
+        <!-- Description -->
+        <label style="font-size:11px;font-weight:600;color:var(--tm);display:block;margin-bottom:4px;">Description</label>
+        <textarea id="lb-desc" class="vi" rows="3" style="height:auto;padding:8px 10px;font-size:12px;resize:vertical;margin-bottom:14px;"></textarea>
+
+        <!-- Tags -->
+        <label style="font-size:11px;font-weight:600;color:var(--tm);display:block;margin-bottom:3px;">Tags</label>
+        <div style="font-size:10px;color:var(--td);margin-bottom:4px;">Add Tags Pressing Enter</div>
+        <div id="lb-tags-container" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;border:1px solid var(--border);border-radius:6px;padding:5px 8px;min-height:34px;background:#fff;cursor:text;margin-bottom:14px;" onclick="document.getElementById('lb-tags-input').focus()">
+          <input id="lb-tags-input" style="border:none;outline:none;font-size:11px;flex:1;min-width:60px;font-family:inherit;color:var(--tb);" placeholder="Type..." onkeydown="handleLbTagKey(event)">
+        </div>
+
+        <!-- Meta info -->
+        <div style="border-top:1px solid var(--border);padding-top:12px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:11px;color:var(--tm);">Uploaded By</span>
+            <span style="font-size:11px;color:var(--tb);font-weight:500;">Anu Praz</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:11px;color:var(--tm);">Uploaded On</span>
+            <span id="lb-date" style="font-size:11px;color:var(--tb);font-weight:500;">02/04/2026</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;">
+            <span style="font-size:11px;color:var(--tm);">Location</span>
+            <span style="font-size:11px;color:var(--td);">-</span>
+          </div>
+        </div>
+      </div>
+      <!-- Footer actions -->
+      <div style="display:flex;gap:6px;padding:12px 16px;border-top:1px solid var(--border);">
+        <button class="btn btn-sm" style="background:none;border:1px solid var(--red);color:var(--red);gap:4px;" onclick="deleteLbPhoto()">
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="6" cy="6" r="3" fill="var(--red)"/></svg>
+          DELETE
+        </button>
+        <div style="flex:1;"></div>
+        <button class="btn btn-o btn-sm" onclick="closeMo()">CANCEL</button>
+        <button class="btn btn-a btn-sm" onclick="saveLbDetails()">SAVE</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Calendar Modal -->
+<div id="mo-calendar" class="mo" style="display:none;" onclick="if(event.target===this)closeMo()">
+  <div class="mb" style="width:320px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);">
+      <button class="ibtn" onclick="calNav(-1)">‹</button>
+      <span id="cal-title" style="font-size:14px;font-weight:600;">April 2026</span>
+      <button class="ibtn" onclick="calNav(1)">›</button>
+    </div>
+    <div style="padding:12px 16px;">
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;margin-bottom:6px;">
+        <div style="font-size:10px;font-weight:600;color:var(--tm);padding:4px;">SU</div>
+        <div style="font-size:10px;font-weight:600;color:var(--tm);padding:4px;">MO</div>
+        <div style="font-size:10px;font-weight:600;color:var(--tm);padding:4px;">TU</div>
+        <div style="font-size:10px;font-weight:600;color:var(--tm);padding:4px;">WE</div>
+        <div style="font-size:10px;font-weight:600;color:var(--tm);padding:4px;">TH</div>
+        <div style="font-size:10px;font-weight:600;color:var(--tm);padding:4px;">FR</div>
+        <div style="font-size:10px;font-weight:600;color:var(--tm);padding:4px;">SA</div>
+      </div>
+      <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;"></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:6px;padding:10px 16px;border-top:1px solid var(--border);">
+      <button class="btn btn-o btn-sm" onclick="closeMo()">Cancel</button>
+      <button class="btn btn-a btn-sm" onclick="calToday()">Today</button>
+    </div>
+  </div>
+</div>
+
+<!-- Report Preview Modal -->
+<div id="mo-report" class="mo" style="display:none;" onclick="if(event.target===this)closeMo()">
+  <div class="mb" style="width:700px;max-height:85vh;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:15px;font-weight:600;">Site Diary Report Preview</h3>
+      <button onclick="closeMo()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--tm);">✕</button>
+    </div>
+    <div style="padding:20px;overflow-y:auto;flex:1;">
+      <div style="border:1px solid var(--border);border-radius:6px;padding:18px;margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+          <div><div style="font-size:11px;color:var(--tm);">Project</div><div style="font-size:14px;font-weight:600;">Assets Management</div></div>
+          <div style="text-align:right;"><div style="font-size:11px;color:var(--tm);">Date</div><div style="font-size:14px;font-weight:600;" id="rpt-date">02/04/2026</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding-top:12px;border-top:1px solid var(--border);">
+          <div><div style="font-size:11px;color:var(--tm);">Weather</div><div style="font-size:13px;">Partly Cloudy · 22°C</div></div>
+          <div><div style="font-size:11px;color:var(--tm);">Plant & Equipment</div><div style="font-size:13px;" id="rpt-plant">0 items</div></div>
+          <div><div style="font-size:11px;color:var(--tm);">Labour</div><div style="font-size:13px;" id="rpt-labour">0 workers</div></div>
+        </div>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:6px;padding:14px;margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:600;color:var(--amber);margin-bottom:8px;">NOTES</div>
+        <div id="rpt-notes" style="font-size:12px;color:var(--tm);">No notes recorded.</div>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:6px;padding:14px;">
+        <div style="font-size:12px;font-weight:600;color:var(--amber);margin-bottom:8px;">SIGN OFF</div>
+        <div style="display:flex;gap:14px;">
+          <div style="flex:1;"><label style="font-size:11px;color:var(--tm);display:block;margin-bottom:4px;">Supervisor</label><input class="vi" placeholder="Full name"></div>
+          <div style="flex:1;"><label style="font-size:11px;color:var(--tm);display:block;margin-bottom:4px;">Signature</label><div style="border:1px dashed var(--border);border-radius:6px;height:40px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--tm);cursor:pointer;">Click to sign</div></div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);">
+      <button class="btn btn-o" onclick="closeMo()">Cancel</button>
+      <button class="btn btn-o" onclick="showToast('PDF generated');closeMo()"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 8V2M3 4l3-3 3 3M2 10h8"/></svg> Download PDF</button>
+      <button class="btn btn-a" onclick="showToast('Submitted!');closeMo()">SIGN AND SUBMIT</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add Material Modal (bulk select) ── -->
+<div id="mo-add-material" class="mo" style="display:none;" onclick="if(event.target===this)closeMo()">
+  <div class="mb" style="width:860px;max-width:95vw;max-height:82vh;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div style="width:30px;height:30px;border-radius:6px;background:var(--amber-l);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--amber)" stroke-width="1.5"><rect x="1" y="5" width="14" height="9" rx="1.5"/><path d="M5 5V3.5A1.5 1.5 0 016.5 2h3A1.5 1.5 0 0111 3.5V5"/><path d="M1 9h14"/></svg>
+      </div>
+      <div style="flex:1;">
+        <h3 style="font-size:15px;font-weight:700;color:var(--tp);margin:0;">Add Materials</h3>
+        <div style="font-size:11px;color:var(--tm);margin-top:1px;">Select one or more materials to add to the diary</div>
+      </div>
+      <button onclick="closeMo()" class="ibtn" style="padding:4px;">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--tm)" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <div style="display:flex;flex:1;min-height:0;overflow:hidden;">
+      <!-- Left: catalogue list -->
+      <div style="flex:1;border-right:1px solid var(--border);display:flex;flex-direction:column;">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:6px;padding:0 8px;height:30px;background:#fff;">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#9CA3AF" stroke-width="1.5"><circle cx="5" cy="5" r="3.5"/><path d="M8 8l3 3"/></svg>
+            <input id="aeqmat-search" style="border:none;outline:none;font-size:11px;font-family:inherit;flex:1;color:var(--tb);" placeholder="Search catalogue…" oninput="renderAddMatModal()">
+          </div>
+          <button onclick="selectAllMat()" style="font-size:11px;font-weight:600;color:var(--amber);background:none;border:none;cursor:pointer;white-space:nowrap;font-family:inherit;">Select All</button>
+        </div>
+        <div id="aeqmat-list" style="flex:1;overflow-y:auto;"></div>
+      </div>
+      <!-- Right: selected panel -->
+      <div style="width:320px;display:flex;flex-direction:column;flex-shrink:0;">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:13px;font-weight:600;color:var(--tp);">Selected <span id="aeqmat-sel-count" style="color:var(--amber);">0</span></span>
+          <button class="ibtn" style="color:var(--red);font-size:11px;font-weight:600;" onclick="clearMatSelect()">CLEAR ALL</button>
+        </div>
+        <div id="aeqmat-selected-list" style="flex:1;overflow-y:auto;"></div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);flex-shrink:0;">
+      <button class="btn btn-o" onclick="closeMo()">CANCEL</button>
+      <button class="btn btn-a" style="gap:4px;" onclick="confirmAddMaterials()">
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg>
+        ADD
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add Misc Item Modal (bulk select) ── -->
+<div id="mo-add-misc" class="mo" style="display:none;" onclick="if(event.target===this)closeMo()">
+  <div class="mb" style="width:800px;max-width:95vw;max-height:82vh;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <div style="width:30px;height:30px;border-radius:6px;background:var(--amber-l);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--amber)" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 5h6M5 8h6M5 11h3"/></svg>
+      </div>
+      <div style="flex:1;">
+        <h3 style="font-size:15px;font-weight:700;color:var(--tp);margin:0;">Add Miscellaneous Items</h3>
+        <div style="font-size:11px;color:var(--tm);margin-top:1px;">Select one or more items to add to the diary</div>
+      </div>
+      <button onclick="closeMo()" class="ibtn" style="padding:4px;">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--tm)" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <div style="display:flex;flex:1;min-height:0;overflow:hidden;">
+      <div style="flex:1;border-right:1px solid var(--border);display:flex;flex-direction:column;">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:6px;padding:0 8px;height:30px;background:#fff;">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="#9CA3AF" stroke-width="1.5"><circle cx="5" cy="5" r="3.5"/><path d="M8 8l3 3"/></svg>
+            <input id="amisc-search" style="border:none;outline:none;font-size:11px;font-family:inherit;flex:1;color:var(--tb);" placeholder="Search items…" oninput="renderAddMiscModal()">
+          </div>
+          <button onclick="selectAllMisc()" style="font-size:11px;font-weight:600;color:var(--amber);background:none;border:none;cursor:pointer;white-space:nowrap;font-family:inherit;">Select All</button>
+        </div>
+        <div id="amisc-list" style="flex:1;overflow-y:auto;"></div>
+      </div>
+      <div style="width:280px;display:flex;flex-direction:column;flex-shrink:0;">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:13px;font-weight:600;color:var(--tp);">Selected <span id="amisc-sel-count" style="color:var(--amber);">0</span></span>
+          <button class="ibtn" style="color:var(--red);font-size:11px;font-weight:600;" onclick="clearMiscSelect()">CLEAR ALL</button>
+        </div>
+        <div id="amisc-selected-list" style="flex:1;overflow-y:auto;"></div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);flex-shrink:0;">
+      <button class="btn btn-o" onclick="closeMo()">CANCEL</button>
+      <button class="btn btn-a" style="gap:4px;" onclick="confirmAddMiscItems()">
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2"><path d="M2 6l3 3 5-5"/></svg>
+        ADD
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Task / Cost Centre Selector Modal -->
+<div id="mo-task" class="mo" style="display:none;" onclick="if(event.target===this)closeMo()">
+  <div class="mb" style="width:880px;max-height:80vh;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:15px;font-weight:600;">Select Tasks / Cost Centres</h3>
+      <button onclick="closeMo()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--tm);">✕</button>
+    </div>
+    <div style="display:flex;flex:1;min-height:0;overflow:hidden;">
+      <div style="flex:1;border-right:1px solid var(--border);display:flex;flex-direction:column;">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--border);">
+          <input class="vi" style="height:30px;font-size:12px;" placeholder="Search tasks…">
+          <div style="display:flex;gap:0;margin-top:8px;border-bottom:1px solid var(--border);">
+            <div class="stab on" onclick="swStab(this)">TASKS</div>
+            <div class="stab" onclick="swStab(this)">COST CENTRE</div>
+          </div>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:8px 0;">
+          <!-- (1) Site Preliminaries group -->
+          <div style="padding:4px 14px;">
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:13px;font-weight:500;">
+              <input type="checkbox" onchange="toggleTaskSel(this,'1.1','Site establishment','(1) Site Preliminaries')"> <span style="font-weight:600;">(1.1)</span> Site establishment
+            </label>
+            <div style="padding-left:22px;">
+              <label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer;font-size:12px;color:var(--tb);">
+                <input type="checkbox" onchange="toggleTaskSel(this,'110','Preliminaries/Super','(1) Site Preliminaries')"> <span style="color:var(--tm);">(110)</span> Preliminaries/Super
+              </label>
+            </div>
+          </div>
+          <div style="padding:4px 14px;">
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:13px;font-weight:500;">
+              <input type="checkbox" onchange="toggleTaskSel(this,'1.2','Management Plans','(1) Site Preliminaries')"> <span style="font-weight:600;">(1.2)</span> Management Plans
+            </label>
+          </div>
+          <div style="padding:4px 14px;">
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:13px;font-weight:500;">
+              <input type="checkbox" onchange="toggleTaskSel(this,'1.3','Underground Service','(1) Site Preliminaries')"> <span style="font-weight:600;">(1.3)</span> Underground Service
+            </label>
+          </div>
+          <!-- (2) Earthworks group -->
+          <div style="padding:4px 14px;border-top:1px solid var(--border);margin-top:4px;">
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:13px;font-weight:500;">
+              <input type="checkbox" onchange="toggleTaskSel(this,'2.1','Bulk Earthworks','(2) Earthworks')"> <span style="font-weight:600;">(2.1)</span> Bulk Earthworks
+            </label>
+          </div>
+          <div style="padding:4px 14px;">
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:13px;font-weight:500;">
+              <input type="checkbox" onchange="toggleTaskSel(this,'2.2','Cut to Fill','(2) Earthworks')"> <span style="font-weight:600;">(2.2)</span> Cut to Fill
+            </label>
+          </div>
+          <!-- (3) Drainage -->
+          <div style="padding:4px 14px;border-top:1px solid var(--border);margin-top:4px;">
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:13px;font-weight:500;">
+              <input type="checkbox" onchange="toggleTaskSel(this,'3.1','Drainage Works','(3) Drainage')"> <span style="font-weight:600;">(3.1)</span> Drainage Works
+            </label>
+          </div>
+        </div>
+      </div>
+      <div style="width:340px;display:flex;flex-direction:column;">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:13px;font-weight:600;">Selected Items <span id="task-sel-count" style="color:var(--amber);">(0)</span></span>
+          <button class="ibtn" style="color:var(--red);font-size:11px;" onclick="clearTaskSel()">CLEAR ALL</button>
+        </div>
+        <div id="task-sel-list" style="flex:1;overflow-y:auto;padding:8px 14px;">
+          <div style="text-align:center;color:var(--tm);font-size:12px;padding:20px 0;">No items selected</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);">
+      <button class="btn btn-o" onclick="closeMo()">CANCEL</button>
+      <button class="btn btn-a" onclick="applyTasks();closeMo()">ADD</button>
+    </div>
+  </div>
+</div>
+
+<!-- Form Fill Modal -->
+<div id="mo-form-fill" class="mo" style="display:none;" onclick="if(event.target===this)closeFormFill()">
+  <div class="mb" style="width:680px;max-height:85vh;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:28px;height:28px;border-radius:6px;background:var(--amber-l);display:flex;align-items:center;justify-content:center;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--amber)" stroke-width="1.5"><rect x="2" y="1" width="12" height="14" rx="1.5"/><path d="M5 5h6M5 8h6M5 11h3"/></svg>
+        </div>
+        <h3 id="form-fill-title" style="font-size:15px;font-weight:600;">Form Response</h3>
+      </div>
+      <button onclick="closeFormFill()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--tm);">&#10005;</button>
+    </div>
+    <div style="padding:20px 22px;overflow-y:auto;flex:1;">
+      <div id="form-fill-fields">
+        <!-- Dynamically populated by openFormResponseModal() -->
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);">
+      <button class="btn btn-o" onclick="closeFormFill()">CANCEL</button>
+      <button class="btn btn-o" onclick="showToast('Draft saved');closeFormFill()">SAVE DRAFT</button>
+      <button class="btn btn-a" onclick="submitFormFill()">SUBMIT</button>
+    </div>
+  </div>
+</div>
+
+<!-- Help Modal -->
+<div id="mo-help" class="mo" style="display:none;" onclick="if(event.target===this)closeMo()">
+  <div class="mb" style="width:500px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:15px;font-weight:600;">Need Help?</h3>
+      <button onclick="closeMo()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--tm);">✕</button>
+    </div>
+    <div style="padding:18px;">
+      <div style="font-size:13px;color:var(--tb);margin-bottom:10px;">The Site Diary is your daily record of work activities. Complete each section as needed:</div>
+      <div style="font-size:12px;color:var(--tm);line-height:1.8;">
+        <strong style="color:var(--tp);">Photos</strong> — Upload site progress and safety documentation photos<br>
+        <strong style="color:var(--tp);">Notes</strong> — Record daily observations, instructions, and conditions<br>
+        <strong style="color:var(--tp);">Plant & Equipment</strong> — Log all plant/equipment used on site<br>
+        <strong style="color:var(--tp);">Labour</strong> — Record crew members, hours, and roles<br>
+        <strong style="color:var(--tp);">Materials</strong> — Track materials used with quantities<br>
+        <strong style="color:var(--tp);">Delivery Dockets</strong> — Log incoming deliveries<br>
+        <strong style="color:var(--tp);">Weather</strong> — Confirm weather conditions for the day
+      </div>
+    </div>
+    <div style="padding:0 18px 18px;"><button class="btn btn-a" onclick="closeMo()" style="width:100%;">Got it</button></div>
+  </div>
+</div>
+
+<!-- ── Add Equipment Modal (Split Panel) ── -->
+<div id="mo-add-equipment" class="mo" style="display:none;" onclick="if(event.target===this)closeMo()">
+  <div class="mb" style="width:880px;max-height:80vh;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:15px;font-weight:700;color:var(--tp);">Add Equipment</h3>
+      <button onclick="closeMo()" class="ibtn" style="padding:4px;">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--tm)" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <div style="display:flex;flex:1;min-height:0;overflow:hidden;">
+      <!-- Left: Equipment List -->
+      <div style="flex:1;border-right:1px solid var(--border);display:flex;flex-direction:column;">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);">
+          <h4 style="font-size:13px;font-weight:600;color:var(--tp);margin-bottom:8px;">List of Equipment</h4>
+          <div style="position:relative;">
+            <input id="aeq-search" class="vi" placeholder="Search Equipment..." oninput="renderAddEquipModal()" style="height:34px;padding-left:30px;font-size:12px;">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="var(--tm)" stroke-width="1.5" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;"><circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5L13 13"/></svg>
+          </div>
+        </div>
+        <div style="padding:8px 14px 4px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);">
+          <span style="font-size:11px;font-weight:600;color:var(--tm);text-transform:uppercase;letter-spacing:.04em;">PROJECT EQUIPMENT</span>
+          <button class="ibtn" style="font-size:11px;color:var(--amber);font-weight:600;" onclick="selectAllEquip()">Select All</button>
+        </div>
+        <div id="aeq-list" style="flex:1;overflow-y:auto;">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+      <!-- Right: Selected Equipment -->
+      <div style="width:340px;display:flex;flex-direction:column;">
+        <div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:13px;font-weight:600;color:var(--tp);">Selected Equipment</span>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:12px;color:var(--amber);font-weight:600;"><span id="aeq-sel-count">0</span> SELECTED</span>
+            <button class="ibtn" style="font-size:11px;color:var(--amber);" onclick="clearEquipSelect()">Clear All</button>
+          </div>
+        </div>
+        <div id="aeq-selected-list" style="flex:1;overflow-y:auto;">
+          <div style="text-align:center;color:var(--tm);font-size:12px;padding:30px 0;">No items selected</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);background:#FAFAFA;">
+      <button class="btn btn-o" onclick="closeMo()">CANCEL</button>
+      <button class="btn btn-a" onclick="confirmAddEquipment()">ADD</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Log Stand Down Modal ── -->
+<div id="mo-log-standdown" class="mo" style="display:none;" onclick="if(event.target===this)closeMo()">
+  <div class="mb" style="width:480px;max-height:85vh;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:15px;font-weight:700;color:var(--tp);">Log Stand Down</h3>
+      <button onclick="closeMo()" class="ibtn" style="padding:4px;">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--tm)" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+    <div style="padding:14px 18px;overflow-y:auto;max-height:calc(85vh - 130px);">
+      <!-- Search -->
+      <div style="position:relative;margin-bottom:12px;">
+        <input id="lsd-search" class="vi" placeholder="Search..." oninput="renderLogStandDownModal()" style="height:34px;padding-left:30px;font-size:12px;">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="var(--tm)" stroke-width="1.5" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;"><circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5L13 13"/></svg>
+      </div>
+
+      <!-- Equipment selection -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:11px;font-weight:600;color:var(--tm);text-transform:uppercase;letter-spacing:.04em;">PROJECT EQUIPMENT <span id="lsd-sel-count" style="color:var(--amber);">(0 Selected)</span></span>
+        <button class="ibtn" style="font-size:11px;color:var(--amber);font-weight:600;" onclick="sdSelectedEquip=equipmentCatalogue.map(e=>e.id);renderLogStandDownModal()">Select All</button>
+      </div>
+      <div id="lsd-equip-list" style="border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;margin-bottom:16px;">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Reason -->
+      <div style="margin-bottom:12px;">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--tb);margin-bottom:4px;">Reason for Stand down <span style="color:var(--red);">*</span></label>
+        <select id="lsd-reason" class="vi" style="height:38px;font-size:12px;">
+          <option value="">Reason*</option>
+          <option>Inclement Weather</option>
+          <option>Mechanical Breakdown</option>
+          <option>No Operator Available</option>
+          <option>Not Required Today</option>
+          <option>Safety Stand Down</option>
+          <option>Other</option>
+        </select>
+      </div>
+
+      <!-- Specific reason -->
+      <div style="margin-bottom:12px;">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--tb);margin-bottom:4px;">Specific reason</label>
+        <input id="lsd-specific" class="vi" placeholder="Optional specific details..." style="height:38px;font-size:12px;">
+      </div>
+
+      <!-- Notify -->
+      <div style="border-top:1px solid var(--border);padding-top:12px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--tb);cursor:pointer;margin-bottom:8px;">
+          <input type="checkbox" id="lsd-notify" style="accent-color:var(--amber);width:15px;height:15px;">
+          Notify Admins
+        </label>
+        <div>
+          <label style="font-size:11px;color:var(--tm);display:block;margin-bottom:3px;">Notes for</label>
+          <select id="lsd-notes-for" class="vi" style="height:38px;font-size:12px;">
+            <option>Bishwas Shrestha (bishwas@var...)</option>
+            <option>Anu Praz (anu.prazapti@varicon.com.au)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);background:#FAFAFA;">
+      <button class="btn btn-o" onclick="closeMo()">Cancel</button>
+      <button class="btn btn-o" style="gap:4px;" onclick="confirmLogStandDown();showToast('Saved and email sent to suppliers')">
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1 3l5 4 5-4M1 3v6h10V3"/></svg>
+        Save and email suppliers
+      </button>
+      <button class="btn btn-a" onclick="confirmLogStandDown()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Export Site Diary Modal ── -->
+<div id="mo-export" class="mo" style="display:none;" onclick="if(event.target===this)closeMo()">
+  <div class="mb" style="width:480px;">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);">
+      <h3 style="font-size:15px;font-weight:700;color:var(--tp);">Export Site Diary</h3>
+      <button onclick="closeMo()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--tm);line-height:1;">✕</button>
+    </div>
+    <!-- Body -->
+    <div style="padding:20px;display:flex;flex-direction:column;gap:18px;">
+      <!-- Date Range -->
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--tb);margin-bottom:6px;">Date Range</label>
+        <div style="position:relative;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--tm)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);pointer-events:none;">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          <input type="date" id="mo-export-date" class="vi" style="padding-left:32px;" />
+        </div>
+      </div>
+      <!-- Status -->
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--tb);margin-bottom:6px;">Status</label>
+        <div style="position:relative;">
+          <select id="mo-export-status" class="vi" style="appearance:none;padding-right:30px;cursor:pointer;">
+            <option value="all">All</option>
+            <option value="draft">Draft</option>
+            <option value="submitted">Submitted</option>
+            <option value="approved">Approved</option>
+          </select>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="var(--tm)" stroke-width="1.5" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;"><polyline points="2 4 6 8 10 4"/></svg>
+        </div>
+      </div>
+      <!-- Export Format -->
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--tb);margin-bottom:10px;">Export Format</label>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="radio" name="export-fmt" value="excel" checked style="accent-color:var(--amber);width:16px;height:16px;cursor:pointer;">
+            <span style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--tb);">
+              <span style="background:#D1FAE5;color:#065F46;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">XLS</span>
+              Excel Spreadsheet (.xlsx)
+            </span>
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="radio" name="export-fmt" value="pdf" style="accent-color:var(--amber);width:16px;height:16px;cursor:pointer;">
+             <span style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--tb);">
+              <span style="background:#FEE2E2;color:#991B1B;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">PDF</span>
+              PDF Document (.pdf)
+            </span>
+          </label>
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="radio" name="export-fmt" value="both" style="accent-color:var(--amber);width:16px;height:16px;cursor:pointer;">
+            <span style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--tb);">
+              <span style="background:#EDE9FE;color:#5B21B6;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;">ZIP</span>
+              Excel + PDF Bundle (.zip)
+            </span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <!-- Footer -->
+    <div style="display:flex;align-items:center;gap:8px;padding:14px 20px;border-top:1px solid var(--border);background:var(--hover);">
+      <button class="btn btn-o" style="gap:5px;margin-right:auto;" onclick="window.open('pages/site_diary_multiday_report.html')">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="4"/><path d="M9.5 9.5L13 13"/></svg>
+        Preview
+      </button>
+      <button class="btn btn-o" onclick="closeMo()">Cancel</button>
+      <button class="btn btn-a" style="gap:5px;" onclick="doExport()">
+        <svg width="12" height="12" viewBox="0 0 13 13" fill="none" stroke="white" stroke-width="1.5"><path d="M6.5 1v8M4 6l2.5 3 2.5-3M1 11v1h11v-1"/></svg>
+        Export
+      </button>
+    </div>
+  </div>
+</div>
+</div>
