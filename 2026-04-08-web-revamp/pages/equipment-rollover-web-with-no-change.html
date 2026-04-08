@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Copy Plants & Equipment</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #F4F5F7;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top nav (breadcrumb only) ── */
+    .topbar {
+      background: #fff;
+      border-bottom: 1px solid #E5E7EB;
+      padding: 0 32px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .back-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #6B7280;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      padding: 6px 8px;
+      border-radius: 6px;
+      transition: background 0.15s;
+    }
+    .back-btn:hover { background: #F9FAFB; color: #374151; }
+    .back-btn svg { flex-shrink: 0; }
+    .topbar-divider { color: #D1D5DB; font-size: 16px; }
+    .topbar-title { font-size: 14px; font-weight: 600; color: #1A2332; }
+
+    /* ── Scrollable main ── */
+    .main-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding-bottom: 80px; /* space for sticky footer */
+    }
+
+    /* ── Page layout ── */
+    .page { max-width: 960px; margin: 0 auto; padding: 28px 32px; }
+
+    /* ── Page heading ── */
+    .page-heading {
+      margin-bottom: 20px;
+    }
+    .page-heading h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #F5A623;
+      margin-bottom: 2px;
+    }
+    .page-heading p {
+      font-size: 13px;
+      color: #6B7280;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      border: 1px solid #E5E7EB;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+      overflow: hidden;
+    }
+
+    /* ── Date row ── */
+    .date-row {
+      display: flex;
+      gap: 16px;
+      padding: 20px 24px;
+      border-bottom: 1px solid #E5E7EB;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    .date-field { flex: 0 0 180px; }
+    .date-field-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #6B7280;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .date-input-wrap {
+      position: relative;
+      border: 1px solid #E5E7EB;
+      border-radius: 6px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      height: 40px;
+      cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .date-input-wrap:focus-within {
+      border-color: #F5A623;
+      box-shadow: 0 0 0 3px rgba(245,166,35,0.15);
+    }
+    .date-input-wrap .di-icon { font-size: 14px; color: #9CA3AF; flex-shrink: 0; }
+    .date-input-wrap input[type="date"] {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 13px;
+      color: #1A2332;
+      font-weight: 500;
+      background: transparent;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .arrow-icon {
+      display: flex;
+      align-items: center;
+      padding-top: 22px;
+      color: #9CA3AF;
+    }
+
+    /* ── Warning ── */
+    .warning-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 10px 24px;
+      background: #FFFBEB;
+      border-bottom: 1px solid #FDE68A;
+      font-size: 12px;
+      color: #92400E;
+    }
+    .warning-icon { flex-shrink: 0; margin-top: 1px; }
+
+    /* ── Table toolbar ── */
+    .table-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px 12px;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .table-toolbar-left { display: flex; align-items: center; gap: 10px; }
+    .toolbar-title { font-size: 13px; font-weight: 600; color: #1A2332; }
+    .toolbar-count {
+      font-size: 12px;
+      color: #6B7280;
+      background: #F4F5F7;
+      border-radius: 10px;
+      padding: 2px 8px;
+    }
+    .select-all-btn {
+      font-size: 13px;
+      color: #F5A623;
+      font-weight: 600;
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-family: inherit;
+      padding: 0;
+    }
+    .select-all-btn:hover { text-decoration: underline; }
+
+    /* ── Table ── */
+    .eq-table { width: 100%; border-collapse: collapse; }
+    .eq-table thead tr { background: #EAECEF; }
+    .eq-table th {
+      padding: 10px 16px;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .eq-table th:first-child { width: 44px; }
+    .eq-table tbody tr {
+      border-bottom: 1px solid #E5E7EB;
+      transition: background 0.1s;
+    }
+    .eq-table tbody tr:last-child { border-bottom: none; }
+    .eq-table tbody tr:hover:not(.sub-row) { background: #F9FAFB; }
+    .eq-table tbody tr.row-checked { background: #FFFBF0; }
+    .eq-table td {
+      padding: 14px 16px;
+      font-size: 13px;
+      color: #374151;
+      vertical-align: middle;
+    }
+    .eq-table td:first-child { width: 44px; }
+
+    /* Custom checkbox */
+    .cb {
+      width: 18px;
+      height: 18px;
+      border: 1.5px solid #D1D5DB;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      flex-shrink: 0;
+      background: #fff;
+    }
+    .cb:hover { border-color: #F5A623; }
+    .cb.on { background: #F5A623; border-color: #F5A623; }
+    .cb.on::after {
+      content: '';
+      display: block;
+      width: 4px;
+      height: 7px;
+      border: 1.5px solid #fff;
+      border-top: none;
+      border-left: none;
+      transform: rotate(45deg) translateY(-1px);
+    }
+    .cb-wrap { display: flex; align-items: center; justify-content: center; }
+
+    /* Equipment name cell */
+    .eq-name-cell { display: flex; flex-direction: column; gap: 2px; }
+    .eq-name-main { font-weight: 600; color: #1A2332; font-size: 13px; }
+    .eq-name-meta { font-size: 12px; color: #9CA3AF; }
+
+    /* Type badge */
+    .type-badge {
+      display: inline-flex;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 4px;
+      padding: 2px 8px;
+    }
+    .type-dry { background: #DBEAFE; color: #1D4ED8; }
+    .type-wet { background: #D1FAE5; color: #065F46; }
+
+    /* Standdown badge */
+    .standdown-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #FEF3DC;
+      color: #92400E;
+      border-radius: 4px;
+      padding: 2px 7px;
+      margin-left: 6px;
+    }
+
+    /* Duration cell */
+    .duration-text { font-size: 13px; color: #374151; font-weight: 500; }
+    .standdown-text { font-size: 12px; color: #D97706; font-weight: 600; }
+
+    /* Expand btn */
+    .expand-btn {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.1s, transform 0.2s;
+      color: #9CA3AF;
+      font-size: 13px;
+      user-select: none;
+    }
+    .expand-btn:hover { background: #F3F4F6; color: #6B7280; }
+    .expand-btn.up { transform: rotate(180deg); }
+
+    /* Expanded sub-row */
+    .sub-row td {
+      padding: 0;
+      border-bottom: none !important;
+    }
+    .sub-row-inner {
+      display: flex;
+      gap: 20px;
+      padding: 14px 16px 16px 60px;
+      background: #F9FAFB;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .sub-field { display: flex; flex-direction: column; gap: 5px; min-width: 140px; }
+    .sub-field label {
+      font-size: 11px;
+      color: #6B7280;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .sub-input {
+      border: 1px solid #E5E7EB;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 13px;
+      color: #1A2332;
+      outline: none;
+      font-family: inherit;
+      background: #fff;
+      height: 38px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .sub-input:focus {
+      border-color: #F5A623;
+      box-shadow: 0 0 0 3px rgba(245,166,35,0.15);
+    }
+    .sub-input-row { display: flex; align-items: center; gap: 8px; }
+    .sub-unit { font-size: 12px; color: #9CA3AF; }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: #9CA3AF;
+      font-size: 13px;
+    }
+    .empty-state svg { margin: 0 auto 12px; display: block; opacity: 0.4; }
+
+    /* ── Sticky footer ── */
+    .sticky-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border-top: 1px solid #E5E7EB;
+      padding: 14px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 50;
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+    }
+    .footer-info {
+      font-size: 13px;
+      color: #6B7280;
+    }
+    .footer-info strong { color: #1A2332; }
+    .footer-actions { display: flex; align-items: center; gap: 10px; }
+
+    /* ── Buttons ── */
+    .btn {
+      height: 38px;
+      padding: 0 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .btn-cancel {
+      background: #fff;
+      border: 1px solid #E5E7EB;
+      color: #374151;
+    }
+    .btn-cancel:hover { background: #F9FAFB; border-color: #D1D5DB; }
+    .btn-primary {
+      background: #F5A623;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #D4891A; }
+    .btn-primary:disabled { background: #E5E7EB; color: #9CA3AF; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+<!-- Top nav (breadcrumb only) -->
+<div class="topbar">
+  <a class="back-btn" onclick="history.back()">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Plants & Equipment
+  </a>
+  <span class="topbar-divider">/</span>
+  <span class="topbar-title">Copy Plants & Equipment</span>
+</div>
+
+<!-- Scrollable content -->
+<div class="main-scroll">
+  <div class="page">
+
+    <!-- Page heading -->
+    <div class="page-heading">
+      <h1>Copy Plants & Equipment</h1>
+      <p>Select equipment from a previous date and copy it forward to a new entry.</p>
+    </div>
+
+    <!-- Main card -->
+    <div class="card">
+
+      <!-- Date row -->
+      <div class="date-row">
+        <div class="date-field">
+          <div class="date-field-label">Copy From</div>
+          <div class="date-input-wrap">
+            <span class="di-icon">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="12" rx="2" stroke="#9CA3AF" stroke-width="1.5"/><path d="M5 1v4M11 1v4M1 7h14" stroke="#9CA3AF" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </span>
+            <input type="date" id="from-date" value="2026-04-03" onchange="onFromChange(this.value)" />
+          </div>
+        </div>
+
+        <div class="arrow-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 8h10M9 4l4 4-4 4" stroke="#D1D5DB" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <div class="date-field">
+          <div class="date-field-label">Copy To</div>
+          <div class="date-input-wrap">
+            <span class="di-icon">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="12" rx="2" stroke="#9CA3AF" stroke-width="1.5"/><path d="M5 1v4M11 1v4M1 7h14" stroke="#9CA3AF" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </span>
+            <input type="date" id="to-date" value="2026-04-07" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Warning -->
+      <div class="warning-row">
+        <span class="warning-icon">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M8 1L1 14h14L8 1z" stroke="#D97706" stroke-width="1.5" stroke-linejoin="round"/>
+            <path d="M8 6v4M8 11.5v.5" stroke="#D97706" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </span>
+        Only manual entries from Site Diary can be copied. Synced entries will be excluded.
+      </div>
+
+      <!-- Table toolbar -->
+      <div class="table-toolbar">
+        <div class="table-toolbar-left">
+          <span class="toolbar-title">Equipment</span>
+          <span class="toolbar-count" id="eq-count-text">0 of 0 selected</span>
+        </div>
+        <button class="select-all-btn" onclick="selectAll()">Select All</button>
+      </div>
+
+      <!-- Equipment table -->
+      <table class="eq-table" id="eq-table">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Equipment</th>
+            <th>Type</th>
+            <th>Supplier</th>
+            <th>Duration / Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="eq-tbody"></tbody>
+      </table>
+
+    </div>
+  </div>
+</div>
+
+<!-- Sticky footer with actions -->
+<div class="sticky-footer">
+  <div class="footer-info" id="footer-info">
+    Select equipment to copy
+  </div>
+  <div class="footer-actions">
+    <button class="btn btn-cancel" onclick="history.back()">Cancel</button>
+    <button class="btn btn-primary" id="copy-btn" disabled onclick="doCopy()">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+        <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M11 5V3.5A1.5 1.5 0 009.5 2H3.5A1.5 1.5 0 002 3.5v6A1.5 1.5 0 003.5 11H5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      Copy Plants & Equipment
+    </button>
+  </div>
+</div>
+
+<script>
+  const equipmentDataByDate = {
+    '2026-04-03': [
+      { id: 1, type: 'Dry Hire', title: 'CAT 320 Excavator',       meta: 'Construction KaT',   checked: true,  duration: 1.0, standdown: false, standdownReason: '', expanded: false },
+      { id: 2, type: 'Wet Hire', title: '55T Excavator',            meta: 'Hamilton Smith Pty', checked: true,  standdown: true,  standdownReason: 'On standdown due to rain', expanded: false },
+      { id: 3, type: 'Wet Hire', title: 'CAT D6 Dozer',             meta: 'Books by Bessie',    checked: false, standdown: true,  standdownReason: 'On standdown - maintenance', expanded: false },
+      { id: 4, type: 'Dry Hire', title: 'Abby supplier equipment',  meta: 'Construction KaT',   checked: false, duration: 1.0, standdown: false, standdownReason: '', expanded: false }
+    ],
+    '2026-04-04': [
+      { id: 5, type: 'Dry Hire', title: 'DUM-12T Dump Truck', meta: 'Unassigned',          checked: true, duration: 1.0, standdown: false, standdownReason: '', expanded: false }
+    ],
+    '2026-04-05': [],
+    '2026-04-06': [
+      { id: 6, type: 'Wet Hire', title: 'Loader',             meta: 'Hamilton Smith Pty', checked: true, standdown: false, duration: 1.0, standdownReason: '', expanded: false }
+    ]
+  };
+
+  let fromDate  = '2026-04-03';
+  let equipment = JSON.parse(JSON.stringify(equipmentDataByDate[fromDate]));
+
+  function onFromChange(val) {
+    fromDate  = val;
+    equipment = JSON.parse(JSON.stringify(equipmentDataByDate[fromDate] || []));
+    renderTable();
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('eq-tbody');
+    tbody.innerHTML = '';
+
+    if (equipment.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td colspan="6">
+        <div class="empty-state">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="#9CA3AF" stroke-width="1.5"/><path d="M3 9h18M9 21V9" stroke="#9CA3AF" stroke-width="1.5"/></svg>
+          No equipment found for this date.
+        </div>
+      </td>`;
+      tbody.appendChild(tr);
+      updateCount();
+      return;
+    }
+
+    equipment.forEach((eq, idx) => {
+      const typeCls = eq.type === 'Dry Hire' ? 'type-dry' : 'type-wet';
+
+      const tr = document.createElement('tr');
+      tr.className = eq.checked ? 'row-checked' : '';
+      tr.innerHTML = `
+        <td><div class="cb-wrap"><div class="cb ${eq.checked ? 'on' : ''}" onclick="toggleCheck(${idx})"></div></div></td>
+        <td>
+          <div class="eq-name-cell">
+            <span class="eq-name-main">${eq.title}</span>
+            <span class="eq-name-meta">${eq.meta}</span>
+          </div>
+        </td>
+        <td>
+          <span class="type-badge ${typeCls}">${eq.type}</span>
+          ${eq.standdown ? '<span class="standdown-badge">Standdown</span>' : ''}
+        </td>
+        <td style="color:#6B7280;font-size:13px;">${eq.meta}</td>
+        <td>
+          ${eq.standdown
+            ? `<span class="standdown-text">On Standdown</span>`
+            : `<span class="duration-text">${eq.duration} hr</span>`}
+        </td>
+        <td>
+          <div class="expand-btn ${eq.expanded ? 'up' : ''}" onclick="toggleExpand(${idx})" title="${eq.expanded ? 'Collapse' : 'Expand'}">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+
+      if (eq.expanded) {
+        const sub = document.createElement('tr');
+        sub.className = 'sub-row';
+        sub.innerHTML = `<td colspan="6">
+          <div class="sub-row-inner">
+            ${eq.standdown ? `
+              <div class="sub-field" style="min-width:320px;">
+                <label>Standdown Reason</label>
+                <input class="sub-input" type="text" value="${eq.standdownReason || ''}"
+                  oninput="equipment[${idx}].standdownReason=this.value"
+                  style="width:320px;" />
+              </div>
+            ` : `
+              <div class="sub-field">
+                <label>Duration</label>
+                <div class="sub-input-row">
+                  <input class="sub-input" type="number" min="0" step="0.5" value="${eq.duration || 0}"
+                    style="width:90px;" oninput="equipment[${idx}].duration=parseFloat(this.value)||0" />
+                  <span class="sub-unit">hr</span>
+                </div>
+              </div>
+            `}
+          </div>
+        </td>`;
+        tbody.appendChild(sub);
+      }
+    });
+
+    updateCount();
+  }
+
+  function toggleCheck(idx) {
+    equipment[idx].checked = !equipment[idx].checked;
+    renderTable();
+  }
+  function selectAll() {
+    equipment.forEach(eq => eq.checked = true);
+    renderTable();
+  }
+  function toggleExpand(idx) {
+    equipment[idx].expanded = !equipment[idx].expanded;
+    renderTable();
+  }
+  function updateCount() {
+    const on  = equipment.filter(e => e.checked).length;
+    const tot = equipment.length;
+    document.getElementById('eq-count-text').textContent = `${on} of ${tot} selected`;
+
+    const info = document.getElementById('footer-info');
+    if (on === 0) {
+      info.innerHTML = `Select equipment to copy`;
+    } else {
+      const toVal = document.getElementById('to-date').value;
+      info.innerHTML = `Copying <strong>${on} item${on > 1 ? 's' : ''}</strong> to ${toVal || '—'}`;
+    }
+
+    const btn = document.getElementById('copy-btn');
+    btn.disabled = on === 0;
+  }
+
+  function doCopy() {
+    const selected = equipment.filter(e => e.checked);
+    const toDate   = document.getElementById('to-date').value;
+    alert(`Copied ${selected.length} item(s) to ${toDate}.`);
+  }
+
+  renderTable();
+</script>
+</body>
+</html>

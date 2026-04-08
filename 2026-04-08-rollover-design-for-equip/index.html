@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Copy Plants & Equipment</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #F4F5F7;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-size: 13px;
+      color: #374151;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      background: #fff;
+      border-bottom: 1px solid #E5E7EB;
+      padding: 0 28px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .back-btn {
+      display: flex; align-items: center; gap: 6px;
+      color: #6B7280; font-size: 13px; font-weight: 500;
+      cursor: pointer; text-decoration: none;
+      padding: 5px 8px; border-radius: 6px;
+      transition: background .15s, color .15s;
+    }
+    .back-btn:hover { background: #F4F5F7; color: #1A2332; }
+    .topbar-sep { color: #D1D5DB; }
+    .topbar-title { font-size: 14px; font-weight: 600; color: #1A2332; }
+
+    /* ── Main scroll ── */
+    .main-scroll { flex: 1; overflow-y: auto; padding-bottom: 80px; }
+    .page { max-width: 1000px; margin: 0 auto; padding: 24px 28px; }
+
+    /* ── Page heading ── */
+    .pg-head { margin-bottom: 18px; }
+    .pg-head h1 { font-size: 18px; font-weight: 700; color: #F5A623; margin-bottom: 3px; }
+    .pg-head p  { font-size: 12px; color: #6B7280; }
+
+    /* ── Card ── */
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      border: 1px solid #E5E7EB;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+      overflow: hidden;
+    }
+
+    /* ── Date picker row ── */
+    .date-row {
+      display: flex; align-items: flex-end; gap: 12px;
+      padding: 18px 22px;
+      border-bottom: 1px solid #E5E7EB;
+      background: #fff;
+      flex-wrap: wrap;
+    }
+    .date-field { display: flex; flex-direction: column; gap: 5px; }
+    .date-label {
+      font-size: 11px; font-weight: 700; color: #6B7280;
+      text-transform: uppercase; letter-spacing: .06em;
+    }
+    .date-wrap {
+      display: flex; align-items: center; gap: 7px;
+      border: 1px solid #E5E7EB; border-radius: 6px;
+      padding: 0 10px; height: 38px; background: #fff;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .date-wrap:focus-within {
+      border-color: #F5A623;
+      box-shadow: 0 0 0 3px rgba(245,166,35,.15);
+    }
+    .date-wrap input[type="date"] {
+      border: none; outline: none; font-size: 13px; font-weight: 500;
+      color: #1A2332; background: transparent; cursor: pointer;
+      font-family: inherit; width: 160px;
+    }
+    .date-arrow { color: #D1D5DB; padding-top: 18px; }
+
+    /* ── Warning banner ── */
+    .warn-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 22px;
+      background: #FFFBEB; border-bottom: 1px solid #FDE68A;
+      font-size: 12px; color: #92400E;
+    }
+
+    /* ── Table toolbar ── */
+    .toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 22px;
+      border-bottom: 1px solid #E5E7EB;
+    }
+    .toolbar-left { display: flex; align-items: center; gap: 10px; }
+    .toolbar-ttl { font-size: 13px; font-weight: 600; color: #1A2332; }
+    .toolbar-cnt {
+      font-size: 11px; font-weight: 500; color: #6B7280;
+      background: #F4F5F7; border-radius: 10px; padding: 2px 9px;
+    }
+    .sel-all {
+      font-size: 12px; font-weight: 600; color: #F5A623;
+      background: none; border: none; cursor: pointer;
+      font-family: inherit; padding: 0;
+    }
+    .sel-all:hover { text-decoration: underline; }
+
+    /* ── Table ── */
+    .eq-tbl { width: 100%; border-collapse: collapse; }
+    .eq-tbl thead tr { background: #EAECEF; }
+    .eq-tbl th {
+      padding: 9px 14px; text-align: left;
+      font-size: 11px; font-weight: 600; color: #374151;
+      letter-spacing: .04em; white-space: nowrap;
+    }
+    .eq-tbl th:first-child { width: 44px; }
+    .eq-tbl th.col-yst { width: 160px; }
+    .eq-tbl th.col-today { /* flex */ }
+
+    .eq-tbl tbody tr {
+      border-bottom: 1px solid #E5E7EB;
+      transition: background .1s;
+    }
+    .eq-tbl tbody tr:last-child { border-bottom: none; }
+    .eq-tbl tbody tr.row-on { background: #FFFBF0; }
+    .eq-tbl tbody tr:hover { background: #F9FAFB; }
+    .eq-tbl tbody tr.row-on:hover { background: #FFF7E6; }
+
+    .eq-tbl td {
+      padding: 13px 14px;
+      vertical-align: middle;
+    }
+    .eq-tbl td:first-child { width: 44px; }
+
+    /* ── Checkbox ── */
+    .cb {
+      width: 18px; height: 18px;
+      border: 1.5px solid #D1D5DB; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all .15s;
+      background: #fff; flex-shrink: 0; margin: 0 auto;
+    }
+    .cb:hover { border-color: #F5A623; }
+    .cb.on { background: #F5A623; border-color: #F5A623; }
+    .cb.on svg { display: block; }
+    .cb svg { display: none; }
+
+    /* ── Equipment name cell ── */
+    .eq-name { font-size: 13px; font-weight: 600; color: #1A2332; }
+    .eq-meta { font-size: 11px; color: #9CA3AF; margin-top: 2px; display: flex; align-items: center; gap: 5px; }
+    .hire-badge {
+      display: inline-flex; align-items: center;
+      font-size: 10px; font-weight: 600; border-radius: 3px; padding: 1px 6px;
+    }
+    .hire-dry { background: #DBEAFE; color: #1D4ED8; }
+    .hire-wet { background: #D1FAE5; color: #065F46; }
+
+    /* ── Yesterday badge ── */
+    .yst {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 600; border-radius: 4px; padding: 3px 8px;
+      white-space: nowrap;
+    }
+    .yst-a  { background: #F0FDF4; color: #059669; }
+    .yst-sd { background: #FEF3DC; color: #92400E; }
+    .yst-sub { font-size: 10px; color: #9CA3AF; margin-top: 3px; font-weight: 400; }
+
+    /* ── Status toggle ── */
+    .st-toggle {
+      display: inline-flex; border: 1px solid #E5E7EB;
+      border-radius: 6px; overflow: hidden; flex-shrink: 0;
+    }
+    .st-btn {
+      padding: 5px 12px; font-size: 12px; font-weight: 600;
+      border: none; cursor: pointer; font-family: inherit;
+      transition: background .15s, color .15s;
+      white-space: nowrap; background: #fff; color: #6B7280;
+      line-height: 1.4;
+    }
+    .st-btn:first-child { border-right: 1px solid #E5E7EB; }
+    .st-btn.active-on {
+      background: #ECFDF5; color: #059669;
+    }
+    .st-btn.sd-on {
+      background: #FEF3DC; color: #92400E;
+    }
+    .st-btn:hover:not(.active-on):not(.sd-on) {
+      background: #F4F5F7;
+    }
+
+    /* ── Conditional fields area ── */
+    .cond-wrap {
+      display: flex; align-items: center; flex-wrap: wrap;
+      gap: 7px; margin-top: 8px;
+    }
+
+    /* Duration input */
+    .dur-in {
+      width: 72px; height: 34px;
+      border: 1px solid #E5E7EB; border-radius: 5px;
+      padding: 0 8px; font-size: 13px; font-weight: 600;
+      color: #1A2332; font-family: 'JetBrains Mono', monospace;
+      outline: none; text-align: center; background: #fff;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .dur-in:focus {
+      border-color: #F5A623;
+      box-shadow: 0 0 0 3px rgba(245,166,35,.15);
+    }
+    .dur-in.err { border-color: #EF4444; box-shadow: 0 0 0 3px rgba(239,68,68,.1); }
+    .dur-unit { font-size: 12px; color: #6B7280; }
+
+    /* Reason select */
+    .reason-sel {
+      height: 34px; border: 1px solid #E5E7EB; border-radius: 5px;
+      padding: 0 28px 0 10px; font-size: 12px; color: #374151;
+      font-family: inherit; outline: none; background: #fff;
+      cursor: pointer; min-width: 180px;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236B7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .reason-sel:focus {
+      border-color: #F5A623;
+      box-shadow: 0 0 0 3px rgba(245,166,35,.15);
+    }
+    .reason-sel.err { border-color: #EF4444; box-shadow: 0 0 0 3px rgba(239,68,68,.1); }
+
+    /* Other remarks */
+    .other-in {
+      height: 34px; border: 1px solid #E5E7EB; border-radius: 5px;
+      padding: 0 10px; font-size: 12px; color: #374151;
+      font-family: inherit; outline: none; background: #fff;
+      min-width: 200px; flex: 1;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .other-in:focus {
+      border-color: #F5A623;
+      box-shadow: 0 0 0 3px rgba(245,166,35,.15);
+    }
+    .other-in.err { border-color: #EF4444; box-shadow: 0 0 0 3px rgba(239,68,68,.1); }
+    .other-in::placeholder { color: #9CA3AF; }
+
+    /* Required label */
+    .req-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #EF4444; flex-shrink: 0; margin-top: 1px;
+    }
+    .field-req {
+      font-size: 10px; color: #EF4444; font-weight: 600;
+      white-space: nowrap; display: flex; align-items: center; gap: 3px;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center; padding: 48px 24px;
+      color: #9CA3AF; font-size: 13px;
+    }
+    .empty-state svg { margin: 0 auto 10px; display: block; opacity: .35; }
+
+    /* ── Sticky footer ── */
+    .sticky-footer {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #fff; border-top: 1px solid #E5E7EB;
+      padding: 12px 28px;
+      display: flex; align-items: center; justify-content: space-between;
+      z-index: 100;
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+    }
+    .footer-info { font-size: 13px; color: #6B7280; display: flex; align-items: center; gap: 6px; }
+    .footer-info strong { color: #1A2332; }
+    .footer-warn { font-size: 12px; color: #D97706; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+    .footer-actions { display: flex; align-items: center; gap: 8px; }
+
+    /* ── Buttons ── */
+    .btn {
+      height: 36px; padding: 0 18px; border-radius: 6px;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      font-family: inherit; border: none;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: background .15s, color .15s, border-color .15s;
+    }
+    .btn-cancel {
+      background: #fff; border: 1px solid #E5E7EB; color: #374151;
+    }
+    .btn-cancel:hover { background: #F4F5F7; }
+    .btn-primary { background: #F5A623; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #D4891A; }
+    .btn-primary:disabled { background: #E5E7EB; color: #9CA3AF; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <a class="back-btn" onclick="history.back()">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+      <path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Plant &amp; Equipment
+  </a>
+  <span class="topbar-sep">/</span>
+  <span class="topbar-title">Copy from Previous Day</span>
+</div>
+
+<!-- Main -->
+<div class="main-scroll">
+  <div class="page">
+
+    <div class="pg-head">
+      <h1>Copy from Previous Day</h1>
+      <p>Select equipment to carry forward. Set each item as Active (with duration) or Stand Down (with reason) for today.</p>
+    </div>
+
+    <div class="card">
+
+      <!-- Date pickers -->
+      <div class="date-row">
+        <div class="date-field">
+          <div class="date-label">Copy From</div>
+          <div class="date-wrap">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="12" rx="2" stroke="#9CA3AF" stroke-width="1.5"/><path d="M5 1v4M11 1v4M1 7h14" stroke="#9CA3AF" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <input type="date" id="from-date" value="2026-04-03" onchange="onFromChange(this.value)" />
+          </div>
+        </div>
+        <div class="date-arrow">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 8h10M9 4l4 4-4 4" stroke="#D1D5DB" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="date-field">
+          <div class="date-label">Copy To</div>
+          <div class="date-wrap">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="12" rx="2" stroke="#9CA3AF" stroke-width="1.5"/><path d="M5 1v4M11 1v4M1 7h14" stroke="#9CA3AF" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <input type="date" id="to-date" value="2026-04-08" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Warning -->
+      <div class="warn-row">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;">
+          <path d="M8 1L1 14h14L8 1z" stroke="#D97706" stroke-width="1.5" stroke-linejoin="round"/>
+          <path d="M8 6v4M8 11.5v.5" stroke="#D97706" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        Only manually entered equipment is shown. Timesheet-synced entries are excluded.
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <span class="toolbar-ttl">Equipment</span>
+          <span class="toolbar-cnt" id="cnt-text">0 of 0 selected</span>
+        </div>
+        <button class="sel-all" onclick="selectAll()">Select All</button>
+      </div>
+
+      <!-- Table -->
+      <table class="eq-tbl" id="eq-tbl">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Equipment</th>
+            <th class="col-yst">Yesterday</th>
+            <th>Today's Status &amp; Details</th>
+          </tr>
+        </thead>
+        <tbody id="eq-tbody"></tbody>
+      </table>
+
+    </div>
+  </div>
+</div>
+
+<!-- Sticky footer -->
+<div class="sticky-footer">
+  <div id="footer-left">
+    <span class="footer-info">Select equipment to copy</span>
+  </div>
+  <div class="footer-actions">
+    <button class="btn btn-cancel" onclick="history.back()">Cancel</button>
+    <button class="btn btn-primary" id="copy-btn" disabled onclick="doCopy()">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+        <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="white" stroke-width="1.5"/>
+        <path d="M11 5V3.5A1.5 1.5 0 009.5 2H3.5A1.5 1.5 0 002 3.5v6A1.5 1.5 0 003.5 11H5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      Copy Equipment
+    </button>
+  </div>
+</div>
+
+<script>
+/* ── Standdown reasons ── */
+const SD_REASONS = [
+  { val: '',          label: 'Select reason…' },
+  { val: 'weather',   label: 'Weather / Rain' },
+  { val: 'breakdown', label: 'Mechanical Breakdown' },
+  { val: 'parts',     label: 'Awaiting Parts' },
+  { val: 'site',      label: 'Site Conditions' },
+  { val: 'no-work',   label: 'No Work Available' },
+  { val: 'operator',  label: 'Operator Absent' },
+  { val: 'other',     label: 'Other' },
+];
+
+/* ── Sample data by date ── */
+const SOURCE_DATA = {
+  '2026-04-03': [
+    { id:1, title:'CAT 320 Excavator',      meta:'Construction KaT',   hire:'Dry Hire', wasSD:false, wasDur:8   },
+    { id:2, title:'55T Excavator',           meta:'Hamilton Smith Pty', hire:'Wet Hire', wasSD:true,  wasReason:'Weather / Rain' },
+    { id:3, title:'CAT D6 Dozer',            meta:'Books by Bessie',    hire:'Wet Hire', wasSD:true,  wasReason:'Mechanical Breakdown' },
+    { id:4, title:'Abby Supplier Equipment', meta:'Construction KaT',   hire:'Dry Hire', wasSD:false, wasDur:6   },
+  ],
+  '2026-04-04': [
+    { id:5, title:'DUM-12T Dump Truck',      meta:'Unassigned',         hire:'Dry Hire', wasSD:false, wasDur:7.5 },
+  ],
+  '2026-04-05': [],
+  '2026-04-06': [
+    { id:6, title:'Loader',                  meta:'Hamilton Smith Pty', hire:'Wet Hire', wasSD:false, wasDur:8   },
+    { id:7, title:'Compactor Plate',         meta:'Metro Hire',         hire:'Dry Hire', wasSD:true,  wasReason:'Site Conditions' },
+  ],
+};
+
+/* ── Working list (mutable copy) ── */
+let equipment = [];
+
+function initFromSource(dateKey) {
+  const src = SOURCE_DATA[dateKey] || [];
+  equipment = src.map(s => ({
+    ...s,
+    checked:    true,
+    todayStatus: s.wasSD ? 'standdown' : 'active',
+    duration:   s.wasDur || 8,
+    sdReason:   '',
+    sdOther:    '',
+    showErr:    false,
+  }));
+}
+
+function onFromChange(val) {
+  initFromSource(val);
+  renderTable();
+}
+
+/* ── Validation ── */
+function isValid(eq) {
+  if (!eq.checked) return true;
+  if (eq.todayStatus === 'active') return eq.duration > 0;
+  if (!eq.sdReason) return false;
+  if (eq.sdReason === 'other' && !eq.sdOther.trim()) return false;
+  return true;
+}
+
+/* ── Render ── */
+function renderTable() {
+  const tbody = document.getElementById('eq-tbody');
+  tbody.innerHTML = '';
+
+  if (!equipment.length) {
+    tbody.innerHTML = `<tr><td colspan="4">
+      <div class="empty-state">
+        <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
+          <circle cx="20" cy="20" r="16" stroke="#9CA3AF" stroke-width="1.4"/>
+          <circle cx="20" cy="20" r="5"  stroke="#9CA3AF" stroke-width="1.4"/>
+          <path d="M20 4v5M20 31v5M4 20h5M31 20h5" stroke="#9CA3AF" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        No equipment found for this date.
+      </div>
+    </td></tr>`;
+    updateFooter();
+    return;
+  }
+
+  equipment.forEach((eq, i) => {
+    const isA  = eq.todayStatus === 'active';
+    const isSd = eq.todayStatus === 'standdown';
+    const hire = eq.hire === 'Dry Hire' ? 'hire-dry' : 'hire-wet';
+    const valid = isValid(eq);
+    const showFieldErr = eq.checked && !valid;
+
+    /* Yesterday badge */
+    const ystHtml = eq.wasSD
+      ? `<span class="yst yst-sd">
+           <svg width="9" height="9" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5"/><path d="M4 4l4 4M8 4l-4 4" stroke="currentColor" stroke-width="1.4"/></svg>
+           Stand Down
+         </span>
+         <div class="yst-sub">${eq.wasReason || ''}</div>`
+      : `<span class="yst yst-a">
+           <svg width="9" height="9" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+           Active
+         </span>
+         <div class="yst-sub">${eq.wasDur ? eq.wasDur + 'h' : ''}</div>`;
+
+    /* Today's conditional fields */
+    let condHtml = '';
+    if (isA) {
+      const errCls = showFieldErr && !(eq.duration > 0) ? ' err' : '';
+      condHtml = `
+        <input type="number" class="dur-in${errCls}" min="0.5" step="0.5"
+          value="${eq.duration || ''}"
+          placeholder="0"
+          oninput="equipment[${i}].duration=parseFloat(this.value)||0;equipment[${i}].showErr=true;renderTable()"
+          title="Duration in hours (required)" />
+        <span class="dur-unit">hrs</span>
+        ${showFieldErr && !(eq.duration > 0) ? `<span class="field-req"><span class="req-dot"></span>Required</span>` : ''}
+      `;
+    } else {
+      const reasonErr = showFieldErr && !eq.sdReason ? ' err' : '';
+      const reasonOpts = SD_REASONS.map(r =>
+        `<option value="${r.val}" ${eq.sdReason === r.val ? 'selected' : ''}>${r.label}</option>`
+      ).join('');
+      condHtml = `
+        <select class="reason-sel${reasonErr}"
+          onchange="equipment[${i}].sdReason=this.value;equipment[${i}].showErr=true;renderTable()">
+          ${reasonOpts}
+        </select>
+        ${showFieldErr && !eq.sdReason ? `<span class="field-req"><span class="req-dot"></span>Required</span>` : ''}
+      `;
+      if (eq.sdReason === 'other') {
+        const otherErr = showFieldErr && !eq.sdOther.trim() ? ' err' : '';
+        condHtml += `
+          <input type="text" class="other-in${otherErr}"
+            placeholder="Specify reason… (required)"
+            value="${eq.sdOther || ''}"
+            oninput="equipment[${i}].sdOther=this.value;equipment[${i}].showErr=true;renderTable()" />
+          ${showFieldErr && !eq.sdOther.trim() ? `<span class="field-req"><span class="req-dot"></span>Required</span>` : ''}
+        `;
+      }
+    }
+
+    const tr = document.createElement('tr');
+    tr.className = eq.checked ? 'row-on' : '';
+    tr.innerHTML = `
+      <td>
+        <div class="cb ${eq.checked ? 'on' : ''}" onclick="toggleCheck(${i})">
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+            <path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </td>
+      <td>
+        <div class="eq-name">${eq.title}</div>
+        <div class="eq-meta">
+          ${eq.meta}
+          <span class="hire-badge ${hire}">${eq.hire}</span>
+        </div>
+      </td>
+      <td>
+        ${ystHtml}
+      </td>
+      <td>
+        <div class="st-toggle">
+          <button class="st-btn ${isA ? 'active-on' : ''}" onclick="setStatus(${i},'active')">
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" style="vertical-align:-1px;"><path d="M2 6l3 3 5-5" stroke="${isA ? '#059669' : '#9CA3AF'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Active
+          </button>
+          <button class="st-btn ${isSd ? 'sd-on' : ''}" onclick="setStatus(${i},'standdown')">
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" style="vertical-align:-1px;"><circle cx="6" cy="6" r="4.5" stroke="${isSd ? '#92400E' : '#9CA3AF'}" stroke-width="1.5"/><path d="M4 4l4 4M8 4l-4 4" stroke="${isSd ? '#92400E' : '#9CA3AF'}" stroke-width="1.4"/></svg>
+            Stand Down
+          </button>
+        </div>
+        <div class="cond-wrap">${condHtml}</div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  updateFooter();
+}
+
+function setStatus(i, status) {
+  equipment[i].todayStatus = status;
+  equipment[i].showErr = false;
+  renderTable();
+}
+
+function toggleCheck(i) {
+  equipment[i].checked = !equipment[i].checked;
+  equipment[i].showErr = false;
+  renderTable();
+}
+
+function selectAll() {
+  equipment.forEach(eq => eq.checked = true);
+  renderTable();
+}
+
+function updateFooter() {
+  const sel     = equipment.filter(e => e.checked);
+  const invalid = sel.filter(e => !isValid(e));
+  const total   = equipment.length;
+  const on      = sel.length;
+
+  document.getElementById('cnt-text').textContent = `${on} of ${total} selected`;
+
+  const footerLeft = document.getElementById('footer-left');
+  const btn = document.getElementById('copy-btn');
+
+  if (on === 0) {
+    footerLeft.innerHTML = `<span class="footer-info">Select equipment to copy forward</span>`;
+    btn.disabled = true;
+    return;
+  }
+
+  if (invalid.length > 0) {
+    invalid.forEach(e => e.showErr = true);
+    footerLeft.innerHTML = `
+      <span class="footer-warn">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <path d="M8 1L1 14h14L8 1z" stroke="#D97706" stroke-width="1.5" stroke-linejoin="round"/>
+          <path d="M8 6v4M8 11.5v.5" stroke="#D97706" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        ${invalid.length} item${invalid.length > 1 ? 's' : ''} need${invalid.length === 1 ? 's' : ''} attention before copying
+      </span>`;
+    btn.disabled = true;
+  } else {
+    const toVal = document.getElementById('to-date').value;
+    footerLeft.innerHTML = `<span class="footer-info">Copying <strong>${on} item${on > 1 ? 's' : ''}</strong> to ${toVal || '—'}</span>`;
+    btn.disabled = false;
+  }
+}
+
+function doCopy() {
+  const sel = equipment.filter(e => e.checked);
+  const toDate = document.getElementById('to-date').value;
+  const summary = sel.map(e =>
+    e.todayStatus === 'active'
+      ? `${e.title} — Active · ${e.duration}h`
+      : `${e.title} — Stand Down · ${SD_REASONS.find(r => r.val === e.sdReason)?.label || e.sdReason}${e.sdReason === 'other' ? ': ' + e.sdOther : ''}`
+  ).join('\n');
+  alert(`Copied ${sel.length} item(s) to ${toDate}:\n\n${summary}`);
+}
+
+/* ── Boot ── */
+initFromSource('2026-04-03');
+renderTable();
+</script>
+</body>
+</html>

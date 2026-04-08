@@ -42,6 +42,56 @@ const equipmentCatalogue = [
   { id:'EQ-010',  name:'Dump Truck',          type:'Truck', hireOptions:['Wet Hire','Dry Hire'] },
 ];
 
+/* ─── Recent Equipment (prototype: last-used IDs) ─── */
+const recentEquipIds = ['EQ-006', 'EQ-007', 'EQ-008', 'T590', 'EQ-010'];
+
+function renderRecentEquip() {
+  let strip = document.getElementById('recent-equip-strip');
+  if (!strip) {
+    const opTab = document.getElementById('pe-operating-tab');
+    if (!opTab) return;
+    strip = document.createElement('div');
+    strip.id = 'recent-equip-strip';
+    strip.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-bottom:14px;';
+    opTab.insertBefore(strip, opTab.firstChild);
+  }
+  const wrench = `<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 2.5a3 3 0 0 0-4.1 4.1L2 14l.6.6 7.4-7.4a3 3 0 0 0 3.5-4.7z"/></svg>`;
+  const chips = recentEquipIds.map(id => {
+    const eq = equipmentCatalogue.find(e => e.id === id);
+    if (!eq) return '';
+    const added = plantData.some(p => p.eqId === id);
+    return `<button
+      onclick="quickAddEquip('${id}')"
+      ${added ? 'disabled' : ''}
+      style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;
+        border:1px solid ${added ? '#BBF7D0' : 'var(--border)'};
+        background:${added ? '#F0FDF4' : '#fff'};
+        color:${added ? '#059669' : 'var(--tb)'};
+        font-size:12px;font-weight:500;cursor:${added ? 'default' : 'pointer'};
+        transition:background .15s,border-color .15s;white-space:nowrap;"
+      onmouseenter="if(!this.disabled){this.style.background='var(--hover)';this.style.borderColor='var(--border-d)'}"
+      onmouseleave="if(!this.disabled){this.style.background='#fff';this.style.borderColor='var(--border)'}"
+    >${added ? `<svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M2 6l3 3 5-5"/></svg>` : wrench}${eq.name}</button>`;
+  }).join('');
+  strip.innerHTML = `<span style="font-size:12px;color:var(--tm);font-weight:500;white-space:nowrap;flex-shrink:0;">Recent Equipment — click to add quickly:</span>${chips}`;
+}
+
+function quickAddEquip(eqId) {
+  const eq = equipmentCatalogue.find(e => e.id === eqId);
+  if (!eq) return;
+  if (plantData.some(p => p.eqId === eqId)) { showToast(eq.name + ' already added', 'info'); return; }
+  const taskHours = {};
+  if (typeof appliedTasks !== 'undefined') appliedTasks.forEach(t => { taskHours[t.code] = 0; });
+  plantData.push({
+    id: plantIdC++, name: eq.name, hire: eq.hireOptions[0], op: '', task: '',
+    start: '07:00', end: '15:00', brk: 0.5, sd: false,
+    supplier: '', attachments: '', eqId: eq.id, taskHours: taskHours,
+    unassignedMins: 0
+  });
+  renderPlant(); updStats();
+  showToast(eq.name + ' added');
+}
+
 /* ═══════════════════════════════════════════════════════════════
    TAB SWITCHING
    ═══════════════════════════════════════════════════════════════ */
@@ -64,6 +114,7 @@ function setSdViewMode(mode) {
    OPERATING TAB — RENDER (always inline-editable, no edit mode)
    ═══════════════════════════════════════════════════════════════ */
 function renderPlant() {
+  renderRecentEquip();
   const tb = document.getElementById('plant-tbody');
   const thead = document.getElementById('plant-thead');
   if (!tb) return;
