@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phase 1 — Quick Wins · Site Diary Prototype</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Roboto', sans-serif; background: #f0f2f5; color: rgba(0,5,10,0.87); font-size: 14px; }
+
+  /* ── TOP BADGE ── */
+  .phase-badge {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    background: #143666; color: #fff; text-align: center;
+    padding: 8px 16px; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 16px;
+  }
+  .phase-badge strong { font-size: 13px; font-family: 'Barlow Semi Condensed', sans-serif; letter-spacing: 0.5px; }
+  .phase-badge .tag { background: #F19100; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+  .phase-badge .change-tag { background: rgba(255,255,255,0.15); border-radius: 4px; padding: 2px 8px; font-size: 11px; }
+
+  /* ── LAYOUT ── */
+  .page { padding-top: 40px; }
+  .diary-shell { max-width: 960px; margin: 0 auto; }
+
+  /* ── DIARY HEADER ── */
+  .diary-header {
+    background: #fff; border-bottom: 1px solid #EEEEEE;
+    padding: 12px 20px; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 40px; z-index: 100; gap: 12px;
+  }
+  .diary-header-left { display: flex; align-items: center; gap: 12px; }
+  .date-nav { display: flex; align-items: center; gap: 4px; }
+  .date-nav button { background: none; border: none; cursor: pointer; color: #5F6D83; display: flex; align-items: center; padding: 4px; border-radius: 4px; }
+  .date-nav button:hover { background: #F3F6FB; }
+  .date-label { font-family: 'Barlow Semi Condensed', sans-serif; font-size: 16px; font-weight: 600; color: #143666; white-space: nowrap; }
+  .status-chip { background: #FDBC6033; color: #FBAD33; border-radius: 12px; padding: 3px 10px; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .diary-header-right { display: flex; align-items: center; gap: 8px; }
+  .btn { border: none; cursor: pointer; border-radius: 4px; padding: 7px 14px; font-size: 13px; font-family: 'Roboto', sans-serif; font-weight: 500; display: flex; align-items: center; gap: 6px; transition: all 0.15s; }
+  .btn-primary { background: #143666; color: #fff; }
+  .btn-primary:hover { background: #0C2043; }
+  .btn-outline { background: transparent; border: 1px solid #EEEEEE; color: #5F6D83; }
+  .btn-outline:hover { background: #F3F6FB; }
+  .btn-orange { background: #F19100; color: #fff; }
+  .btn-orange:hover { background: #C17400; }
+
+  /* ── TABS ── */
+  .diary-tabs { background: #fff; border-bottom: 1px solid #EEEEEE; padding: 0 20px; display: flex; gap: 0; overflow-x: auto; }
+  .tab { padding: 12px 16px; font-size: 13px; font-weight: 500; color: #5F6D83; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.15s; }
+  .tab:hover { color: #143666; }
+  .tab.active { color: #F19100; border-bottom-color: #F19100; }
+
+  /* ── CONTENT ── */
+  .diary-content { padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* ── SECTION CARD ── */
+  .section-card { background: #fff; border-radius: 6px; border: 1px solid #EEEEEE; overflow: hidden; }
+  .section-header {
+    background: #FFF4E3; border-bottom: 1px solid #FDDCAA;
+    padding: 10px 16px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .section-title { font-family: 'Barlow Semi Condensed', sans-serif; font-size: 16px; font-weight: 600; color: #F0840F; display: flex; align-items: center; gap: 8px; }
+  .section-actions { display: flex; align-items: center; gap: 8px; }
+
+  /* ── NEW: ROLLOVER CHIP ── */
+  .rollover-chip {
+    display: flex; align-items: center; gap: 4px;
+    background: #fff; border: 1px solid #F19100; border-radius: 20px;
+    padding: 3px 10px; font-size: 12px; color: #F19100; font-weight: 500;
+    cursor: pointer; transition: all 0.15s; user-select: none;
+  }
+  .rollover-chip:hover { background: #FFF4E3; }
+  .rollover-chip.active { background: #F19100; color: #fff; }
+  .rollover-chip .mi { font-size: 14px; }
+  .new-badge { background: #0F8A0F; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.5px; }
+
+  /* ── TABLE ── */
+  .section-body { padding: 12px 16px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { background: #F3F6FB; padding: 8px; text-align: left; font-size: 11px; font-weight: 600; color: #5F6D83; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #EEEEEE; }
+  tbody td { padding: 8px; border-bottom: 1px solid #EEEEEE; vertical-align: middle; font-size: 13px; }
+  tbody tr:hover td { background: #EBF0F5; }
+  tbody tr:last-child td { border-bottom: none; }
+  .td-input { width: 100%; border: none; background: transparent; font-size: 13px; color: rgba(0,5,10,0.87); font-family: 'Roboto', sans-serif; padding: 2px 4px; outline: none; }
+  .td-input:focus { background: #FFFFF0; border-radius: 2px; }
+
+  /* ── TASK FIELD WITH CHIPS ── */
+  .task-cell { position: relative; }
+  .task-chip-row { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+  .task-chip {
+    background: #EAEDF1; border-radius: 4px; font-size: 11px; color: #233759;
+    padding: 3px 8px; cursor: pointer; border: 1px solid transparent; transition: all 0.12s;
+  }
+  .task-chip:hover { background: #D3D7DD; border-color: #899BB3; }
+  .task-chip.selected { background: #143666; color: #fff; }
+  .task-chip-more { background: transparent; border: 1px solid #F19100; color: #F19100; border-radius: 4px; font-size: 11px; padding: 3px 8px; cursor: pointer; }
+  .task-chip-label { font-size: 11px; color: #5F6D83; margin-bottom: 4px; display: flex; align-items: center; gap: 4px; }
+  .task-chip-label .mi { font-size: 13px; color: #F19100; }
+
+  /* ── ROLLOVER ROWS (animated) ── */
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .rollover-row { animation: slideIn 0.2s ease-out; background: #F0FFF0 !important; }
+  .rollover-row td { border-left: 3px solid #0F8A0F !important; }
+  .rollover-row td:not(:first-child) { border-left: none !important; }
+
+  /* ── ADD ROW ── */
+  .add-row-btn {
+    display: flex; align-items: center; gap: 4px;
+    color: #F19100; font-size: 13px; font-weight: 500; cursor: pointer;
+    padding: 8px 0; border-top: 1px solid #EEEEEE; margin-top: 4px;
+    background: none; border: none; border-top: 1px solid #EEEEEE; width: 100%;
+  }
+  .add-row-btn:hover { color: #C17400; }
+
+  /* ── INLINE WARNING BANNER ── */
+  .warn-banner {
+    background: #FFF5E5; border: 1px solid #FFD180; border-radius: 4px;
+    padding: 8px 12px; display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .warn-banner-left { display: flex; align-items: center; gap: 6px; color: #FF9800; font-size: 13px; font-weight: 500; }
+  .warn-banner-left .mi { font-size: 16px; }
+  .warn-link { color: #F19100; font-size: 12px; text-decoration: underline; cursor: pointer; white-space: nowrap; }
+  .warn-banner.hidden { display: none; }
+
+  /* ── ANNOTATION CALLOUT ── */
+  .callout {
+    background: #E5F1FC; border-left: 3px solid #0075E0; border-radius: 0 4px 4px 0;
+    padding: 8px 12px; font-size: 12px; color: #0075E0; display: flex; align-items: flex-start; gap: 6px;
+    margin-top: 12px;
+  }
+  .callout .mi { font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+
+  /* ── EMPTY ROW ── */
+  .empty-table-state {
+    border: 1px dashed #D3D7DD; border-radius: 4px; background: #FAFAFA;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    height: 56px; color: #5F6D83; font-size: 13px; margin-bottom: 4px;
+  }
+  .empty-table-state span { color: #F19100; cursor: pointer; text-decoration: underline; }
+
+  /* ── SECTION STATS ── */
+  .stats-chip { background: #EAEDF1; border-radius: 2px; font-size: 11px; color: #5F6D83; padding: 2px 8px; }
+
+  /* ── DELETE BTN ── */
+  .del-btn { background: none; border: none; cursor: pointer; color: #9e9e9e; display: flex; padding: 4px; border-radius: 3px; }
+  .del-btn:hover { color: #d2281b; background: #FBE9E8; }
+
+  /* ── TOOLTIP ANNOTATION ── */
+  .annotation-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #0F8A0F; color: #fff; border-radius: 20px;
+    font-size: 11px; padding: 2px 8px; font-weight: 600;
+  }
+
+  /* ── WEATHER SECTION ── */
+  .weather-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+  .weather-select { width: 100%; padding: 8px 10px; border: 1px solid #E0E0E0; border-radius: 4px; font-size: 13px; font-family: 'Roboto', sans-serif; background: #fff; color: rgba(0,5,10,0.87); cursor: pointer; }
+  .weather-select:focus { outline: none; border-color: #F19100; }
+  .field-label { font-size: 11px; color: #5F6D83; font-weight: 500; margin-bottom: 4px; display: block; text-transform: uppercase; letter-spacing: 0.5px; }
+  .autofill-banner { background: #E5F1FC; border-radius: 4px; padding: 6px 10px; font-size: 12px; color: #0075E0; display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(0,5,10,0.87); margin-top: 10px; cursor: pointer; }
+  .checkbox-row input { accent-color: #F19100; width: 15px; height: 15px; cursor: pointer; }
+
+  /* ── NOTES ── */
+  .notes-textarea { width: 100%; border: 1px solid #E0E0E0; border-radius: 4px; padding: 10px 12px; font-size: 13px; font-family: 'Roboto', sans-serif; min-height: 80px; resize: vertical; background: #F3F6FB; }
+  .notes-textarea:focus { outline: none; border-color: #F19100; background: #fff; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: #233759; color: #fff; padding: 10px 20px; border-radius: 6px;
+    font-size: 13px; display: flex; align-items: center; gap: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 9000; transition: transform 0.3s ease;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast .mi { font-size: 18px; color: #8DC641; }
+</style>
+</head>
+<body>
+
+<div class="phase-badge">
+  <span class="tag">PHASE 1</span>
+  <strong>Quick Wins Prototype</strong>
+  <span class="change-tag">🟢 NEW: Rollover chips</span>
+  <span class="change-tag">🟢 NEW: Recent task chips</span>
+  <span class="change-tag">🟢 NEW: Inline warnings</span>
+  <span class="change-tag">🟢 NEW: Weather memory</span>
+</div>
+
+<div class="page">
+  <div class="diary-shell">
+
+    <!-- HEADER -->
+    <div class="diary-header">
+      <div class="diary-header-left">
+        <div class="date-nav">
+          <button onclick="changeDate(-1)"><span class="material-icons-round" style="font-size:18px">chevron_left</span></button>
+          <div class="date-label" id="dateLabel">Mon, 7 Apr 2026</div>
+          <button onclick="changeDate(1)"><span class="material-icons-round" style="font-size:18px">chevron_right</span></button>
+        </div>
+        <div class="status-chip">
+          <span class="material-icons-round" style="font-size:14px">info</span>
+          In Review
+        </div>
+      </div>
+      <div class="diary-header-right">
+        <button class="btn btn-outline" onclick="showToast('Report preview opening...')">
+          <span class="material-icons-round" style="font-size:16px">picture_as_pdf</span> Report
+        </button>
+        <button class="btn btn-primary" onclick="openApprovalFlow()">
+          <span class="material-icons-round" style="font-size:16px">how_to_reg</span> Sign & Submit
+        </button>
+      </div>
+    </div>
+
+    <!-- TABS -->
+    <div class="diary-tabs">
+      <div class="tab active">Weather</div>
+      <div class="tab">Labour</div>
+      <div class="tab">Materials</div>
+      <div class="tab">Equipment</div>
+      <div class="tab">Tasks</div>
+      <div class="tab">Notes</div>
+      <div class="tab">Photos</div>
+      <div class="tab">Timecards</div>
+      <div class="tab">Dockets</div>
+    </div>
+
+    <div class="diary-content">
+
+      <!-- ══ WEATHER SECTION ══ -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">
+            <span class="material-icons-round" style="font-size:18px">wb_sunny</span>
+            Weather Log
+          </div>
+          <div class="section-actions">
+            <span class="annotation-pill"><span class="material-icons-round" style="font-size:12px">auto_awesome</span> NEW: remembers last entry</span>
+          </div>
+        </div>
+        <div class="section-body">
+          <div class="autofill-banner" style="margin-bottom:12px">
+            <span class="material-icons-round" style="font-size:16px">cloud</span>
+            <span>Auto-fetched: <strong>14°C, Partly Cloudy</strong> — Sydney CBD · Updated 7:00 AM</span>
+          </div>
+          <div class="weather-grid">
+            <div>
+              <span class="field-label">Sky Conditions</span>
+              <select class="weather-select">
+                <option>Partly Cloudy</option>
+                <option selected>Clear</option>
+                <option>Overcast</option>
+                <option>Heavy Cloud</option>
+              </select>
+            </div>
+            <div>
+              <span class="field-label">Temperature</span>
+              <select class="weather-select">
+                <option>Hot</option>
+                <option selected>Mild</option>
+                <option>Cold</option>
+              </select>
+            </div>
+            <div>
+              <span class="field-label">Rainfall</span>
+              <select class="weather-select">
+                <option selected>None</option>
+                <option>Light</option>
+                <option>Heavy</option>
+              </select>
+            </div>
+          </div>
+          <label class="checkbox-row">
+            <input type="checkbox"> Weather Delay today
+          </label>
+          <div class="callout" style="margin-top:10px">
+            <span class="material-icons-round">auto_awesome</span>
+            <span><strong>Phase 1 change:</strong> Dropdowns now pre-fill from your last manual entry. No re-selecting Clear/Mild/None every day.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ LABOUR SECTION ══ -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">
+            <span class="material-icons-round" style="font-size:18px">people</span>
+            Labour
+            <span class="stats-chip" id="labourStats">0 entries · 0.0 hrs</span>
+          </div>
+          <div class="section-actions">
+            <span class="new-badge">NEW</span>
+            <div class="rollover-chip" id="labourRollover" onclick="rolloverSection('labour')">
+              <span class="material-icons-round mi">restore</span>
+              Copy from yesterday
+            </div>
+          </div>
+        </div>
+        <div class="section-body">
+          <div class="warn-banner hidden" id="labourWarn">
+            <div class="warn-banner-left">
+              <span class="material-icons-round mi">warning_amber</span>
+              <span id="labourWarnText">2 entries have no task assigned</span>
+            </div>
+            <span class="warn-link" onclick="scrollToUnassigned()">Assign now</span>
+          </div>
+
+          <div id="labourEmpty" class="empty-table-state">
+            <span class="material-icons-round" style="color:#D3D7DD;font-size:20px">people_outline</span>
+            No labour entries yet. <span onclick="addLabourRow()">+ Add first row</span>
+          </div>
+
+          <div id="labourTable" style="display:none">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:30%">Resource / Supplier</th>
+                  <th style="width:10%">Qty</th>
+                  <th style="width:10%">Hours</th>
+                  <th>Task</th>
+                  <th style="width:32px"></th>
+                </tr>
+              </thead>
+              <tbody id="labourTbody"></tbody>
+            </table>
+          </div>
+          <button class="add-row-btn" id="labourAddBtn" style="display:none" onclick="addLabourRow()">
+            <span class="material-icons-round" style="font-size:16px">add</span> Add row
+          </button>
+        </div>
+      </div>
+
+      <!-- ══ MATERIALS SECTION ══ -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">
+            <span class="material-icons-round" style="font-size:18px">inventory_2</span>
+            Materials
+            <span class="stats-chip" id="matStats">0 items</span>
+          </div>
+          <div class="section-actions">
+            <span class="new-badge">NEW</span>
+            <div class="rollover-chip" id="matRollover" onclick="rolloverSection('materials')">
+              <span class="material-icons-round mi">restore</span>
+              Copy from yesterday
+            </div>
+          </div>
+        </div>
+        <div class="section-body">
+          <div id="matEmpty" class="empty-table-state">
+            <span class="material-icons-round" style="color:#D3D7DD;font-size:20px">inventory_2</span>
+            No materials yet. <span onclick="addMaterialRow()">+ Add first item</span>
+          </div>
+          <div id="matTable" style="display:none">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:30%">Material</th>
+                  <th style="width:10%">Qty</th>
+                  <th style="width:12%">Unit</th>
+                  <th>Task</th>
+                  <th style="width:32px"></th>
+                </tr>
+              </thead>
+              <tbody id="matTbody"></tbody>
+            </table>
+          </div>
+          <button class="add-row-btn" id="matAddBtn" style="display:none" onclick="addMaterialRow()">
+            <span class="material-icons-round" style="font-size:16px">add</span> Add item
+          </button>
+          <div class="callout" style="margin-top:10px">
+            <span class="material-icons-round">auto_awesome</span>
+            <span><strong>Phase 1 change:</strong> Removed duplicate confirmation step. Material + Task selection now in a single modal instead of two stacked modals.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ NOTES SECTION ══ -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">
+            <span class="material-icons-round" style="font-size:18px">notes</span>
+            Notes — General
+          </div>
+          <div class="section-actions">
+            <div class="rollover-chip" onclick="rolloverNotes()">
+              <span class="material-icons-round mi">restore</span>
+              Copy from yesterday
+            </div>
+          </div>
+        </div>
+        <div class="section-body">
+          <textarea class="notes-textarea" id="notesText" placeholder="Enter site notes for today..."></textarea>
+        </div>
+      </div>
+
+    </div><!-- /diary-content -->
+  </div><!-- /diary-shell -->
+</div><!-- /page -->
+
+<!-- APPROVAL MODAL (streamlined) -->
+<div id="approvalOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:2000; display:flex; align-items:center; justify-content:center;" onclick="if(event.target===this)closeApproval()">
+  <div style="background:#fff; border-radius:8px; width:480px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.2);" onclick="event.stopPropagation()">
+    <div style="background:#143666; padding:16px 20px; display:flex; justify-content:space-between; align-items:center; border-radius:8px 8px 0 0;">
+      <div>
+        <div style="font-family:'Barlow Semi Condensed',sans-serif; font-size:18px; font-weight:600; color:#fff;">Submit Site Diary</div>
+        <div style="font-size:12px; color:rgba(255,255,255,0.7);">Mon, 7 Apr 2026</div>
+      </div>
+      <button onclick="closeApproval()" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.8);">
+        <span class="material-icons-round">close</span>
+      </button>
+    </div>
+
+    <div style="padding:20px;">
+      <div style="font-size:12px; font-weight:600; color:#5F6D83; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px;">Summary</div>
+
+      <div id="summaryList" style="display:flex; flex-direction:column; gap:2px;"></div>
+
+      <div style="margin-top:20px; margin-bottom:8px; font-size:12px; font-weight:600; color:#5F6D83; text-transform:uppercase; letter-spacing:0.5px;">Signature</div>
+      <canvas id="sigCanvas" width="440" height="120" style="border:1px dashed #C4C4C4; border-radius:4px; background:#FAFAFA; cursor:crosshair; display:block; width:100%;"></canvas>
+      <div style="margin-top:6px;">
+        <span onclick="clearSig()" style="color:#F19100; font-size:12px; text-decoration:underline; cursor:pointer;">Clear signature</span>
+        <span style="font-size:12px; color:#5F6D83; margin-left:8px;" id="sigHint">← Draw your signature above</span>
+      </div>
+    </div>
+
+    <div style="padding:12px 20px; border-top:1px solid #EEEEEE; display:flex; justify-content:flex-end; gap:8px;">
+      <button class="btn btn-outline" onclick="closeApproval()">Cancel</button>
+      <button class="btn btn-primary" id="submitBtn" disabled onclick="submitDiary()" style="opacity:0.4; cursor:not-allowed;">
+        <span class="material-icons-round" style="font-size:16px">how_to_reg</span> Submit Diary
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <span class="material-icons-round">check_circle</span>
+  <span id="toastMsg"></span>
+</div>
+
+<script>
+// ── DATA ──
+const yesterdayLabour = [
+  { resource: 'John Smith (Concreter)', qty: 1, hrs: 8.0, task: 'Footing Work' },
+  { resource: 'ABC Labour Co.', qty: 4, hrs: 8.0, task: 'Slab Pour' },
+  { resource: 'Maria Chen (Formwork)', qty: 1, hrs: 7.5, task: 'Formwork Erection' },
+];
+const yesterdayMaterials = [
+  { material: 'Concrete 25 MPa', qty: 12, unit: 'm³', task: 'Footing Work' },
+  { material: 'Rebar D16', qty: 450, unit: 'kg', task: 'Slab Pour' },
+];
+const recentTasks = ['Footing Work', 'Slab Pour', 'Formwork Erection', 'Reo Bar Fix'];
+
+let labourRows = [], matRows = [];
+
+// ── DATE NAV ──
+const dates = ['Fri, 3 Apr 2026','Mon, 7 Apr 2026','Tue, 8 Apr 2026'];
+let di = 1;
+function changeDate(d) {
+  di = Math.max(0, Math.min(dates.length-1, di+d));
+  document.getElementById('dateLabel').textContent = dates[di];
+}
+
+// ── TASK CHIPS HTML ──
+function taskChipsHTML(selectedTask) {
+  const chips = recentTasks.map(t =>
+    `<span class="task-chip ${t===selectedTask?'selected':''}" onclick="selectTask(this,'${t}')">${t}</span>`
+  ).join('');
+  return `
+    <div style="margin-bottom:4px">
+      <div class="task-chip-label"><span class="material-icons-round mi">star</span>Recent</div>
+      <div class="task-chip-row">${chips}<span class="task-chip-more" onclick="showToast('Full task tree opens here')">+More</span></div>
+    </div>`;
+}
+
+function selectTask(el, task) {
+  el.closest('td').querySelectorAll('.task-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  el.closest('td').querySelector('.td-input') && (el.closest('td').querySelector('.td-input').value = task);
+}
+
+// ── LABOUR ──
+function renderLabour() {
+  const empty = document.getElementById('labourEmpty');
+  const table = document.getElementById('labourTable');
+  const addBtn = document.getElementById('labourAddBtn');
+  if (labourRows.length === 0) {
+    empty.style.display = 'flex'; table.style.display = 'none'; addBtn.style.display = 'none';
+  } else {
+    empty.style.display = 'none'; table.style.display = 'block'; addBtn.style.display = 'flex';
+    const unassigned = labourRows.filter(r => !r.task).length;
+    const warn = document.getElementById('labourWarn');
+    if (unassigned > 0) {
+      warn.classList.remove('hidden');
+      document.getElementById('labourWarnText').textContent = `${unassigned} ${unassigned===1?'entry has':'entries have'} no task assigned`;
+    } else { warn.classList.add('hidden'); }
+  }
+  document.getElementById('labourStats').textContent =
+    labourRows.length > 0 ? `${labourRows.length} ${labourRows.length===1?'entry':'entries'} · ${labourRows.reduce((s,r)=>s+r.hrs,0).toFixed(1)} hrs` : '0 entries';
+  const tbody = document.getElementById('labourTbody');
+  tbody.innerHTML = labourRows.map((r,i) => `
+    <tr class="${r.rollover?'rollover-row':''}">
+      <td><input class="td-input" value="${r.resource}" placeholder="Search resource..." onchange="labourRows[${i}].resource=this.value"></td>
+      <td><input class="td-input" value="${r.qty}" type="number" min="1" style="width:50px" onchange="labourRows[${i}].qty=+this.value;updateStats()"></td>
+      <td><input class="td-input" value="${r.hrs}" type="number" step="0.5" style="width:50px" onchange="labourRows[${i}].hrs=+this.value;updateStats()"></td>
+      <td class="task-cell">
+        ${taskChipsHTML(r.task)}
+        <input class="td-input" value="${r.task}" placeholder="Or type task..." style="border:1px solid #EEE;border-radius:3px;padding:4px 8px;" onchange="labourRows[${i}].task=this.value;renderLabour()">
+      </td>
+      <td><button class="del-btn" onclick="labourRows.splice(${i},1);renderLabour()"><span class="material-icons-round" style="font-size:16px">close</span></button></td>
+    </tr>`).join('');
+}
+
+function addLabourRow() {
+  labourRows.push({ resource:'', qty:1, hrs:8.0, task:'' });
+  renderLabour();
+  setTimeout(() => document.querySelectorAll('#labourTbody tr:last-child .td-input')[0]?.focus(), 50);
+}
+
+function updateStats() {
+  document.getElementById('labourStats').textContent =
+    `${labourRows.length} entries · ${labourRows.reduce((s,r)=>s+r.hrs,0).toFixed(1)} hrs`;
+}
+
+// ── MATERIALS ──
+function renderMaterials() {
+  const empty = document.getElementById('matEmpty');
+  const table = document.getElementById('matTable');
+  const addBtn = document.getElementById('matAddBtn');
+  if (matRows.length === 0) {
+    empty.style.display = 'flex'; table.style.display = 'none'; addBtn.style.display = 'none';
+  } else {
+    empty.style.display = 'none'; table.style.display = 'block'; addBtn.style.display = 'flex';
+  }
+  document.getElementById('matStats').textContent = `${matRows.length} item${matRows.length!==1?'s':''}`;
+  document.getElementById('matTbody').innerHTML = matRows.map((r,i) => `
+    <tr class="${r.rollover?'rollover-row':''}">
+      <td><input class="td-input" value="${r.material}" placeholder="Search material..."></td>
+      <td><input class="td-input" value="${r.qty}" type="number" style="width:60px"></td>
+      <td><input class="td-input" value="${r.unit}" style="width:50px"></td>
+      <td class="task-cell">
+        ${taskChipsHTML(r.task)}
+        <input class="td-input" value="${r.task}" placeholder="Or type task..." style="border:1px solid #EEE;border-radius:3px;padding:4px 8px;">
+      </td>
+      <td><button class="del-btn" onclick="matRows.splice(${i},1);renderMaterials()"><span class="material-icons-round" style="font-size:16px">close</span></button></td>
+    </tr>`).join('');
+}
+
+function addMaterialRow() {
+  matRows.push({ material:'', qty:0, unit:'m³', task:'' });
+  renderMaterials();
+  setTimeout(() => document.querySelectorAll('#matTbody tr:last-child .td-input')[0]?.focus(), 50);
+}
+
+// ── ROLLOVER ──
+function rolloverSection(section) {
+  if (section === 'labour') {
+    const btn = document.getElementById('labourRollover');
+    btn.classList.add('active');
+    yesterdayLabour.forEach((r, i) => {
+      setTimeout(() => {
+        labourRows.push({...r, rollover:true});
+        renderLabour();
+      }, i * 120);
+    });
+    setTimeout(() => { btn.classList.remove('active'); showToast('✓ 3 labour entries copied from yesterday'); }, 500);
+  } else if (section === 'materials') {
+    const btn = document.getElementById('matRollover');
+    btn.classList.add('active');
+    yesterdayMaterials.forEach((r, i) => {
+      setTimeout(() => {
+        matRows.push({...r, rollover:true});
+        renderMaterials();
+      }, i * 120);
+    });
+    setTimeout(() => { btn.classList.remove('active'); showToast('✓ 2 material entries copied from yesterday'); }, 400);
+  }
+  setTimeout(() => {
+    document.querySelectorAll('.rollover-row').forEach(r => r.classList.remove('rollover-row'));
+  }, 2000);
+}
+
+function rolloverNotes() {
+  document.getElementById('notesText').value = 'Concrete pour commenced on grid lines A1–A4. Formwork stripped on columns C2, C3. Afternoon work delayed by supplier delivery running late. Site clean-up completed EOD.';
+  showToast('✓ Notes copied from yesterday');
+}
+
+function scrollToUnassigned() { showToast('Scrolling to unassigned entries...'); }
+
+// ── APPROVAL ──
+function openApprovalFlow() {
+  const items = [
+    { ok: true, label: 'Weather logged — Clear, Mild, No rain' },
+    { ok: labourRows.length > 0, label: `Labour: ${labourRows.length} entries · ${labourRows.reduce((s,r)=>s+r.hrs,0).toFixed(1)} hrs` },
+    { ok: false, label: labourRows.filter(r=>!r.task).length > 0 ? `${labourRows.filter(r=>!r.task).length} labour entries have no task assigned` : null, warn: true, sub: 'These will be excluded from cost tracking' },
+    { ok: matRows.length > 0, label: `Materials: ${matRows.length} item${matRows.length!==1?'s':''}` },
+    { ok: false, label: 'Photos: none', neutral: true },
+    { ok: document.getElementById('notesText').value.length > 0, label: 'Notes added' },
+  ].filter(i => i.label);
+
+  document.getElementById('summaryList').innerHTML = items.map(item => {
+    if (item.warn && labourRows.filter(r=>!r.task).length===0) return '';
+    const icon = item.warn ? 'warning_amber' : (item.neutral ? 'remove' : (item.ok ? 'check_circle_outline' : 'remove'));
+    const color = item.warn ? '#FF9800' : (item.neutral ? '#9e9e9e' : (item.ok ? '#0F8A0F' : '#9e9e9e'));
+    return `<div style="padding:8px 0;border-bottom:1px solid #EEEEEE;display:flex;gap:10px;align-items:flex-start">
+      <span class="material-icons-round" style="font-size:18px;color:${color};flex-shrink:0;margin-top:1px">${icon}</span>
+      <div>
+        <div style="font-size:13px;color:${color};font-weight:${item.warn?500:400}">${item.label}</div>
+        ${item.sub ? `<div style="font-size:11px;color:#5F6D83;margin-top:2px">${item.sub}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('approvalOverlay').style.display = 'flex';
+  initSignature();
+}
+
+function closeApproval() { document.getElementById('approvalOverlay').style.display = 'none'; }
+
+function submitDiary() {
+  closeApproval();
+  showToast('✓ Site diary submitted successfully');
+}
+
+// ── SIGNATURE ──
+let signing = false, hasSig = false;
+function initSignature() {
+  const canvas = document.getElementById('sigCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+  canvas.height = 120 * window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  ctx.strokeStyle = '#143666'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+  let drawing = false, lx, ly;
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    const c = e.touches ? e.touches[0] : e;
+    return { x: (c.clientX - r.left) * (canvas.width / r.width / window.devicePixelRatio), y: (c.clientY - r.top) * (canvas.height / r.height / window.devicePixelRatio) };
+  }
+  canvas.onmousedown = canvas.ontouchstart = e => { drawing=true; const p=getPos(e); lx=p.x; ly=p.y; e.preventDefault(); };
+  canvas.onmousemove = canvas.ontouchmove = e => {
+    if (!drawing) return;
+    const p=getPos(e);
+    ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(p.x,p.y); ctx.stroke();
+    lx=p.x; ly=p.y; hasSig=true;
+    document.getElementById('submitBtn').disabled = false;
+    document.getElementById('submitBtn').style.opacity = '1';
+    document.getElementById('submitBtn').style.cursor = 'pointer';
+    document.getElementById('sigHint').style.display = 'none';
+    e.preventDefault();
+  };
+  canvas.onmouseup = canvas.ontouchend = () => { drawing=false; };
+}
+
+function clearSig() {
+  const c = document.getElementById('sigCanvas');
+  c.getContext('2d').clearRect(0,0,c.width,c.height);
+  hasSig=false;
+  document.getElementById('submitBtn').disabled = true;
+  document.getElementById('submitBtn').style.opacity = '0.4';
+  document.getElementById('sigHint').style.display='';
+}
+
+// ── TOAST ──
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// Init
+renderLabour(); renderMaterials();
+</script>
+</body>
+</html>
