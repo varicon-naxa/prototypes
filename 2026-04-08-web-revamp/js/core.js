@@ -294,6 +294,9 @@ function doExport() {
     a.click();
     document.body.removeChild(a);
     showToast('Downloading Excel file\u2026');
+  } else if (fmtVal === 'both') {
+   
+    showToast('Downloading Zip\u2026');
   } else {
     showToast('Exporting as PDF\u2026');
   }

@@ -12,7 +12,7 @@ Before touching any code, read the relevant spec file(s):
 Always Do First
 
 Invoke the frontend-design skill before writing any frontend code, every session, no exceptions.
-Read brand_assets/ and design_tokens.json (if present) before touching a single color or font.
+
 
 
 Project Context
