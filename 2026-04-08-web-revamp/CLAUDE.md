@@ -1,4 +1,14 @@
 CLAUDE.md — SiteDiary / Varicon Revamp
+
+## Spec files — READ THESE FIRST every session
+Before touching any code, read the relevant spec file(s):
+| File | When to read |
+|---|---|
+| `spec/architecture.md` | Any session — project structure, loader, file map, navigation |
+| `spec/sections.md` | Working on any Site Diary section — IDs, JS functions, data structures |
+| `spec/js-api.md` | Adding/modifying JS — all public functions per module |
+| `spec/ui-patterns.md` | Building any UI — buttons, tables, modals, badges, checkboxes |
+
 Always Do First
 
 Invoke the frontend-design skill before writing any frontend code, every session, no exceptions.
