@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Maintenance History Export</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f5f7;color:#1a2332;font-size:13px;}
+
+/* ── Layout ── */
+.layout{display:flex;min-height:100vh;}
+
+/* ── Sidebar ── */
+.sidebar{width:195px;background:#1a2332;color:#b0b8c4;flex-shrink:0;display:flex;flex-direction:column;}
+.sidebar-logo{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.07);}
+.v-icon{width:30px;height:30px;background:linear-gradient(135deg,#f7941d,#f15a24);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:17px;flex-shrink:0;}
+.sidebar-logo span{color:#fff;font-weight:700;font-size:14px;}
+.sidebar-org{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 6px;font-size:12px;color:#f7941d;font-weight:700;}
+.sidebar-item{display:flex;align-items:center;gap:9px;padding:8px 16px;font-size:12.5px;cursor:pointer;transition:background .15s;border-left:3px solid transparent;}
+.sidebar-item:hover{background:rgba(255,255,255,0.05);}
+.sidebar-item.active{background:rgba(247,148,29,0.15);color:#fff;border-left-color:#f7941d;}
+.sidebar-item .si{width:16px;text-align:center;font-size:14px;opacity:0.7;flex-shrink:0;}
+.sidebar-item.active .si{opacity:1;}
+.sidebar-section{padding:14px 16px 4px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#5a6a7e;}
+
+/* ── Main ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+
+/* ── Topbar ── */
+.topbar{background:#fff;border-bottom:1px solid #e5e7eb;padding:0 20px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:10px;}
+.topbar h1{font-size:16px;font-weight:700;color:#1a2332;}
+.topbar-right{display:flex;align-items:center;gap:8px;}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;font-size:12.5px;font-weight:500;cursor:pointer;border:1px solid #d1d5db;background:#fff;color:#374151;transition:background .15s,border-color .15s;white-space:nowrap;}
+.btn:hover{background:#f9fafb;}
+.btn-primary{background:#f7941d;border-color:#f7941d;color:#fff;}
+.btn-primary:hover{background:#e8840d;}
+.btn-outline{border-color:#f7941d;color:#f7941d;background:#fff;}
+.btn-outline:hover{background:#fff8f0;}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-ghost{border-color:transparent;background:transparent;color:#6b7280;}
+.btn-ghost:hover{background:#f4f5f7;border-color:#e5e7eb;}
+.user-chip{display:flex;align-items:center;gap:7px;font-size:12.5px;color:#374151;cursor:pointer;padding:4px 8px;border-radius:6px;}
+.user-chip:hover{background:#f4f5f7;}
+.avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;}
+.av-orange{background:#f7941d;} .av-teal{background:#00897b;} .av-purple{background:#7c3aed;} .av-green{background:#43a047;} .av-blue{background:#1565c0;}
+.new-badge{display:inline-flex;align-items:center;padding:1px 6px;background:#f0fdf4;border:1px solid #86efac;border-radius:20px;font-size:10px;font-weight:700;color:#15803d;letter-spacing:.3px;}
+
+/* ── Filter bar ── */
+.filter-bar{background:#fff;border-bottom:1px solid #e5e7eb;padding:8px 20px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.filter-select{padding:6px 28px 6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12.5px;background:#fff url("data:image/svg+xml,%3Csvg width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;appearance:none;color:#374151;cursor:pointer;}
+.filter-divider{width:1px;height:22px;background:#e5e7eb;margin:0 4px;}
+.search-box{display:flex;align-items:center;gap:6px;border:1px solid #d1d5db;border-radius:6px;padding:5px 10px;background:#fff;margin-left:auto;}
+.search-box input{border:none;outline:none;font-size:12.5px;color:#374151;width:150px;}
+.view-toggles{display:flex;border:1px solid #d1d5db;border-radius:6px;overflow:hidden;}
+.view-btn{padding:5px 9px;background:#fff;border:none;cursor:pointer;color:#6b7280;display:flex;align-items:center;font-size:12px;gap:5px;transition:background .15s;border-right:1px solid #d1d5db;}
+.view-btn:last-child{border-right:none;}
+.view-btn.active{background:#1a2332;color:#fff;}
+.view-btn:hover:not(.active){background:#f4f5f7;}
+
+/* ── Tabs ── */
+.tabs-bar{background:#fff;border-bottom:1px solid #e5e7eb;padding:0 20px;display:flex;}
+.tab{padding:12px 16px;font-size:12.5px;font-weight:600;color:#6b7280;cursor:pointer;border-bottom:2px solid transparent;transition:color .15s;white-space:nowrap;}
+.tab.active{color:#f7941d;border-bottom-color:#f7941d;}
+.tab:hover:not(.active){color:#1a2332;}
+
+/* ── Selection bar ── */
+.selection-bar{background:#1a2332;color:#fff;padding:10px 20px;display:none;align-items:center;gap:12px;flex-shrink:0;}
+.selection-bar.show{display:flex;}
+.sel-count{font-size:13px;font-weight:600;}
+.sel-actions{display:flex;gap:8px;margin-left:auto;}
+.btn-sel-export{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;border:none;color:#fff;}
+.btn-sel-pdf{background:#e53935;}
+.btn-sel-pdf:hover{background:#c62828;}
+.btn-sel-excel{background:#2e7d32;}
+.btn-sel-excel:hover{background:#1b5e20;}
+.btn-sel-clear{background:transparent;border:1px solid rgba(255,255,255,0.3);color:#fff;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;font-size:12.5px;cursor:pointer;}
+.btn-sel-clear:hover{background:rgba(255,255,255,0.1);}
+
+/* ── Content ── */
+.content{flex:1;overflow-y:auto;padding:16px 20px;}
+
+/* ── Table ── */
+.table-wrap{background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+thead{background:#f9fafb;}
+thead th{padding:10px 12px;text-align:left;font-size:12px;font-weight:600;color:#6b7280;border-bottom:1px solid #e5e7eb;white-space:nowrap;}
+thead th.th-check{width:36px;padding:10px 8px 10px 14px;}
+tbody tr{border-bottom:1px solid #f3f4f6;transition:background .12s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:#fafafa;}
+tbody tr.selected{background:#fff8f0;}
+td{padding:9px 12px;font-size:12.5px;color:#374151;vertical-align:middle;}
+td.td-check{padding:9px 8px 9px 14px;}
+td.muted{color:#9ca3af;}
+.equip-name{font-weight:600;color:#1a2332;}
+.equip-code{font-size:11px;color:#9ca3af;}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
+.badge-preventive{background:#e8f5e9;color:#2e7d32;}
+.badge-corrective{background:#fce4ec;color:#c62828;}
+.badge-inspection{background:#e3f2fd;color:#1565c0;}
+.attach-pill{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:#6b7280;background:#f3f4f6;border-radius:4px;padding:2px 7px;}
+input[type=checkbox]{width:15px;height:15px;accent-color:#f7941d;cursor:pointer;}
+
+/* Action buttons */
+.action-btns{display:flex;align-items:center;gap:4px;}
+.icon-btn{width:28px;height:28px;border:none;border-radius:6px;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#6b7280;transition:background .15s;}
+.icon-btn:hover{background:#f3f4f6;color:#374151;}
+.icon-btn.danger:hover{background:#fce4ec;color:#c62828;}
+
+/* Row export dropdown */
+.row-export{position:relative;display:inline-block;}
+.row-export-menu{position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.13);z-index:300;min-width:188px;padding:6px;display:none;}
+.row-export-menu.open{display:block;}
+.rem-section{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#9ca3af;padding:4px 8px 4px;}
+.rem-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:7px;cursor:pointer;font-size:12.5px;color:#374151;transition:background .13s;}
+.rem-item:hover{background:#f4f5f7;}
+.rem-item .ri-icon{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+.ri-preview{background:#e3f2fd;}
+.ri-pdf{background:#fce4ec;}
+.ri-excel{background:#e8f5e9;}
+.ri-email{background:#fff3e0;}
+.rem-sep{border:none;border-top:1px solid #f3f4f6;margin:4px 0;}
+.rem-item-text .ri-label{font-weight:600;font-size:12.5px;}
+.rem-item-text .ri-sub{font-size:10.5px;color:#9ca3af;margin-top:1px;}
+
+/* ── Pagination ── */
+.pagination{background:#fff;border-top:1px solid #e5e7eb;padding:10px 16px;display:flex;align-items:center;justify-content:flex-end;gap:12px;font-size:12.5px;color:#6b7280;}
+.pagination select{padding:4px 22px 4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;background:#fff url("data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 6px center;appearance:none;color:#374151;}
+.pg-nav{display:flex;gap:2px;}
+.pg-btn{width:28px;height:28px;border:1px solid #e5e7eb;border-radius:4px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;color:#6b7280;}
+.pg-btn:hover{background:#f4f5f7;}
+.pg-btn:disabled{opacity:.35;cursor:default;}
+
+/* ── Report view ── */
+.report-view{display:none;}
+.report-view.active{display:block;}
+.list-view.hidden{display:none;}
+.summary-strip{display:flex;gap:12px;margin-bottom:16px;}
+.sc{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px;flex:1;}
+.sc-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:#9ca3af;margin-bottom:4px;}
+.sc-value{font-size:22px;font-weight:700;color:#1a2332;}
+.sc-sub{font-size:11px;color:#6b7280;margin-top:2px;}
+.sc-green .sc-value{color:#2e7d32;} .sc-amber .sc-value{color:#e65100;} .sc-red .sc-value{color:#c62828;}
+.status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;}
+.dot-green{background:#43a047;} .dot-amber{background:#f9a825;} .dot-red{background:#e53935;} .dot-gray{background:#9ca3af;}
+.due-ok{color:#2e7d32;font-weight:600;} .due-soon{color:#e65100;font-weight:600;} .due-over{color:#c62828;font-weight:600;}
+
+/* ════════════════════════════════════
+   MODAL FOUNDATIONS
+════════════════════════════════════ */
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.38);z-index:400;display:none;align-items:center;justify-content:center;}
+.backdrop.open{display:flex;}
+.modal{background:#fff;border-radius:12px;box-shadow:0 24px 64px rgba(0,0,0,0.22);display:flex;flex-direction:column;overflow:hidden;}
+.modal-hdr{padding:18px 22px 14px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.modal-hdr h2{font-size:15px;font-weight:700;color:#1a2332;}
+.modal-hdr-sub{font-size:12px;color:#9ca3af;margin-top:2px;}
+.modal-close{width:28px;height:28px;border:none;background:#f3f4f6;border-radius:6px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;color:#6b7280;flex-shrink:0;}
+.modal-close:hover{background:#e5e7eb;}
+.modal-body{padding:20px 22px;overflow-y:auto;}
+.modal-ftr{padding:14px 22px;border-top:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;}
+.modal-ftr-right{display:flex;gap:8px;}
+
+.form-group{margin-bottom:18px;}
+.form-group:last-child{margin-bottom:0;}
+.fg-label{display:block;font-size:12px;font-weight:700;color:#374151;margin-bottom:7px;}
+.fg-label span{font-weight:400;color:#9ca3af;margin-left:4px;}
+
+/* Format pills */
+.fmt-group{display:flex;gap:8px;}
+.fmt-opt{flex:1;border:1.5px solid #e5e7eb;border-radius:8px;padding:10px 14px;cursor:pointer;transition:border-color .15s,background .15s;display:flex;align-items:center;gap:10px;}
+.fmt-opt:hover{border-color:#f7941d;background:#fff8f0;}
+.fmt-opt.sel{border-color:#f7941d;background:#fff8f0;}
+.fmt-opt .fo-icon{font-size:20px;}
+.fmt-opt .fo-label{font-size:13px;font-weight:600;color:#1a2332;}
+.fmt-opt .fo-sub{font-size:11px;color:#9ca3af;}
+
+/* ════════════════════════════════════
+   BULK EXPORT MODAL
+════════════════════════════════════ */
+#bulkModal .modal{width:520px;max-width:96vw;}
+
+/* Equipment multi-select */
+.equip-ms{border:1px solid #d1d5db;border-radius:8px;overflow:hidden;}
+.equip-ms-search{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #e5e7eb;background:#fafafa;}
+.equip-ms-search input{border:none;outline:none;font-size:12.5px;background:transparent;flex:1;color:#374151;}
+.equip-ms-list{max-height:180px;overflow-y:auto;}
+.equip-ms-row{display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;transition:background .12s;border-bottom:1px solid #f3f4f6;}
+.equip-ms-row:last-child{border-bottom:none;}
+.equip-ms-row:hover{background:#f9fafb;}
+.equip-ms-row label{font-size:12.5px;color:#374151;flex:1;cursor:pointer;display:flex;flex-direction:column;}
+.equip-ms-row label small{font-size:11px;color:#9ca3af;}
+.ms-footer{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;background:#fafafa;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;}
+.ms-footer a{color:#f7941d;cursor:pointer;font-weight:600;}
+.ms-footer a:hover{text-decoration:underline;}
+
+/* Date range row */
+.date-range-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.date-field{display:flex;flex-direction:column;gap:4px;}
+.date-field label{font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;}
+.date-field input[type=date]{padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12.5px;color:#374151;background:#fff;width:100%;}
+.date-field input[type=date]:focus{outline:2px solid #f7941d;outline-offset:0;border-color:transparent;}
+
+.bulk-sel-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;background:#fff3e0;border:1px solid #ffcc80;border-radius:20px;font-size:12px;font-weight:600;color:#e65100;}
+
+/* ════════════════════════════════════
+   SINGLE EXPORT MODAL
+════════════════════════════════════ */
+#singleModal .modal{width:460px;max-width:96vw;}
+.check-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.check-item{display:flex;align-items:center;gap:7px;font-size:12.5px;color:#374151;cursor:pointer;}
+.check-item input[type=checkbox]{width:14px;height:14px;accent-color:#f7941d;}
+
+/* ════════════════════════════════════
+   PREVIEW MODAL
+════════════════════════════════════ */
+#previewModal .modal{width:720px;max-width:97vw;max-height:92vh;}
+.preview-toolbar{display:flex;align-items:center;gap:8px;padding:10px 22px;background:#f4f5f7;border-bottom:1px solid #e5e7eb;flex-shrink:0;}
+.preview-toolbar .pt-label{font-size:12px;color:#6b7280;margin-right:auto;}
+.preview-body{flex:1;overflow-y:auto;padding:24px;background:#e5e7eb;display:flex;justify-content:center;}
+
+/* Paper */
+.paper{background:#fff;width:640px;max-width:100%;border-radius:4px;box-shadow:0 2px 16px rgba(0,0,0,0.12);padding:36px 40px;font-size:12.5px;color:#222;}
+.paper-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:28px;padding-bottom:20px;border-bottom:2px solid #f7941d;}
+.paper-logo{display:flex;align-items:center;gap:8px;}
+.paper-logo .v{width:28px;height:28px;background:linear-gradient(135deg,#f7941d,#f15a24);border-radius:5px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:15px;}
+.paper-logo span{font-size:15px;font-weight:700;color:#1a2332;}
+.paper-title-block{text-align:right;}
+.paper-title{font-size:18px;font-weight:700;color:#1a2332;}
+.paper-subtitle{font-size:11px;color:#9ca3af;margin-top:2px;}
+.paper-machine{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px;margin-bottom:22px;display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;}
+.pm-row{display:flex;flex-direction:column;gap:2px;}
+.pm-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#9ca3af;}
+.pm-value{font-size:13px;font-weight:600;color:#1a2332;}
+.paper-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#9ca3af;margin-bottom:10px;}
+.paper-table{width:100%;border-collapse:collapse;margin-bottom:24px;}
+.paper-table th{background:#f4f5f7;padding:7px 10px;text-align:left;font-size:11px;font-weight:700;color:#6b7280;border-bottom:2px solid #e5e7eb;}
+.paper-table td{padding:8px 10px;font-size:12px;color:#374151;border-bottom:1px solid #f0f0f0;}
+.paper-table tr:last-child td{border-bottom:none;}
+.paper-summary{background:#fff8f0;border:1px solid #ffe0b2;border-radius:8px;padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;margin-bottom:22px;}
+.ps-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}
+.ps-label{font-size:11px;color:#6b7280;}
+.ps-value{font-size:13px;font-weight:700;color:#1a2332;}
+.paper-footer{border-top:1px solid #e5e7eb;padding-top:14px;display:flex;justify-content:space-between;align-items:center;font-size:10.5px;color:#9ca3af;}
+.pf-status{display:flex;align-items:center;gap:5px;font-size:11px;}
+.pf-status .dot{width:7px;height:7px;border-radius:50%;background:#43a047;}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:22px;right:22px;background:#1a2332;color:#fff;padding:12px 18px;border-radius:8px;font-size:13px;font-weight:500;box-shadow:0 6px 20px rgba(0,0,0,0.2);z-index:999;display:flex;align-items:center;gap:10px;transform:translateY(80px);opacity:0;transition:transform .3s,opacity .3s;}
+.toast.show{transform:translateY(0);opacity:1;}
+
+/* scrollbar */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:#f4f5f7;}
+::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:3px;}
+.equip-ms-list::-webkit-scrollbar{width:4px;}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Product Civil <span>▾</span></div>
+    <div class="sidebar-item"><span class="si">🏠</span> Projects</div>
+    <div class="sidebar-item"><span class="si">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="si">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="si">🏖</span> Leave</div>
+    <div class="sidebar-item"><span class="si">📋</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="si">🚚</span> Delivery Docket</div>
+    <div class="sidebar-item"><span class="si">💰</span> Bills</div>
+    <div class="sidebar-item"><span class="si">📝</span> Forms</div>
+    <div class="sidebar-section">Asset Management</div>
+    <div class="sidebar-item"><span class="si">🗂</span> Equipment Registry</div>
+    <div class="sidebar-item"><span class="si">📎</span> Attachment Registry</div>
+    <div class="sidebar-item active"><span class="si">🔧</span> Servicing &amp; Maint.</div>
+    <div class="sidebar-item"><span class="si">🏷</span> Asset Type</div>
+    <div class="sidebar-item"><span class="si">👥</span> Resource Assigner</div>
+    <div class="sidebar-item"><span class="si">🏢</span> Suppliers</div>
+    <div class="sidebar-item"><span class="si">⚙️</span> User Management</div>
+  </div>
+
+  <!-- ── Main ── -->
+  <div class="main">
+
+    <!-- ── Topbar ── -->
+    <div class="topbar">
+      <h1>Servicing and Maintenance</h1>
+      <div class="topbar-right">
+        <button class="btn" onclick="showToast('📤  Opening initial data upload…')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Initial Data Upload
+        </button>
+        <!-- Bulk Export -->
+        <button class="btn btn-outline" onclick="openBulkModal()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Bulk Export
+          <span class="new-badge">NEW</span>
+        </button>
+        <button class="btn" onclick="showToast('🔍  Opening global search…')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Search
+        </button>
+        <button class="btn" style="padding:6px 11px;font-size:16px;font-weight:300">+</button>
+        <div class="user-chip">
+          <div class="avatar av-orange">PT</div>
+          Prabin Tharu
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Filter bar ── -->
+    <div class="filter-bar">
+      <select class="filter-select">
+        <option>Mon 09/03/2026 – Wed 08/04/2026</option>
+        <option>Last 7 days</option><option>Last 30 days</option><option>Last 90 days</option><option>Custom…</option>
+      </select>
+      <select class="filter-select">
+        <option>Equipment</option>
+        <option>(24) BICYCLE</option><option>(EQ-005) Bobcat S650</option>
+        <option>(new20T) 20T Exavator new</option><option>(T-M-S-19) Tata Mustang S…</option>
+      </select>
+      <select class="filter-select">
+        <option>Maintenance Type</option>
+        <option>Preventive Maintenance</option><option>Corrective Maintenance</option><option>Inspection</option>
+      </select>
+      <div class="filter-divider"></div>
+      <div class="view-toggles">
+        <button class="view-btn active" id="vgrid" onclick="setView('grid')" title="Table view">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        </button>
+        <button class="view-btn" id="vlist" onclick="setView('list')" title="List view">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/></svg>
+        </button>
+        <button class="view-btn" id="vrep" onclick="setView('report')" title="Report view">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Report
+        </button>
+      </div>
+      <div class="search-box">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="Search equipment…">
+      </div>
+      <button class="btn btn-primary">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Maintenance Record
+      </button>
+    </div>
+
+    <!-- ── Tabs ── -->
+    <div class="tabs-bar">
+      <div class="tab" onclick="switchTab(this)">Upcoming Maintenance</div>
+      <div class="tab active" onclick="switchTab(this)">Maintenance History</div>
+    </div>
+
+    <!-- ── Selection bar (appears on checkbox select) ── -->
+    <div class="selection-bar" id="selBar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      <span class="sel-count" id="selCount">0 records selected</span>
+      <div class="sel-actions">
+        <button class="btn-sel-export btn-sel-pdf" onclick="openBulkModal('pdf-sel')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Export PDF
+        </button>
+        <button class="btn-sel-export btn-sel-excel" onclick="openBulkModal('excel-sel')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+          Export Excel
+        </button>
+        <button class="btn-sel-clear" onclick="clearSelection()">✕ Clear</button>
+      </div>
+    </div>
+
+    <!-- ── Content ── -->
+    <div class="content">
+
+      <!-- ══ LIST VIEW ══ -->
+      <div id="listView">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="th-check"><input type="checkbox" id="chkAll" onchange="toggleAll(this)"></th>
+                <th>Date Completed <span style="opacity:.4;font-size:11px">↕</span></th>
+                <th>Equipment <span style="opacity:.4;font-size:11px">↕</span></th>
+                <th>Maintenance Type</th>
+                <th>Description</th>
+                <th>Meter Reading</th>
+                <th>Next Reading</th>
+                <th>Next Date</th>
+                <th>Attachment</th>
+                <th>Added by</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="mainTbody">
+
+              <!-- rows injected by JS -->
+
+            </tbody>
+          </table>
+          <div class="pagination">
+            <span>Rows per page</span>
+            <select><option>15</option><option>25</option><option>50</option></select>
+            <span id="pageInfo">1–9 of 41</span>
+            <div class="pg-nav">
+              <button class="pg-btn" disabled>|◂</button>
+              <button class="pg-btn" disabled>◂</button>
+              <button class="pg-btn">▸</button>
+              <button class="pg-btn">▸|</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ REPORT VIEW ══ -->
+      <div id="reportView" class="report-view">
+        <div class="summary-strip">
+          <div class="sc"><div class="sc-label">Total Machines</div><div class="sc-value">14</div><div class="sc-sub">with history</div></div>
+          <div class="sc sc-green"><div class="sc-label">On Track</div><div class="sc-value">9</div><div class="sc-sub">next service &gt;14 days</div></div>
+          <div class="sc sc-amber"><div class="sc-label">Due Soon</div><div class="sc-value">3</div><div class="sc-sub">within 14 days</div></div>
+          <div class="sc sc-red"><div class="sc-label">Overdue</div><div class="sc-value">2</div><div class="sc-sub">past next service date</div></div>
+          <div class="sc"><div class="sc-label">Total Services</div><div class="sc-value">41</div><div class="sc-sub">in date range</div></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Equipment</th>
+                <th>Current Hours / Odometer</th>
+                <th>Last Service Date</th>
+                <th>Last Service Type</th>
+                <th>Next Service Date</th>
+                <th>Frequency</th>
+                <th>Records</th>
+                <th style="text-align:right">Export</th>
+              </tr>
+            </thead>
+            <tbody id="reportTbody"></tbody>
+          </table>
+          <div class="pagination">
+            <span>Rows per page</span>
+            <select><option>15</option><option>25</option><option>50</option></select>
+            <span>1–7 of 14</span>
+            <div class="pg-nav">
+              <button class="pg-btn" disabled>|◂</button>
+              <button class="pg-btn" disabled>◂</button>
+              <button class="pg-btn">▸</button>
+              <button class="pg-btn">▸|</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+
+<!-- ════════════════════════════════════════
+  BULK EXPORT MODAL
+════════════════════════════════════════ -->
+<div class="backdrop" id="bulkModal">
+  <div class="modal" style="width:520px;max-width:96vw;">
+    <div class="modal-hdr">
+      <div>
+        <h2>Bulk Export — Maintenance History</h2>
+        <div class="modal-hdr-sub">Filter by equipment and date range, then choose your format.</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('bulkModal')">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Equipment multi-select -->
+      <div class="form-group">
+        <label class="fg-label">Equipment <span id="bulkSelCount">(all 14 selected)</span></label>
+        <div class="equip-ms">
+          <div class="equip-ms-search">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" placeholder="Search equipment…" oninput="filterEquipList(this.value)" id="equipSearchInput">
+          </div>
+          <div class="equip-ms-list" id="equipMsList">
+            <!-- injected by JS -->
+          </div>
+          <div class="ms-footer">
+            <span id="msSelLabel">14 of 14 selected</span>
+            <div style="display:flex;gap:12px">
+              <a onclick="selectAllEquip()">Select all</a>
+              <a onclick="clearAllEquip()">Clear all</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Date range -->
+      <div class="form-group">
+        <label class="fg-label">Date Range</label>
+        <div class="date-range-row">
+          <div class="date-field">
+            <label>From</label>
+            <input type="date" value="2026-03-09">
+          </div>
+          <div class="date-field">
+            <label>To</label>
+            <input type="date" value="2026-04-08">
+          </div>
+        </div>
+      </div>
+
+      <!-- Format -->
+      <div class="form-group">
+        <label class="fg-label">Format</label>
+        <div class="fmt-group">
+          <div class="fmt-opt" id="bfmt-pdf" onclick="selectBulkFmt('pdf')">
+            <div class="fo-icon">📋</div>
+            <div><div class="fo-label">PDF</div><div class="fo-sub">Formatted report, per machine</div></div>
+          </div>
+          <div class="fmt-opt sel" id="bfmt-excel" onclick="selectBulkFmt('excel')">
+            <div class="fo-icon">📊</div>
+            <div><div class="fo-label">Excel</div><div class="fo-sub">Spreadsheet, all records</div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-ftr">
+      <span class="bulk-sel-badge" id="bulkFtrBadge">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        14 machines · 41 records
+      </span>
+      <div class="modal-ftr-right">
+        <button class="btn" onclick="closeModal('bulkModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="showToast('✅  Bulk export started — file will download shortly');closeModal('bulkModal')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+  SINGLE EXPORT MODAL
+════════════════════════════════════════ -->
+<div class="backdrop" id="singleModal">
+  <div class="modal" style="width:460px;max-width:96vw;">
+    <div class="modal-hdr">
+      <div>
+        <h2 id="singleModalTitle">Export Record</h2>
+        <div class="modal-hdr-sub" id="singleModalSub">1 maintenance record</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('singleModal')">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Format -->
+      <div class="form-group">
+        <label class="fg-label">Format</label>
+        <div class="fmt-group">
+          <div class="fmt-opt sel" id="sfmt-pdf" onclick="selectSingleFmt('pdf')">
+            <div class="fo-icon">📋</div>
+            <div><div class="fo-label">PDF</div><div class="fo-sub">Formatted with machine header</div></div>
+          </div>
+          <div class="fmt-opt" id="sfmt-excel" onclick="selectSingleFmt('excel')">
+            <div class="fo-icon">📊</div>
+            <div><div class="fo-label">Excel</div><div class="fo-sub">Spreadsheet format</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Columns -->
+      <div class="form-group">
+        <label class="fg-label">Include in Export</label>
+        <div class="check-grid">
+          <label class="check-item"><input type="checkbox" checked> Service Date</label>
+          <label class="check-item"><input type="checkbox" checked> Maintenance Type</label>
+          <label class="check-item"><input type="checkbox" checked> Meter Reading</label>
+          <label class="check-item"><input type="checkbox" checked> Next Due Date</label>
+          <label class="check-item"><input type="checkbox" checked> Notes / Description</label>
+          <label class="check-item"><input type="checkbox" checked> Attachments list</label>
+          <label class="check-item"><input type="checkbox" checked> Machine Details Header</label>
+          <label class="check-item"><input type="checkbox"> Service Summary block</label>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-ftr">
+      <button class="btn" onclick="openPreview();closeModal('singleModal')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        Preview
+      </button>
+      <div class="modal-ftr-right">
+        <button class="btn" onclick="closeModal('singleModal')">Cancel</button>
+        <button class="btn" onclick="showToast('✉️  Opening email…');closeModal('singleModal')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          Email
+        </button>
+        <button class="btn btn-primary" onclick="showToast('✅  Downloading export…');closeModal('singleModal')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════
+  PREVIEW MODAL
+════════════════════════════════════════ -->
+<div class="backdrop" id="previewModal">
+  <div class="modal" style="width:720px;max-width:97vw;max-height:92vh;">
+    <div class="modal-hdr" style="flex-shrink:0;">
+      <div>
+        <h2 id="previewTitle">Preview — (EQ-005) Bobcat S650</h2>
+        <div class="modal-hdr-sub">PDF format · Generated 08 Apr 2026</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('previewModal')">✕</button>
+    </div>
+
+    <!-- Preview toolbar -->
+    <div class="preview-toolbar">
+      <span class="pt-label">Preview only — this is how your PDF will look</span>
+      <button class="btn btn-sm" onclick="showToast('✉️  Opening email dialog…')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        Email
+      </button>
+      <button class="btn btn-sm" onclick="showToast('📊  Downloading Excel…')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        Download Excel
+      </button>
+      <button class="btn btn-sm btn-primary" onclick="showToast('📋  Downloading PDF…')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download PDF
+      </button>
+    </div>
+
+    <!-- Paper preview -->
+    <div class="preview-body">
+      <div class="paper">
+
+        <!-- Header -->
+        <div class="paper-header">
+          <div class="paper-logo">
+            <div class="v">V</div>
+            <span>Varicon</span>
+          </div>
+          <div class="paper-title-block">
+            <div class="paper-title">Maintenance History Report</div>
+            <div class="paper-subtitle" id="previewSubtitle">Product Civil · Generated 08 Apr 2026</div>
+          </div>
+        </div>
+
+        <!-- Machine details -->
+        <div class="paper-section-title">Machine Details</div>
+        <div class="paper-machine" id="paperMachineDetails">
+          <div class="pm-row"><div class="pm-label">Name</div><div class="pm-value">(EQ-005) Bobcat S650</div></div>
+          <div class="pm-row"><div class="pm-label">Asset ID</div><div class="pm-value">EQ-005</div></div>
+          <div class="pm-row"><div class="pm-label">Number Plate</div><div class="pm-value">BCA-650</div></div>
+          <div class="pm-row"><div class="pm-label">Category</div><div class="pm-value">Equipment</div></div>
+        </div>
+
+        <!-- Service history table -->
+        <div class="paper-section-title" style="margin-top:20px">Service History</div>
+        <table class="paper-table" id="paperHistoryTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Meter Reading</th>
+              <th>Next Reading</th>
+              <th>Next Due Date</th>
+              <th>Notes</th>
+              <th>Added By</th>
+            </tr>
+          </thead>
+          <tbody id="paperHistoryBody">
+            <!-- injected by JS -->
+          </tbody>
+        </table>
+
+        <!-- Summary -->
+        <div class="paper-section-title">Service Summary</div>
+        <div class="paper-summary" id="paperSummary">
+          <div class="ps-row"><span class="ps-label">Last Service Date</span><span class="ps-value">01/04/2026</span></div>
+          <div class="ps-row"><span class="ps-label">Next Service Due</span><span class="ps-value" style="color:#2e7d32">29/05/2026</span></div>
+          <div class="ps-row"><span class="ps-label">Service Frequency</span><span class="ps-value">450 hrs</span></div>
+          <div class="ps-row"><span class="ps-label">Current Engine Hours</span><span class="ps-value">1,550 hrs</span></div>
+        </div>
+
+        <!-- Footer -->
+        <div class="paper-footer">
+          <span>Varicon — Product Civil · Confidential</span>
+          <div class="pf-status">
+            <span class="dot"></span>
+            On Track — next service 29/05/2026
+          </div>
+          <span>Page 1 of 1</span>
+        </div>
+
+      </div>
+    </div><!-- /preview-body -->
+
+    <div class="modal-ftr" style="flex-shrink:0;">
+      <span style="font-size:12px;color:#9ca3af">Preview — PDF will include all checked fields</span>
+      <div class="modal-ftr-right">
+        <button class="btn" onclick="closeModal('previewModal')">Close</button>
+        <button class="btn btn-primary" onclick="showToast('📋  Downloading PDF…');closeModal('previewModal')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download PDF
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Toast ── -->
+<div class="toast" id="toast"><span id="toastMsg">Done</span></div>
+
+
+<script>
+/* ══════════════════════════════════
+   DATA
+══════════════════════════════════ */
+const ROWS = [
+  {id:0, date:'03/04/2026', equip:'(1901) test-1901',            code:'1901',             type:'corrective', desc:'maintainance gariyo', meter:'—',     nextRead:'—',    nextDate:'—',          attach:1, addedBy:'Pradeep Dahal',  av:'PD', avc:'av-teal'},
+  {id:1, date:'03/04/2026', equip:'(new20T) 20T Exavator new',   code:'new20T',           type:'preventive', desc:'—',                  meter:'—',     nextRead:'1200', nextDate:'01/07/2026', attach:0, addedBy:'Pradeep Dahal',  av:'PD', avc:'av-teal'},
+  {id:2, date:'03/04/2026', equip:'(new20T) 20T Exavator new',   code:'new20T',           type:'preventive', desc:'—',                  meter:'—',     nextRead:'100',  nextDate:'01/07/2026', attach:0, addedBy:'Pradeep Dahal',  av:'PD', avc:'av-teal'},
+  {id:3, date:'02/04/2026', equip:'(24) BICYCLE',                code:'24',               type:'preventive', desc:'—',                  meter:'27000', nextRead:'27500',nextDate:'12/04/2026', attach:0, addedBy:'Boni Khatiwada', av:'BK', avc:'av-purple'},
+  {id:4, date:'02/04/2026', equip:'(24) BICYCLE',                code:'24',               type:'preventive', desc:'—',                  meter:'26000', nextRead:'26500',nextDate:'12/04/2026', attach:0, addedBy:'Boni Khatiwada', av:'BK', avc:'av-purple'},
+  {id:5, date:'02/04/2026', equip:'(24) BICYCLE',                code:'24',               type:'preventive', desc:'—',                  meter:'1720',  nextRead:'2220', nextDate:'12/04/2026', attach:0, addedBy:'Prabin Tharu',   av:'PT', avc:'av-orange'},
+  {id:6, date:'02/04/2026', equip:'(24) BICYCLE',                code:'24',               type:'corrective', desc:'—',                  meter:'1600',  nextRead:'2100', nextDate:'12/04/2026', attach:0, addedBy:'Prabin Tharu',   av:'PT', avc:'av-orange'},
+  {id:7, date:'01/04/2026', equip:'(EQ-005) Bobcat S650',        code:'EQ-005',           type:'preventive', desc:'—',                  meter:'1550',  nextRead:'2000', nextDate:'29/05/2026', attach:0, addedBy:'Nammy Kirat',    av:'NK', avc:'av-green'},
+  {id:8, date:'29/03/2026', equip:'(E-01029919123) AP-Exca…',   code:'E-01029919123',    type:'preventive', desc:'—',                  meter:'1500',  nextRead:'2000', nextDate:'15/04/2026', attach:0, addedBy:'Nammy Kirat',    av:'NK', avc:'av-green'},
+  {id:9, date:'30/03/2026', equip:'(T-M-S-19) Tata Mustang S…', code:'T-M-S-19',         type:'preventive', desc:'—',                  meter:'2150',  nextRead:'3000', nextDate:'22/05/2026', attach:0, addedBy:'Nammy Kirat',    av:'NK', avc:'av-green'},
+];
+
+const EQUIPS = [
+  {id:'24',             name:'(24) BICYCLE',                plate:'—'},
+  {id:'EQ-005',         name:'(EQ-005) Bobcat S650',        plate:'BCA-650'},
+  {id:'new20T',         name:'(new20T) 20T Exavator new',   plate:'—'},
+  {id:'T-M-S-19',       name:'(T-M-S-19) Tata Mustang S…', plate:'TMS-019'},
+  {id:'E-01029919123',  name:'(E-01029919123) AP-Excavator',plate:'AP-EX1'},
+  {id:'1901',           name:'(1901) test-1901',             plate:'—'},
+  {id:'nn-trck-001',    name:'(nn-trck-001) nn-odometer',   plate:'—'},
+  {id:'290',            name:'(290) Test 290',               plate:'—'},
+  {id:'BD123',          name:'BD123 - Bull Dozer 25',        plate:'BD-123'},
+  {id:'EP-12',          name:'Ep-12 - Backhoe Loaders',      plate:'EP-012'},
+  {id:'123-H',          name:'123 - Hammer',                 plate:'—'},
+  {id:'E-10',           name:'E-10 - Excavator',             plate:'—'},
+  {id:'TK-001',         name:'TK-001 - Crane A',             plate:'CRN-01'},
+  {id:'GR-007',         name:'GR-007 - Grader 7',            plate:'GRD-07'},
+];
+
+const REPORT_ROWS = [
+  {equip:'(24) BICYCLE',               code:'24',          plate:'—',       reading:'27,000 km',  lastDate:'02/04/2026', lastType:'preventive', nextDate:'03/04/2026', nextStatus:'over',  freq:'500 km',  records:10},
+  {equip:'(nn-trck-001) nn-odometer',  code:'nn-trck-001', plate:'—',       reading:'1,500 hrs',  lastDate:'31/03/2026', lastType:'preventive', nextDate:'03/04/2026', nextStatus:'soon',  freq:'500 hrs', records:3},
+  {equip:'(EQ-005) Bobcat S650',       code:'EQ-005',      plate:'BCA-650', reading:'1,550 hrs',  lastDate:'01/04/2026', lastType:'preventive', nextDate:'29/05/2026', nextStatus:'ok',    freq:'450 hrs', records:1},
+  {equip:'(new20T) 20T Exavator new',  code:'new20T',      plate:'—',       reading:'— (no reading)', lastDate:'03/04/2026', lastType:'preventive', nextDate:'01/07/2026', nextStatus:'ok', freq:'1200 hrs', records:2},
+  {equip:'(T-M-S-19) Tata Mustang S…',code:'T-M-S-19',    plate:'TMS-019', reading:'2,150 hrs',  lastDate:'30/03/2026', lastType:'preventive', nextDate:'22/05/2026', nextStatus:'ok',    freq:'850 hrs', records:1},
+  {equip:'(E-01029919123) AP-Excavator',code:'E-01029919123',plate:'AP-EX1',reading:'1,500 hrs', lastDate:'29/03/2026', lastType:'preventive', nextDate:'15/04/2026', nextStatus:'soon',  freq:'500 hrs', records:1},
+  {equip:'(1901) test-1901',           code:'1901',         plate:'—',       reading:'— (no reading)', lastDate:'03/04/2026', lastType:'corrective', nextDate:'—', nextStatus:'none',     freq:'N/A',     records:1},
+];
+
+const MACHINE_DATA = {
+  'EQ-005': {
+    name:'(EQ-005) Bobcat S650', plate:'BCA-650', category:'Equipment',
+    history:[{date:'01/04/2026',type:'Preventive',meter:'1,550',nextRead:'2,000',nextDate:'29/05/2026',notes:'—',by:'Nammy Kirat'}],
+    lastService:'01/04/2026', nextService:'29/05/2026', freq:'450 hrs', reading:'1,550 hrs', status:'ok'
+  },
+  '24': {
+    name:'(24) BICYCLE', plate:'—', category:'Equipment',
+    history:[
+      {date:'02/04/2026',type:'Preventive',meter:'27,000',nextRead:'27,500',nextDate:'12/04/2026',notes:'—',by:'Boni Khatiwada'},
+      {date:'02/04/2026',type:'Preventive',meter:'26,000',nextRead:'26,500',nextDate:'12/04/2026',notes:'—',by:'Boni Khatiwada'},
+      {date:'02/04/2026',type:'Corrective',meter:'1,600', nextRead:'2,100', nextDate:'12/04/2026',notes:'—',by:'Prabin Tharu'},
+    ],
+    lastService:'02/04/2026', nextService:'03/04/2026 — Overdue', freq:'500 km', reading:'27,000 km', status:'over'
+  },
+  'new20T': {
+    name:'(new20T) 20T Exavator new', plate:'—', category:'Equipment',
+    history:[
+      {date:'03/04/2026',type:'Preventive',meter:'—',nextRead:'1,200',nextDate:'01/07/2026',notes:'—',by:'Pradeep Dahal'},
+      {date:'03/04/2026',type:'Preventive',meter:'—',nextRead:'100',  nextDate:'01/07/2026',notes:'—',by:'Pradeep Dahal'},
+    ],
+    lastService:'03/04/2026', nextService:'01/07/2026', freq:'1200 hrs', reading:'— (no reading)', status:'ok'
+  }
+};
+
+/* ══════════════════════════════════
+   RENDER LIST VIEW
+══════════════════════════════════ */
+let selected = new Set();
+
+function renderList() {
+  const tbody = document.getElementById('mainTbody');
+  tbody.innerHTML = ROWS.map(r => `
+    <tr id="row-${r.id}" class="${selected.has(r.id)?'selected':''}">
+      <td class="td-check"><input type="checkbox" ${selected.has(r.id)?'checked':''} onchange="toggleRow(${r.id},this)"></td>
+      <td>📅 ${r.date}</td>
+      <td><div class="equip-name">${r.equip}</div></td>
+      <td><span class="badge badge-${r.type}">${r.type==='preventive'?'Preventive Maint.':'Corrective Maint.'}</span></td>
+      <td class="${r.desc==='—'?'muted':''}">${r.desc}</td>
+      <td class="${r.meter==='—'?'muted':''}">${r.meter}</td>
+      <td class="${r.nextRead==='—'?'muted':''}">${r.nextRead}</td>
+      <td class="${r.nextDate==='—'?'muted':''}" style="${r.nextDate!=='—'&&new Date(r.nextDate.split('/').reverse().join('-'))<new Date('2026-04-15')?'color:#e65100;font-weight:600':''}">${r.nextDate}</td>
+      <td>${r.attach?`<span class="attach-pill">📎 ${r.attach}</span>`:'<span class="muted">—</span>'}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:5px">
+          <div class="avatar ${r.avc}" style="width:22px;height:22px;font-size:9px">${r.av}</div>
+          <span>${r.addedBy}</span>
+        </div>
+      </td>
+      <td>
+        <div class="action-btns">
+          <div class="row-export" id="re-${r.id}">
+            <button class="icon-btn" title="Export options" onclick="toggleRowMenu('re-${r.id}')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
+            ${rowMenu(r)}
+          </div>
+          <button class="icon-btn" title="Edit">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="icon-btn danger" title="Delete">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function rowMenu(r) {
+  return `
+    <div class="row-export-menu" id="re-${r.id}-menu">
+      <div class="rem-section">Single Record</div>
+      <div class="rem-item" onclick="openPreviewForRow(${r.id})">
+        <div class="ri-icon ri-preview">👁</div>
+        <div class="rem-item-text">
+          <div class="ri-label">Preview</div>
+          <div class="ri-sub">See document before downloading</div>
+        </div>
+      </div>
+      <hr class="rem-sep">
+      <div class="rem-item" onclick="openSingleModal('${r.equip}','${r.code}','pdf')">
+        <div class="ri-icon ri-pdf">📋</div>
+        <div class="rem-item-text">
+          <div class="ri-label">Export as PDF</div>
+          <div class="ri-sub">Formatted report</div>
+        </div>
+      </div>
+      <div class="rem-item" onclick="openSingleModal('${r.equip}','${r.code}','excel')">
+        <div class="ri-icon ri-excel">📊</div>
+        <div class="rem-item-text">
+          <div class="ri-label">Export as Excel</div>
+          <div class="ri-sub">Spreadsheet format</div>
+        </div>
+      </div>
+      <hr class="rem-sep">
+      <div class="rem-item" onclick="showToast('✉️  Opening email…');closeAllMenus()">
+        <div class="ri-icon ri-email">✉️</div>
+        <div class="rem-item-text">
+          <div class="ri-label">Email Report</div>
+          <div class="ri-sub">Send to recipients</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ══════════════════════════════════
+   RENDER REPORT VIEW
+══════════════════════════════════ */
+function renderReport() {
+  const tbody = document.getElementById('reportTbody');
+  tbody.innerHTML = REPORT_ROWS.map((r,i) => {
+    const nextHtml = r.nextStatus==='over'
+      ? `<span class="due-over"><span class="status-dot dot-red" style="margin-right:4px;display:inline-block"></span>${r.nextDate}</span>`
+      : r.nextStatus==='soon'
+      ? `<span class="due-soon"><span class="status-dot dot-amber" style="margin-right:4px;display:inline-block"></span>${r.nextDate}</span>`
+      : r.nextStatus==='ok'
+      ? `<span class="due-ok"><span class="status-dot dot-green" style="margin-right:4px;display:inline-block"></span>${r.nextDate}</span>`
+      : `<span class="muted">—</span>`;
+    return `
+    <tr>
+      <td><div class="equip-name">${r.equip}</div><div class="equip-code">ID: ${r.code} · Plate: ${r.plate}</div></td>
+      <td>${r.reading}</td>
+      <td>${r.lastDate}</td>
+      <td><span class="badge badge-${r.lastType}">${r.lastType==='preventive'?'Preventive':'Corrective'}</span></td>
+      <td>${nextHtml}</td>
+      <td>${r.freq}</td>
+      <td style="text-align:center">${r.records}</td>
+      <td style="text-align:right">
+        <div class="row-export" id="rr-${i}" style="display:inline-block">
+          <button class="btn btn-outline btn-sm" onclick="toggleRowMenu('rr-${i}')">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export ▾
+          </button>
+          <div class="row-export-menu" id="rr-${i}-menu" style="right:0">
+            <div class="rem-section">This Machine</div>
+            <div class="rem-item" onclick="openPreviewForEquip('${r.code}')">
+              <div class="ri-icon ri-preview">👁</div>
+              <div class="rem-item-text"><div class="ri-label">Preview</div><div class="ri-sub">See before downloading</div></div>
+            </div>
+            <hr class="rem-sep">
+            <div class="rem-item" onclick="openSingleModal('${r.equip}','${r.code}','pdf')">
+              <div class="ri-icon ri-pdf">📋</div>
+              <div class="rem-item-text"><div class="ri-label">Export as PDF</div><div class="ri-sub">All records for this machine</div></div>
+            </div>
+            <div class="rem-item" onclick="openSingleModal('${r.equip}','${r.code}','excel')">
+              <div class="ri-icon ri-excel">📊</div>
+              <div class="rem-item-text"><div class="ri-label">Export as Excel</div><div class="ri-sub">Spreadsheet format</div></div>
+            </div>
+            <hr class="rem-sep">
+            <div class="rem-item" onclick="showToast('✉️  Opening email…');closeAllMenus()">
+              <div class="ri-icon ri-email">✉️</div>
+              <div class="rem-item-text"><div class="ri-label">Email Report</div><div class="ri-sub">Send to recipients</div></div>
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════
+   EQUIPMENT MULTI-SELECT
+══════════════════════════════════ */
+let equipChecked = new Set(EQUIPS.map(e=>e.id));
+
+function renderEquipList(filter='') {
+  const list = document.getElementById('equipMsList');
+  const filtered = EQUIPS.filter(e=>e.name.toLowerCase().includes(filter.toLowerCase()));
+  list.innerHTML = filtered.map(e=>`
+    <div class="equip-ms-row">
+      <input type="checkbox" id="ec-${e.id}" ${equipChecked.has(e.id)?'checked':''} onchange="toggleEquip('${e.id}',this)">
+      <label for="ec-${e.id}">
+        ${e.name}
+        <small>ID: ${e.id} · Plate: ${e.plate}</small>
+      </label>
+    </div>
+  `).join('');
+  updateMsFooter();
+}
+
+function toggleEquip(id, el) {
+  if(el.checked) equipChecked.add(id); else equipChecked.delete(id);
+  updateMsFooter();
+}
+function selectAllEquip() {
+  EQUIPS.forEach(e=>equipChecked.add(e.id));
+  renderEquipList(document.getElementById('equipSearchInput').value);
+}
+function clearAllEquip() {
+  equipChecked.clear();
+  renderEquipList(document.getElementById('equipSearchInput').value);
+}
+function filterEquipList(v) { renderEquipList(v); }
+function updateMsFooter() {
+  const n = equipChecked.size;
+  document.getElementById('msSelLabel').textContent = `${n} of ${EQUIPS.length} selected`;
+  document.getElementById('bulkSelCount').textContent = `(${n} selected)`;
+  document.getElementById('bulkFtrBadge').innerHTML =
+    `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>${n} machines · 41 records`;
+}
+
+/* ══════════════════════════════════
+   SELECTION (checkboxes)
+══════════════════════════════════ */
+function toggleRow(id, el) {
+  if(el.checked) selected.add(id); else selected.delete(id);
+  const row = document.getElementById('row-'+id);
+  row.classList.toggle('selected', el.checked);
+  updateSelBar();
+}
+function toggleAll(el) {
+  ROWS.forEach(r=>{ if(el.checked) selected.add(r.id); else selected.delete(r.id); });
+  renderList();
+  updateSelBar();
+}
+function clearSelection() {
+  selected.clear();
+  document.getElementById('chkAll').checked=false;
+  renderList();
+  updateSelBar();
+}
+function updateSelBar() {
+  const bar = document.getElementById('selBar');
+  const n = selected.size;
+  bar.classList.toggle('show', n>0);
+  document.getElementById('selCount').textContent = `${n} record${n!==1?'s':''} selected`;
+}
+
+/* ══════════════════════════════════
+   VIEW SWITCHING
+══════════════════════════════════ */
+function setView(v) {
+  const lv = document.getElementById('listView');
+  const rv = document.getElementById('reportView');
+  ['vgrid','vlist','vrep'].forEach(id=>document.getElementById(id).classList.remove('active'));
+  if(v==='report') {
+    lv.style.display='none'; rv.classList.add('active');
+    document.getElementById('vrep').classList.add('active');
+  } else {
+    lv.style.display=''; rv.classList.remove('active');
+    document.getElementById(v==='grid'?'vgrid':'vlist').classList.add('active');
+  }
+}
+function switchTab(el) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+/* ══════════════════════════════════
+   ROW MENUS
+══════════════════════════════════ */
+function toggleRowMenu(id) {
+  closeAllMenus(id+'-menu');
+  const m = document.getElementById(id+'-menu');
+  if(m) m.classList.toggle('open');
+}
+function closeAllMenus(except) {
+  document.querySelectorAll('.row-export-menu').forEach(m=>{
+    if(!except||m.id!==except) m.classList.remove('open');
+  });
+}
+
+/* ══════════════════════════════════
+   MODALS
+══════════════════════════════════ */
+function openBulkModal(preset) {
+  closeAllMenus();
+  renderEquipList();
+  if(preset==='pdf-sel') selectBulkFmt('pdf');
+  else if(preset==='excel-sel') selectBulkFmt('excel');
+  else selectBulkFmt('excel');
+  openModal('bulkModal');
+}
+
+function openSingleModal(name, code, fmt) {
+  closeAllMenus();
+  document.getElementById('singleModalTitle').textContent = 'Export — ' + name;
+  document.getElementById('singleModalSub').textContent = (MACHINE_DATA[code]?.history.length||1) + ' maintenance record(s)';
+  window._currentExportCode = code;
+  window._currentExportName = name;
+  selectSingleFmt(fmt||'pdf');
+  openModal('singleModal');
+}
+
+function openPreviewForRow(id) {
+  closeAllMenus();
+  const r = ROWS[id];
+  openPreviewFor(r.code, r.equip);
+}
+function openPreviewForEquip(code) {
+  closeAllMenus();
+  const eq = EQUIPS.find(e=>e.id===code);
+  openPreviewFor(code, eq?eq.name:code);
+}
+function openPreview() {
+  openPreviewFor(window._currentExportCode||'EQ-005', window._currentExportName||'(EQ-005) Bobcat S650');
+}
+
+function openPreviewFor(code, name) {
+  const data = MACHINE_DATA[code] || MACHINE_DATA['EQ-005'];
+  document.getElementById('previewTitle').textContent = 'Preview — ' + name;
+  document.getElementById('previewSubtitle').textContent = 'Product Civil · Generated 08 Apr 2026';
+
+  // Machine details
+  document.getElementById('paperMachineDetails').innerHTML = `
+    <div class="pm-row"><div class="pm-label">Name</div><div class="pm-value">${data.name}</div></div>
+    <div class="pm-row"><div class="pm-label">Asset ID</div><div class="pm-value">${code}</div></div>
+    <div class="pm-row"><div class="pm-label">Number Plate</div><div class="pm-value">${data.plate}</div></div>
+    <div class="pm-row"><div class="pm-label">Category</div><div class="pm-value">${data.category}</div></div>
+  `;
+
+  // History table
+  document.getElementById('paperHistoryBody').innerHTML = data.history.map(h=>`
+    <tr>
+      <td>${h.date}</td>
+      <td>${h.type}</td>
+      <td>${h.meter}</td>
+      <td>${h.nextRead}</td>
+      <td>${h.nextDate}</td>
+      <td>${h.notes}</td>
+      <td>${h.by}</td>
+    </tr>
+  `).join('');
+
+  // Summary
+  const statusColor = data.status==='ok'?'#2e7d32':data.status==='over'?'#c62828':'#e65100';
+  document.getElementById('paperSummary').innerHTML = `
+    <div class="ps-row"><span class="ps-label">Last Service Date</span><span class="ps-value">${data.lastService}</span></div>
+    <div class="ps-row"><span class="ps-label">Next Service Due</span><span class="ps-value" style="color:${statusColor}">${data.nextService}</span></div>
+    <div class="ps-row"><span class="ps-label">Service Frequency</span><span class="ps-value">${data.freq}</span></div>
+    <div class="ps-row"><span class="ps-label">Current Reading</span><span class="ps-value">${data.reading}</span></div>
+  `;
+
+  // Footer
+  document.querySelector('.pf-status').innerHTML = `
+    <span class="dot" style="background:${statusColor}"></span>
+    ${data.status==='ok'?'On Track':'Overdue / Action Required'} — next ${data.nextService}
+  `;
+
+  openModal('previewModal');
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+/* Format selectors */
+function selectBulkFmt(f) {
+  document.getElementById('bfmt-pdf').classList.toggle('sel',f==='pdf');
+  document.getElementById('bfmt-excel').classList.toggle('sel',f==='excel');
+}
+function selectSingleFmt(f) {
+  document.getElementById('sfmt-pdf').classList.toggle('sel',f==='pdf');
+  document.getElementById('sfmt-excel').classList.toggle('sel',f==='excel');
+}
+
+/* ══════════════════════════════════
+   TOAST
+══════════════════════════════════ */
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 3000);
+}
+
+/* ══════════════════════════════════
+   INIT
+══════════════════════════════════ */
+renderList();
+renderReport();
+
+/* Close menus on outside click */
+document.addEventListener('click', e => {
+  if(!e.target.closest('.row-export') && !e.target.closest('.row-export-menu')) closeAllMenus();
+});
+/* Close modals on backdrop click */
+['bulkModal','singleModal','previewModal'].forEach(id=>{
+  document.getElementById(id).addEventListener('click', e=>{
+    if(e.target===document.getElementById(id)) closeModal(id);
+  });
+});
+</script>
+</body>
+</html>
