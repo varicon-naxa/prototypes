@@ -333,6 +333,14 @@ input[type=checkbox]{width:14px;height:14px;accent-color:#f7941d;cursor:pointer;
 ::-webkit-scrollbar{width:5px;height:5px;}
 ::-webkit-scrollbar-track{background:#f4f5f7;}
 ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:3px;}
+
+/* ── Bulk share bar ── */
+.bulk-bar{display:flex;align-items:center;gap:8px;padding:7px 12px;background:#fff3e0;border:1px solid #fcd9a0;border-radius:7px;animation:fadein .18s;}
+@keyframes fadein{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.bulk-bar-count{font-size:12.5px;font-weight:600;color:#b45309;flex:1;}
+.bulk-bar-clear{font-size:12px;color:#9ca3af;cursor:pointer;padding:2px 6px;border-radius:4px;transition:background .12s,color .12s;}
+.bulk-bar-clear:hover{color:#374151;background:#f3f4f6;}
+.bulk-bar .btn:disabled{opacity:.45;cursor:not-allowed;}
 </style>
 </head>
 <body>
@@ -446,12 +454,23 @@ input[type=checkbox]{width:14px;height:14px;accent-color:#f7941d;cursor:pointer;
         </button>
       </div>
 
+      <!-- Bulk share bar (shown when rows are checked) -->
+      <div class="bulk-bar" id="bulkBar" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        <span id="bulkCountText" class="bulk-bar-count">0 documents selected</span>
+        <span class="bulk-bar-clear" onclick="clearSelection()">Clear</span>
+        <button class="btn btn-sm btn-primary" id="bulkShareBtn" onclick="openBulkShare()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Share Selected
+        </button>
+      </div>
+
       <!-- Documents table -->
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th class="th-check"><input type="checkbox"></th>
+              <th class="th-check"><input type="checkbox" id="selectAllCheck" onchange="handleSelectAll(this)"></th>
               <th>Document Type</th>
               <th>Description</th>
               <th>Expiry Date</th>
@@ -480,7 +499,7 @@ input[type=checkbox]{width:14px;height:14px;accent-color:#f7941d;cursor:pointer;
     <div class="share-dialog-hdr">
       <div class="share-dialog-hdr-top">
         <div>
-          <h3>Share Document</h3>
+          <h3 id="shareDialogTitle">Share Document</h3>
           <div class="share-dialog-hdr-doc" id="drawerDocLabel">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             <span id="drawerDocName">—</span>
@@ -532,20 +551,11 @@ Varicon</textarea>
         <span class="form-hint">This message will be included in the email body.</span>
       </div>
 
-      <!-- Attachment -->
+      <!-- Attachment(s) -->
       <div class="form-group">
-        <div class="section-divider">Attachment</div>
-        <div style="margin-top:10px;">
-          <div class="attach-card">
-            <div class="attach-card-icon aci-pdf">📄</div>
-            <div class="attach-card-info">
-              <div class="attach-card-name" id="drawerAttachName">Test_Compliance_2024.pdf</div>
-              <div class="attach-card-meta">PDF · 2.4 MB · Compliance Document</div>
-            </div>
-            <button class="attach-card-eye" disabled style="opacity:.35;cursor:not-allowed;pointer-events:none;" title="Preview available after sending">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
+        <div class="section-divider" id="attachmentSectionLabel">Attachment</div>
+        <div id="attachmentsList" style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
+          <!-- Populated dynamically by openDrawer() -->
         </div>
       </div>
 
@@ -611,8 +621,8 @@ Varicon</textarea>
             <tr><td>Equipment Name</td><td>BICYCLE</td></tr>
             <tr><td>Equipment ID</td><td>24</td></tr>
             <tr><td>Serial Number</td><td>BIKE-24-SN001</td></tr>
-            <tr><td>Document Name</td><td id="emailPreviewDocName">Test Compliance</td></tr>
-            <tr><td>Expiry Date</td><td id="emailPreviewExpiry">04/05/2026</td></tr>
+            <tr id="emailPreviewDocNameRow"><td>Document Name</td><td id="emailPreviewDocName">Test Compliance</td></tr>
+            <tr id="emailPreviewExpiryRow"><td>Expiry Date</td><td id="emailPreviewExpiry">04/05/2026</td></tr>
           </table>
 
           <!-- Sender's personalised message -->
@@ -625,14 +635,16 @@ Varicon</textarea>
 
           <div class="ecard-text">You can view and download the attached document below.</div>
 
-          <!-- Attachment -->
-          <div class="ecard-attach-line">
-            <div class="ecard-attach-line-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c62828" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            </div>
-            <div class="ecard-attach-line-info">
-              <div class="ecard-attach-line-name" id="emailPreviewFile">Test_Compliance_2024.pdf</div>
-              <div class="ecard-attach-line-meta">PDF · 2.4 MB</div>
+          <!-- Attachment(s) -->
+          <div id="emailPreviewAttachments">
+            <div class="ecard-attach-line">
+              <div class="ecard-attach-line-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c62828" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </div>
+              <div class="ecard-attach-line-info">
+                <div class="ecard-attach-line-name" id="emailPreviewFile">Test_Compliance_2024.pdf</div>
+                <div class="ecard-attach-line-meta">PDF · 2.4 MB</div>
+              </div>
             </div>
           </div>
 
@@ -783,7 +795,7 @@ const DOCS = [
   },
 ];
 
-let activeDocId = null;
+let activeDocIds = []; // array — supports single or multi-doc sharing
 
 /* ════════════════════════════
    RENDER TABLE
@@ -819,7 +831,7 @@ function statusHtml(s) {
 function renderDocs() {
   document.getElementById('docTbody').innerHTML = DOCS.map(d => `
     <tr id="doc-row-${d.id}">
-      <td class="td-check"><input type="checkbox"></td>
+      <td class="td-check"><input type="checkbox" data-doc-id="${d.id}" onchange="handleRowCheck()"></td>
       <td>
         <div class="doc-type-name">${d.type}</div>
         <div class="doc-type-sub">${d.typeLabel}</div>
@@ -882,18 +894,104 @@ function renderDocs() {
 }
 
 /* ════════════════════════════
+   CHECKBOX SELECTION
+════════════════════════════ */
+function getCheckedIds() {
+  return Array.from(document.querySelectorAll('#docTbody input[type=checkbox]:checked'))
+    .map(cb => parseInt(cb.dataset.docId));
+}
+
+function handleSelectAll(cb) {
+  document.querySelectorAll('#docTbody input[type=checkbox]').forEach(c => c.checked = cb.checked);
+  updateBulkBar();
+}
+
+function handleRowCheck() {
+  const all     = document.querySelectorAll('#docTbody input[type=checkbox]');
+  const checked = document.querySelectorAll('#docTbody input[type=checkbox]:checked');
+  const hdr = document.getElementById('selectAllCheck');
+  if(hdr) {
+    hdr.indeterminate = checked.length > 0 && checked.length < all.length;
+    hdr.checked = all.length > 0 && checked.length === all.length;
+  }
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const ids = getCheckedIds();
+  const bar = document.getElementById('bulkBar');
+  if(!bar) return;
+  if(ids.length === 0) {
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = 'flex';
+  document.getElementById('bulkCountText').textContent =
+    ids.length === 1 ? '1 document selected' : `${ids.length} documents selected`;
+
+  const pubIds = ids.filter(id => DOCS[id].visibility === 'Public');
+  const shareBtn = document.getElementById('bulkShareBtn');
+  shareBtn.disabled = pubIds.length === 0;
+  shareBtn.title = pubIds.length === 0 ? 'No public documents selected' : '';
+}
+
+function clearSelection() {
+  document.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false);
+  const hdr = document.getElementById('selectAllCheck');
+  if(hdr) { hdr.indeterminate = false; hdr.checked = false; }
+  updateBulkBar();
+}
+
+function openBulkShare() {
+  const pubIds = getCheckedIds().filter(id => DOCS[id].visibility === 'Public');
+  if(pubIds.length === 0) {
+    showToast('No public documents selected to share.', 'warn');
+    return;
+  }
+  openDrawer(pubIds);
+}
+
+/* ════════════════════════════
    DRAWER
 ════════════════════════════ */
-function openDrawer(docId) {
-  activeDocId = docId;
-  const doc = DOCS[docId];
+function openDrawer(docIdOrIds) {
+  activeDocIds = Array.isArray(docIdOrIds) ? docIdOrIds : [docIdOrIds];
+  const docs   = activeDocIds.map(id => DOCS[id]);
+  const isMulti = docs.length > 1;
 
-  // Populate drawer fields
-  document.getElementById('drawerDocName').textContent = doc.file || doc.type;
-  document.getElementById('drawerAttachName').textContent = doc.file;
-  document.getElementById('emailSubject').value =
-    `Document Shared: ${doc.typeLabel} – (24) BICYCLE`;
-  document.getElementById('emailMessage').value =
+  // Dialog title
+  document.getElementById('shareDialogTitle').textContent =
+    isMulti ? `Share Documents (${docs.length})` : 'Share Document';
+
+  // Header doc label
+  const labelEl = document.getElementById('drawerDocLabel');
+  labelEl.innerHTML = isMulti
+    ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>${docs.length} documents selected</span>`
+    : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>${docs[0].file || docs[0].type}</span>`;
+
+  // Subject
+  document.getElementById('emailSubject').value = isMulti
+    ? `Documents Shared – (24) BICYCLE`
+    : `Document Shared: ${docs[0].typeLabel} – (24) BICYCLE`;
+
+  // Message
+  if(isMulti) {
+    const names = docs.map(d => d.typeLabel).join(', ');
+    document.getElementById('emailMessage').value =
+`Hi,
+
+Prabin Tharu has shared ${docs.length} documents (${names}) with you for equipment (24) BICYCLE.
+
+Please find the attached documents for your reference. Kindly review and keep these on file.
+
+If you have any questions, feel free to reach out.
+
+Thank you,
+Prabin Tharu
+Varicon`;
+  } else {
+    const doc = docs[0];
+    document.getElementById('emailMessage').value =
 `Hi,
 
 Prabin Tharu has shared a ${doc.typeLabel.toLowerCase()} document with you for equipment (24) BICYCLE.
@@ -905,14 +1003,27 @@ If you have any questions, feel free to reach out.
 Thank you,
 Prabin Tharu
 Varicon`;
+  }
 
-  // Update email preview content
-  document.getElementById('emailPreviewTitle').textContent = `Shared Document – (24) BICYCLE`;
-  document.getElementById('emailPreviewDocName').textContent = doc.typeLabel;
-  document.getElementById('emailPreviewExpiry').textContent = doc.expiryFmt;
-  document.getElementById('emailPreviewFile').textContent = doc.file;
-  document.getElementById('emailPreviewMsg').innerHTML =
-    `Hi,<br><br>Prabin Tharu has shared a ${doc.typeLabel.toLowerCase()} document with you for equipment (24) BICYCLE.<br><br>Please find the attached document for your reference. Kindly review and keep this on file.<br><br>If you have any questions, feel free to reach out.`;
+  // Attachment section label + cards
+  document.getElementById('attachmentSectionLabel').textContent =
+    isMulti ? `Attachments (${docs.length})` : 'Attachment';
+
+  document.getElementById('attachmentsList').innerHTML = docs.map(doc => `
+    <div class="attach-card">
+      <div class="attach-card-icon aci-pdf">📄</div>
+      <div class="attach-card-info">
+        <div class="attach-card-name">${doc.file}</div>
+        <div class="attach-card-meta">PDF · ${doc.fileSize} · ${doc.typeLabel} Document</div>
+      </div>
+      <button class="attach-card-eye" disabled style="opacity:.35;cursor:not-allowed;pointer-events:none;" title="Preview available after sending">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+  `).join('');
+
+  // Sync email preview
+  syncEmailPreview(docs);
 
   document.getElementById('shareDialogBack').classList.add('open');
 }
@@ -938,64 +1049,102 @@ function sendDocument() {
 
   // Collect email addresses from chips (text node before the × button)
   const emails = Array.from(chips).map(c => c.childNodes[0].textContent.trim());
+  const sharedCount = activeDocIds.length;
 
   closeDrawer();
 
-  // Mark as shared
-  if(activeDocId !== null) {
-    const doc = DOCS[activeDocId];
+  // Mark every active doc as shared
+  activeDocIds.forEach(docId => {
+    const doc = DOCS[docId];
     doc.shared = true;
-    // Merge with any previously shared emails (deduplicated)
     const merged = Array.from(new Set([...doc.sharedEmails, ...emails]));
     doc.sharedEmails = merged;
 
-    // Update share button icon to checkmark
-    const btn = document.getElementById(`share-btn-${activeDocId}`);
+    // Update share button to checkmark
+    const btn = document.getElementById(`share-btn-${docId}`);
     if(btn) {
       btn.innerHTML = `<span class="tt">Share via email</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>`;
-      btn.onclick = () => openDrawer(activeDocId);
+      btn.onclick = () => openDrawer([docId]);
     }
 
-    // Replace shared badge area with badge + info icon
-    const badgeContainer = document.getElementById(`shared-badge-${activeDocId}`);
-    const infoContainer  = document.getElementById(`share-info-${activeDocId}`);
+    // Update shared badge
+    const badgeContainer = document.getElementById(`shared-badge-${docId}`);
+    const infoContainer  = document.getElementById(`share-info-${docId}`);
     if(badgeContainer) {
       badgeContainer.outerHTML = sharedBadgeHtml(doc);
     } else if(!infoContainer) {
-      // Fallback: full re-render keeps things consistent
       renderDocs();
     } else {
-      // Already rendered — just refresh the email list inside the popover
-      const sipEmails = document.getElementById(`sip-emails-${activeDocId}`);
+      const sipEmails = document.getElementById(`sip-emails-${docId}`);
       if(sipEmails) {
         sipEmails.innerHTML = merged.map(e =>
           `<div class="sip-email"><span class="sip-dot"></span>${e}</div>`
         ).join('');
       }
     }
-  }
+  });
+
+  // Deselect checkboxes after bulk send
+  clearSelection();
 
   showToast(
-    'Document shared successfully!',
+    sharedCount > 1 ? `${sharedCount} documents shared!` : 'Document shared successfully!',
     'success',
     `Email sent to ${recipientCount} recipient${recipientCount > 1 ? 's' : ''}.`,
-    true   // show preview link
+    true
   );
 }
 
 /* ════════════════════════════
    EMAIL PREVIEW
 ════════════════════════════ */
+function syncEmailPreview(docs) {
+  const isMulti = docs.length > 1;
+
+  document.getElementById('emailPreviewTitle').textContent =
+    `Shared Document${isMulti ? 's' : ''} – (24) BICYCLE`;
+
+  const docNameRow  = document.getElementById('emailPreviewDocNameRow');
+  const expiryRow   = document.getElementById('emailPreviewExpiryRow');
+  if(isMulti) {
+    if(docNameRow) docNameRow.innerHTML =
+      `<td>Documents</td><td>${docs.map(d => d.typeLabel).join(', ')}</td>`;
+    if(expiryRow) expiryRow.style.display = 'none';
+  } else {
+    const doc = docs[0];
+    if(docNameRow) docNameRow.innerHTML =
+      `<td>Document Name</td><td>${doc.typeLabel}</td>`;
+    if(expiryRow) {
+      expiryRow.style.display = '';
+      expiryRow.innerHTML = `<td>Expiry Date</td><td>${doc.expiryFmt}</td>`;
+    }
+  }
+
+  const attachEl = document.getElementById('emailPreviewAttachments');
+  if(attachEl) {
+    attachEl.innerHTML = docs.map(doc => `
+      <div class="ecard-attach-line">
+        <div class="ecard-attach-line-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c62828" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div class="ecard-attach-line-info">
+          <div class="ecard-attach-line-name">${doc.file}</div>
+          <div class="ecard-attach-line-meta">PDF · ${doc.fileSize}</div>
+        </div>
+      </div>`).join('');
+  }
+}
+
 function openEmailPreview() {
-  // Sync message from textarea if drawer is open
+  // Sync custom message from textarea
   const msgEl  = document.getElementById('emailMessage');
   const prevEl = document.getElementById('emailPreviewMsg');
-  if(msgEl && prevEl) {
-    prevEl.innerHTML = msgEl.value.replace(/\n/g,'<br>');
-  }
-  // Use style.display directly — avoids any class-specificity race
-  const back = document.getElementById('emailBack');
-  back.style.display = 'flex';
+  if(msgEl && prevEl) prevEl.innerHTML = msgEl.value.replace(/\n/g,'<br>');
+
+  // Re-sync attachments/doc rows in case dialog is still open
+  if(activeDocIds.length > 0) syncEmailPreview(activeDocIds.map(id => DOCS[id]));
+
+  document.getElementById('emailBack').style.display = 'flex';
 }
 
 function closeEmailPreview() {
