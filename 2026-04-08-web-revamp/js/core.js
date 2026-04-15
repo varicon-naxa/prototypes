@@ -272,7 +272,7 @@ function sdShowTab(sectionId) {
   if (tileId) { var ti = document.getElementById(tileId); if (ti) ti.classList.add('act'); }
   sdActiveSection = sectionId;
 
-  var autoExpand = ['sec-materials', 'sec-misc'];
+  var autoExpand = ['sec-materials', 'sec-misc', 'sec-plant'];
   if (autoExpand.indexOf(sectionId) !== -1) {
     var sec = document.getElementById(sectionId);
     if (sec) {

@@ -24,17 +24,13 @@ function updStats() {
   setEl('tv-tc-of', labourData.filter(l => l.status === 'On Field').length);
 
   // Section status badges
-  document.getElementById('ss-photos').textContent = pc + ' photo' + (pc !== 1 ? 's' : '');
-  document.getElementById('ss-photos').className = 'sstat ' + (pc ? 'done' : 'empty');
-  document.getElementById('ss-notes').textContent = nc + ' note' + (nc !== 1 ? 's' : '');
-  document.getElementById('ss-notes').className = 'sstat ' + (nc ? 'done' : 'empty');
-  const ssPlant = document.getElementById('ss-plant');
-  if (ssPlant) { ssPlant.textContent = ec + ' item' + (ec !== 1 ? 's' : ''); ssPlant.className = 'sstat ' + (ec ? 'done' : 'empty'); }
-  document.getElementById('ss-labour').textContent = lc + ' worker' + (lc !== 1 ? 's' : '');
-  document.getElementById('ss-labour').className = 'sstat ' + (lc ? 'done' : 'empty');
+  const setS = (id, txt, cls) => { const e = document.getElementById(id); if (e) { e.textContent = txt; e.className = cls; } };
+  setS('ss-photos', pc + ' photo' + (pc !== 1 ? 's' : ''), 'sstat ' + (pc ? 'done' : 'empty'));
+  setS('ss-notes',  nc + ' note'  + (nc !== 1 ? 's' : ''), 'sstat ' + (nc ? 'done' : 'empty'));
+  setS('ss-plant',  ec + ' item'  + (ec !== 1 ? 's' : ''), 'sstat ' + (ec ? 'done' : 'empty'));
+  setS('ss-labour', lc + ' worker'+ (lc !== 1 ? 's' : ''), 'sstat ' + (lc ? 'done' : 'empty'));
   if (typeof updateMatStats === 'function') updateMatStats();
-  document.getElementById('ss-del').textContent = delData.length + ' docket' + (delData.length !== 1 ? 's' : '');
-  document.getElementById('ss-del').className = 'sstat ' + (delData.length ? 'done' : 'empty');
+  setS('ss-del', delData.length + ' docket' + (delData.length !== 1 ? 's' : ''), 'sstat ' + (delData.length ? 'done' : 'empty'));
 
   // Misc tile stat
   if (typeof updateMiscStats === 'function') updateMiscStats();
