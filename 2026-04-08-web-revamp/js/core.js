@@ -282,6 +282,12 @@ function sdShowTab(sectionId) {
   }
 }
 
+function openExportPreview() {
+  var r = document.querySelector('input[name="export-preview-type"]:checked');
+  var single = r && r.value === 'single';
+  window.open(single ? 'pages/single_site_diary.html' : 'pages/site_diary_multiday_report.html');
+}
+
 function doExport() {
   var fmt = document.querySelector('input[name="export-fmt"]:checked');
   var fmtVal = fmt ? fmt.value : 'excel';
