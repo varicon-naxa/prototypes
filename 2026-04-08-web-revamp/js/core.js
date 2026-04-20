@@ -272,7 +272,7 @@ function sdShowTab(sectionId) {
   if (tileId) { var ti = document.getElementById(tileId); if (ti) ti.classList.add('act'); }
   sdActiveSection = sectionId;
 
-  var autoExpand = ['sec-materials', 'sec-misc'];
+  var autoExpand = ['sec-materials', 'sec-misc', 'sec-plant'];
   if (autoExpand.indexOf(sectionId) !== -1) {
     var sec = document.getElementById(sectionId);
     if (sec) {
@@ -280,6 +280,12 @@ function sdShowTab(sectionId) {
       if (head && !head.classList.contains('open')) togSec(head);
     }
   }
+}
+
+function openExportPreview() {
+  var r = document.querySelector('input[name="export-preview-type"]:checked');
+  var single = r && r.value === 'single';
+  window.open(single ? 'pages/single_site_diary.html' : 'pages/site_diary_multiday_report.html');
 }
 
 function doExport() {

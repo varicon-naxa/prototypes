@@ -8,6 +8,13 @@ let standDownData = [];
 let standDownIdC = 0;
 let plantActiveTab = 'operating';
 let sdViewMode2 = 'list'; // list or grid for stand down tab
+let collapsedEquipIds = new Set();   /* Redesign: eqIds that are collapsed; empty = all expanded */
+let opAttDropKey      = null;        /* Redesign: "plantIdx_opIdx" of open per-operator att dropdown */
+let plantGroupBy      = 'none';      /* 'none' | 'supplier' | 'hire' */
+let collapsedGroups   = new Set();   /* group header keys that are collapsed */
+
+/* ─── SBI-10: Overtime threshold ─── */
+const OVERTIME_THRESHOLD_MINS = 600; /* 10 hours */
 
 /* ─── Sample dropdown data ─── */
 const plantOperators = ['—', 'John Smith', 'Mike Johnson', 'Tom Brown', 'Alex Chen', 'Sarah Williams'];
@@ -59,19 +66,15 @@ function renderRecentEquip() {
   const chips = recentEquipIds.map(id => {
     const eq = equipmentCatalogue.find(e => e.id === id);
     if (!eq) return '';
-    const added = plantData.some(p => p.eqId === id);
     return `<button
       onclick="quickAddEquip('${id}')"
-      ${added ? 'disabled' : ''}
       style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;
-        border:1px solid ${added ? '#BBF7D0' : 'var(--border)'};
-        background:${added ? '#F0FDF4' : '#fff'};
-        color:${added ? '#059669' : 'var(--tb)'};
-        font-size:12px;font-weight:500;cursor:${added ? 'default' : 'pointer'};
+        border:1px solid var(--border);background:#fff;color:var(--tb);
+        font-size:12px;font-weight:500;cursor:pointer;
         transition:background .15s,border-color .15s;white-space:nowrap;"
-      onmouseenter="if(!this.disabled){this.style.background='var(--hover)';this.style.borderColor='var(--border-d)'}"
-      onmouseleave="if(!this.disabled){this.style.background='#fff';this.style.borderColor='var(--border)'}"
-    >${added ? `<svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M2 6l3 3 5-5"/></svg>` : wrench}${eq.name}</button>`;
+      onmouseenter="this.style.background='var(--hover)';this.style.borderColor='var(--border-d)'"
+      onmouseleave="this.style.background='#fff';this.style.borderColor='var(--border)'"
+    >${wrench}${eq.name}</button>`;
   }).join('');
   strip.innerHTML = `<span style="font-size:12px;color:var(--tm);font-weight:500;white-space:nowrap;flex-shrink:0;">Recent Equipment — click to add quickly:</span>${chips}`;
 }
@@ -79,14 +82,23 @@ function renderRecentEquip() {
 function quickAddEquip(eqId) {
   const eq = equipmentCatalogue.find(e => e.id === eqId);
   if (!eq) return;
-  if (plantData.some(p => p.eqId === eqId)) { showToast(eq.name + ' already added', 'info'); return; }
+  // If already logged, add a new operator sub-row to the existing entry
+  const existingIdx = plantData.findIndex(p => p.eqId === eqId);
+  if (existingIdx !== -1) {
+    addOperatorRow(existingIdx);
+    showToast(eq.name + ' — new operator row added');
+    return;
+  }
   const taskHours = {};
   if (typeof appliedTasks !== 'undefined') appliedTasks.forEach(t => { taskHours[t.code] = 0; });
   plantData.push({
     id: plantIdC++, name: eq.name, hire: eq.hireOptions[0], op: '', task: '',
     start: '07:00', end: '15:00', brk: 0.5, sd: false,
     supplier: '', attachments: '', eqId: eq.id, taskHours: taskHours,
-    unassignedMins: 0
+    unassignedMins: 0,
+    manifestHours: 8,  /* Three-source model: planned hours from manager's plan */
+    fromPlan: false,   /* Three-source model: true = pre-planned entry from manager's plan */
+    operators: [{ opId: 1, name: '', company: '', source: 'Site Diary', durationMins: 0, taskHours: {}, unassignedMins: 0, selectedAttachments: [] }]
   });
   renderPlant(); updStats();
   showToast(eq.name + ' added');
@@ -140,7 +152,8 @@ function renderPlant() {
     const TH2 = 'background:var(--thead);color:var(--tb);font-size:11px;font-weight:600;padding:9px 14px;white-space:nowrap;border-right:1px solid var(--border-d);';
 
     let headerRow1 = `<th rowspan="2" style="width:32px;${TH1}border-right:1px solid var(--border-d);"></th>
-      <th colspan="4" style="${TH1}text-align:left;border-right:2px solid var(--border-d);">Equipment Description</th>
+      <th rowspan="2" style="${TH1}text-align:center;width:74px;border-right:1px solid var(--border-d);">Status</th>
+      <th colspan="3" style="${TH1}text-align:left;border-right:2px solid var(--border-d);">Equipment Description</th>
       <th rowspan="2" style="${TH1}text-align:center;width:96px;">Equip.<br><span style="font-size:10px;font-weight:400;color:var(--tm);">Duration</span></th>
       <th rowspan="2" style="${TH1}text-align:center;width:110px;">Unassigned<br><span style="font-size:10px;font-weight:400;color:var(--tm);">Duration</span></th>`;
 
@@ -149,10 +162,9 @@ function renderPlant() {
     });
 
     let headerRow2 = `
-      <th style="${TH2}text-align:left;min-width:180px;">Equipment</th>
-      <th style="${TH2}width:140px;">Source / Operator</th>
-      <th style="${TH2}width:140px;">Company / Supplier</th>
-      <th style="${TH2}width:200px;border-right:2px solid var(--border-d);">Attachments</th>`;
+      <th style="${TH2}text-align:left;min-width:180px;">Operator</th>
+      <th style="${TH2}width:130px;">Company</th>
+      <th style="${TH2}width:180px;border-right:2px solid var(--border-d);">Attachments</th>`;
 
     tasks.forEach(t => {
       headerRow2 += `<th style="${TH2}text-align:center;border-left:1px solid var(--border);min-width:70px;padding:6px 4px;position:relative;color:var(--tm);" title="(${t.code}) ${t.name}">
@@ -189,142 +201,380 @@ function renderPlant() {
     return;
   }
 
-  // ── Data rows (always editable inline) ──
-  tb.innerHTML = filtered.map((p, fi) => {
+  // ── Helper: render one equipment block (group header + op rows + add shift) ──
+  const renderEquipBlock = (p) => {
     const idx = plantData.indexOf(p);
-    if (!p.taskHours) p.taskHours = {};
-
-    // Equipment Duration = sum of all task allocations + unassigned duration
-    // If no tasks applied, user fills Equip Duration directly (stored as unassigned)
-    const allocatedMins = tasks.reduce((sum, t) => sum + (p.taskHours[t.code] || 0), 0);
-    const unassignedMins = p.unassignedMins || 0;
-    const totalMins = hasTasks ? (allocatedMins + unassignedMins) : unassignedMins;
-
-    // Equip Duration display (computed summary when tasks exist)
-    const eqDurStr = Math.floor(totalMins / 60) + 'h ' + (totalMins % 60) + 'm';
-    const unassignedStr = Math.floor(unassignedMins / 60) + 'h ' + (unassignedMins % 60) + 'm';
-
-    const taskCells = tasks.map(t => {
-      const val = p.taskHours[t.code] || 0;
-      const hasVal = val > 0;
-      return `<td style="text-align:center;border-left:1px solid var(--border);padding:4px 3px;background:${hasVal?'#FFFDF5':''};">
-        <div style="display:flex;align-items:center;justify-content:center;gap:2px;">
-          <input type="number" value="${val}" min="0" step="15" class="vi-sm"
-            style="width:44px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:${hasVal?'600':'400'};color:${hasVal?'var(--tp)':'var(--td)'};padding:3px 4px;border:1px solid transparent;border-radius:4px;background:transparent;outline:none;"
-            onfocus="this.style.borderColor='var(--amber)';this.style.background='#fff';this.style.color='var(--tp)'"
-            onblur="this.style.borderColor='transparent';this.style.background='transparent'"
-            onchange="setTaskHours(${idx},'${t.code}',parseInt(this.value)||0);renderPlant()">
-          <button class="ibtn" onclick="openTimePopup(${idx},'${t.code}')" style="padding:2px;color:var(--td);opacity:.5;flex-shrink:0;" title="Quick set"
-            onmouseenter="this.style.opacity='1';this.style.color='var(--amber)'" onmouseleave="this.style.opacity='.5';this.style.color='var(--td)'">
-            <svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="5.5"/><path d="M7 4.5v2.5l2 1.5"/></svg>
+    const ops = p.operators || [];
+    const isCollapsed = collapsedEquipIds.has(p.eqId || String(idx));
+    let html = renderEquipGroupHeader(idx, p, tasks, isCollapsed);
+    if (!isCollapsed) {
+      ops.forEach((op, oi) => { html += renderOpUsageRow(idx, oi, p, op, tasks); });
+      html += `<tr style="background:#F9FAFB;border-bottom:2px solid var(--border-d);">
+        <td style="width:32px;padding:0;border-right:1px solid var(--border);border-left:3px solid transparent;"></td>
+        <td colspan="${6 + tasks.length}" style="padding:5px 16px;">
+          <button onclick="addOperatorRow(${idx})"
+            style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--amber);background:none;border:1px dashed var(--amber);border-radius:4px;padding:3px 10px;cursor:pointer;"
+            onmouseenter="this.style.background='#FEF3DC'" onmouseleave="this.style.background='transparent'">
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2v8M2 6h8"/></svg>
+            Add Shift
           </button>
-        </div>
-      </td>`;
-    }).join('');
+        </td>
+      </tr>`;
+    }
+    return html;
+  };
 
-    const hireOpts = equipmentCatalogue.find(e => e.name === p.name)?.hireOptions || ['Wet Hire','Dry Hire'];
-    const opOpts   = plantOperators.map(o => `<option value="${o}"${p.op===o||(!p.op&&o==='—')?' selected':''}>${o}</option>`).join('');
-    const supOpts  = plantSuppliers.map(o => `<option value="${o}"${p.supplier===o||(!p.supplier&&o==='—')?' selected':''}>${o}</option>`).join('');
-    const attSel   = p.selectedAttachments || [];
-    const attCount = attSel.length;
-    const attLabel = attCount > 0 ? `${attCount} attachment${attCount>1?'s':''} selected` : 'Select attachments...';
+  // ── New rendering: grouped or flat ──
+  let bodyHtml = '';
 
-    const selectStyle = `width:100%;height:32px;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:0 7px;background:#fff;color:var(--tb);cursor:pointer;outline:none;`;
+  if (plantGroupBy === 'none') {
+    filtered.forEach(p => { bodyHtml += renderEquipBlock(p); });
+  } else {
+    // Build groups
+    const getKey = p => plantGroupBy === 'supplier'
+      ? (p.supplier || '—')
+      : (p.hire || '—');
 
-    return `<tr class="pe-row" style="border-bottom:1px solid var(--border);transition:background .1s;"
-      onmouseenter="this.style.background='var(--hover)';this.querySelector('.pe-row-rm').style.opacity='1'"
-      onmouseleave="this.style.background='';this.querySelector('.pe-row-rm').style.opacity='0'">
-      <td style="width:32px;text-align:center;padding:0 4px;border-right:1px solid var(--border);">
-        <button class="pe-row-rm" onclick="removePlantRow(${idx})" title="Remove row"
-          style="opacity:0;transition:opacity .15s;background:none;border:none;cursor:pointer;color:var(--td);padding:4px;border-radius:3px;"
-          onmouseenter="this.style.color='var(--red)'" onmouseleave="this.style.color='var(--td)'">
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l6 6M9 3l-6 6"/></svg>
-        </button>
-      </td>
-      <td style="padding:10px 14px;min-width:180px;">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
-          <span style="font-size:10px;font-weight:600;color:#fff;background:#374151;border-radius:3px;padding:1px 5px;letter-spacing:.02em;flex-shrink:0;">${p.eqId || 'EQ'}</span>
-          <span style="font-size:13px;font-weight:600;color:var(--tp);line-height:1.3;">${p.name}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          ${hireOpts.map(opt => `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--tm);cursor:pointer;user-select:none;">
-            <input type="radio" name="hire-${idx}" value="${opt}" ${p.hire===opt?'checked':''}
-              onchange="plantData[${idx}].hire=this.value"
-              style="accent-color:var(--amber);width:12px;height:12px;cursor:pointer;">
-            <span style="font-weight:${p.hire===opt?'600':'400'};color:${p.hire===opt?'var(--tp)':'var(--tm)'};">${opt}</span>
-          </label>`).join('')}
-        </div>
-      </td>
-      <td style="padding:8px 12px;border-right:1px solid var(--border);">
-        <select style="${selectStyle}" onfocus="this.style.borderColor='var(--amber)';this.style.boxShadow='0 0 0 3px rgba(245,166,35,.1)'" onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none'" onchange="plantData[${idx}].op=this.value">
-          ${opOpts}
-        </select>
-      </td>
-      <td style="padding:8px 12px;border-right:2px solid var(--border-d);">
-        <select style="${selectStyle}" onfocus="this.style.borderColor='var(--amber)';this.style.boxShadow='0 0 0 3px rgba(245,166,35,.1)'" onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none'" onchange="plantData[${idx}].supplier=this.value">
-          ${supOpts}
-        </select>
-      </td>
-      <td style="padding:8px 12px;border-right:2px solid var(--border-d);min-width:210px;">
-        <div id="att-trigger-${idx}" onclick="event.stopPropagation();plantOpenAttDrop(${idx},this)"
-          style="height:32px;border:1px solid var(--border);border-radius:4px;padding:0 10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:#fff;gap:6px;user-select:none;margin-bottom:${attCount>0?'8px':'0'};">
-          <span style="font-size:12px;color:${attCount>0?'var(--tb)':'var(--tm)'};">${attLabel}</span>
-          <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
-            ${attCount>0?`<button onclick="event.stopPropagation();plantClearAtt(${idx})" style="background:none;border:none;cursor:pointer;color:var(--td);font-size:15px;line-height:1;padding:0 1px;" onmouseenter="this.style.color='var(--red)'" onmouseleave="this.style.color='var(--td)'">&times;</button>`:''}
-            <svg id="att-chev-${idx}" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="var(--tm)" stroke-width="2"><path d="M2 4l4 4 4-4"/></svg>
+    const groupMap = new Map();
+    filtered.forEach(p => {
+      const k = getKey(p);
+      if (!groupMap.has(k)) groupMap.set(k, []);
+      groupMap.get(k).push(p);
+    });
+
+    groupMap.forEach((items, groupKey) => {
+      const isGCollapsed = collapsedGroups.has(groupKey);
+      // Group totals
+      const gTotalMins = items.reduce((s, p) => s + calcEquipCoverageMins(p.operators, tasks), 0);
+      const gHrs = Math.floor(gTotalMins/60)+'h '+String(gTotalMins%60).padStart(2,'0')+'m';
+      const encKey = encodeURIComponent(groupKey);
+      // Group header row
+      bodyHtml += `<tr style="background:#EAECEF;border-top:2px solid var(--border-d);">
+        <td style="width:32px;padding:4px 3px;text-align:center;vertical-align:middle;border-left:3px solid var(--amber);">
+          <button onclick="togglePlantGroup('${encKey}')" style="background:none;border:none;cursor:pointer;color:var(--tm);padding:3px;border-radius:3px;"
+            onmouseenter="this.style.color='var(--amber)'" onmouseleave="this.style.color='var(--tm)'">
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"
+              style="transform:${isGCollapsed?'rotate(0)':'rotate(90deg)'};transition:transform .15s;display:block;">
+              <path d="M4 2l4 4-4 4"/>
+            </svg>
+          </button>
+        </td>
+        <td colspan="${6 + tasks.length}" style="padding:7px 14px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--tp);text-transform:uppercase;">${groupKey}</span>
+            <span style="font-size:10px;color:var(--tm);">${items.length} piece${items.length!==1?'s':''}</span>
+            <span style="font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--amber);font-weight:600;">${gHrs}</span>
           </div>
-        </div>
-        <div id="att-card-${idx}">${_plantRenderAttCard(idx, p)}</div>
-      </td>
-      <td style="text-align:center;padding:10px 8px;border-right:1px solid var(--border);">
-        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:${totalMins>0?'var(--tp)':'var(--td)'};"
-          title="${hasTasks?'Sum of all task durations + unassigned':'Set via Unassigned Duration'}">${eqDurStr}</span>
-      </td>
-      <td style="text-align:center;padding:8px 8px;">
-        <div style="display:flex;align-items:center;justify-content:center;gap:2px;">
-          <input type="number" value="${unassignedMins}" min="0" step="15" class="vi-sm"
-            style="width:48px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:${unassignedMins>0?'600':'400'};color:${unassignedMins>0?'var(--tp)':'var(--td)'};padding:3px 4px;border:1px solid transparent;border-radius:4px;background:transparent;outline:none;"
-            onfocus="this.style.borderColor='var(--amber)';this.style.background='#fff';this.style.color='var(--tp)'"
-            onblur="this.style.borderColor='transparent';this.style.background='transparent'"
-            onchange="plantData[${idx}].unassignedMins=parseInt(this.value)||0;renderPlant()">
-          <button class="ibtn" onclick="openTimePopup(${idx},'__unassigned')" style="padding:2px;color:var(--td);opacity:.5;flex-shrink:0;" title="Quick set"
-            onmouseenter="this.style.opacity='1';this.style.color='var(--amber)'" onmouseleave="this.style.opacity='.5';this.style.color='var(--td)'">
-            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="5.5"/><path d="M7 4.5v2.5l2 1.5"/></svg>
-          </button>
-        </div>
-      </td>
-      ${taskCells}
-    </tr>`;
-  }).join('');
-
-  // ── Always show add-row at bottom ──
-  const availEquip = equipmentCatalogue.filter(eq => !plantData.some(p => p.name === eq.name));
-  if (availEquip.length) {
-    tb.innerHTML += `<tr style="background:var(--hover);border-bottom:1px solid var(--border);">
-      <td style="width:32px;border-right:1px solid var(--border);"></td>
-      <td colspan="${5 + tasks.length}" style="padding:9px 14px;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="var(--tm)" stroke-width="1.8" style="flex-shrink:0;"><path d="M6 2v8M2 6h8"/></svg>
-          <select style="font-size:12px;width:300px;color:var(--tm);border:1px solid var(--border);border-radius:4px;padding:5px 8px;background:#fff;outline:none;cursor:pointer;"
-            onfocus="this.style.borderColor='var(--amber)'" onblur="this.style.borderColor='var(--border)'"
-            onchange="addEquipFromInline(this)">
-            <option value="">Select equipment to add…</option>
-            ${availEquip.map(eq => `<option value="${eq.name}">(${eq.id}) ${eq.name} — ${eq.type}</option>`).join('')}
-          </select>
-        </div>
-      </td>
-    </tr>`;
+        </td>
+      </tr>`;
+      if (!isGCollapsed) {
+        items.forEach(p => { bodyHtml += renderEquipBlock(p); });
+      }
+    });
   }
+
+  // ── Add equipment row at bottom ──
+  bodyHtml += `<tr style="background:var(--hover);border-bottom:1px solid var(--border);">
+    <td style="width:32px;border-right:1px solid var(--border);"></td>
+    <td colspan="${6 + tasks.length}" style="padding:9px 14px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="var(--tm)" stroke-width="1.8" style="flex-shrink:0;"><path d="M6 2v8M2 6h8"/></svg>
+        <select style="font-size:12px;width:320px;color:var(--tm);border:1px solid var(--border);border-radius:4px;padding:5px 8px;background:#fff;outline:none;cursor:pointer;"
+          onfocus="this.style.borderColor='var(--amber)'" onblur="this.style.borderColor='var(--border)'"
+          onchange="addEquipFromInline(this)">
+          <option value="">+ Add equipment to today's diary…</option>
+          ${equipmentCatalogue.map(eq => {
+            const logged = plantData.some(p => p.eqId === eq.id);
+            return `<option value="${eq.name}">(${eq.id}) ${eq.name} — ${eq.type}${logged ? ' ✓' : ''}</option>`;
+          }).join('')}
+        </select>
+      </div>
+    </td>
+  </tr>`;
+
+  tb.innerHTML = bodyHtml;
+
+  // ── Operator name autocomplete datalist ──
+  let dl = document.getElementById('pe-op-names');
+  if (!dl) { dl = document.createElement('datalist'); dl.id = 'pe-op-names'; document.body.appendChild(dl); }
+  dl.innerHTML = plantOperators.filter(n => n !== '—').map(n => `<option value="${n}">`).join('');
 
   updatePlantStats();
   const footer = document.getElementById('pe-op-footer');
   if (footer) footer.style.display = plantData.length ? 'flex' : 'none';
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   REDESIGN: EQUIPMENT GROUP HEADER + OPERATOR USAGE ROWS
+   ═══════════════════════════════════════════════════════════════ */
+
+function renderEquipGroupHeader(idx, p, tasks, isCollapsed) {
+  const ops = p.operators || [];
+  const taskMins = tasks.reduce((s, t) => s + ops.reduce((ss, o) => ss + ((o.taskHours||{})[t.code]||0), 0), 0);
+  const unassignedMins = ops.reduce((s, o) => s + (o.unassignedMins||0), 0);
+  const totalMins = taskMins + unassignedMins;
+  const totalStr = Math.floor(totalMins/60)+'h '+String(totalMins%60).padStart(2,'0')+'m';
+  const unassignedStr = Math.floor(unassignedMins/60)+'h '+String(unassignedMins%60).padStart(2,'0')+'m';
+  const namedOps = ops.filter(o => o.name).length;
+
+  const statusBadge = totalMins > 0
+    ? `<span style="display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;padding:3px 7px;border-radius:4px;background:#D1FAE5;color:#065F46;">Active</span>`
+    : `<span style="display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;padding:3px 7px;border-radius:4px;background:#F3F4F6;color:#9CA3AF;">Idle</span>`;
+
+  const hireOpts = equipmentCatalogue.find(e => e.name === p.name)?.hireOptions || ['Wet Hire','Dry Hire'];
+  const supOpts = plantSuppliers.map(o => `<option value="${o}"${p.supplier===o||(!p.supplier&&o==='—')?' selected':''}>${o}</option>`).join('');
+
+  const taskCells = tasks.map(t => {
+    const val = ops.reduce((s, o) => s + ((o.taskHours||{})[t.code]||0), 0);
+    const hasVal = val > 0;
+    const dispStr = val > 0 ? (Math.floor(val/60)+'h'+(val%60>0?' '+val%60+'m':'')) : '—';
+    return `<td style="text-align:center;border-left:1px solid var(--border);padding:6px 4px;background:${hasVal?'#FFFDF5':'var(--thead)'};">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:${hasVal?'700':'400'};color:${hasVal?'var(--tp)':'var(--td)'};">${dispStr}</span>
+    </td>`;
+  }).join('');
+
+  return `<tr class="pe-group-header" style="background:var(--thead);border-top:2px solid var(--border-d);border-bottom:1px solid var(--border);"
+    onmouseenter="this.querySelector('.pe-row-rm')&&(this.querySelector('.pe-row-rm').style.opacity='1')"
+    onmouseleave="this.querySelector('.pe-row-rm')&&(this.querySelector('.pe-row-rm').style.opacity='0')">
+    <td style="width:32px;padding:4px 3px;border-right:1px solid var(--border);text-align:center;vertical-align:middle;">
+      <button onclick="toggleEquipGroup(${idx})" title="${isCollapsed?'Expand':'Collapse'}"
+        style="background:none;border:none;cursor:pointer;color:var(--tm);padding:3px;border-radius:3px;display:block;margin:0 auto 2px;"
+        onmouseenter="this.style.color='var(--amber)'" onmouseleave="this.style.color='var(--tm)'">
+        <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2"
+          style="transform:${isCollapsed?'rotate(0)':'rotate(90deg)'};transition:transform .15s;display:block;">
+          <path d="M4 2l4 4-4 4"/>
+        </svg>
+      </button>
+      <button class="pe-row-rm" onclick="removePlantRow(${idx})" title="Remove equipment"
+        style="opacity:0;transition:opacity .15s;background:none;border:none;cursor:pointer;color:var(--td);padding:3px;border-radius:3px;display:block;margin:0 auto;"
+        onmouseenter="this.style.color='var(--red)'" onmouseleave="this.style.color='var(--td)'">
+        <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+      </button>
+    </td>
+    <td style="text-align:center;padding:6px;border-right:1px solid var(--border);width:74px;vertical-align:middle;">${statusBadge}</td>
+    <td style="padding:9px 14px;min-width:180px;border-right:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
+        <span style="font-size:10px;font-weight:600;color:#fff;background:#374151;border-radius:3px;padding:1px 5px;flex-shrink:0;">${p.eqId||'EQ'}</span>
+        <span style="font-size:13px;font-weight:600;color:var(--tp);">${p.name}</span>
+        ${namedOps > 0 ? `<span style="font-size:10px;color:var(--tm);">${namedOps} operator${namedOps!==1?'s':''}</span>` : ''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        ${hireOpts.map(opt => `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--tm);cursor:pointer;user-select:none;">
+          <input type="radio" name="hire-${idx}" value="${opt}" ${p.hire===opt?'checked':''}
+            onchange="plantData[${idx}].hire=this.value"
+            style="accent-color:var(--amber);width:12px;height:12px;">
+          <span style="font-weight:${p.hire===opt?'600':'400'};color:${p.hire===opt?'var(--tp)':'var(--tm)'};">${opt}</span>
+        </label>`).join('')}
+      </div>
+    </td>
+    <td colspan="2" style="border-right:2px solid var(--border-d);"></td>
+    <td style="text-align:center;padding:8px 8px;border-right:1px solid var(--border);">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:${totalMins>0?'var(--tp)':'var(--td)'};">${totalStr}</span>
+    </td>
+    <td style="text-align:center;padding:8px 8px;border-right:1px solid var(--border);">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:${unassignedMins>0?'700':'400'};color:${unassignedMins>0?'var(--tp)':'var(--td)'};">${unassignedStr}</span>
+    </td>
+    ${taskCells}
+  </tr>`;
+}
+
+function renderOpUsageRow(plantIdx, opIdx, p, op, tasks) {
+  const allocMins = tasks.reduce((s, t) => s + ((op.taskHours||{})[t.code]||0), 0);
+  const rowTotalMins = allocMins + (op.unassignedMins||0);
+  const rowTotalStr = Math.floor(rowTotalMins/60)+'h '+String(rowTotalMins%60).padStart(2,'0')+'m';
+  const hasHours = rowTotalMins > 0;
+  const canRemove = (p.operators||[]).length > 1;
+  const attKey = plantIdx + '_' + opIdx;
+  const sel = op.selectedAttachments || [];
+  const attLabel = sel.length > 0 ? `${sel.length} att.` : 'None';
+
+  const taskCells = tasks.map(t => {
+    const val = (op.taskHours||{})[t.code] || 0;
+    const hasVal = val > 0;
+    return `<td style="text-align:center;border-left:1px solid var(--border);padding:3px 2px;background:${hasVal?'#FFFDF5':''};">
+      <input type="number" value="${val}" min="0" step="15"
+        style="width:44px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:${hasVal?'600':'400'};color:${hasVal?'var(--tp)':'var(--td)'};padding:2px 3px;border:1px solid transparent;border-radius:4px;background:transparent;outline:none;"
+        onfocus="this.style.borderColor='var(--amber)';this.style.background='#fff';this.style.color='var(--tp)'"
+        onblur="this.style.borderColor='transparent';this.style.background='transparent'"
+        onchange="setOpTaskHours(${plantIdx},${opIdx},'${t.code}',parseInt(this.value)||0);renderPlant()">
+    </td>`;
+  }).join('');
+
+  return `<tr class="pe-usage-row" style="background:#FAFAFA;border-bottom:1px solid var(--border);height:44px;"
+    onmouseenter="this.style.background='#F3F4F6';this.querySelector('.pe-rm-op')&&(this.querySelector('.pe-rm-op').style.opacity='1')"
+    onmouseleave="this.style.background='#FAFAFA';this.querySelector('.pe-rm-op')&&(this.querySelector('.pe-rm-op').style.opacity='0')">
+    <td style="width:32px;padding:0 3px;border-right:1px solid var(--border);border-left:3px solid #F5A623;text-align:center;">
+      ${canRemove ? `<button class="pe-rm-op" onclick="removeOperatorRow(${plantIdx},${opIdx})" title="Remove shift"
+        style="opacity:0;transition:opacity .15s;background:none;border:none;cursor:pointer;color:var(--td);padding:3px;border-radius:3px;"
+        onmouseenter="this.style.color='var(--red)'" onmouseleave="this.style.color='var(--td)'">
+        <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l6 6M9 3l-6 6"/></svg>
+      </button>` : `<span style="color:#D1D5DB;font-size:13px;line-height:44px;">└</span>`}
+    </td>
+    <td style="width:74px;text-align:center;padding:0 6px;border-right:1px solid var(--border);">
+      <span style="display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 6px;border-radius:4px;background:${hasHours?'#D1FAE5':'#F3F4F6'};color:${hasHours?'#065F46':'#9CA3AF'};">${hasHours?'Active':'Idle'}</span>
+    </td>
+    <td style="padding:4px 12px;min-width:180px;border-right:1px solid var(--border);">
+      <input type="text" value="${op.name||''}" placeholder="Operator name…" list="pe-op-names"
+        style="width:100%;font-size:12px;border:1px solid transparent;border-radius:4px;padding:5px 7px;background:transparent;color:var(--tp);outline:none;"
+        onfocus="this.style.borderColor='var(--amber)';this.style.background='#fff'"
+        onblur="this.style.borderColor='transparent';this.style.background='transparent'"
+        onchange="plantData[${plantIdx}].operators[${opIdx}].name=this.value;renderPlant()">
+      ${(() => {
+        const src = op.source || 'Site Diary';
+        const srcStyle = src === 'Timesheet' ? 'background:#DBEAFE;color:#1D4ED8;'
+                       : src === 'Docket'    ? 'background:#D1FAE5;color:#065F46;'
+                       :                       'background:#F3F4F6;color:#6B7280;';
+        return `<span style="display:inline-block;font-size:9px;font-weight:600;padding:1px 6px;border-radius:3px;margin-top:1px;${srcStyle}">${src}</span>`;
+      })()}
+    </td>
+    <td style="padding:4px 8px;border-right:1px solid var(--border);">
+      <select style="width:100%;height:30px;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:0 6px;background:#fff;outline:none;color:var(--tb);"
+        onfocus="this.style.borderColor='var(--amber)'" onblur="this.style.borderColor='var(--border)'"
+        onchange="plantData[${plantIdx}].operators[${opIdx}].company=this.value;plantData[${plantIdx}].supplier=this.value">
+        ${plantSuppliers.map(o => `<option value="${o}"${op.company===o||(!op.company&&o==='—')?' selected':''}>${o}</option>`).join('')}
+      </select>
+    </td>
+    <td style="padding:4px 8px;border-right:2px solid var(--border-d);">
+      <div id="op-att-trigger-${attKey}" onclick="event.stopPropagation();openOpAttDrop(${plantIdx},${opIdx},this)"
+        style="height:30px;border:1px solid var(--border);border-radius:4px;padding:0 8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:#fff;gap:4px;user-select:none;">
+        <span style="font-size:11px;color:${sel.length>0?'var(--tb)':'var(--tm)'};">${attLabel}</span>
+        <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="var(--tm)" stroke-width="1.5"><path d="M2 4l4 4 4-4"/></svg>
+      </div>
+      ${sel.length > 0 ? `<div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:2px;">
+        ${sel.map(s => `<span style="font-size:9px;background:var(--amber-light,#FEF3DC);color:#92400E;border-radius:3px;padding:1px 5px;">${s.name}</span>`).join('')}
+      </div>` : ''}
+    </td>
+    <td style="text-align:center;padding:5px 8px;border-right:1px solid var(--border);">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:${rowTotalMins>0?'600':'400'};color:${rowTotalMins>0?'var(--tp)':'var(--td)'};">${rowTotalStr}</span>
+    </td>
+    <td style="text-align:center;padding:4px 6px;border-right:1px solid var(--border);">
+      <input type="number" value="${op.unassignedMins||0}" min="0" step="15"
+        style="width:50px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11px;padding:3px;border:1px solid transparent;border-radius:4px;background:transparent;outline:none;color:${(op.unassignedMins||0)>0?'var(--tp)':'var(--td)'};font-weight:${(op.unassignedMins||0)>0?'600':'400'};"
+        onfocus="this.style.borderColor='var(--amber)';this.style.background='#fff';this.style.color='var(--tp)'"
+        onblur="this.style.borderColor='transparent';this.style.background='transparent'"
+        onchange="plantData[${plantIdx}].operators[${opIdx}].unassignedMins=parseInt(this.value)||0;renderPlant()">
+    </td>
+    ${taskCells}
+  </tr>`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   REDESIGN: PER-OPERATOR ATTACHMENT DROPDOWN
+   ═══════════════════════════════════════════════════════════════ */
+function openOpAttDrop(plantIdx, opIdx, trigger) {
+  const newKey = plantIdx + '_' + opIdx;
+  if (opAttDropKey === newKey) { closeOpAttDrop(); return; }
+  if (opAttDropKey !== null) closeOpAttDrop();
+  if (plantAttDropIdx !== -1) plantCloseAttDrop();
+  opAttDropKey = newKey;
+  const dd = document.getElementById('plant-att-dropdown');
+  if (!dd || !trigger) return;
+  _renderOpAttDrop(plantIdx, opIdx);
+  trigger.style.borderColor = 'var(--amber)';
+  trigger.style.boxShadow = '0 0 0 3px rgba(245,166,35,0.12)';
+  const rect = trigger.getBoundingClientRect();
+  dd.style.top = (rect.bottom + 3) + 'px';
+  dd.style.left = rect.left + 'px';
+  dd.style.width = Math.max(rect.width, 240) + 'px';
+  dd.style.display = 'block';
+}
+
+function closeOpAttDrop() {
+  opAttDropKey = null;
+  const dd = document.getElementById('plant-att-dropdown');
+  if (dd) dd.style.display = 'none';
+}
+
+function _renderOpAttDrop(plantIdx, opIdx) {
+  const dd = document.getElementById('plant-att-dropdown');
+  const op = (plantData[plantIdx]?.operators||[])[opIdx];
+  if (!op || !dd) return;
+  if (!op.selectedAttachments) op.selectedAttachments = [];
+  const sel = op.selectedAttachments;
+  const allChecked = sel.length === attachmentCatalogue.length;
+  const chk = checked => checked
+    ? `<span style="width:18px;height:18px;border-radius:3px;background:var(--amber);border:2px solid var(--amber);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="white" stroke-width="2.2"><path d="M2 6l3 3 5-5"/></svg></span>`
+    : `<span style="width:18px;height:18px;border-radius:3px;background:#fff;border:2px solid #CBD5E1;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;"></span>`;
+  let html = `<div onclick="event.stopPropagation();toggleOpSelectAll(${plantIdx},${opIdx})"
+    style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;"
+    onmouseenter="this.style.background='var(--hover)'" onmouseleave="this.style.background=''">
+    ${chk(allChecked)}<span style="font-size:12px;font-weight:500;color:var(--tb);">Select All</span>
+  </div>`;
+  attachmentCatalogue.forEach(a => {
+    const checked = sel.some(s => s.id === a.id);
+    html += `<div onclick="event.stopPropagation();toggleOpAtt(${plantIdx},${opIdx},'${a.id}','${a.name.replace(/'/g,"\\'")}' )"
+      style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;"
+      onmouseenter="this.style.background='var(--hover)'" onmouseleave="this.style.background=''">
+      ${chk(checked)}<span style="font-size:12px;color:var(--tb);">${a.name}</span>
+    </div>`;
+  });
+  dd.innerHTML = html;
+}
+
+function toggleOpAtt(plantIdx, opIdx, id, name) {
+  const op = (plantData[plantIdx]?.operators||[])[opIdx];
+  if (!op) return;
+  if (!op.selectedAttachments) op.selectedAttachments = [];
+  const ei = op.selectedAttachments.findIndex(s => s.id === id);
+  if (ei !== -1) op.selectedAttachments.splice(ei, 1);
+  else op.selectedAttachments.push({ id, name });
+  _renderOpAttDrop(plantIdx, opIdx);
+  renderPlant();
+}
+
+function toggleOpSelectAll(plantIdx, opIdx) {
+  const op = (plantData[plantIdx]?.operators||[])[opIdx];
+  if (!op) return;
+  if (!op.selectedAttachments) op.selectedAttachments = [];
+  op.selectedAttachments = op.selectedAttachments.length === attachmentCatalogue.length
+    ? [] : attachmentCatalogue.map(a => ({ id: a.id, name: a.name }));
+  _renderOpAttDrop(plantIdx, opIdx);
+  renderPlant();
+}
+
+/* Equipment coverage = sum of all operator task hours + unassigned */
+function calcEquipCoverageMins(operators, tasks) {
+  const ops = operators || [];
+  const taskMins = (tasks||[]).reduce((s, t) => s + ops.reduce((ss, o) => ss + ((o.taskHours||{})[t.code]||0), 0), 0);
+  const unassigned = ops.reduce((s, o) => s + (o.unassignedMins||0), 0);
+  return taskMins + unassigned;
+}
+
+function getShiftSpan() { return null; }
+function detectOpConflicts() { return { overlap: false, gap: false }; }
+
+
+/* ─── SBI-8: Group by toggle ─── */
+function setPlantGroupBy(val) {
+  plantGroupBy = val;
+  collapsedGroups.clear();
+  renderPlant();
+}
+
+function togglePlantGroup(encodedKey) {
+  const key = decodeURIComponent(encodedKey);
+  if (collapsedGroups.has(key)) collapsedGroups.delete(key);
+  else collapsedGroups.add(key);
+  renderPlant();
+}
+
 /* ── Task hour helpers ── */
 function setTaskHours(plantIdx, taskCode, mins) {
   if (!plantData[plantIdx].taskHours) plantData[plantIdx].taskHours = {};
   plantData[plantIdx].taskHours[taskCode] = mins;
+}
+
+/* Per-operator task hour setter — auto-reduces unassigned by the increase */
+function setOpTaskHours(plantIdx, opIdx, taskCode, mins) {
+  const op = (plantData[plantIdx].operators || [])[opIdx];
+  if (!op) return;
+  if (!op.taskHours) op.taskHours = {};
+  const oldMins = op.taskHours[taskCode] || 0;
+  const delta = mins - oldMins;
+  op.taskHours[taskCode] = mins;
+  if (delta > 0) {
+    op.unassignedMins = Math.max(0, (op.unassignedMins || 0) - delta);
+  }
 }
 
 function openTimePopup(plantIdx, taskCode) {
@@ -367,6 +617,16 @@ function removePlantRow(idx) {
 function addEquipFromInline(sel) {
   if (!sel.value) return;
   const cat = equipmentCatalogue.find(eq => eq.name === sel.value);
+  // If already logged, add operator sub-row to existing entry
+  if (cat) {
+    const existingIdx = plantData.findIndex(p => p.eqId === cat.id);
+    if (existingIdx !== -1) {
+      addOperatorRow(existingIdx);
+      sel.value = '';
+      showToast(cat.name + ' — new operator row added');
+      return;
+    }
+  }
   addPlantRow(sel.value, cat ? cat.hireOptions[0] : 'Dry Hire', '', '', false);
   if (cat) plantData[plantData.length - 1].eqId = cat.id;
   sel.value = '';
@@ -377,24 +637,192 @@ function togglePlantColumns() { showToast('Column toggle coming soon', 'info'); 
 function cancelPlantEdit() { renderPlant(); }
 function savePlantData() { renderPlant(); showToast('Equipment data saved'); }
 
+/* ─── SBI-1: Fleet status helper — pure computation, no DOM ─── */
+function calcNotLoggedItems() {
+  const loggedIds = new Set([
+    ...plantData.map(p => p.eqId),
+    ...standDownData.map(s => s.eqId)
+  ]);
+  return equipmentCatalogue.filter(eq => !loggedIds.has(eq.id));
+}
+
+/* ─── SBI-2: updatePlantStats — now includes Not Logged pill + renderNotLogged ─── */
 function updatePlantStats() {
   const opCount = plantData.filter(p => !p.sd).length;
   const sdCount = standDownData.length;
   const tasks = (typeof appliedTasks !== 'undefined') ? appliedTasks : [];
 
-  // Total hours = sum of each equipment's total minutes (task allocations + unassigned)
-  const totalMins = plantData.reduce((s, p) => {
-    const allocatedMins = tasks.reduce((sum, t) => sum + ((p.taskHours || {})[t.code] || 0), 0);
-    const unassigned = p.unassignedMins || 0;
-    return s + allocatedMins + unassigned;
-  }, 0);
+  const totalMins = plantData.reduce((s, p) => s + calcEquipCoverageMins(p.operators, tasks), 0);
+
+  const notLoggedItems = calcNotLoggedItems();
+  const nlCount = notLoggedItems.length;
+
+  let activeCount = 0, idleCount = 0;
+  plantData.forEach(p => {
+    if (calcEquipCoverageMins(p.operators, tasks) > 0) activeCount++;
+    else idleCount++;
+  });
 
   const el = id => document.getElementById(id);
-  if (el('pe-stat-equip')) el('pe-stat-equip').textContent = plantData.length + standDownData.length;
-  if (el('pe-stat-op')) el('pe-stat-op').textContent = opCount;
-  if (el('pe-stat-sd')) el('pe-stat-sd').textContent = sdCount;
-  if (el('pe-stat-hrs')) el('pe-stat-hrs').textContent = Math.floor(totalMins / 60) + 'h ' + String(totalMins % 60).padStart(2, '0') + 'm';
+  const totalOperators = plantData.reduce((sum, p) => sum + (p.operators || []).length, 0);
+
+  if (el('pe-stat-equip'))     el('pe-stat-equip').textContent     = plantData.length + standDownData.length;
+  if (el('pe-stat-sd'))        el('pe-stat-sd').textContent        = sdCount;
+  if (el('pe-stat-hrs'))       el('pe-stat-hrs').textContent       = Math.floor(totalMins / 60) + 'h ' + String(totalMins % 60).padStart(2, '0') + 'm';
+  if (el('pe-stat-active'))    el('pe-stat-active').textContent    = activeCount;
+  if (el('pe-stat-idle'))      el('pe-stat-idle').textContent      = idleCount;
+  if (el('pe-stat-operators')) el('pe-stat-operators').textContent = totalOperators;
+
+  // Tab labels with live counts
+  const tabOp = el('pe-tab-op');
+  const tabSd = el('pe-tab-sd');
+  if (tabOp) tabOp.textContent = opCount > 0 ? `OPERATING (${opCount})` : 'OPERATING';
+  if (tabSd) tabSd.textContent = sdCount > 0 ? `STAND DOWN (${sdCount})` : 'STAND DOWN';
+
+  // Not Logged pill — amber when count > 0
+  const nlStrong = el('pe-stat-notlogged');
+  const nlPill   = el('pe-stat-pill-nl');
+  if (nlStrong) nlStrong.textContent = nlCount;
+  if (nlPill) {
+    const hot = nlCount > 0;
+    nlPill.style.background   = hot ? '#FEF3DC' : 'var(--hover)';
+    nlPill.style.borderColor  = hot ? '#F5A623' : 'var(--border)';
+    const nlLabel = nlPill.querySelector('.nl-label');
+    if (nlLabel) nlLabel.style.color = hot ? '#92400E' : 'var(--tm)';
+    nlStrong.style.color = hot ? '#92400E' : 'var(--tp)';
+  }
+
+  renderNotLogged();
+  renderOperatorSummary();
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   SBI-3: NOT LOGGED TODAY SECTION
+   ═══════════════════════════════════════════════════════════════ */
+function renderNotLogged() {
+  const sec = document.getElementById('pe-notlogged-section');
+  if (!sec) return;
+
+  const items = calcNotLoggedItems();
+  if (!items.length) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+
+  sec.innerHTML = `
+    <div style="margin-top:10px;border:1px solid var(--border);border-radius:6px;overflow:hidden;">
+      <div onclick="toggleNotLoggedSection()" style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--thead);cursor:pointer;user-select:none;border-bottom:1px solid var(--border);">
+        <svg id="pe-nl-chev" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="var(--tm)" stroke-width="2.2" style="flex-shrink:0;transition:transform .15s ease;"><path d="M2 4l4 4 4-4"/></svg>
+        <span style="font-size:11px;font-weight:700;color:var(--tp);letter-spacing:.04em;text-transform:uppercase;">NOT LOGGED TODAY</span>
+        <span style="font-size:10px;font-weight:700;color:#fff;background:var(--tm);border-radius:10px;padding:1px 7px;">${items.length}</span>
+        <span style="font-size:11px;color:var(--tm);">— account for all fleet equipment before end of day</span>
+      </div>
+      <div id="pe-nl-body">
+        <div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px;background:#fff;">
+          ${items.map(eq => `
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border);border-radius:5px;background:var(--hover);">
+              <span style="font-size:10px;font-weight:600;color:var(--tm);background:var(--border);border-radius:3px;padding:1px 5px;flex-shrink:0;">${eq.id}</span>
+              <span style="font-size:12px;font-weight:500;color:var(--tp);">${eq.name}</span>
+              <span style="font-size:10px;color:var(--tm);">${eq.type}</span>
+              <button onclick="quickAddEquip('${eq.id}')" title="Log Operating"
+                style="padding:2px 8px;font-size:10px;font-weight:600;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--tb);cursor:pointer;white-space:nowrap;"
+                onmouseenter="this.style.borderColor='var(--amber)';this.style.color='var(--amber)'" onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--tb)'">+ Log</button>
+              <button onclick="prefillStandDown('${eq.id}')" title="Log Stand Down"
+                style="padding:2px 8px;font-size:10px;font-weight:600;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--tm);cursor:pointer;white-space:nowrap;"
+                onmouseenter="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--tm)'">Stand Down</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ─── SBI-4: Collapse/expand the Not Logged body ─── */
+function toggleNotLoggedSection() {
+  const body = document.getElementById('pe-nl-body');
+  const chev = document.getElementById('pe-nl-chev');
+  if (!body) return;
+  const collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? '' : 'none';
+  if (chev) chev.style.transform = collapsed ? '' : 'rotate(-90deg)';
+}
+
+/* ─── SBI-5: Pre-select equipment in stand down modal then open ─── */
+function prefillStandDown(eqId) {
+  sdSelectedEquip = [eqId];
+  openMo('log-standdown');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SBI-9: CROSS-EQUIPMENT OPERATOR CONFLICT DETECTION
+   ═══════════════════════════════════════════════════════════════ */
+
+/* No time-based conflict detection — timing removed from model */
+function detectCrossEquipConflicts() { return new Set(); }
+
+/* ═══════════════════════════════════════════════════════════════
+   SBI-10: OPERATOR OVERTIME DETECTION
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Returns a Map of { operatorName -> totalMins } for operators exceeding OVERTIME_THRESHOLD_MINS */
+function detectOvertimeOperators() {
+  const totals = new Map();
+  plantData.forEach(p => {
+    (p.operators || []).forEach(op => {
+      if (!op.name) return;
+      totals.set(op.name, (totals.get(op.name) || 0) + (op.durationMins || 0));
+    });
+  });
+  const overtime = new Map();
+  totals.forEach((mins, name) => {
+    if (mins > OVERTIME_THRESHOLD_MINS) overtime.set(name, mins);
+  });
+  return overtime;
+}
+
+function renderOperatorSummary() {
+  const sec = document.getElementById('pe-operator-summary');
+  if (sec) sec.style.display = 'none';
+}
+function toggleOpSummarySection() {}
+
+/* ═══════════════════════════════════════════════════════════════
+   SBI-6: MULTI-OPERATOR SUPPORT
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Compute minutes between two "HH:MM" time strings */
+function calcOpDurationMins(op) { return op ? (op.durationMins || 0) : 0; }
+
+/* Toggle collapsed state for an equipment group */
+function toggleEquipGroup(idx) {
+  const p = plantData[idx];
+  if (!p) return;
+  const key = p.eqId || String(idx);
+  if (collapsedEquipIds.has(key)) collapsedEquipIds.delete(key);
+  else collapsedEquipIds.add(key);
+  renderPlant();
+}
+
+function addOperatorRow(idx) {
+  const p = plantData[idx];
+  if (!p) return;
+  if (!p.operators) p.operators = [];
+  // Inherit company from the last operator that has one set, fallback to equipment supplier
+  const inheritedCompany = [...p.operators].reverse().find(o => o.company && o.company !== '—')?.company || p.supplier || '';
+  p.operators.push({ opId: (p.operators.length + 1), name: '', company: inheritedCompany, source: 'Site Diary', durationMins: 0, taskHours: {}, unassignedMins: 0, selectedAttachments: [] });
+  collapsedEquipIds.delete(p.eqId || String(idx));
+  renderPlant();
+}
+
+function removeOperatorRow(idx, opIdx) {
+  const p = plantData[idx];
+  if (!p || !p.operators) return;
+  p.operators.splice(opIdx, 1);
+  if (!p.operators.length) {
+    p.operators = [{ opId: 1, name: '', company: '', source: 'Site Diary', durationMins: 0, taskHours: {}, unassignedMins: 0, selectedAttachments: [] }];
+  }
+  collapsedEquipIds.delete(p.eqId || String(idx));
+  renderPlant();
+}
+
 
 /* ═══════════════════════════════════════════════════════════════
    OPERATING — ADD EQUIPMENT (from old panel & quick chips)
@@ -408,7 +836,9 @@ function addPlantRow(name, hire, op, task, sd) {
     task: task || '', start: '07:00', end: '15:00', brk: 0.5, sd: sd || false,
     supplier: '', eqId: cat ? cat.id : 'EQ-' + plantIdC,
     selectedAttachments: [], attachmentMode: 'simple',
-    taskHours: taskHours, unassignedMins: 0
+    taskHours: taskHours, unassignedMins: 0,
+    manifestHours: 8, fromPlan: false,
+    operators: [{ opId: 1, name: '', company: '', source: 'Site Diary', durationMins: 0, taskHours: {}, unassignedMins: 0, selectedAttachments: [] }]
   });
   renderPlant(); updStats();
 }
@@ -631,14 +1061,22 @@ function _plantUpdateAttTrigger(idx) {
   if (card) card.innerHTML = _plantRenderAttCard(idx, p);
 }
 
-/* close on outside click — use capture phase so we see it before any re-render */
+/* close attachment dropdown on outside click */
 document.addEventListener('click', function(e) {
   const dd = document.getElementById('plant-att-dropdown');
   if (!dd || dd.style.display === 'none') return;
-  if (dd.contains(e.target)) return; // click inside dropdown — keep open
+  if (dd.contains(e.target)) return;
+  // Check equipment-level trigger
   const trigger = document.getElementById('att-trigger-' + plantAttDropIdx);
-  if (trigger && trigger.contains(e.target)) return; // click on trigger — handled by onclick
-  plantCloseAttDrop();
+  if (trigger && trigger.contains(e.target)) return;
+  // Check operator-level trigger
+  if (opAttDropKey !== null) {
+    const opTrigger = document.getElementById('op-att-trigger-' + opAttDropKey);
+    if (opTrigger && opTrigger.contains(e.target)) return;
+    closeOpAttDrop();
+  } else {
+    plantCloseAttDrop();
+  }
 }, true);
 
 /* ═══════════════════════════════════════════════════════════════
