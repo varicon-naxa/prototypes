@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — PO Detail</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; display: flex; flex-direction: column; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; transition: background 0.15s; color: #ccc; text-decoration: none; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+  .sidebar-item.active .icon { opacity: 1; }
+  .sidebar-prototype-link { display: block; padding: 12px 16px; font-size: 11px; color: rgba(255,255,255,.4); text-decoration: none; margin-top: auto; border-top: 1px solid rgba(255,255,255,.06); }
+  .sidebar-prototype-link:hover { color: #f7941d; }
+
+  .main { flex: 1; overflow-y: auto; }
+  .top-bar { background: #fff; border-bottom: 1px solid #e0e0e0; padding: 18px 32px; display: flex; align-items: center; justify-content: space-between; }
+  .top-bar-left { display: flex; align-items: center; gap: 12px; }
+  .back-btn { background: none; border: none; cursor: pointer; font-size: 20px; color: #666; padding: 4px; text-decoration: none; }
+  .back-btn:hover { color: #333; }
+  .top-bar h1 { font-size: 20px; font-weight: 600; }
+  .top-bar h1 .po-num { color: #888; font-weight: 500; margin-left: 8px; font-size: 16px; }
+  .top-bar-actions { display: flex; gap: 10px; }
+  .btn-secondary { padding: 9px 18px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; color: #555; }
+  .btn-secondary:hover { background: #f5f5f5; }
+  .btn-primary { padding: 9px 18px; border: none; border-radius: 6px; background: #f7941d; font-size: 13px; font-weight: 700; cursor: pointer; color: #fff; }
+  .btn-primary:hover { background: #e8850f; }
+
+  .content { padding: 24px 32px; display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start; }
+
+  /* Status banner */
+  .pending-banner { grid-column: 1 / -1; padding: 16px 22px; background: #fff8f0; border: 2px solid #f7941d; border-radius: 12px; display: flex; align-items: center; gap: 16px; }
+  .pending-banner .icon-wrap { width: 40px; height: 40px; border-radius: 50%; background: #f7941d; color: #fff; font-size: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .pending-banner .text { flex: 1; }
+  .pending-banner .text h3 { font-size: 14px; font-weight: 700; color: #e65100; margin-bottom: 2px; }
+  .pending-banner .text p { font-size: 13px; color: #555; }
+  .pending-banner .text strong { color: #e65100; }
+  .pending-banner .actions { display: flex; gap: 8px; }
+
+  /* Header card */
+  .header-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 22px 26px; }
+  .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; gap: 16px; flex-wrap: wrap; }
+  .header-title { font-size: 20px; font-weight: 700; }
+  .status-pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px; background: #e8f5e9; color: #2e7d32; text-transform: uppercase; letter-spacing: 0.4px; }
+  .header-meta { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 12px; padding-top: 14px; border-top: 1px solid #f0f0f0; }
+  .meta-item .label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 2px; }
+  .meta-item .value { font-size: 14px; font-weight: 600; }
+
+  .value-block { display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: #fafafa; border: 1px solid #ececec; border-radius: 8px; margin-top: 14px; }
+  .value-block .v-section { flex: 1; }
+  .value-block .v-section .label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 2px; }
+  .value-block .v-section .amt { font-size: 18px; font-weight: 700; color: #1a1a2e; }
+  .value-block .v-section.pending .amt { color: #e65100; }
+  .value-block .arrow { font-size: 18px; color: #ccc; }
+  .value-block .v-section.headroom .amt { color: #2e7d32; font-size: 16px; }
+  .value-block .v-section.billed .amt { color: #555; font-size: 16px; }
+
+  .section-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px 24px; margin-top: 16px; }
+  .section-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+
+  table.lines { width: 100%; border-collapse: collapse; }
+  table.lines th { text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #e0e0e0; }
+  table.lines td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+  table.lines td:nth-child(n+4), table.lines th:nth-child(n+4) { text-align: right; }
+  .pending-line { background: #fff8f0; }
+
+  /* Right column */
+  .right-col { display: flex; flex-direction: column; gap: 14px; }
+  .approval-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 18px 20px; }
+  .approval-card h3 { font-size: 13px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .tier-tag { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: #fff3e0; color: #e65100; }
+
+  .approval-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f5f5f5; }
+  .approval-row:last-child { border-bottom: none; }
+  .approval-row .step-icon { width: 24px; height: 24px; border-radius: 50%; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+  .approval-row.done .step-icon { background: #4caf50; color: #fff; }
+  .approval-row.pending-step .step-icon { background: #f7941d; color: #fff; }
+  .approval-row.future .step-icon { background: #e0e0e0; color: #999; }
+  .approval-row .body { flex: 1; }
+  .approval-row .name { font-size: 13px; font-weight: 600; }
+  .approval-row .role { font-size: 11px; color: #888; }
+  .approval-row .meta { font-size: 11px; color: #888; margin-top: 3px; }
+  .approval-row.done .meta { color: #2e7d32; }
+  .approval-row.pending-step .meta { color: #e65100; font-weight: 600; }
+
+  .audit-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 18px 20px; }
+  .audit-card h3 { font-size: 13px; font-weight: 700; margin-bottom: 10px; }
+  .audit-row { padding: 8px 0; font-size: 12px; color: #555; border-bottom: 1px solid #f5f5f5; }
+  .audit-row:last-child { border-bottom: none; }
+  .audit-row .ts { color: #999; font-size: 11px; margin-bottom: 2px; }
+  .audit-row .delta { color: #1a1a2e; font-weight: 600; }
+  .audit-row .delta strong { color: #e65100; }
+
+  /* Edit modal */
+  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: #fff; border-radius: 12px; padding: 26px 30px; width: 600px; max-width: 92vw; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+  .modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .modal .modal-sub { font-size: 13px; color: #888; margin-bottom: 16px; }
+  .modal .info-row { padding: 12px 14px; background: #fafafa; border: 1px solid #ececec; border-radius: 8px; margin-bottom: 14px; font-size: 13px; line-height: 1.55; color: #555; }
+  .modal .info-row strong { color: #1a1a2e; }
+  .modal .info-row em { color: #e65100; font-style: normal; font-weight: 700; }
+  .modal label { display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 6px; }
+  .modal input, .modal textarea { width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 13px; }
+  .modal textarea { resize: vertical; min-height: 60px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .modal .field { margin-bottom: 14px; }
+
+  .annotation { padding: 12px 14px; background: #f5f9ff; border: 1px solid #90caf9; border-radius: 8px; font-size: 12px; color: #1565c0; line-height: 1.55; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Shovel &amp; Hope Civil</div>
+    <div class="sidebar-item"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">🖼</span> Gallery</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Docket</div>
+    <div class="sidebar-item active"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">🚚</span> Delivery Docket</div>
+    <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+    <a class="sidebar-prototype-link" href="index.html">← Back to prototype scenarios</a>
+  </div>
+
+  <div class="main">
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <a class="back-btn" href="index.html">←</a>
+        <h1>Concrete supply — Tottenham slab pour <span class="po-num">PO-2026-04-118</span></h1>
+      </div>
+      <div class="top-bar-actions">
+        <button class="btn-secondary" onclick="openEditModal()">Edit / increase value</button>
+        <button class="btn-primary">Receive</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="pending-banner" id="pendingBanner" style="display:none">
+        <div class="icon-wrap">⏳</div>
+        <div class="text">
+          <h3>Pending value change — awaiting approval</h3>
+          <p>Approved value remains <strong>$57,783</strong>. Pending value <strong>$72,303</strong> ($14,520 increase). Bills can keep being raised against the approved value's remaining headroom while the change is reviewed.</p>
+        </div>
+        <div class="actions">
+          <button class="btn-secondary" onclick="discardPending()">Discard change</button>
+          <button class="btn-primary" onclick="alert('Routes to Tier 3 (new total $72,303): Sarah → Alec → James')">View approval</button>
+        </div>
+      </div>
+
+      <!-- Left: PO body -->
+      <div>
+
+        <div class="header-card">
+          <div class="header-row">
+            <div class="header-title">PO-2026-04-118</div>
+            <span class="status-pill">Approved · Active</span>
+          </div>
+          <div class="header-meta">
+            <div class="meta-item"><div class="label">Supplier</div><div class="value">Redstone Concrete Supply</div></div>
+            <div class="meta-item"><div class="label">Project</div><div class="value">Tottenham Industrial Estate — Stage 2</div></div>
+            <div class="meta-item"><div class="label">Required by</div><div class="value">13 May 2026</div></div>
+            <div class="meta-item"><div class="label">Created by</div><div class="value">James Baker</div></div>
+          </div>
+
+          <div class="value-block" id="valueBlock">
+            <div class="v-section">
+              <div class="label">Approved value</div>
+              <div class="amt" id="approvedAmt">$57,783.00</div>
+            </div>
+            <div class="v-section billed">
+              <div class="label">Billed</div>
+              <div class="amt">$28,891.50</div>
+            </div>
+            <div class="v-section headroom">
+              <div class="label">Remaining headroom</div>
+              <div class="amt">$28,891.50</div>
+            </div>
+          </div>
+          <div id="pendingValueRow" style="display:none; margin-top:10px;">
+            <div class="value-block" style="border-color:#f7941d; background:#fff8f0">
+              <div class="v-section pending">
+                <div class="label">Pending new value</div>
+                <div class="amt">$72,303.00</div>
+              </div>
+              <div class="v-section">
+                <div class="label">Increase</div>
+                <div class="amt" style="color:#e65100">+$14,520.00</div>
+              </div>
+              <div class="v-section">
+                <div class="label">Approval re-route</div>
+                <div class="amt" style="font-size:13px; font-weight:600; color:#555">Tier 3 (new total still in band)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <h3>Line items</h3>
+          <table class="lines">
+            <thead>
+              <tr>
+                <th style="width: 40%">Description</th>
+                <th>Type</th>
+                <th>Unit</th>
+                <th>Qty</th>
+                <th>Rate</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>GP 25MPa 14mm aggregate</td>
+                <td>Concrete</td>
+                <td>m³</td>
+                <td>220</td>
+                <td>$228.00</td>
+                <td>$50,160.00</td>
+              </tr>
+              <tr>
+                <td>Pump hire — line pump 4hr min</td>
+                <td>Plant hire</td>
+                <td>hour</td>
+                <td>6</td>
+                <td>$320.00</td>
+                <td>$1,920.00</td>
+              </tr>
+              <tr>
+                <td>Saturday delivery surcharge</td>
+                <td>Plant hire</td>
+                <td>each</td>
+                <td>1</td>
+                <td>$450.00</td>
+                <td>$450.00</td>
+              </tr>
+              <tr id="pendingLineQty" style="display:none" class="pending-line">
+                <td>GP 25MPa 14mm aggregate <span style="color:#e65100; font-weight:700; margin-left:6px">+ pending</span></td>
+                <td>Concrete</td>
+                <td>m³</td>
+                <td><strong>+60</strong></td>
+                <td>$228.00</td>
+                <td><strong>+$13,680.00</strong></td>
+              </tr>
+              <tr id="pendingLineHire" style="display:none" class="pending-line">
+                <td>Pump extension <span style="color:#e65100; font-weight:700; margin-left:6px">+ pending</span></td>
+                <td>Plant hire</td>
+                <td>hour</td>
+                <td><strong>+2</strong></td>
+                <td>$420.00</td>
+                <td><strong>+$840.00</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section-card">
+          <h3>Bills against this PO</h3>
+          <table class="lines">
+            <thead>
+              <tr>
+                <th>Bill</th>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>BILL-2026-04-7821</td>
+                <td>19 Apr 2026</td>
+                <td>50m³ concrete + pump (week 1)</td>
+                <td>$15,070.50</td>
+                <td><span class="status-pill" style="background:#e8f5e9; color:#2e7d32">Approved</span></td>
+              </tr>
+              <tr>
+                <td>BILL-2026-04-7842</td>
+                <td>26 Apr 2026</td>
+                <td>40m³ concrete + Saturday surcharge</td>
+                <td>$13,821.00</td>
+                <td><span class="status-pill" style="background:#fff3e0; color:#e65100">Pending approval</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+      <!-- Right: approval + audit -->
+      <div class="right-col">
+
+        <div class="approval-card">
+          <h3>Approval status <span class="tier-tag">Tier 3</span></h3>
+          <div class="approval-row done">
+            <div class="step-icon">✓</div>
+            <div class="body">
+              <div class="name">Sarah Mitchell</div>
+              <div class="role">Project Lead · Step 1 of 3</div>
+              <div class="meta">Approved 14 Apr 2026 · 09:42</div>
+            </div>
+          </div>
+          <div class="approval-row done">
+            <div class="step-icon">✓</div>
+            <div class="body">
+              <div class="name">Alec Baker</div>
+              <div class="role">Senior Manager · Step 2 of 3</div>
+              <div class="meta">Approved 14 Apr 2026 · 14:18</div>
+            </div>
+          </div>
+          <div class="approval-row done">
+            <div class="step-icon">✓</div>
+            <div class="body">
+              <div class="name">James Baker</div>
+              <div class="role">Director · Step 3 of 3</div>
+              <div class="meta">Approved 15 Apr 2026 · 08:30</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="approval-card" id="pendingApproval" style="display:none">
+          <h3>Pending change approval <span class="tier-tag">Tier 3</span></h3>
+          <div class="approval-row pending-step">
+            <div class="step-icon">1</div>
+            <div class="body">
+              <div class="name">Sarah Mitchell</div>
+              <div class="role">Project Lead · Step 1 of 1</div>
+              <div class="meta">Awaiting review</div>
+            </div>
+          </div>
+          <div class="annotation" style="margin-top: 10px;">
+            <strong>Re-approval scope:</strong> only the highest tier triggered by the new total ($72,303 → Tier 3) re-approves. Earlier tiers don't redo since they already vouched for the deal at the lower value.
+            <br><br>
+            <em>Open decision — should this re-route through every tier, or only the topmost? Recommended: topmost only.</em>
+          </div>
+        </div>
+
+        <div class="audit-card">
+          <h3>Value history</h3>
+          <div class="audit-row">
+            <div class="ts">14 Apr 2026 · 09:42</div>
+            <div class="delta">PO created at <strong>$57,783</strong> by James Baker</div>
+          </div>
+          <div class="audit-row">
+            <div class="ts">15 Apr 2026 · 08:30</div>
+            <div class="delta">Approved at <strong>$57,783</strong> after 3-tier sequential approval</div>
+          </div>
+          <div class="audit-row" id="auditPending" style="display:none">
+            <div class="ts">25 Apr 2026 · 11:15</div>
+            <div class="delta">Pending change layered on: $57,783 → <strong>$72,303</strong> (+$14,520) by James Baker</div>
+          </div>
+        </div>
+
+        <div class="annotation">
+          <strong>Why two value rows when pending?</strong> Bills continue against the approved value's headroom while the change is reviewed. If the change is rejected, work doesn't unwind. If approved, the audit log captures each delta as a discrete row.
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Edit modal -->
+<div class="modal-backdrop" id="editModal" onclick="if(event.target===this) closeModal()">
+  <div class="modal">
+    <h3>Increase PO value</h3>
+    <div class="modal-sub">Edits create a pending change layered on the PO. The approved value stays unchanged until the change is approved.</div>
+
+    <div class="info-row">
+      Current approved value: <strong>$57,783.00</strong> · Currently billed: $28,891.50 · Headroom: $28,891.50.<br>
+      Bills can keep being raised against the approved-value headroom while a pending change is reviewed.
+    </div>
+
+    <div class="field">
+      <label>Add a line / edit a quantity</label>
+      <textarea>+ 60 m³ GP 25MPa 14mm aggregate (additional pour zone)
++ 2 hour pump extension @ $420/hr</textarea>
+    </div>
+
+    <div class="info-row">
+      New PO total: <strong>$72,303.00</strong> · Increase: <em>+$14,520.00</em><br>
+      This sits in <strong>Tier 3</strong> (same band as current). Change re-approval routes to Tier 3's topmost approver only — Sarah Mitchell.
+    </div>
+
+    <div class="field">
+      <label>Reason for increase (visible in audit log)</label>
+      <input type="text" value="Variation request from site — additional southern pour zone" />
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitPending()">Submit pending change</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openEditModal() {
+    document.getElementById('editModal').classList.add('open');
+  }
+  function closeModal() {
+    document.getElementById('editModal').classList.remove('open');
+  }
+  function submitPending() {
+    closeModal();
+    document.getElementById('pendingBanner').style.display = 'flex';
+    document.getElementById('pendingValueRow').style.display = 'block';
+    document.getElementById('pendingLineQty').style.display = 'table-row';
+    document.getElementById('pendingLineHire').style.display = 'table-row';
+    document.getElementById('pendingApproval').style.display = 'block';
+    document.getElementById('auditPending').style.display = 'block';
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+  function discardPending() {
+    if (!confirm('Discard the pending change? The PO returns to its approved state with no effect.')) return;
+    document.getElementById('pendingBanner').style.display = 'none';
+    document.getElementById('pendingValueRow').style.display = 'none';
+    document.getElementById('pendingLineQty').style.display = 'none';
+    document.getElementById('pendingLineHire').style.display = 'none';
+    document.getElementById('pendingApproval').style.display = 'none';
+    document.getElementById('auditPending').style.display = 'none';
+  }
+</script>
+
+</body>
+</html>

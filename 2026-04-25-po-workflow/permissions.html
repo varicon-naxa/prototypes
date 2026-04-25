@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — PO Workflow Setting</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; transition: background 0.15s; color: #ccc; text-decoration: none; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+  .sidebar-item.active .icon { opacity: 1; }
+  .sidebar-prototype-link { display: block; padding: 12px 16px; font-size: 11px; color: rgba(255,255,255,.4); text-decoration: none; margin-top: auto; border-top: 1px solid rgba(255,255,255,.06); }
+  .sidebar-prototype-link:hover { color: #f7941d; }
+
+  /* Main */
+  .main { flex: 1; overflow-y: auto; }
+  .top-bar { background: #fff; border-bottom: 1px solid #e0e0e0; padding: 18px 32px; display: flex; align-items: center; justify-content: space-between; }
+  .top-bar-left { display: flex; align-items: center; gap: 12px; }
+  .back-btn { background: none; border: none; cursor: pointer; font-size: 20px; color: #666; padding: 4px; text-decoration: none; }
+  .back-btn:hover { color: #333; }
+  .top-bar h1 { font-size: 20px; font-weight: 600; }
+  .info-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: #f7941d; color: #fff; font-size: 11px; font-weight: 700; cursor: help; }
+  .top-bar-actions { display: flex; gap: 10px; }
+  .btn-cancel { padding: 9px 18px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; color: #555; }
+  .btn-cancel:hover { background: #f5f5f5; }
+  .btn-primary { padding: 9px 18px; border: none; border-radius: 6px; background: #f7941d; font-size: 13px; font-weight: 700; cursor: pointer; color: #fff; }
+  .btn-primary:hover { background: #e8850f; }
+
+  .content { padding: 24px 32px 60px; }
+  .intro-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 32px; }
+  .intro-text { flex: 1; }
+  .intro-text h2 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .intro-text p { font-size: 13.5px; color: #666; line-height: 1.55; max-width: 720px; }
+
+  /* Approval tiers */
+  .tier-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; }
+  .tier-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px 24px; }
+  .tier-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+  .tier-num { width: 28px; height: 28px; border-radius: 50%; background: #1a1a2e; color: #fff; font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .tier-title { font-size: 15px; font-weight: 700; }
+  .tier-band { font-size: 13px; color: #555; background: #f0f0f0; padding: 4px 10px; border-radius: 6px; font-weight: 600; }
+  .tier-band.editable { cursor: pointer; }
+  .tier-band.editable:hover { background: #fff3e0; color: #e65100; }
+  .tier-remove { margin-left: auto; background: none; border: none; cursor: pointer; color: #999; font-size: 13px; padding: 4px 8px; }
+  .tier-remove:hover { color: #e53935; }
+
+  .approver-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .approver-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #fafafa; border: 1px solid #ececec; border-radius: 8px; }
+  .approver-step { width: 24px; height: 24px; border-radius: 50%; background: #fff; border: 2px solid #f7941d; color: #f7941d; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .approver-avatar { width: 28px; height: 28px; border-radius: 50%; background: #1a1a2e; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .approver-name { font-size: 13px; font-weight: 600; }
+  .approver-role { font-size: 12px; color: #888; }
+  .approver-arrow { color: #ccc; font-size: 14px; }
+  .approver-remove { margin-left: auto; background: none; border: none; cursor: pointer; color: #999; font-size: 13px; padding: 4px; }
+  .approver-remove:hover { color: #e53935; }
+  .add-approver-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px dashed #ccc; border-radius: 6px; background: #fff; font-size: 13px; color: #888; cursor: pointer; }
+  .add-approver-btn:hover { background: #fafafa; border-color: #f7941d; color: #f7941d; }
+
+  .add-tier-btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px; width: 100%; border: 2px dashed #d0d0d0; border-radius: 10px; background: #fff; font-size: 13.5px; font-weight: 600; color: #888; cursor: pointer; transition: all 0.15s; }
+  .add-tier-btn:hover { border-color: #f7941d; color: #f7941d; background: #fff8f0; }
+
+  .info-box { padding: 16px 20px; background: #fff8f0; border: 1px solid #f7941d; border-radius: 10px; font-size: 13px; color: #333; line-height: 1.55; margin-bottom: 24px; }
+  .info-box strong { color: #e65100; }
+  .info-box .label { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #f7941d; color: #fff; text-transform: uppercase; letter-spacing: 0.4px; margin-right: 6px; vertical-align: middle; }
+
+  .annotation { margin-top: 20px; padding: 14px 18px; background: #f5f9ff; border: 1px solid #90caf9; border-radius: 8px; font-size: 12.5px; color: #1565c0; line-height: 1.55; }
+  .annotation strong { color: #0d47a1; }
+
+  .removed-section { margin-top: 32px; padding: 18px 22px; background: #fafafa; border: 1px dashed #d0d0d0; border-radius: 10px; }
+  .removed-section h3 { font-size: 13px; font-weight: 700; color: #888; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .removed-section ul { list-style: none; padding: 0; }
+  .removed-section li { font-size: 13px; color: #777; line-height: 1.6; padding-left: 22px; position: relative; }
+  .removed-section li::before { content: "✕"; position: absolute; left: 0; color: #aaa; font-weight: 700; }
+  .removed-section li strong { color: #555; }
+
+  /* Modal */
+  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: #fff; border-radius: 12px; padding: 24px 28px; width: 480px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+  .modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .modal .modal-sub { font-size: 13px; color: #888; margin-bottom: 18px; }
+  .modal label { display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 6px; }
+  .modal .field-row { display: flex; gap: 12px; margin-bottom: 14px; }
+  .modal .field-row > div { flex: 1; }
+  .modal input, .modal select { width: 100%; padding: 9px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 13px; }
+  .modal input:focus, .modal select:focus { outline: none; border-color: #f7941d; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Shovel &amp; Hope Civil</div>
+    <div class="sidebar-item"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">🖼</span> Gallery</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Docket</div>
+    <div class="sidebar-item active"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">🚚</span> Delivery Docket</div>
+    <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+    <a class="sidebar-prototype-link" href="index.html">← Back to prototype scenarios</a>
+  </div>
+
+  <div class="main">
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <a class="back-btn" href="index.html">←</a>
+        <h1>PO Workflow Setting</h1>
+        <span class="info-icon" title="Approvals route by total PO value. Each tier requires sequential sign-off.">i</span>
+      </div>
+      <div class="top-bar-actions">
+        <button class="btn-cancel">Cancel</button>
+        <button class="btn-primary">Update the Workflow</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="intro-row">
+        <div class="intro-text">
+          <h2>Approval tiers</h2>
+          <p>Anyone with PO module access can draft a PO of any value. The approval gate is the only value-based control. Larger POs require sequential sign-off from more approvers — junior first, then senior, then exec.</p>
+        </div>
+      </div>
+
+      <div class="tier-list">
+
+        <!-- Tier 1: 0-5k -->
+        <div class="tier-card">
+          <div class="tier-head">
+            <div class="tier-num">1</div>
+            <div class="tier-title">Tier 1 — small value</div>
+            <div class="tier-band editable" onclick="openBandModal(1)" title="Click to edit value band">$0 — $5,000</div>
+            <button class="tier-remove" title="Cannot remove the lowest tier" disabled>✕</button>
+          </div>
+          <div class="approver-rows">
+            <div class="approver-row">
+              <div class="approver-step">1</div>
+              <div class="approver-avatar">SM</div>
+              <div>
+                <div class="approver-name">Sarah Mitchell</div>
+                <div class="approver-role">Project Lead</div>
+              </div>
+              <button class="approver-remove" title="Remove">✕</button>
+            </div>
+          </div>
+          <button class="add-approver-btn" onclick="alert('Approver search opens')">+ Add approver to Tier 1</button>
+        </div>
+
+        <!-- Tier 2: 5k-50k -->
+        <div class="tier-card">
+          <div class="tier-head">
+            <div class="tier-num">2</div>
+            <div class="tier-title">Tier 2 — medium value</div>
+            <div class="tier-band editable" onclick="openBandModal(2)" title="Click to edit value band">$5,000 — $50,000</div>
+            <button class="tier-remove" title="Remove tier" onclick="alert('Removing this tier rolls $5k–$50k POs into Tier 1 routing.')">✕</button>
+          </div>
+          <div class="approver-rows">
+            <div class="approver-row">
+              <div class="approver-step">1</div>
+              <div class="approver-avatar">SM</div>
+              <div>
+                <div class="approver-name">Sarah Mitchell</div>
+                <div class="approver-role">Project Lead</div>
+              </div>
+              <button class="approver-remove">✕</button>
+            </div>
+            <div class="approver-row">
+              <div class="approver-step">2</div>
+              <div class="approver-avatar">AB</div>
+              <div>
+                <div class="approver-name">Alec Baker</div>
+                <div class="approver-role">Senior Manager</div>
+              </div>
+              <button class="approver-remove">✕</button>
+            </div>
+          </div>
+          <button class="add-approver-btn" onclick="alert('Approver search opens')">+ Add approver to Tier 2</button>
+        </div>
+
+        <!-- Tier 3: 50k+ -->
+        <div class="tier-card">
+          <div class="tier-head">
+            <div class="tier-num">3</div>
+            <div class="tier-title">Tier 3 — high value</div>
+            <div class="tier-band editable" onclick="openBandModal(3)" title="Click to edit value band">$50,000 and above</div>
+            <button class="tier-remove" title="Remove tier" onclick="alert('Removing this tier rolls $50k+ POs into Tier 2 routing.')">✕</button>
+          </div>
+          <div class="approver-rows">
+            <div class="approver-row">
+              <div class="approver-step">1</div>
+              <div class="approver-avatar">SM</div>
+              <div>
+                <div class="approver-name">Sarah Mitchell</div>
+                <div class="approver-role">Project Lead</div>
+              </div>
+              <button class="approver-remove">✕</button>
+            </div>
+            <div class="approver-row">
+              <div class="approver-step">2</div>
+              <div class="approver-avatar">AB</div>
+              <div>
+                <div class="approver-name">Alec Baker</div>
+                <div class="approver-role">Senior Manager</div>
+              </div>
+              <button class="approver-remove">✕</button>
+            </div>
+            <div class="approver-row">
+              <div class="approver-step">3</div>
+              <div class="approver-avatar">JB</div>
+              <div>
+                <div class="approver-name">James Baker</div>
+                <div class="approver-role">Director</div>
+              </div>
+              <button class="approver-remove">✕</button>
+            </div>
+          </div>
+          <button class="add-approver-btn" onclick="alert('Approver search opens')">+ Add approver to Tier 3</button>
+        </div>
+
+      </div>
+
+      <button class="add-tier-btn" onclick="alert('Adds a new tier — you can split an existing band, e.g. add a $50k–$200k tier and shift $200k+ to Tier 4.')">+ Add another approval tier</button>
+
+      <div class="info-box" style="margin-top: 24px;">
+        <span class="label">Value increase</span>
+        When a PO's total is increased, the change goes through the same value-band rules at the new total. Only the highest tier triggered by the new total re-approves — earlier tiers don't redo, since they already vouched for the deal at the lower value.
+        <br><br>
+        While the change is pending, the PO's <strong>approved value stays at the prior amount</strong> and bills can keep being raised against the approved-value headroom. The approved value updates only when the change is approved. Reject clears the pending change with no effect on the PO.
+      </div>
+
+      <div class="info-box">
+        <span class="label">Close</span>
+        When total billed equals the approved PO value, the system surfaces a soft prompt asking whether to close the PO. <strong>Manual short-close</strong> for under-deliveries is available at any time, performed by anyone in the PO's approval chain. <strong>Cancel</strong> is a separate action for un-actioned POs.
+      </div>
+
+      <div class="removed-section">
+        <h3>Removed from the previous workflow</h3>
+        <ul>
+          <li><strong>Can Create / Submit tier</strong> — anyone with PO module access can draft. The approval gate is the only value-based control. (No reason to gate creation when approval already gates value.)</li>
+          <li><strong>Can Close tier</strong> — close is an action available to anyone in the PO's approval chain, not a separate permission to configure.</li>
+          <li><strong>Increment / Decrement amount fields</strong> per approver — replaced by the pending-change model: edit the PO to a higher value and the change goes through approval as a discrete pending layer.</li>
+        </ul>
+      </div>
+
+      <div class="annotation">
+        <strong>Open decisions for review:</strong>
+        <ul style="margin-left: 18px; margin-top: 6px;">
+          <li>Sequential vs parallel within a tier — recommended sequential (junior → senior → exec)</li>
+          <li>Manual close permission scope — recommended: anyone in the PO's approval chain</li>
+          <li>Cancel as a distinct action with lighter approval — recommended yes (creator + one approver in chain)</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Edit band modal -->
+<div class="modal-backdrop" id="bandModal" onclick="if(event.target===this) closeModal()">
+  <div class="modal">
+    <h3>Edit value band</h3>
+    <div class="modal-sub">POs whose total falls in this range route to this tier's approvers in sequence.</div>
+    <div class="field-row">
+      <div>
+        <label>From (AUD)</label>
+        <input type="text" id="bandFrom" value="$5,000">
+      </div>
+      <div>
+        <label>To (AUD)</label>
+        <input type="text" id="bandTo" value="$50,000">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="closeModal()">Save band</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openBandModal(tier) {
+    document.getElementById('bandModal').classList.add('open');
+  }
+  function closeModal() {
+    document.getElementById('bandModal').classList.remove('open');
+  }
+</script>
+
+</body>
+</html>

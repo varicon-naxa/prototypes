@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — PO Close</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; display: flex; flex-direction: column; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; transition: background 0.15s; color: #ccc; text-decoration: none; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+  .sidebar-item.active .icon { opacity: 1; }
+  .sidebar-prototype-link { display: block; padding: 12px 16px; font-size: 11px; color: rgba(255,255,255,.4); text-decoration: none; margin-top: auto; border-top: 1px solid rgba(255,255,255,.06); }
+  .sidebar-prototype-link:hover { color: #f7941d; }
+
+  .main { flex: 1; overflow-y: auto; }
+  .top-bar { background: #fff; border-bottom: 1px solid #e0e0e0; padding: 18px 32px; display: flex; align-items: center; justify-content: space-between; }
+  .top-bar-left { display: flex; align-items: center; gap: 12px; }
+  .back-btn { background: none; border: none; cursor: pointer; font-size: 20px; color: #666; padding: 4px; text-decoration: none; }
+  .top-bar h1 { font-size: 20px; font-weight: 600; }
+  .top-bar-actions { display: flex; gap: 10px; }
+  .btn-secondary { padding: 9px 18px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; color: #555; }
+  .btn-secondary:hover { background: #f5f5f5; }
+  .btn-primary { padding: 9px 18px; border: none; border-radius: 6px; background: #f7941d; font-size: 13px; font-weight: 700; cursor: pointer; color: #fff; }
+  .btn-primary:hover { background: #e8850f; }
+  .btn-danger { padding: 9px 18px; border: 1px solid #e53935; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; color: #e53935; }
+  .btn-danger:hover { background: #ffeaea; }
+
+  .content { padding: 24px 32px; max-width: 1100px; }
+
+  /* Tabs */
+  .scenario-tabs { display: flex; gap: 0; margin-bottom: 22px; border-bottom: 2px solid #e0e0e0; }
+  .scenario-tab { padding: 11px 18px; font-size: 13px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #888; background: none; border-left: none; border-right: none; border-top: none; }
+  .scenario-tab.active { color: #f7941d; border-bottom-color: #f7941d; }
+  .scenario-tab:hover { color: #f7941d; }
+
+  .scenario { display: none; }
+  .scenario.active { display: block; }
+
+  .soft-prompt-banner { padding: 18px 24px; background: #e8f5e9; border: 2px solid #4caf50; border-radius: 12px; display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+  .soft-prompt-banner.short { background: #fff8f0; border-color: #f7941d; }
+  .soft-prompt-banner.cancel { background: #ffeaea; border-color: #e53935; }
+  .soft-prompt-banner .icon-wrap { width: 44px; height: 44px; border-radius: 50%; background: #4caf50; color: #fff; font-size: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .soft-prompt-banner.short .icon-wrap { background: #f7941d; }
+  .soft-prompt-banner.cancel .icon-wrap { background: #e53935; }
+  .soft-prompt-banner .text { flex: 1; }
+  .soft-prompt-banner .text h3 { font-size: 14.5px; font-weight: 700; margin-bottom: 3px; }
+  .soft-prompt-banner.cancel .text h3 { color: #c62828; }
+  .soft-prompt-banner .text p { font-size: 13px; color: #555; line-height: 1.5; }
+  .soft-prompt-banner .actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .soft-prompt-banner.short .text h3 { color: #e65100; }
+  .soft-prompt-banner.short .text strong { color: #e65100; }
+  .soft-prompt-banner.short .actions .btn-primary { background: #f7941d; }
+
+  .header-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 22px 26px; margin-bottom: 16px; }
+  .header-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+  .header-title { font-size: 18px; font-weight: 700; }
+  .po-num { color: #888; font-weight: 500; margin-left: 8px; font-size: 14px; }
+  .status-pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .status-pill.active { background: #e8f5e9; color: #2e7d32; }
+  .status-pill.draft { background: #f0f0f0; color: #888; }
+  .status-pill.short { background: #fff3e0; color: #e65100; }
+
+  .header-meta { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 12px; padding-top: 14px; border-top: 1px solid #f0f0f0; }
+  .meta-item .label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 2px; }
+  .meta-item .value { font-size: 14px; font-weight: 600; }
+
+  .progress-bar { margin-top: 14px; padding: 14px 18px; background: #fafafa; border: 1px solid #ececec; border-radius: 8px; }
+  .progress-bar .top { display: flex; justify-content: space-between; font-size: 12px; color: #888; margin-bottom: 6px; }
+  .progress-bar .top strong { color: #1a1a2e; font-size: 14px; }
+  .bar-track { height: 12px; background: #e0e0e0; border-radius: 6px; overflow: hidden; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, #f7941d, #4caf50); border-radius: 6px; transition: width 0.4s; }
+  .bar-fill.full { background: #4caf50; }
+  .bar-fill.partial { background: linear-gradient(90deg, #f7941d, #f7941d); }
+
+  .section-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px 24px; margin-top: 14px; }
+  .section-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+
+  table.lines { width: 100%; border-collapse: collapse; }
+  table.lines th { text-align: left; padding: 9px 12px; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #e0e0e0; }
+  table.lines td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+  table.lines td.right, table.lines th.right { text-align: right; }
+  .delta-under { color: #e65100; font-weight: 600; }
+  .delta-zero { color: #2e7d32; font-weight: 600; }
+
+  /* Modal */
+  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: #fff; border-radius: 12px; padding: 26px 30px; width: 560px; max-width: 92vw; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+  .modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .modal .modal-sub { font-size: 13px; color: #888; margin-bottom: 16px; }
+  .modal label { display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 6px; }
+  .modal textarea { width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 13px; resize: vertical; min-height: 60px; }
+  .modal .info-row { padding: 12px 14px; background: #fafafa; border: 1px solid #ececec; border-radius: 8px; margin-bottom: 14px; font-size: 13px; line-height: 1.55; color: #555; }
+  .modal .info-row strong { color: #1a1a2e; }
+  .modal .info-row em { color: #e65100; font-style: normal; font-weight: 700; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .modal .field { margin-bottom: 14px; }
+
+  .annotation { padding: 12px 16px; background: #f5f9ff; border: 1px solid #90caf9; border-radius: 8px; font-size: 12.5px; color: #1565c0; line-height: 1.55; margin-top: 14px; }
+  .annotation strong { color: #0d47a1; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Shovel &amp; Hope Civil</div>
+    <div class="sidebar-item"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">🖼</span> Gallery</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Docket</div>
+    <div class="sidebar-item active"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">🚚</span> Delivery Docket</div>
+    <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+    <a class="sidebar-prototype-link" href="index.html">← Back to prototype scenarios</a>
+  </div>
+
+  <div class="main">
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <a class="back-btn" href="index.html">←</a>
+        <h1>PO Close paths</h1>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="scenario-tabs">
+        <button class="scenario-tab active" onclick="showTab('full')">A · Fully billed (soft prompt)</button>
+        <button class="scenario-tab" onclick="showTab('short')">B · Under-delivered (manual short-close)</button>
+        <button class="scenario-tab" onclick="showTab('cancel')">C · Un-actioned (cancel)</button>
+      </div>
+
+      <!-- A: Fully billed -->
+      <div class="scenario active" id="scenario-full">
+
+        <div class="soft-prompt-banner">
+          <div class="icon-wrap">✓</div>
+          <div class="text">
+            <h3>This PO is fully billed — would you like to close it?</h3>
+            <p>Total billed ($57,783.00) equals the approved value. Closing prevents new bills against this PO. You can keep it open if late credits or retention adjustments are still expected.</p>
+          </div>
+          <div class="actions">
+            <button class="btn-secondary" onclick="alert('PO stays open. The prompt will resurface if no further bills are added in 30 days.')">Keep open</button>
+            <button class="btn-primary" onclick="alert('PO closed. Audit logged.')">Close PO</button>
+          </div>
+        </div>
+
+        <div class="header-card">
+          <div class="header-row">
+            <div>
+              <div class="header-title">Concrete supply — Tottenham slab pour <span class="po-num">PO-2026-04-118</span></div>
+            </div>
+            <span class="status-pill active">Active · Fully billed</span>
+          </div>
+          <div class="header-meta">
+            <div class="meta-item"><div class="label">Approved value</div><div class="value">$57,783.00</div></div>
+            <div class="meta-item"><div class="label">Billed</div><div class="value">$57,783.00</div></div>
+            <div class="meta-item"><div class="label">Remaining</div><div class="value" style="color:#2e7d32">$0.00</div></div>
+            <div class="meta-item"><div class="label">Bills</div><div class="value">4 (all approved)</div></div>
+          </div>
+          <div class="progress-bar">
+            <div class="top"><span>Billed against approved value</span><strong>100%</strong></div>
+            <div class="bar-track"><div class="bar-fill full" style="width: 100%"></div></div>
+          </div>
+        </div>
+
+        <div class="annotation">
+          <strong>Why a soft prompt instead of hard auto-close?</strong> Civil construction often has late retention drawdowns, credits, or last-minute adjustments. A surprise close can block legitimate bills and frustrate the AP team. The soft prompt gives the user explicit choice without requiring them to navigate to the PO to mark it closed.
+          <br><br>
+          <strong>Open decision:</strong> if no action is taken, should the prompt resurface daily, weekly, or only re-trigger when activity resumes? Recommended: re-surface after 30 days of no new bills.
+        </div>
+      </div>
+
+      <!-- B: Under-delivered -->
+      <div class="scenario" id="scenario-short">
+
+        <div class="soft-prompt-banner short">
+          <div class="icon-wrap">!</div>
+          <div class="text">
+            <h3>Final delivery short of ordered quantity</h3>
+            <p>Site reports the pour completed at <strong>205 m³</strong> instead of the ordered 220 m³. The PO has billed value <strong>$54,357</strong> against approved <strong>$57,783</strong>. You can short-close to release the unused commitment of <strong>$3,426</strong>.</p>
+          </div>
+          <div class="actions">
+            <button class="btn-secondary">Keep open</button>
+            <button class="btn-primary" onclick="openShortModal()">Short-close PO</button>
+          </div>
+        </div>
+
+        <div class="header-card">
+          <div class="header-row">
+            <div>
+              <div class="header-title">Concrete supply — Tottenham slab pour <span class="po-num">PO-2026-04-118</span></div>
+            </div>
+            <span class="status-pill active">Active · Under-delivered</span>
+          </div>
+          <div class="header-meta">
+            <div class="meta-item"><div class="label">Approved value</div><div class="value">$57,783.00</div></div>
+            <div class="meta-item"><div class="label">Billed</div><div class="value">$54,357.00</div></div>
+            <div class="meta-item"><div class="label">Remaining</div><div class="value" style="color:#e65100">$3,426.00</div></div>
+            <div class="meta-item"><div class="label">Final delivered</div><div class="value">205 / 220 m³</div></div>
+          </div>
+          <div class="progress-bar">
+            <div class="top"><span>Billed against approved value</span><strong>94%</strong></div>
+            <div class="bar-track"><div class="bar-fill partial" style="width: 94%"></div></div>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <h3>Line-level reconciliation</h3>
+          <table class="lines">
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th class="right">Ordered</th>
+                <th class="right">Delivered</th>
+                <th class="right">Variance</th>
+                <th class="right">$ released</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>GP 25MPa 14mm aggregate</td>
+                <td class="right">220 m³</td>
+                <td class="right">205 m³</td>
+                <td class="right delta-under">−15 m³</td>
+                <td class="right delta-under">$3,420.00</td>
+              </tr>
+              <tr>
+                <td>Pump hire — line pump 4hr min</td>
+                <td class="right">6 hr</td>
+                <td class="right">6 hr</td>
+                <td class="right delta-zero">—</td>
+                <td class="right delta-zero">—</td>
+              </tr>
+              <tr>
+                <td>Saturday delivery surcharge</td>
+                <td class="right">1 ea</td>
+                <td class="right">1 ea</td>
+                <td class="right delta-zero">—</td>
+                <td class="right delta-zero">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="annotation">
+          <strong>Who can short-close?</strong> Anyone in the PO's existing approval chain — same people who already vouched for the deal. No new permission tier required.
+          <br><br>
+          <strong>Note on Item 11:</strong> auto-close depends on Quantity Received being correctly captured against each delivery docket. The pre-fill bug captured in Item 11 of the feedback log must be fixed before this prompt is reliable.
+        </div>
+      </div>
+
+      <!-- C: Cancel -->
+      <div class="scenario" id="scenario-cancel">
+
+        <div class="soft-prompt-banner cancel">
+          <div class="icon-wrap">✕</div>
+          <div class="text">
+            <h3>Cancel this PO?</h3>
+            <p>This PO has no bills, no receipts, and no approved deliveries against it. Cancelling is distinct from closing — it indicates the order was never actioned.</p>
+          </div>
+          <div class="actions">
+            <button class="btn-secondary">Keep open</button>
+            <button class="btn-danger" onclick="openCancelModal()">Cancel PO</button>
+          </div>
+        </div>
+
+        <div class="header-card">
+          <div class="header-row">
+            <div>
+              <div class="header-title">Bitumen — emergency repair Sunshine Rd <span class="po-num">PO-2026-04-202</span></div>
+            </div>
+            <span class="status-pill draft">Approved · No activity</span>
+          </div>
+          <div class="header-meta">
+            <div class="meta-item"><div class="label">Approved value</div><div class="value">$3,420.00</div></div>
+            <div class="meta-item"><div class="label">Billed</div><div class="value">$0.00</div></div>
+            <div class="meta-item"><div class="label">Bills</div><div class="value">0</div></div>
+            <div class="meta-item"><div class="label">Receipts</div><div class="value">0</div></div>
+          </div>
+          <div class="progress-bar">
+            <div class="top"><span>Billed against approved value</span><strong>0%</strong></div>
+            <div class="bar-track"><div class="bar-fill" style="width: 0%"></div></div>
+          </div>
+        </div>
+
+        <div class="annotation">
+          <strong>Why distinguish cancel from close?</strong> Closed = work was completed (perhaps under-delivered). Cancelled = work never happened. Reporting and supplier metrics need this distinction so a never-actioned PO doesn't pollute "completion" KPIs.
+          <br><br>
+          <strong>Lighter approval:</strong> creator + one approver in the chain (vs full re-approval). The deal was already approved at this value — cancellation just acknowledges it won't proceed.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Short close modal -->
+<div class="modal-backdrop" id="shortModal" onclick="if(event.target===this) closeShortModal()">
+  <div class="modal">
+    <h3>Short-close PO</h3>
+    <div class="modal-sub">Closes the PO at the actual delivered total. The unused commitment is released back to the project budget.</div>
+
+    <div class="info-row">
+      Releasing <em>$3,426.00</em> from the project commitment.<br>
+      Final close value: <strong>$54,357.00</strong>.
+    </div>
+
+    <div class="field">
+      <label>Reason (visible in audit log)</label>
+      <textarea>Site delivered 205 m³ of 220 m³ ordered. Final pour shorter than estimated — slab dimensions confirmed at 205 m³ post-survey.</textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeShortModal()">Cancel</button>
+      <button class="btn-primary" onclick="closeShortModal(); alert('PO short-closed at $54,357. $3,426 released to project budget.')">Confirm short-close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cancel modal -->
+<div class="modal-backdrop" id="cancelModal" onclick="if(event.target===this) closeCancelModal()">
+  <div class="modal">
+    <h3>Cancel PO</h3>
+    <div class="modal-sub">Use cancel when work never started. Use short-close when work was partially delivered.</div>
+
+    <div class="info-row">
+      Releasing the full <em>$3,420.00</em> commitment back to the project budget.<br>
+      Supplier will be notified by email if your account has supplier-cancellation notices enabled.
+    </div>
+
+    <div class="field">
+      <label>Reason (visible in audit log)</label>
+      <textarea>Emergency repair handled under existing maintenance retainer. Order no longer required.</textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeCancelModal()">Don't cancel</button>
+      <button class="btn-danger" onclick="closeCancelModal(); alert('PO cancelled. Commitment of $3,420 released.')">Confirm cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function showTab(name) {
+    document.querySelectorAll('.scenario').forEach(s => s.classList.remove('active'));
+    document.getElementById('scenario-' + name).classList.add('active');
+    document.querySelectorAll('.scenario-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+  }
+  function openShortModal() { document.getElementById('shortModal').classList.add('open'); }
+  function closeShortModal() { document.getElementById('shortModal').classList.remove('open'); }
+  function openCancelModal() { document.getElementById('cancelModal').classList.add('open'); }
+  function closeCancelModal() { document.getElementById('cancelModal').classList.remove('open'); }
+</script>
+
+</body>
+</html>

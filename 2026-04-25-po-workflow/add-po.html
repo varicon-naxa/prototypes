@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Add Purchase Order</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; display: flex; flex-direction: column; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; transition: background 0.15s; color: #ccc; text-decoration: none; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+  .sidebar-item.active .icon { opacity: 1; }
+  .sidebar-prototype-link { display: block; padding: 12px 16px; font-size: 11px; color: rgba(255,255,255,.4); text-decoration: none; margin-top: auto; border-top: 1px solid rgba(255,255,255,.06); }
+  .sidebar-prototype-link:hover { color: #f7941d; }
+
+  .main { flex: 1; overflow-y: auto; padding-bottom: 80px; }
+  .top-bar { background: #fff; border-bottom: 1px solid #e0e0e0; padding: 18px 32px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .top-bar-left { display: flex; align-items: center; gap: 12px; }
+  .back-btn { background: none; border: none; cursor: pointer; font-size: 20px; color: #666; padding: 4px; text-decoration: none; }
+  .back-btn:hover { color: #333; }
+  .top-bar h1 { font-size: 20px; font-weight: 600; }
+  .top-bar-actions { display: flex; gap: 10px; }
+  .btn-secondary { padding: 9px 18px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; color: #555; }
+  .btn-secondary:hover { background: #f5f5f5; }
+  .btn-primary { padding: 9px 18px; border: none; border-radius: 6px; background: #f7941d; font-size: 13px; font-weight: 700; cursor: pointer; color: #fff; }
+  .btn-primary:hover { background: #e8850f; }
+
+  .content { display: grid; grid-template-columns: 1fr 320px; gap: 24px; padding: 24px 32px; align-items: start; }
+
+  .form-col { display: flex; flex-direction: column; gap: 16px; }
+  .form-section { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px 24px; }
+  .form-section h3 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .form-section .form-sub { font-size: 12px; color: #888; margin-bottom: 14px; }
+  .field { margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: #666; margin-bottom: 6px; }
+  .field label .req { color: #e53935; }
+  .field input, .field select, .field textarea { width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 13px; background: #fff; }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: #f7941d; }
+  .field textarea { resize: vertical; min-height: 60px; }
+  .field-row { display: flex; gap: 14px; }
+  .field-row .field { flex: 1; margin-bottom: 0; }
+
+  table.lines { width: 100%; border-collapse: collapse; }
+  table.lines th { text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #e0e0e0; }
+  table.lines td { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+  table.lines td:last-child, table.lines th:last-child { text-align: right; }
+  table.lines input, table.lines select { padding: 8px 10px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 13px; width: 100%; }
+  .add-line-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px dashed #ccc; border-radius: 6px; background: #fff; font-size: 13px; color: #888; cursor: pointer; margin-top: 10px; }
+  .add-line-btn:hover { background: #fafafa; border-color: #f7941d; color: #f7941d; }
+
+  .totals { display: flex; flex-direction: column; align-items: flex-end; padding: 14px 0 4px; }
+  .totals .row { display: flex; gap: 40px; padding: 3px 0; font-size: 13.5px; }
+  .totals .row .t-label { color: #888; text-align: right; min-width: 140px; }
+  .totals .row .t-val { font-weight: 600; min-width: 100px; text-align: right; }
+  .totals .total-row { font-size: 17px; font-weight: 700; border-top: 2px solid #e0e0e0; padding-top: 8px; margin-top: 4px; }
+
+  /* Routing sidebar */
+  .routing-col { position: sticky; top: 88px; }
+  .routing-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px 22px; }
+  .routing-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .routing-head h3 { font-size: 14px; font-weight: 700; }
+  .routing-sub { font-size: 12px; color: #888; margin-bottom: 16px; }
+  .routing-total { padding: 12px 14px; background: #fafafa; border: 1px solid #ececec; border-radius: 8px; margin-bottom: 16px; }
+  .routing-total .label { font-size: 11px; color: #888; font-weight: 600; text-transform: uppercase; }
+  .routing-total .value { font-size: 22px; font-weight: 700; color: #1a1a2e; margin-top: 2px; }
+  .tier-chip { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 12px; background: #fff3e0; color: #e65100; margin-left: 8px; }
+
+  .routing-flow { display: flex; flex-direction: column; gap: 6px; }
+  .routing-step { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #fafafa; border: 1px solid #ececec; border-radius: 8px; }
+  .routing-step.you { background: #fff8f0; border-color: #f7941d; }
+  .routing-step .step-num { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 2px solid #f7941d; color: #f7941d; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .routing-step.you .step-num { background: #f7941d; color: #fff; border-color: #f7941d; }
+  .routing-step .avatar { width: 26px; height: 26px; border-radius: 50%; background: #1a1a2e; color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .routing-step .who { flex: 1; min-width: 0; }
+  .routing-step .who .name { font-size: 12.5px; font-weight: 600; }
+  .routing-step .who .role { font-size: 11px; color: #888; }
+  .routing-step .you-badge { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: #f7941d; color: #fff; text-transform: uppercase; letter-spacing: 0.3px; }
+
+  .routing-foot { margin-top: 14px; font-size: 11.5px; color: #777; line-height: 1.5; padding-top: 12px; border-top: 1px solid #f0f0f0; }
+  .routing-foot strong { color: #444; }
+
+  .annotation { margin-top: 14px; padding: 12px 14px; background: #f5f9ff; border: 1px solid #90caf9; border-radius: 8px; font-size: 12px; color: #1565c0; line-height: 1.55; }
+
+  .submit-bar { position: fixed; bottom: 0; left: 200px; right: 0; background: #fff; border-top: 1px solid #e0e0e0; padding: 12px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px; z-index: 50; }
+  .submit-bar .summary { font-size: 13px; color: #555; }
+  .submit-bar .summary strong { color: #1a1a2e; }
+  .submit-bar-actions { display: flex; gap: 10px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Shovel &amp; Hope Civil</div>
+    <div class="sidebar-item"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">🖼</span> Gallery</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Docket</div>
+    <div class="sidebar-item active"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">🚚</span> Delivery Docket</div>
+    <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+    <a class="sidebar-prototype-link" href="index.html">← Back to prototype scenarios</a>
+  </div>
+
+  <div class="main">
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <a class="back-btn" href="index.html">←</a>
+        <h1>Add Purchase Order</h1>
+      </div>
+      <div class="top-bar-actions">
+        <button class="btn-secondary">Save as Draft</button>
+        <button class="btn-primary" onclick="alert('Submitted for approval — routes to Tier 3 first approver Sarah Mitchell.')">Submit for Approval</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="form-col">
+
+        <div class="form-section">
+          <h3>PO header</h3>
+          <div class="form-sub">Anyone with PO module access can draft a PO. The approval gate is the only value-based control.</div>
+          <div class="field">
+            <label>PO title <span class="req">*</span></label>
+            <input type="text" value="Concrete supply — Tottenham slab pour" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Project <span class="req">*</span></label>
+              <select>
+                <option>Tottenham Industrial Estate — Stage 2</option>
+                <option>Footscray Civic Bridge</option>
+                <option>Sunshine West Pump Station</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Supplier <span class="req">*</span></label>
+              <select onchange="syncSupplier(this.value)">
+                <option>Redstone Concrete Supply</option>
+                <option>Yarra Readymix Pty Ltd</option>
+                <option>Inner West Aggregates</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Required by</label>
+              <input type="text" value="13 May 2026" />
+            </div>
+            <div class="field">
+              <label>Cost centre</label>
+              <select>
+                <option>04-CC-Concrete works</option>
+                <option>04-CC-Earthworks</option>
+                <option>04-CC-Site establishment</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h3>Line items</h3>
+          <div class="form-sub">Each line auto-fills type and unit from the supplier's catalogue.</div>
+          <table class="lines">
+            <thead>
+              <tr>
+                <th style="width: 32%">Description</th>
+                <th>Type</th>
+                <th>Unit</th>
+                <th style="width: 80px">Qty</th>
+                <th style="width: 100px">Rate</th>
+                <th style="width: 110px">Total</th>
+              </tr>
+            </thead>
+            <tbody id="linesBody">
+              <tr>
+                <td><input type="text" value="GP 25MPa 14mm aggregate" /></td>
+                <td>Concrete</td>
+                <td>m³</td>
+                <td><input type="number" value="220" oninput="recalc()" /></td>
+                <td><input type="number" value="228" oninput="recalc()" /></td>
+                <td style="text-align:right; font-weight:600">$50,160.00</td>
+              </tr>
+              <tr>
+                <td><input type="text" value="Pump hire — line pump 4hr min" /></td>
+                <td>Plant hire</td>
+                <td>hour</td>
+                <td><input type="number" value="6" oninput="recalc()" /></td>
+                <td><input type="number" value="320" oninput="recalc()" /></td>
+                <td style="text-align:right; font-weight:600">$1,920.00</td>
+              </tr>
+              <tr>
+                <td><input type="text" value="Saturday delivery surcharge" /></td>
+                <td>Plant hire</td>
+                <td>each</td>
+                <td><input type="number" value="1" oninput="recalc()" /></td>
+                <td><input type="number" value="450" oninput="recalc()" /></td>
+                <td style="text-align:right; font-weight:600">$450.00</td>
+              </tr>
+            </tbody>
+          </table>
+          <button class="add-line-btn">+ Add line</button>
+
+          <div class="totals">
+            <div class="row"><div class="t-label">Subtotal</div><div class="t-val" id="subtotal">$52,530.00</div></div>
+            <div class="row"><div class="t-label">GST (10%)</div><div class="t-val" id="gst">$5,253.00</div></div>
+            <div class="row total-row"><div class="t-label">Total</div><div class="t-val" id="grand">$57,783.00</div></div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h3>Delivery instructions</h3>
+          <div class="field">
+            <label>Attention</label>
+            <input type="text" value="Site supervisor — Tom Reilly" />
+          </div>
+          <div class="field">
+            <label>Phone</label>
+            <input type="text" value="0412 998 200" />
+          </div>
+          <div class="field">
+            <label>Instructions</label>
+            <textarea>Pour starts 06:30 sharp. Access via Sunshine Rd north gate. Tom on site from 06:00.</textarea>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Routing sidebar -->
+      <div class="routing-col">
+        <div class="routing-card">
+          <div class="routing-head">
+            <h3>Approval routing</h3>
+          </div>
+          <div class="routing-sub">Updates live as line items change.</div>
+
+          <div class="routing-total">
+            <div class="label">PO total</div>
+            <div class="value" id="routingTotal">
+              $57,783.00
+              <span class="tier-chip" id="tierChip">Tier 3</span>
+            </div>
+          </div>
+
+          <div class="routing-flow" id="routingFlow">
+            <div class="routing-step you">
+              <div class="step-num">●</div>
+              <div class="avatar">JB</div>
+              <div class="who">
+                <div class="name">James Baker</div>
+                <div class="role">Drafted by</div>
+              </div>
+              <span class="you-badge">You</span>
+            </div>
+            <div class="routing-step">
+              <div class="step-num">1</div>
+              <div class="avatar">SM</div>
+              <div class="who">
+                <div class="name">Sarah Mitchell</div>
+                <div class="role">Project Lead</div>
+              </div>
+            </div>
+            <div class="routing-step">
+              <div class="step-num">2</div>
+              <div class="avatar">AB</div>
+              <div class="who">
+                <div class="name">Alec Baker</div>
+                <div class="role">Senior Manager</div>
+              </div>
+            </div>
+            <div class="routing-step">
+              <div class="step-num">3</div>
+              <div class="avatar">JB</div>
+              <div class="who">
+                <div class="name">James Baker</div>
+                <div class="role">Director</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="routing-foot">
+            <strong>Why three approvers?</strong> The PO total is over $50,000, which sits in <strong>Tier 3</strong>. Approvers sign off in sequence — Sarah first, then Alec, then James. Configure tiers in <a href="permissions.html" style="color:#f7941d">PO Workflow Setting</a>.
+          </div>
+        </div>
+
+        <div class="annotation">
+          <strong>Drafting freedom:</strong> a junior drafting a $5M PO is allowed. It just won't be approved until it routes through every tier. Surfacing the routing here means no surprises at submit.
+        </div>
+      </div>
+
+    </div>
+
+    <div class="submit-bar">
+      <div class="summary">
+        Total <strong id="barTotal">$57,783.00</strong> · routes to <strong id="barTier">Tier 3 (3 approvers in sequence)</strong>
+      </div>
+      <div class="submit-bar-actions">
+        <button class="btn-secondary">Save as Draft</button>
+        <button class="btn-primary" onclick="alert('Submitted for approval — routes to Tier 3, first approver Sarah Mitchell.')">Submit for Approval</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  function recalc() {
+    const rows = document.querySelectorAll('#linesBody tr');
+    let subtotal = 0;
+    rows.forEach(r => {
+      const inputs = r.querySelectorAll('input[type=number]');
+      if (inputs.length === 2) {
+        const qty = parseFloat(inputs[0].value) || 0;
+        const rate = parseFloat(inputs[1].value) || 0;
+        const total = qty * rate;
+        subtotal += total;
+        r.cells[5].textContent = '$' + total.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      }
+    });
+    const gst = subtotal * 0.10;
+    const grand = subtotal + gst;
+    document.getElementById('subtotal').textContent = '$' + subtotal.toLocaleString('en-AU', {minimumFractionDigits: 2});
+    document.getElementById('gst').textContent = '$' + gst.toLocaleString('en-AU', {minimumFractionDigits: 2});
+    document.getElementById('grand').textContent = '$' + grand.toLocaleString('en-AU', {minimumFractionDigits: 2});
+
+    // Update routing
+    const tierChip = document.getElementById('tierChip');
+    const flow = document.getElementById('routingFlow');
+    const barTier = document.getElementById('barTier');
+
+    let tier, approvers;
+    if (grand <= 5000) {
+      tier = 'Tier 1';
+      approvers = [{n: 'Sarah Mitchell', r: 'Project Lead', a: 'SM'}];
+    } else if (grand <= 50000) {
+      tier = 'Tier 2';
+      approvers = [
+        {n: 'Sarah Mitchell', r: 'Project Lead', a: 'SM'},
+        {n: 'Alec Baker', r: 'Senior Manager', a: 'AB'}
+      ];
+    } else {
+      tier = 'Tier 3';
+      approvers = [
+        {n: 'Sarah Mitchell', r: 'Project Lead', a: 'SM'},
+        {n: 'Alec Baker', r: 'Senior Manager', a: 'AB'},
+        {n: 'James Baker', r: 'Director', a: 'JB'}
+      ];
+    }
+    tierChip.textContent = tier;
+    barTier.textContent = tier + ' (' + approvers.length + ' approver' + (approvers.length > 1 ? 's in sequence' : '') + ')';
+    document.getElementById('routingTotal').firstChild.textContent = '$' + grand.toLocaleString('en-AU', {minimumFractionDigits: 2}) + ' ';
+    document.getElementById('barTotal').textContent = '$' + grand.toLocaleString('en-AU', {minimumFractionDigits: 2});
+
+    flow.innerHTML = `
+      <div class="routing-step you">
+        <div class="step-num">●</div>
+        <div class="avatar">JB</div>
+        <div class="who"><div class="name">James Baker</div><div class="role">Drafted by</div></div>
+        <span class="you-badge">You</span>
+      </div>
+    ` + approvers.map((a, i) => `
+      <div class="routing-step">
+        <div class="step-num">${i+1}</div>
+        <div class="avatar">${a.a}</div>
+        <div class="who"><div class="name">${a.n}</div><div class="role">${a.r}</div></div>
+      </div>
+    `).join('');
+  }
+  function syncSupplier(){}
+</script>
+
+</body>
+</html>
