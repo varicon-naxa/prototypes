@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup 19 — AP-visible toggle on Resource Cost Sheet</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #1a2336; font-size: 13px; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 220px; background: #1a2336; color: #cfd5e0; flex-shrink: 0; display: flex; flex-direction: column; }
+  .sidebar-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .sidebar-top .v-icon { width: 30px; height: 30px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 16px; }
+  .sidebar-top .collapse { background: none; border: none; color: rgba(255,255,255,.45); font-size: 16px; cursor: pointer; padding: 4px 8px; }
+  .org-row { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .org-row .org-icon { width: 24px; height: 24px; border-radius: 50%; background: #4a5568; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .org-row .org-name { flex: 1; font-size: 12.5px; color: #f7941d; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .org-row .chev { color: rgba(255,255,255,.4); font-size: 14px; }
+  .sidebar-nav { padding: 6px 0; flex: 1; overflow-y: auto; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 14px; font-size: 12.5px; cursor: pointer; color: #cfd5e0; text-decoration: none; }
+  .nav-item:hover { background: rgba(255,255,255,.04); }
+  .nav-item.active { background: #f7941d; color: #fff; }
+  .nav-item .icon { width: 16px; text-align: center; opacity: 0.75; }
+  .nav-item .chev { margin-left: auto; opacity: 0.4; font-size: 11px; }
+  .sidebar-section { padding: 8px 14px 4px; font-size: 10.5px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+  .sidebar-foot { padding: 10px 14px 14px; border-top: 1px solid rgba(255,255,255,.06); font-size: 12px; color: rgba(255,255,255,.6); }
+
+  /* Top bar */
+  .main { flex: 1; overflow-y: auto; }
+  .top-bar { background: #fff; border-bottom: 1px solid #e5e7eb; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .top-bar h1 { font-size: 15px; font-weight: 700; color: #1a2336; letter-spacing: 0.6px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 8px; }
+  .help-icon { width: 18px; height: 18px; border-radius: 50%; background: #f7941d; color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+  .top-bar-right { display: flex; align-items: center; gap: 8px; }
+  .btn-light { padding: 7px 14px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 12.5px; font-weight: 600; color: #374151; cursor: pointer; }
+  .btn-search { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid #cfe7f5; border-radius: 18px; background: #f0fafd; font-size: 12.5px; font-weight: 600; color: #1a2336; cursor: pointer; }
+  .btn-search .star { color: #f7941d; font-size: 13px; }
+  .btn-icon { width: 30px; height: 30px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 16px; color: #4a5568; cursor: pointer; }
+  .org-pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 8px 5px 5px; border-radius: 6px; cursor: pointer; }
+  .org-pill .v-mini { width: 22px; height: 22px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 11px; }
+  .org-pill .name { font-size: 12.5px; font-weight: 600; color: #1a2336; }
+  .org-pill .chev { font-size: 10px; color: #9ca3af; }
+
+  /* Sub-bar */
+  .sub-bar { background: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e5e7eb; gap: 12px; }
+  .sub-bar h2 { font-size: 16px; font-weight: 700; color: #1a2336; }
+  .sub-bar .meta { font-size: 12px; color: #6b7280; margin-top: 2px; font-family: ui-monospace, monospace; }
+  .btn-primary { padding: 10px 18px; border: none; border-radius: 6px; background: #f7941d; font-size: 13px; font-weight: 700; color: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary:hover { background: #e8850f; }
+
+  /* Content */
+  .content { padding: 18px 24px 60px; }
+  .annotation-banner { padding: 10px 14px; background: #f5f9ff; border: 1px solid #90caf9; border-radius: 8px; font-size: 12.5px; color: #1565c0; line-height: 1.55; margin-bottom: 14px; }
+  .annotation-banner strong { color: #0d47a1; }
+  .annotation-banner ul { margin: 4px 0 0 18px; }
+
+  /* Counts strip */
+  .counts-strip { display: flex; gap: 22px; margin-bottom: 16px; }
+  .count-card { padding: 10px 16px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; min-width: 130px; }
+  .count-card .lab { font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  .count-card .val { font-size: 18px; font-weight: 800; color: #1a2336; margin-top: 2px; }
+  .count-card.ap-visible { border-color: #4caf50; background: #f1fbf2; }
+  .count-card.ap-visible .val { color: #2e7d32; }
+  .count-card.ap-hidden { border-color: #d1d5db; background: #fafafa; }
+  .count-card.ap-hidden .val { color: #6b7280; }
+
+  /* Filter bar */
+  .filter-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .filter-chip { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 12.5px; color: #374151; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; min-width: 180px; }
+  .filter-chip .lab { color: #9ca3af; }
+  .filter-chip .chev { margin-left: auto; opacity: 0.5; font-size: 10px; }
+  .search-box { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 12.5px; color: #9ca3af; min-width: 220px; }
+
+  /* AP-visible filter pill — toggleable */
+  .ap-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 18px; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all 0.15s; border: 2px solid #4caf50; background: #f1fbf2; color: #2e7d32; position: relative; }
+  .ap-pill:hover { background: #e8f5e9; }
+  .ap-pill.active { background: #4caf50; color: #fff; }
+  .ap-pill .ap-pill-icon { font-size: 13px; }
+  .ap-pill .nu { background: #f7941d; color: #fff; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.4px; margin-left: 2px; }
+  .ap-pill.active .nu { background: rgba(255,255,255,0.25); }
+
+  /* Table */
+  .table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; overflow-x: auto; }
+  table.lines { width: 100%; border-collapse: collapse; min-width: 1100px; }
+  table.lines th { text-align: left; padding: 11px 14px; font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #e5e7eb; background: #fafafa; white-space: nowrap; }
+  table.lines th.ap-col { background: #f1fbf2; color: #2e7d32; }
+  table.lines td { padding: 11px 14px; font-size: 12.5px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; color: #1a2336; }
+  table.lines tr:last-child td { border-bottom: none; }
+  table.lines tr.ap-off td { color: #9ca3af; background: #fafafa; }
+  table.lines tr.ap-off td:first-child { color: #6b7280; }
+  table.lines tr:hover { background: #fafafa; }
+  table.lines tr.ap-off:hover { background: #f3f4f6; }
+  table.lines td.cb { width: 32px; text-align: center; }
+  table.lines td.action { width: 100px; }
+
+  /* Help icon in column header */
+  .th-help { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: #d1d5db; color: #fff; font-size: 9px; font-weight: 800; cursor: help; outline: none; }
+  .th-help:hover { background: #4caf50; }
+  .th-help .th-tip { display: none; position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #1a2336; color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 11.5px; font-weight: 500; white-space: normal; width: 220px; line-height: 1.4; z-index: 10; text-transform: none; letter-spacing: 0; box-shadow: 0 6px 16px rgba(0,0,0,0.18); }
+  .th-help .th-tip::before { content: ''; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-bottom-color: #1a2336; }
+  .th-help:hover .th-tip, .th-help:focus .th-tip { display: block; }
+
+  /* Toggle switch */
+  .toggle { position: relative; display: inline-block; width: 36px; height: 20px; cursor: pointer; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle .track { position: absolute; inset: 0; background: #d1d5db; border-radius: 12px; transition: 0.2s; }
+  .toggle .track:before { content: ''; position: absolute; height: 14px; width: 14px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+  .toggle input:checked + .track { background: #4caf50; }
+  .toggle input:checked + .track:before { transform: translateX(16px); }
+
+  .ap-cell { display: inline-flex; align-items: center; gap: 8px; }
+  .ap-status-text { font-size: 11px; font-weight: 700; }
+  .ap-status-text.on { color: #2e7d32; }
+  .ap-status-text.off { color: #9ca3af; }
+
+  .row-actions button { background: none; border: none; cursor: pointer; padding: 3px 5px; color: #6b7280; font-size: 14px; }
+  .row-actions button:hover { color: #f7941d; }
+
+  .table-foot { display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 10px 16px; font-size: 12px; color: #6b7280; border-top: 1px solid #f3f4f6; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <div class="v-icon">V</div>
+      <button class="collapse">«</button>
+    </div>
+    <div class="org-row">
+      <div class="org-icon">VI</div>
+      <span class="org-name">Varicon Info</span>
+      <span class="chev">›</span>
+    </div>
+    <div class="sidebar-nav">
+      <a class="nav-item"><span class="icon">📁</span> Projects</a>
+      <a class="nav-item"><span class="icon">📊</span> Dashboard</a>
+      <a class="nav-item"><span class="icon">🖼</span> Gallery</a>
+      <a class="nav-item"><span class="icon">⏱</span> Timesheet</a>
+      <a class="nav-item"><span class="icon">🗓</span> Leave <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">📅</span> Scheduler <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">📄</span> Daywork Docket</a>
+      <a class="nav-item"><span class="icon">🛒</span> Purchase Order</a>
+      <a class="nav-item"><span class="icon">🚚</span> Delivery Docket</a>
+      <a class="nav-item"><span class="icon">💰</span> Bills</a>
+      <a class="nav-item"><span class="icon">📋</span> Forms <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">🔧</span> Plant &amp; Equipment <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">👥</span> Resource Assigner</a>
+      <a class="nav-item"><span class="icon">🏪</span> Suppliers</a>
+      <a class="nav-item"><span class="icon">🗂</span> File Manager</a>
+      <a class="nav-item"><span class="icon">👤</span> User Management <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">💵</span> Payroll Settings <span class="chev">▾</span></a>
+      <a class="nav-item active"><span class="icon">⚙️</span> Settings</a>
+      <div class="sidebar-section">Settings</div>
+      <a class="nav-item" style="padding-left: 30px;">Cost Centre</a>
+      <a class="nav-item" style="padding-left: 30px;">Accounting Code</a>
+      <a class="nav-item" style="padding-left: 30px;">Allowance</a>
+      <a class="nav-item" style="padding-left: 30px;">Employee Cost Sheet</a>
+      <a class="nav-item active" style="padding-left: 30px;">Resource Cost Sheet</a>
+      <a class="nav-item" style="padding-left: 30px;">Estimation Sheet Formatter</a>
+      <a class="nav-item" style="padding-left: 30px;">Segment</a>
+      <a class="nav-item" style="padding-left: 30px;">Organisation</a>
+      <a class="nav-item" style="padding-left: 30px;">Other Settings</a>
+    </div>
+    <div class="sidebar-foot">Mockup 19 · AP-visible toggle</div>
+  </div>
+
+  <div class="main">
+
+    <div class="top-bar">
+      <div>
+        <h1>Resource Cost Sheet <span class="help-icon">?</span></h1>
+      </div>
+      <div class="top-bar-right">
+        <button class="btn-light">Initial Data Upload</button>
+        <button class="btn-search"><span class="star">✦</span> Search</button>
+        <button class="btn-icon">+</button>
+        <div class="org-pill">
+          <div class="v-mini">V</div>
+          <span class="name">Varicon Info</span>
+          <span class="chev">▾</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sub-bar">
+      <div>
+        <h2>Master Cost Sheet</h2>
+        <div class="meta">ID: 2c1ccfd5-2372-4e6e-b62b-c77d8c0abd67</div>
+      </div>
+      <button class="btn-primary">+ Create New Resource</button>
+    </div>
+
+    <div class="content">
+
+      <div class="annotation-banner">
+        <strong>Item 19 — AP-visible toggle on Resource Cost Sheet (after).</strong>
+        <ul>
+          <li>New <strong>"Visible in AP"</strong> column with a per-row toggle — controls whether a resource appears in the Resource dropdown on Add PO and Add Bill</li>
+          <li>Migration default: generic resource types (Material, Labour, Subcontractor, Other, "LS …", Miscellaneous) → ON; specific Plant &amp; Equipment items (machines, attachments) → OFF</li>
+          <li>New <strong>filter pill</strong> in the toolbar — "Visible in AP" — shown active by default so admins focus on the AP-relevant subset; flip to see hidden equipment rows</li>
+          <li>Counts strip at the top breaks the master list into <strong>visible in AP</strong> vs <strong>hidden from AP</strong> so admins can see at-a-glance how the migration landed</li>
+          <li>Hidden rows render in dimmed grey so the visual distinction is clear when "show all" is toggled</li>
+        </ul>
+      </div>
+
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <button class="filter-chip"><span class="lab">Filter by Resource Type</span><span class="chev">▾</span></button>
+        <button class="filter-chip"><span class="lab">Filter by Supplier</span><span class="chev">▾</span></button>
+        <button class="ap-pill active" onclick="toggleApFilter(this)">
+          <span class="ap-pill-icon">✓</span>
+          Showing AP-visible only
+          <span class="nu">NEW</span>
+        </button>
+        <div class="search-box" style="margin-left: auto;">🔍 Search resource</div>
+      </div>
+
+      <!-- Table -->
+      <div class="table-wrap">
+        <table class="lines">
+          <thead>
+            <tr>
+              <th class="cb"><input type="checkbox"></th>
+              <th>Resource Code</th>
+              <th>Resource Name</th>
+              <th>Resource Type</th>
+              <th>Accounting Code</th>
+              <th>Unit</th>
+              <th class="ap-col">
+                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                  Visible in AP
+                  <span class="th-help" tabindex="0">?<span class="th-tip">This resource will only show up for purchase orders or bills if selected.</span></span>
+                </span>
+              </th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+
+            <!-- Visible in AP -->
+            <tr>
+              <td class="cb"><input type="checkbox"></td>
+              <td>Plumbing Materials</td>
+              <td>Plumbing Materials</td>
+              <td>Material</td>
+              <td>500-100</td>
+              <td>EA</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
+                  <span class="ap-status-text on">ON</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr>
+              <td class="cb"><input type="checkbox"></td>
+              <td>Bedding Sand</td>
+              <td>Bedding Sand</td>
+              <td>Material</td>
+              <td>500-100</td>
+              <td>m3</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
+                  <span class="ap-status-text on">ON</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr>
+              <td class="cb"><input type="checkbox"></td>
+              <td>Boral m3</td>
+              <td>Boral m3</td>
+              <td>Material</td>
+              <td>500-100</td>
+              <td>m3</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
+                  <span class="ap-status-text on">ON</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr>
+              <td class="cb"><input type="checkbox"></td>
+              <td>Bunnings</td>
+              <td>Bunnings</td>
+              <td>Material</td>
+              <td>500-100</td>
+              <td>EA</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
+                  <span class="ap-status-text on">ON</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr>
+              <td class="cb"><input type="checkbox"></td>
+              <td>Engineer</td>
+              <td>Engineer</td>
+              <td>Labour</td>
+              <td>500-200</td>
+              <td>Hour</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
+                  <span class="ap-status-text on">ON</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr>
+              <td class="cb"><input type="checkbox"></td>
+              <td>Labourer</td>
+              <td>Labourer</td>
+              <td>Labour</td>
+              <td>500-200</td>
+              <td>Hour</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
+                  <span class="ap-status-text on">ON</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr>
+              <td class="cb"><input type="checkbox"></td>
+              <td>Supervisor</td>
+              <td>Supervisor</td>
+              <td>Labour</td>
+              <td>500-200</td>
+              <td>Hour</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
+                  <span class="ap-status-text on">ON</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr>
+              <td class="cb"><input type="checkbox"></td>
+              <td>LS Labour</td>
+              <td>LS Labour</td>
+              <td>Labour</td>
+              <td>500-200</td>
+              <td>Item</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
+                  <span class="ap-status-text on">ON</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr>
+              <td class="cb"><input type="checkbox"></td>
+              <td>LS Materials</td>
+              <td>LS Materials</td>
+              <td>Material</td>
+              <td>500-100</td>
+              <td>Item</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
+                  <span class="ap-status-text on">ON</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr>
+              <td class="cb"><input type="checkbox"></td>
+              <td>project resource</td>
+              <td>project resource</td>
+              <td>Miscellaneous</td>
+              <td>500-500</td>
+              <td>Item</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
+                  <span class="ap-status-text on">ON</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+
+            <!-- Hidden from AP — shown dimmed; would normally be filtered out but visible here to demo the off state -->
+            <tr class="ap-off">
+              <td class="cb"><input type="checkbox"></td>
+              <td>EX100</td>
+              <td>EX100</td>
+              <td>Plant and Equipment</td>
+              <td>—</td>
+              <td>Hour</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox"><span class="track"></span></label>
+                  <span class="ap-status-text off">OFF</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr class="ap-off">
+              <td class="cb"><input type="checkbox"></td>
+              <td>30t Excavator</td>
+              <td>Volvo 30t Excavator</td>
+              <td>Plant and Equipment</td>
+              <td>—</td>
+              <td>Hour</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox"><span class="track"></span></label>
+                  <span class="ap-status-text off">OFF</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr class="ap-off">
+              <td class="cb"><input type="checkbox"></td>
+              <td>CAT745 Dump Truck</td>
+              <td>CAT745 Dump Truck</td>
+              <td>Plant and Equipment</td>
+              <td>—</td>
+              <td>Hour</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox"><span class="track"></span></label>
+                  <span class="ap-status-text off">OFF</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr class="ap-off">
+              <td class="cb"><input type="checkbox"></td>
+              <td>30t Excavator Wet Hire (Excluding Fuel)</td>
+              <td>30t Excavator Wet Hire (Excluding Fuel)</td>
+              <td>Plant and Equipment</td>
+              <td>—</td>
+              <td>Hour</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox"><span class="track"></span></label>
+                  <span class="ap-status-text off">OFF</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr class="ap-off">
+              <td class="cb"><input type="checkbox"></td>
+              <td>EX036</td>
+              <td>36T Excavator</td>
+              <td>Plant and Equipment</td>
+              <td>—</td>
+              <td>Day</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox"><span class="track"></span></label>
+                  <span class="ap-status-text off">OFF</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr class="ap-off">
+              <td class="cb"><input type="checkbox"></td>
+              <td>FloatEquipment</td>
+              <td>FloatEquipment</td>
+              <td>Miscellaneous</td>
+              <td>—</td>
+              <td>Day</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox"><span class="track"></span></label>
+                  <span class="ap-status-text off">OFF</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr class="ap-off">
+              <td class="cb"><input type="checkbox"></td>
+              <td>TBC</td>
+              <td>VAC Truck</td>
+              <td>Plant and Equipment</td>
+              <td>—</td>
+              <td>Day</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox"><span class="track"></span></label>
+                  <span class="ap-status-text off">OFF</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+            <tr class="ap-off">
+              <td class="cb"><input type="checkbox"></td>
+              <td>TBC</td>
+              <td>6X4 Watercart</td>
+              <td>Plant and Equipment</td>
+              <td>—</td>
+              <td>Day</td>
+              <td>
+                <div class="ap-cell">
+                  <label class="toggle"><input type="checkbox"><span class="track"></span></label>
+                  <span class="ap-status-text off">OFF</span>
+                </div>
+              </td>
+              <td class="row-actions"><button>✏️</button><button>📤</button><button>ⓘ</button></td>
+            </tr>
+
+          </tbody>
+        </table>
+        <div class="table-foot">
+          <span>Rows per page</span>
+          <span style="border:1px solid #d1d5db;border-radius:4px;padding:2px 8px">200 ▾</span>
+          <span>1–18 of 55</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleApFilter(btn) {
+    btn.classList.toggle('active');
+    const tbody = document.getElementById('tbody');
+    if (btn.classList.contains('active')) {
+      btn.querySelector('.ap-pill-icon').textContent = '✓';
+      btn.childNodes[2].nodeValue = ' Showing AP-visible only ';
+      tbody.querySelectorAll('tr.ap-off').forEach(r => r.style.display = '');
+    } else {
+      btn.querySelector('.ap-pill-icon').textContent = '○';
+      btn.childNodes[2].nodeValue = ' Show all resources ';
+      tbody.querySelectorAll('tr.ap-off').forEach(r => r.style.display = '');
+    }
+  }
+</script>
+</body>
+</html>

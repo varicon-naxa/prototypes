@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup 16 — Bulk assign + AI predictions on Bill lines</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #1a2336; font-size: 13px; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 220px; background: #1a2336; color: #cfd5e0; flex-shrink: 0; display: flex; flex-direction: column; }
+  .sidebar-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .sidebar-top .v-icon { width: 30px; height: 30px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 16px; }
+  .sidebar-top .collapse { background: none; border: none; color: rgba(255,255,255,.45); font-size: 16px; cursor: pointer; padding: 4px 8px; }
+  .org-row { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .org-row .org-icon { width: 24px; height: 24px; border-radius: 50%; background: #4a5568; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .org-row .org-name { flex: 1; font-size: 12.5px; color: #f7941d; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .org-row .chev { color: rgba(255,255,255,.4); font-size: 14px; }
+  .sidebar-nav { padding: 6px 0; flex: 1; overflow-y: auto; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 14px; font-size: 12.5px; cursor: pointer; color: #cfd5e0; text-decoration: none; }
+  .nav-item:hover { background: rgba(255,255,255,.04); }
+  .nav-item.active { background: #f7941d; color: #fff; }
+  .nav-item .icon { width: 16px; text-align: center; opacity: 0.75; }
+  .nav-item .chev { margin-left: auto; opacity: 0.4; font-size: 11px; }
+  .nav-badge { margin-left: auto; background: #f7941d; color: #fff; font-size: 10px; font-weight: 800; min-width: 20px; height: 18px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; }
+  .sidebar-foot { padding: 10px 14px 14px; border-top: 1px solid rgba(255,255,255,.06); font-size: 12px; color: rgba(255,255,255,.6); }
+
+  /* Top bar */
+  .main { flex: 1; overflow-y: auto; padding-bottom: 60px; }
+  .top-bar { background: #fff; border-bottom: 1px solid #e5e7eb; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .back-btn { background: none; border: none; cursor: pointer; font-size: 18px; color: #4a5568; padding: 4px 8px; }
+  .top-bar h1 { font-size: 15px; font-weight: 700; color: #1a2336; letter-spacing: 0.6px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 8px; }
+  .help-icon { width: 18px; height: 18px; border-radius: 50%; background: #f7941d; color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+  .top-bar-right { display: flex; align-items: center; gap: 8px; }
+  .btn-light { padding: 7px 14px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 12.5px; font-weight: 600; color: #374151; cursor: pointer; }
+  .btn-search { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid #cfe7f5; border-radius: 18px; background: #f0fafd; font-size: 12.5px; font-weight: 600; color: #1a2336; cursor: pointer; }
+  .btn-search .star { color: #f7941d; font-size: 13px; }
+  .btn-icon { width: 30px; height: 30px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 16px; color: #4a5568; cursor: pointer; }
+  .org-pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 8px 5px 5px; border-radius: 6px; cursor: pointer; }
+  .org-pill .v-mini { width: 22px; height: 22px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 11px; }
+  .org-pill .name { font-size: 12.5px; font-weight: 600; color: #1a2336; }
+  .org-pill .chev { font-size: 10px; color: #9ca3af; }
+
+  .crumb { font-size: 12px; color: #6b7280; padding: 8px 24px; background: #fff; }
+  .crumb a { color: #f7941d; text-decoration: none; }
+
+  /* Content */
+  .content { padding: 18px 24px; }
+  .annotation-banner { padding: 10px 14px; background: #f5f9ff; border: 1px solid #90caf9; border-radius: 8px; font-size: 12.5px; color: #1565c0; line-height: 1.55; margin-bottom: 14px; }
+  .annotation-banner strong { color: #0d47a1; }
+  .annotation-banner ul { margin: 4px 0 0 18px; }
+
+  /* Header card */
+  .summary-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px 20px; margin-bottom: 14px; }
+  .summary-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: #1a2336; }
+  .field-row { display: flex; gap: 12px; margin-bottom: 10px; }
+  .field-row:last-child { margin-bottom: 0; }
+  .field { flex: 1; }
+  .field label { display: block; font-size: 11.5px; font-weight: 600; color: #4a5568; margin-bottom: 4px; }
+  .field input, .field select { width: 100%; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: #fff; }
+  .po-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: #fff8f0; border: 1px solid #f7941d; border-radius: 6px; font-size: 12.5px; color: #c2410c; font-weight: 600; }
+
+  /* Line items section */
+  .lines-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px 20px; }
+  .lines-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
+  .lines-head h3 { font-size: 14px; font-weight: 700; color: #1a2336; }
+
+  /* Bulk action toolbar */
+  .bulk-toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #fafafa; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .bulk-toolbar .selection-info { font-size: 12px; font-weight: 600; color: #1a2336; padding-right: 8px; border-right: 1px solid #e5e7eb; margin-right: 4px; }
+  .bulk-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 12px; font-weight: 600; color: #374151; cursor: pointer; }
+  .bulk-btn:hover { border-color: #f7941d; color: #f7941d; }
+  .bulk-btn.existing { background: #fff; }
+  .bulk-btn.new { background: #fff; position: relative; }
+  .bulk-btn.new::after { content: 'NEW'; position: absolute; top: -7px; right: -8px; background: #f7941d; color: #fff; font-size: 8.5px; font-weight: 800; padding: 1px 5px; border-radius: 3px; letter-spacing: 0.4px; }
+  .bulk-btn.disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Lines table */
+  .lines-wrap { overflow-x: auto; }
+  table.lines { width: 100%; border-collapse: collapse; min-width: 1100px; }
+  table.lines th { text-align: left; padding: 9px 8px; font-size: 10.5px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #e5e7eb; background: #fafafa; white-space: nowrap; }
+  table.lines td { padding: 7px 8px; font-size: 12.5px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  table.lines tr:last-child td { border-bottom: none; }
+  table.lines th.right, table.lines td.right { text-align: right; }
+  table.lines th.cb, table.lines td.cb { width: 32px; text-align: center; padding-left: 12px; }
+  table.lines td.idx { width: 28px; color: #9ca3af; font-weight: 600; text-align: center; }
+
+  /* Cell controls */
+  .cell-input { width: 100%; padding: 7px 9px; border: 1px solid #d1d5db; border-radius: 5px; font-size: 12.5px; background: #fff; color: #1a2336; }
+  .cell-input.predicted { background: #fafbff; border-color: #c7dafc; padding-right: 30px; }
+  .cell-input:focus { outline: none; border-color: #f7941d; background: #fff; }
+  .cell-wrap { position: relative; }
+  .cell-wrap.predicted .ai-badge { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; font-size: 9px; font-weight: 800; padding: 2px 5px; border-radius: 3px; letter-spacing: 0.4px; cursor: help; display: inline-flex; align-items: center; gap: 3px; }
+  .cell-wrap.predicted .ai-badge::before { content: "✦"; font-size: 9px; }
+  .ai-badge .tooltip { display: none; position: absolute; bottom: 100%; right: 0; margin-bottom: 4px; background: #1a2336; color: #fff; padding: 5px 10px; border-radius: 5px; font-size: 11px; font-weight: 500; white-space: nowrap; letter-spacing: 0; }
+  .cell-wrap.predicted:hover .ai-badge .tooltip { display: block; }
+  .cell-wrap.predicted .ai-badge .tooltip::after { content: ''; position: absolute; top: 100%; right: 12px; border: 4px solid transparent; border-top-color: #1a2336; }
+
+  .min-cell-resource { min-width: 200px; }
+  .min-cell-acct { min-width: 180px; }
+  .min-cell-cc { min-width: 170px; }
+  .min-cell-desc { min-width: 200px; }
+  .min-cell-project { min-width: 200px; }
+  .min-cell-num { min-width: 100px; }
+
+  .add-line-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px dashed #cbd5e0; border-radius: 6px; background: #fff; font-size: 12.5px; color: #6b7280; cursor: pointer; margin-top: 10px; }
+  .add-line-btn:hover { border-color: #f7941d; color: #f7941d; }
+
+  .totals { display: flex; flex-direction: column; align-items: flex-end; padding: 12px 4px 0; }
+  .totals .row { display: flex; gap: 40px; padding: 3px 0; font-size: 12.5px; }
+  .totals .row .t-label { color: #6b7280; min-width: 140px; text-align: right; }
+  .totals .row .t-val { font-weight: 600; min-width: 100px; text-align: right; color: #1a2336; }
+  .totals .total-row { font-size: 16px; font-weight: 700; border-top: 2px solid #e5e7eb; padding-top: 6px; margin-top: 4px; }
+
+  .legend { display: flex; gap: 14px; align-items: center; font-size: 11.5px; color: #6b7280; padding: 10px 0 0; flex-wrap: wrap; }
+  .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+  .legend-badge { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; font-size: 9px; font-weight: 800; padding: 2px 5px; border-radius: 3px; letter-spacing: 0.4px; display: inline-flex; align-items: center; gap: 3px; }
+  .legend-badge::before { content: "✦"; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <div class="v-icon">V</div>
+      <button class="collapse">«</button>
+    </div>
+    <div class="org-row">
+      <div class="org-icon">CC</div>
+      <span class="org-name">Cookie's Civil</span>
+      <span class="chev">›</span>
+    </div>
+    <div class="sidebar-nav">
+      <a class="nav-item"><span class="icon">📁</span> Projects</a>
+      <a class="nav-item"><span class="icon">📊</span> Dashboard</a>
+      <a class="nav-item"><span class="icon">🖼</span> Gallery</a>
+      <a class="nav-item"><span class="icon">⏱</span> Timesheet</a>
+      <a class="nav-item"><span class="icon">🗓</span> Leave <span class="nav-badge">8</span></a>
+      <a class="nav-item"><span class="icon">📅</span> Scheduler <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">📄</span> Daywork Docket</a>
+      <a class="nav-item"><span class="icon">🛒</span> Purchase Order <span class="nav-badge">1</span></a>
+      <a class="nav-item"><span class="icon">🚚</span> Delivery Docket</a>
+      <a class="nav-item active"><span class="icon">💰</span> Bills <span class="nav-badge">3</span></a>
+      <a class="nav-item"><span class="icon">📋</span> Forms <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">🔧</span> Plant &amp; Equipment <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">👥</span> Resource Assigner</a>
+      <a class="nav-item"><span class="icon">🏪</span> Suppliers</a>
+      <a class="nav-item"><span class="icon">🗂</span> File Manager</a>
+      <a class="nav-item"><span class="icon">👤</span> User Management <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">💵</span> Payroll Settings <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">⚙️</span> Settings <span class="chev">▾</span></a>
+    </div>
+    <div class="sidebar-foot">Mockup 16 · Bulk-assign + AI predictions</div>
+  </div>
+
+  <div class="main">
+
+    <div class="top-bar">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <button class="back-btn">←</button>
+        <h1>Edit Bill <span class="help-icon">?</span></h1>
+      </div>
+      <div class="top-bar-right">
+        <button class="btn-light">Initial Data Upload</button>
+        <button class="btn-search"><span class="star">✦</span> Search</button>
+        <button class="btn-icon">+</button>
+        <div class="org-pill">
+          <div class="v-mini">V</div>
+          <span class="name">Varicon Info</span>
+          <span class="chev">▾</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="crumb"><a href="#">Bills list</a> &rsaquo; Edit bill</div>
+
+    <div class="content">
+
+      <div class="annotation-banner">
+        <strong>Item 16 — Bulk-assign on bill lines + AI-predicted resources (after).</strong>
+        <ul>
+          <li><strong>Resource</strong> is auto-predicted from <strong>(a)</strong> the linked PO line, or <strong>(b)</strong> the supplier's default resource — whichever is more specific. Shows a small <span class="legend-badge">AI</span> badge; hover to see the source.</li>
+          <li><strong>Accounting Code</strong> follows the Resource automatically (it's linked, not a separate prediction) — no AI badge needed; it just changes when Resource changes.</li>
+          <li><strong>Cost Centre</strong> is also predicted (from PO line, or project history when no PO line exists) — shows the AI badge.</li>
+          <li>Manually editing a predicted value <strong>removes the badge</strong> — confirms the user has reviewed it.</li>
+          <li><strong>Bulk-assign</strong> mirrors the existing "Bulk assign project" pattern — adds Resource / Accounting Code / Cost Centre. Apply to selected rows or all rows.</li>
+        </ul>
+      </div>
+
+      <!-- Summary card (compressed) -->
+      <div class="summary-card">
+        <h3>Summary</h3>
+        <div class="field-row">
+          <div class="field">
+            <label>Supplier *</label>
+            <select><option>Yarra Readymix Pty Ltd</option></select>
+          </div>
+          <div class="field">
+            <label>Linked PO &amp; Dockets</label>
+            <input type="text" value="PO-VAR011-0001 + 3 dockets" readonly style="background:#fafafa;">
+          </div>
+          <div class="field">
+            <label>Supplier invoice ref</label>
+            <input type="text" value="YRX-44211">
+          </div>
+          <div class="field">
+            <label>Transaction date</label>
+            <input type="text" value="Sun 26/04/2026">
+          </div>
+        </div>
+      </div>
+
+      <!-- Line items -->
+      <div class="lines-card">
+        <div class="lines-head">
+          <h3>Line items</h3>
+        </div>
+
+        <div class="bulk-toolbar">
+          <span class="selection-info">3 of 5 selected</span>
+          <button class="bulk-btn existing">Bulk assign project</button>
+          <button class="bulk-btn new">Bulk assign Resource</button>
+          <button class="bulk-btn new">Bulk assign Accounting Code</button>
+          <button class="bulk-btn new">Bulk assign Cost Centre</button>
+          <span style="flex:1"></span>
+          <button class="bulk-btn">+ Add new line</button>
+        </div>
+
+        <div class="lines-wrap">
+          <table class="lines">
+            <thead>
+              <tr>
+                <th class="cb"><input type="checkbox" checked></th>
+                <th></th>
+                <th class="min-cell-desc">Description</th>
+                <th class="min-cell-project">Project</th>
+                <th class="min-cell-resource">Resource</th>
+                <th class="min-cell-acct">Accounting Code</th>
+                <th class="min-cell-cc">Cost Centre</th>
+                <th class="min-cell-num right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+
+              <!-- Row 1 — fully predicted from PO -->
+              <tr>
+                <td class="cb"><input type="checkbox" checked></td>
+                <td class="idx">1</td>
+                <td><input class="cell-input" value="GP 25MPa concrete — 50m³"></td>
+                <td><select class="cell-input"><option>(VAR011) Residential Estate</option></select></td>
+                <td>
+                  <div class="cell-wrap predicted">
+                    <select class="cell-input predicted"><option>(Material m3) Boral m3</option></select>
+                    <span class="ai-badge">AI<span class="tooltip">Predicted from PO-VAR011-0001 line 1</span></span>
+                  </div>
+                </td>
+                <td>
+                  <div class="cell-wrap">
+                    <select class="cell-input"><option>500-100 Material costs</option></select>
+                  </div>
+                </td>
+                <td>
+                  <div class="cell-wrap predicted">
+                    <select class="cell-input predicted"><option>04-CC-Concrete works</option></select>
+                    <span class="ai-badge">AI<span class="tooltip">Predicted from PO-VAR011-0001 line 1</span></span>
+                  </div>
+                </td>
+                <td class="right">$11,400.00</td>
+              </tr>
+
+              <!-- Row 2 — fully predicted, then user manually changed Resource (no badge on Resource) -->
+              <tr>
+                <td class="cb"><input type="checkbox" checked></td>
+                <td class="idx">2</td>
+                <td><input class="cell-input" value="GP 25MPa concrete — 50m³"></td>
+                <td><select class="cell-input"><option>(VAR011) Residential Estate</option></select></td>
+                <td>
+                  <div class="cell-wrap">
+                    <select class="cell-input"><option>(Material m3) Boral m3 — premium mix</option></select>
+                  </div>
+                </td>
+                <td>
+                  <div class="cell-wrap">
+                    <select class="cell-input"><option>500-100 Material costs</option></select>
+                  </div>
+                </td>
+                <td>
+                  <div class="cell-wrap predicted">
+                    <select class="cell-input predicted"><option>04-CC-Concrete works</option></select>
+                    <span class="ai-badge">AI<span class="tooltip">Predicted from PO-VAR011-0001 line 1</span></span>
+                  </div>
+                </td>
+                <td class="right">$11,400.00</td>
+              </tr>
+
+              <!-- Row 3 — predicted from supplier default (no PO link for this line) -->
+              <tr>
+                <td class="cb"><input type="checkbox" checked></td>
+                <td class="idx">3</td>
+                <td><input class="cell-input" value="Pump hire — line pump 4hr"></td>
+                <td><select class="cell-input"><option>(VAR011) Residential Estate</option></select></td>
+                <td>
+                  <div class="cell-wrap predicted">
+                    <select class="cell-input predicted"><option>(Plant hire hour) Pump hire</option></select>
+                    <span class="ai-badge">AI<span class="tooltip">Predicted from supplier default for Yarra Readymix</span></span>
+                  </div>
+                </td>
+                <td>
+                  <div class="cell-wrap">
+                    <select class="cell-input"><option>500-300 Plant hire</option></select>
+                  </div>
+                </td>
+                <td>
+                  <select class="cell-input"><option>Select Cost Centre</option></select>
+                </td>
+                <td class="right">$1,920.00</td>
+              </tr>
+
+              <!-- Row 4 — nothing predictable -->
+              <tr>
+                <td class="cb"><input type="checkbox"></td>
+                <td class="idx">4</td>
+                <td><input class="cell-input" value="Saturday delivery surcharge"></td>
+                <td><select class="cell-input"><option>(VAR011) Residential Estate</option></select></td>
+                <td><select class="cell-input"><option>Select resource</option></select></td>
+                <td><select class="cell-input"><option>Select Acc. Code</option></select></td>
+                <td><select class="cell-input"><option>Select Cost Centre</option></select></td>
+                <td class="right">$450.00</td>
+              </tr>
+
+              <!-- Row 5 — nothing predictable -->
+              <tr>
+                <td class="cb"><input type="checkbox"></td>
+                <td class="idx">5</td>
+                <td><input class="cell-input" value="Concrete sample testing"></td>
+                <td><select class="cell-input"><option>(VAR011) Residential Estate</option></select></td>
+                <td><select class="cell-input"><option>Select resource</option></select></td>
+                <td><select class="cell-input"><option>Select Acc. Code</option></select></td>
+                <td><select class="cell-input"><option>Select Cost Centre</option></select></td>
+                <td class="right">$320.00</td>
+              </tr>
+
+            </tbody>
+          </table>
+        </div>
+
+        <button class="add-line-btn">+ Add new line</button>
+
+        <div class="totals">
+          <div class="row"><div class="t-label">Subtotal</div><div class="t-val">$25,490.00</div></div>
+          <div class="row"><div class="t-label">Plus GST 10%</div><div class="t-val">$2,549.00</div></div>
+          <div class="row total-row"><div class="t-label">Total Incl. GST</div><div class="t-val">$28,039.00</div></div>
+        </div>
+
+        <div class="legend">
+          <span class="legend-item"><span class="legend-badge">AI</span> Varicon predicted this from the supplier or PO</span>
+          <span class="legend-item">Manually editing the cell removes the badge</span>
+          <span class="legend-item">Hover the badge to see the source</span>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>

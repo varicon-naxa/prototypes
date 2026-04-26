@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup 17 + 12 — Approver collision (runtime auto-merge)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #1a2336; font-size: 13px; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 220px; background: #1a2336; color: #cfd5e0; flex-shrink: 0; display: flex; flex-direction: column; }
+  .sidebar-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .sidebar-top .v-icon { width: 30px; height: 30px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 16px; }
+  .sidebar-top .collapse { background: none; border: none; color: rgba(255,255,255,.45); font-size: 16px; cursor: pointer; padding: 4px 8px; }
+  .org-row { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .org-row .org-icon { width: 24px; height: 24px; border-radius: 50%; background: #4a5568; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .org-row .org-name { flex: 1; font-size: 12.5px; color: #f7941d; font-weight: 600; }
+  .org-row .chev { color: rgba(255,255,255,.4); font-size: 14px; }
+  .sidebar-nav { padding: 6px 0; flex: 1; overflow-y: auto; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 14px; font-size: 12.5px; cursor: pointer; color: #cfd5e0; text-decoration: none; }
+  .nav-item:hover { background: rgba(255,255,255,.04); }
+  .nav-item.active { background: #f7941d; color: #fff; }
+  .nav-item .icon { width: 16px; text-align: center; opacity: 0.75; }
+  .nav-item .chev { margin-left: auto; opacity: 0.4; font-size: 11px; }
+  .nav-badge { margin-left: auto; background: #f7941d; color: #fff; font-size: 10px; font-weight: 800; min-width: 20px; height: 18px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; }
+  .sidebar-foot { padding: 10px 14px 14px; border-top: 1px solid rgba(255,255,255,.06); font-size: 12px; color: rgba(255,255,255,.6); }
+
+  /* Top bar */
+  .main { flex: 1; overflow-y: auto; padding-bottom: 100px; }
+  .top-bar { background: #fff; border-bottom: 1px solid #e5e7eb; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .back-btn { background: none; border: none; cursor: pointer; font-size: 18px; color: #4a5568; padding: 4px 8px; }
+  .top-bar h1 { font-size: 15px; font-weight: 700; color: #1a2336; letter-spacing: 0.6px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 8px; }
+  .help-icon { width: 18px; height: 18px; border-radius: 50%; background: #f7941d; color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+  .top-bar-right { display: flex; align-items: center; gap: 8px; }
+  .btn-light { padding: 7px 14px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 12.5px; font-weight: 600; color: #374151; cursor: pointer; }
+  .btn-search { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid #cfe7f5; border-radius: 18px; background: #f0fafd; font-size: 12.5px; font-weight: 600; color: #1a2336; cursor: pointer; }
+  .btn-search .star { color: #f7941d; font-size: 13px; }
+  .btn-icon { width: 30px; height: 30px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 16px; color: #4a5568; cursor: pointer; }
+  .org-pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 8px 5px 5px; border-radius: 6px; cursor: pointer; }
+  .org-pill .v-mini { width: 22px; height: 22px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 11px; }
+  .org-pill .name { font-size: 12.5px; font-weight: 600; color: #1a2336; }
+  .org-pill .chev { font-size: 10px; color: #9ca3af; }
+
+  .crumb { font-size: 12px; color: #6b7280; padding: 8px 24px; background: #fff; }
+  .crumb a { color: #f7941d; text-decoration: none; }
+
+  .sub-bar { background: #fff; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e5e7eb; gap: 12px; }
+  .sub-bar h2 { font-size: 16px; font-weight: 700; color: #1a2336; }
+  .sub-bar .meta-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .status-pill { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 12px; background: #fff3e0; color: #c2410c; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  /* Content */
+  .content { padding: 18px 24px; }
+  .annotation-banner { padding: 10px 14px; background: #f5f9ff; border: 1px solid #90caf9; border-radius: 8px; font-size: 12.5px; color: #1565c0; line-height: 1.55; margin-bottom: 14px; }
+  .annotation-banner strong { color: #0d47a1; }
+  .annotation-banner ul { margin: 4px 0 0 18px; }
+
+  .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px 20px; margin-bottom: 14px; }
+  .panel h4 { font-size: 12px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; }
+  .summary-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12.5px; }
+  .summary-row .lab { color: #6b7280; }
+  .summary-row .val { font-weight: 600; color: #1a2336; }
+
+  /* Approval strip */
+  .approver-strip { display: flex; gap: 10px; padding: 6px 0; }
+  .approver-step { flex: 1; padding: 12px 14px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; display: flex; align-items: center; gap: 10px; font-size: 12.5px; position: relative; }
+  .approver-step.done { border-color: #4caf50; background: #f1fbf2; }
+  .approver-step.combined { border-color: #f7941d; background: #fff8f0; }
+  .approver-step .av { width: 26px; height: 26px; border-radius: 50%; background: #1a2336; color: #fff; font-size: 10.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .approver-step.done .av { background: #4caf50; }
+  .approver-step.combined .av { background: #f7941d; }
+  .approver-step .name { font-weight: 600; color: #1a2336; }
+  .approver-step .role { font-size: 11px; color: #6b7280; margin-top: 1px; }
+  .approver-step .merged-tag { display: inline-block; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 3px; background: #f7941d; color: #fff; text-transform: uppercase; letter-spacing: 0.4px; margin-left: 4px; vertical-align: middle; }
+  .approver-step .icon { font-size: 14px; }
+  .approver-step .step-meta { font-size: 10.5px; font-weight: 800; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+
+  .merge-explainer { padding: 10px 14px; margin-top: 10px; background: #fff8f0; border: 1px dashed #f7941d; border-radius: 8px; font-size: 12px; color: #4a5568; line-height: 1.5; display: flex; gap: 10px; align-items: flex-start; }
+  .merge-explainer .ico { width: 18px; height: 18px; flex-shrink: 0; background: #f7941d; color: #fff; border-radius: 50%; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; margin-top: 1px; }
+  .merge-explainer strong { color: #1a2336; }
+
+  /* Bottom action bar */
+  .action-bar {
+    position: fixed; bottom: 0; left: 220px; right: 0;
+    background: #fff; border-top: 1px solid #e5e7eb;
+    padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.04); z-index: 50;
+  }
+  .action-left { display: flex; align-items: center; gap: 12px; }
+  .btn-cancel { padding: 10px 18px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; color: #374151; cursor: pointer; }
+  .btn-reject { padding: 10px 18px; border: 1px solid #fecaca; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; color: #b91c1c; cursor: pointer; }
+  .btn-approve {
+    background: #f7941d; color: #fff; border: 2px solid #f7941d;
+    border-radius: 8px; padding: 10px 22px; font-size: 13.5px; font-weight: 700; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 2px 6px rgba(247,148,29,0.35);
+  }
+  .btn-approve .ico { font-size: 16px; }
+  .btn-approve .lbl { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
+  .btn-approve .lbl small { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.85); text-transform: uppercase; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <div class="v-icon">V</div>
+      <button class="collapse">«</button>
+    </div>
+    <div class="org-row">
+      <div class="org-icon">CC</div>
+      <span class="org-name">Cookie's Civil</span>
+      <span class="chev">›</span>
+    </div>
+    <div class="sidebar-nav">
+      <a class="nav-item"><span class="icon">📁</span> Projects</a>
+      <a class="nav-item"><span class="icon">📊</span> Dashboard</a>
+      <a class="nav-item"><span class="icon">🖼</span> Gallery</a>
+      <a class="nav-item"><span class="icon">⏱</span> Timesheet</a>
+      <a class="nav-item"><span class="icon">🗓</span> Leave <span class="nav-badge">8</span></a>
+      <a class="nav-item"><span class="icon">📅</span> Scheduler <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">📄</span> Daywork Docket</a>
+      <a class="nav-item"><span class="icon">🛒</span> Purchase Order <span class="nav-badge">1</span></a>
+      <a class="nav-item"><span class="icon">🚚</span> Delivery Docket</a>
+      <a class="nav-item active"><span class="icon">💰</span> Bills <span class="nav-badge">3</span></a>
+      <a class="nav-item"><span class="icon">📋</span> Forms <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">🔧</span> Plant &amp; Equipment <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">👥</span> Resource Assigner</a>
+      <a class="nav-item"><span class="icon">🏪</span> Suppliers</a>
+      <a class="nav-item"><span class="icon">🗂</span> File Manager</a>
+      <a class="nav-item"><span class="icon">👤</span> User Management <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">💵</span> Payroll Settings <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">⚙️</span> Settings <span class="chev">▾</span></a>
+    </div>
+    <div class="sidebar-foot">Mockup 17 + 12 · Approver auto-merge</div>
+  </div>
+
+  <div class="main">
+
+    <div class="top-bar">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <button class="back-btn">←</button>
+        <h1>Edit Bill <span class="help-icon">?</span></h1>
+      </div>
+      <div class="top-bar-right">
+        <button class="btn-light">Initial Data Upload</button>
+        <button class="btn-search"><span class="star">✦</span> Search</button>
+        <button class="btn-icon">+</button>
+        <div class="org-pill">
+          <div class="v-mini">V</div>
+          <span class="name">Varicon Info</span>
+          <span class="chev">▾</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="crumb"><a href="#">Bills list</a> &rsaquo; <a href="#">Awaiting my approval</a> &rsaquo; YRX-44211</div>
+
+    <div class="sub-bar">
+      <div>
+        <h2>Yarra Readymix Pty Ltd · YRX-44211</h2>
+        <div class="meta-row">
+          <span>Bill #BILL-VAR011-0034</span><span>·</span>
+          <span>Project (VAR011) Residential Estate</span><span>·</span>
+          <span>Due 09/05/2026</span>
+        </div>
+      </div>
+      <span class="status-pill">Awaiting your approval</span>
+    </div>
+
+    <div class="content">
+
+      <div class="annotation-banner">
+        <strong>Items 12 + 17 — Auto-merge approver collisions at runtime.</strong>
+        <ul>
+          <li>When two approval steps both resolve to the same person, Varicon collapses them into a <strong>single combined step</strong> on the bill — one click satisfies both</li>
+          <li>No more "Cannot Assign Same Approver" error; no more deleting the second approver to bypass the workflow</li>
+          <li>Audit log records the approval against <strong>both</strong> step 1 and step 2 with a note that they were auto-merged</li>
+          <li><em>Backlog:</em> a Strict-separation mode (Step 2 locked until a different person approves Step 1) for customers needing segregation of duties</li>
+        </ul>
+      </div>
+
+      <!-- Bill summary (light) -->
+      <div class="panel">
+        <h4>Summary</h4>
+        <div class="summary-row"><span class="lab">Supplier</span><span class="val">Yarra Readymix Pty Ltd</span></div>
+        <div class="summary-row"><span class="lab">Project</span><span class="val">(VAR011) Residential Estate</span></div>
+        <div class="summary-row"><span class="lab">Linked PO</span><span class="val">PO-VAR011-0001 + 3 dockets</span></div>
+        <div class="summary-row" style="border-top: 1px solid #f3f4f6; margin-top: 4px; padding-top: 8px;">
+          <span class="lab" style="font-weight: 700; color: #1a2336;">Total (incl. GST)</span>
+          <span class="val" style="font-size: 15px;">$28,039.00</span>
+        </div>
+      </div>
+
+      <!-- Approval workflow — 3 separate steps with collision note -->
+      <div class="panel">
+        <h4>Approval workflow</h4>
+        <div class="approver-strip">
+
+          <!-- Step 1 -->
+          <div class="approver-step combined">
+            <span class="icon">●</span>
+            <div class="av">JB</div>
+            <div>
+              <div class="name">You · James Baker</div>
+              <div class="role">Project Lead Contact · Step 1 of 3</div>
+              <div class="step-meta">Awaiting approval</div>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div class="approver-step combined">
+            <span class="icon">●</span>
+            <div class="av">JB</div>
+            <div>
+              <div class="name">You · James Baker</div>
+              <div class="role">Senior Manager · Step 2 of 3</div>
+              <div class="step-meta">Awaiting approval</div>
+            </div>
+          </div>
+
+          <!-- Step 3 -->
+          <div class="approver-step">
+            <span class="icon">○</span>
+            <div class="av">AB</div>
+            <div>
+              <div class="name">Alec Baker</div>
+              <div class="role">Director · Step 3 of 3</div>
+              <div class="step-meta">Up next</div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="merge-explainer">
+          <span class="ico">i</span>
+          <div>
+            <strong>James Baker is the approver for both Step 1 and Step 2</strong> — Project Lead Contact for project VAR011 resolves to James, and the Senior Manager step is also James. One approval click below will satisfy both steps in one go; the bill then moves to Alec for the Director step.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom action bar -->
+    <div class="action-bar">
+      <div class="action-left">
+        <button class="btn-cancel">Cancel</button>
+        <button class="btn-reject">Reject</button>
+      </div>
+      <button class="btn-approve">
+        <span class="ico">✓</span>
+        <span class="lbl">
+          Approve (covers steps 1 &amp; 2)
+          <small>Bill then routes to Alec</small>
+        </span>
+      </button>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

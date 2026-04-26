@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup 18 — Approve &amp; Next Bill (high-throughput approval)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #1a2336; font-size: 13px; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 220px; background: #1a2336; color: #cfd5e0; flex-shrink: 0; display: flex; flex-direction: column; }
+  .sidebar-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .sidebar-top .v-icon { width: 30px; height: 30px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 800; font-size: 16px; }
+  .sidebar-top .collapse { background: none; border: none; color: rgba(255,255,255,.45); font-size: 16px; cursor: pointer; padding: 4px 8px; }
+  .org-row { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .org-row .org-icon { width: 24px; height: 24px; border-radius: 50%; background: #4a5568; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .org-row .org-name { flex: 1; font-size: 12.5px; color: #f7941d; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .org-row .chev { color: rgba(255,255,255,.4); font-size: 14px; }
+  .sidebar-nav { padding: 6px 0; flex: 1; overflow-y: auto; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 14px; font-size: 12.5px; cursor: pointer; color: #cfd5e0; text-decoration: none; }
+  .nav-item:hover { background: rgba(255,255,255,.04); }
+  .nav-item.active { background: #f7941d; color: #fff; }
+  .nav-item .icon { width: 16px; text-align: center; opacity: 0.75; }
+  .nav-item .chev { margin-left: auto; opacity: 0.4; font-size: 11px; }
+  .nav-badge { margin-left: auto; background: #f7941d; color: #fff; font-size: 10px; font-weight: 800; min-width: 20px; height: 18px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; }
+  .sidebar-foot { padding: 10px 14px 14px; border-top: 1px solid rgba(255,255,255,.06); font-size: 12px; color: rgba(255,255,255,.6); }
+
+  /* Top bar */
+  .main { flex: 1; overflow-y: auto; padding-bottom: 100px; }
+  .top-bar { background: #fff; border-bottom: 1px solid #e5e7eb; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .back-btn { background: none; border: none; cursor: pointer; font-size: 18px; color: #4a5568; padding: 4px 8px; }
+  .top-bar h1 { font-size: 15px; font-weight: 700; color: #1a2336; letter-spacing: 0.6px; text-transform: uppercase; display: inline-flex; align-items: center; gap: 8px; }
+  .help-icon { width: 18px; height: 18px; border-radius: 50%; background: #f7941d; color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+  .top-bar-right { display: flex; align-items: center; gap: 8px; }
+  .btn-light { padding: 7px 14px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 12.5px; font-weight: 600; color: #374151; cursor: pointer; }
+  .btn-search { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid #cfe7f5; border-radius: 18px; background: #f0fafd; font-size: 12.5px; font-weight: 600; color: #1a2336; cursor: pointer; }
+  .btn-search .star { color: #f7941d; font-size: 13px; }
+  .btn-icon { width: 30px; height: 30px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 16px; color: #4a5568; cursor: pointer; }
+  .org-pill { display: inline-flex; align-items: center; gap: 8px; padding: 5px 8px 5px 5px; border-radius: 6px; cursor: pointer; }
+  .org-pill .v-mini { width: 22px; height: 22px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 5px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 11px; }
+  .org-pill .name { font-size: 12.5px; font-weight: 600; color: #1a2336; }
+  .org-pill .chev { font-size: 10px; color: #9ca3af; }
+
+  .crumb { font-size: 12px; color: #6b7280; padding: 8px 24px; background: #fff; }
+  .crumb a { color: #f7941d; text-decoration: none; }
+
+  /* Sub-bar */
+  .sub-bar { background: #fff; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e5e7eb; gap: 12px; }
+  .sub-bar h2 { font-size: 16px; font-weight: 700; color: #1a2336; }
+  .sub-bar .meta-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .status-pill { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 12px; background: #fff3e0; color: #c2410c; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  /* Content */
+  .content { padding: 18px 24px; }
+  .annotation-banner { padding: 10px 14px; background: #f5f9ff; border: 1px solid #90caf9; border-radius: 8px; font-size: 12.5px; color: #1565c0; line-height: 1.55; margin-bottom: 14px; }
+  .annotation-banner strong { color: #0d47a1; }
+  .annotation-banner ul { margin: 4px 0 0 18px; }
+
+  /* Two-column body */
+  .bill-body { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+
+  .pdf-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 16px; }
+  .pdf-card h4 { font-size: 12px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; }
+  .pdf-frame { background: #fafafa; border: 1px dashed #d1d5db; border-radius: 8px; padding: 18px; min-height: 540px; display: flex; flex-direction: column; gap: 10px; }
+  .pdf-frame .invoice-h { font-size: 16px; font-weight: 700; color: #1a2336; }
+  .pdf-frame .invoice-r { display: flex; justify-content: space-between; font-size: 12px; color: #4a5568; padding: 3px 0; }
+  .pdf-frame .invoice-table { margin-top: 12px; border: 1px solid #d1d5db; background: #fff; border-radius: 6px; padding: 8px 10px; font-size: 11.5px; }
+  .pdf-frame .invoice-table .ir { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #f3f4f6; }
+  .pdf-frame .invoice-table .ir:last-child { border-bottom: none; }
+  .pdf-frame .invoice-table .ir.tot { font-weight: 700; color: #1a2336; }
+
+  .right-col { display: flex; flex-direction: column; gap: 14px; }
+  .panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 18px; }
+  .panel h4 { font-size: 12px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; }
+  .summary-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12.5px; }
+  .summary-row .lab { color: #6b7280; }
+  .summary-row .val { font-weight: 600; color: #1a2336; }
+
+  table.lines { width: 100%; border-collapse: collapse; }
+  table.lines th { text-align: left; padding: 8px 10px; font-size: 10.5px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #e5e7eb; }
+  table.lines td { padding: 8px 10px; font-size: 12px; border-bottom: 1px solid #f3f4f6; color: #1a2336; }
+  table.lines td.right, table.lines th.right { text-align: right; }
+
+  .approver-strip { display: flex; gap: 10px; padding: 6px 0; }
+  .approver-step { flex: 1; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fafafa; display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .approver-step.done { border-color: #4caf50; background: #f1fbf2; }
+  .approver-step.now { border-color: #f7941d; background: #fff8f0; }
+  .approver-step .av { width: 22px; height: 22px; border-radius: 50%; background: #1a2336; color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .approver-step.done .av { background: #4caf50; }
+  .approver-step.now .av { background: #f7941d; }
+  .approver-step .name { font-weight: 600; color: #1a2336; }
+  .approver-step .role { font-size: 11px; color: #6b7280; }
+  .approver-step .icon { font-size: 13px; }
+
+  /* === BOTTOM ACTION BAR === */
+  .action-bar {
+    position: fixed; bottom: 0; left: 220px; right: 0;
+    background: #fff; border-top: 1px solid #e5e7eb;
+    padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.04); z-index: 50;
+  }
+
+  .action-left { display: flex; align-items: center; gap: 12px; }
+  .btn-cancel { padding: 10px 18px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; color: #374151; cursor: pointer; }
+  .btn-reject { padding: 10px 18px; border: 1px solid #fecaca; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; color: #b91c1c; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-reject:hover { background: #fef2f2; }
+  .btn-reject .chev { font-size: 9px; opacity: 0.6; }
+
+  .action-center { font-size: 12.5px; color: #4a5568; display: flex; align-items: center; gap: 14px; }
+  .queue-info { display: flex; align-items: center; gap: 8px; }
+  .queue-info .count { background: #fff8f0; color: #c2410c; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 10px; }
+  .queue-info .next-preview { color: #1a2336; }
+  .queue-info .next-preview strong { color: #1a2336; }
+
+  .action-right { display: flex; align-items: stretch; gap: 10px; }
+
+  .btn-approve-back, .btn-approve-next {
+    border-radius: 8px; padding: 10px 18px; font-size: 13.5px; font-weight: 700; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 10px;
+    transition: all 0.15s;
+  }
+  .btn-approve-back {
+    background: #fff; color: #1a2336; border: 2px solid #1a2336;
+  }
+  .btn-approve-back:hover { background: #f3f4f6; }
+  .btn-approve-back .ico { font-size: 16px; }
+  .btn-approve-back .lbl { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
+  .btn-approve-back .lbl small { font-size: 10px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .btn-approve-next {
+    background: #f7941d; color: #fff; border: 2px solid #f7941d;
+    box-shadow: 0 2px 6px rgba(247,148,29,0.35);
+  }
+  .btn-approve-next:hover { background: #e8850f; border-color: #e8850f; }
+  .btn-approve-next .ico { font-size: 16px; }
+  .btn-approve-next .lbl { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
+  .btn-approve-next .lbl small { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.8); text-transform: uppercase; letter-spacing: 0.5px; }
+  .btn-approve-next .arrow { font-size: 18px; margin-left: 4px; }
+
+  .kbd { display: inline-block; padding: 1px 5px; border-radius: 3px; background: rgba(0,0,0,0.06); font-size: 10px; font-weight: 700; font-family: ui-monospace, monospace; color: #4a5568; }
+  .btn-approve-next .kbd { background: rgba(255,255,255,0.25); color: #fff; }
+
+  .keyboard-hint { font-size: 11px; color: #6b7280; padding: 6px 0 0; }
+  .keyboard-hint .kbd { margin: 0 2px; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <div class="v-icon">V</div>
+      <button class="collapse">«</button>
+    </div>
+    <div class="org-row">
+      <div class="org-icon">CC</div>
+      <span class="org-name">Cookie's Civil</span>
+      <span class="chev">›</span>
+    </div>
+    <div class="sidebar-nav">
+      <a class="nav-item"><span class="icon">📁</span> Projects</a>
+      <a class="nav-item"><span class="icon">📊</span> Dashboard</a>
+      <a class="nav-item"><span class="icon">🖼</span> Gallery</a>
+      <a class="nav-item"><span class="icon">⏱</span> Timesheet</a>
+      <a class="nav-item"><span class="icon">🗓</span> Leave <span class="nav-badge">8</span></a>
+      <a class="nav-item"><span class="icon">📅</span> Scheduler <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">📄</span> Daywork Docket</a>
+      <a class="nav-item"><span class="icon">🛒</span> Purchase Order <span class="nav-badge">1</span></a>
+      <a class="nav-item"><span class="icon">🚚</span> Delivery Docket</a>
+      <a class="nav-item active"><span class="icon">💰</span> Bills <span class="nav-badge">3</span></a>
+      <a class="nav-item"><span class="icon">📋</span> Forms <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">🔧</span> Plant &amp; Equipment <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">👥</span> Resource Assigner</a>
+      <a class="nav-item"><span class="icon">🏪</span> Suppliers</a>
+      <a class="nav-item"><span class="icon">🗂</span> File Manager</a>
+      <a class="nav-item"><span class="icon">👤</span> User Management <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">💵</span> Payroll Settings <span class="chev">▾</span></a>
+      <a class="nav-item"><span class="icon">⚙️</span> Settings <span class="chev">▾</span></a>
+    </div>
+    <div class="sidebar-foot">Mockup 18 · Approve &amp; Next Bill</div>
+  </div>
+
+  <div class="main">
+
+    <div class="top-bar">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <button class="back-btn">←</button>
+        <h1>Edit Bill <span class="help-icon">?</span></h1>
+      </div>
+      <div class="top-bar-right">
+        <button class="btn-light">Initial Data Upload</button>
+        <button class="btn-search"><span class="star">✦</span> Search</button>
+        <button class="btn-icon">+</button>
+        <div class="org-pill">
+          <div class="v-mini">V</div>
+          <span class="name">Varicon Info</span>
+          <span class="chev">▾</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="crumb"><a href="#">Bills list</a> &rsaquo; <a href="#">Awaiting my approval</a> &rsaquo; YRX-44211</div>
+
+    <div class="sub-bar">
+      <div>
+        <h2>Yarra Readymix Pty Ltd · YRX-44211</h2>
+        <div class="meta-row">
+          <span>Bill #BILL-VAR011-0034</span><span>·</span>
+          <span>Project (VAR011) Residential Estate</span><span>·</span>
+          <span>Due 09/05/2026</span>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="status-pill">Step 2 of 3 · Awaiting your approval</span>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="annotation-banner">
+        <strong>Item 18 — High-throughput approval (after).</strong>
+        <ul>
+          <li>Two equally prominent primary actions in the bottom bar: <strong>"Approve &amp; Back to List"</strong> and <strong>"Approve &amp; Next Bill"</strong> — no more secondary-option-hidden-in-a-dropdown</li>
+          <li>"Approve &amp; Next" is highlighted (primary orange) when there's another bill in your approval queue; falls back to disabled with "No more bills" copy when the queue is empty</li>
+          <li>Centre of bar shows <strong>queue context</strong>: how many bills remain in your queue and a preview of the next one ("Up next: Bunnings $234.00") — makes "next" feel concrete</li>
+          <li>Keyboard shortcuts visible inline: <span class="kbd">⌘ ⏎</span> Approve &amp; next, <span class="kbd">⌘ L</span> Approve &amp; back to list, <span class="kbd">⌘ R</span> Reject</li>
+          <li>Reject keeps a separate, lighter button (red text on white) — also has its own "Reject &amp; Next" via dropdown for batch-rejection workflows</li>
+        </ul>
+      </div>
+
+      <div class="bill-body">
+
+        <!-- Left: PDF preview placeholder -->
+        <div class="pdf-card">
+          <h4>Invoice attachment</h4>
+          <div class="pdf-frame">
+            <div class="invoice-h">YARRA READYMIX PTY LTD</div>
+            <div style="font-size:11px; color:#6b7280;">29 Industrial Drive, Tottenham VIC 3012 · ABN 22 134 552 901</div>
+            <div style="border-top:1px solid #d1d5db; margin-top:10px; padding-top:10px;">
+              <div class="invoice-r"><span>Bill to</span><span>Cookie's Civil Pty Ltd</span></div>
+              <div class="invoice-r"><span>Invoice #</span><span><strong>YRX-44211</strong></span></div>
+              <div class="invoice-r"><span>Issue date</span><span>25/04/2026</span></div>
+              <div class="invoice-r"><span>Due date</span><span>09/05/2026</span></div>
+              <div class="invoice-r"><span>PO ref</span><span>PO-VAR011-0001</span></div>
+            </div>
+            <div class="invoice-table">
+              <div class="ir"><span>50 m³ · GP 25MPa concrete</span><span>$11,400.00</span></div>
+              <div class="ir"><span>50 m³ · GP 25MPa concrete</span><span>$11,400.00</span></div>
+              <div class="ir"><span>4 hr · Pump hire</span><span>$1,920.00</span></div>
+              <div class="ir"><span>1 · Saturday surcharge</span><span>$450.00</span></div>
+              <div class="ir"><span>1 · Concrete sample test</span><span>$320.00</span></div>
+              <div class="ir tot"><span>Total (incl. GST)</span><span>$28,039.00</span></div>
+            </div>
+            <div style="margin-top:auto; font-size:10px; color:#9ca3af; text-align:center;">[ PDF preview — page 1 of 1 ]</div>
+          </div>
+        </div>
+
+        <!-- Right: summary, lines, approval -->
+        <div class="right-col">
+
+          <div class="panel">
+            <h4>Summary</h4>
+            <div class="summary-row"><span class="lab">Supplier</span><span class="val">Yarra Readymix Pty Ltd</span></div>
+            <div class="summary-row"><span class="lab">Project</span><span class="val">(VAR011) Residential Estate</span></div>
+            <div class="summary-row"><span class="lab">Linked PO</span><span class="val">PO-VAR011-0001 + 3 dockets</span></div>
+            <div class="summary-row"><span class="lab">Subtotal</span><span class="val">$25,490.00</span></div>
+            <div class="summary-row"><span class="lab">GST (10%)</span><span class="val">$2,549.00</span></div>
+            <div class="summary-row" style="border-top:1px solid #f3f4f6; margin-top:4px; padding-top:8px;">
+              <span class="lab" style="font-weight:700; color:#1a2336;">Total</span>
+              <span class="val" style="font-size:15px;">$28,039.00</span>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h4>Line items</h4>
+            <table class="lines">
+              <thead>
+                <tr><th>Description</th><th>Resource</th><th class="right">Qty</th><th class="right">Total</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>GP 25MPa concrete</td><td>Boral m3</td><td class="right">50 m³</td><td class="right">$11,400.00</td></tr>
+                <tr><td>GP 25MPa concrete</td><td>Boral m3 — premium</td><td class="right">50 m³</td><td class="right">$11,400.00</td></tr>
+                <tr><td>Pump hire</td><td>Pump hire</td><td class="right">4 hr</td><td class="right">$1,920.00</td></tr>
+                <tr><td>Saturday surcharge</td><td>Plant hire</td><td class="right">1</td><td class="right">$450.00</td></tr>
+                <tr><td>Concrete sample test</td><td>Lab service</td><td class="right">1</td><td class="right">$320.00</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="panel">
+            <h4>Approval workflow</h4>
+            <div class="approver-strip">
+              <div class="approver-step done">
+                <span class="icon">✓</span>
+                <div class="av">SM</div>
+                <div>
+                  <div class="name">Sarah Mitchell</div>
+                  <div class="role">Project Lead · Step 1</div>
+                </div>
+              </div>
+              <div class="approver-step now">
+                <span class="icon">●</span>
+                <div class="av">JB</div>
+                <div>
+                  <div class="name">You · James Baker</div>
+                  <div class="role">Senior Manager · Step 2 of 3</div>
+                </div>
+              </div>
+              <div class="approver-step">
+                <span class="icon">○</span>
+                <div class="av">AB</div>
+                <div>
+                  <div class="name">Alec Baker</div>
+                  <div class="role">Director · Step 3</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== BOTTOM ACTION BAR ===================== -->
+    <div class="action-bar">
+
+      <div class="action-left">
+        <button class="btn-cancel">Cancel</button>
+        <button class="btn-reject">Reject <span class="chev">▾</span></button>
+      </div>
+
+      <div class="action-center">
+        <div class="queue-info">
+          <span class="count">3 of 5</span>
+          <span class="next-preview">in your approval queue · Up next: <strong>Bunnings · $234.00</strong></span>
+        </div>
+      </div>
+
+      <div class="action-right" style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+        <div style="display:flex; gap:10px;">
+          <button class="btn-approve-back" title="Approve this bill, return to bills list">
+            <span class="ico">✓</span>
+            <span class="lbl">
+              Approve &amp; Back to List
+              <small><span class="kbd">⌘ L</span></small>
+            </span>
+          </button>
+          <button class="btn-approve-next" title="Approve this bill, jump to next pending">
+            <span class="ico">✓</span>
+            <span class="lbl">
+              Approve &amp; Next Bill
+              <small><span class="kbd">⌘ ⏎</span> · 3 more</small>
+            </span>
+            <span class="arrow">→</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
