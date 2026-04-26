@@ -10,6 +10,9 @@ A forced 6-step setup wizard on first login that blocks access to the app until 
 1. **Accounting Integration** — Connect Xero, MYOB, or QuickBooks. Shows confirmation of Suppliers, Chart of Accounts, and Tax Codes synced directly in the selected provider card.
 2. **PO Settings** — Configure purchase order settings with recommended defaults (red warning if changed from recommended). Invoice email is required. Approval workflow requires at least 1 Creator, 1 Approver, and 1 Closer before the user can proceed.
 3. **Bills Setup** — Configure bill sync settings. Integration start date defaults to 30 days ago. "Sync Bills when" has 3 options.
+
+### Update — 26 Apr 2026
+Step 8 (Suppliers) reworked: instead of AI-predicting a Resource Type per supplier, it now maps suppliers to their **default accounting code** (pulled from MYOB). Resource is auto-detected from the code's link to a Varicon default resource. Three states demonstrated: auto-mapped, not mapped, mapped to a code that isn't linked to a default resource (with alert). Defaults to top 25 suppliers from last 30 days; user can show 50/100/all. Click Next to sync mappings to Varicon and MYOB.
 4. **Accounting Codes** — Shows only Expense-type codes with an "Archive" checkbox column. Archived codes are excluded from dropdowns throughout the app.
 5. **Resource Cost Sheet** — Dropdowns exclude archived accounting codes. "Not Applicable" option available. AI auto-fill for same resource type.
 6. **Tracking Categories (Xero)** — Instructions and a direct link to Xero tracking categories settings.
