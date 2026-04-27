@@ -1071,17 +1071,20 @@ goHome();
 // ============= Create Form Wizard =============
 // Steps are computed dynamically based on mode
 function getWizardSteps(){
+  if(wizState.mode === 'import'){
+    return ['Start','Pick Form','Details','Review'];
+  }
   const base = ['Start','Category','Subcategory'];
   if(wizState.mode === 'upload') base.push('Upload');
   base.push('Details','Review');
   return base;
 }
-let wizState = { step:0, mode:null, catId:null, subId:null, name:'', desc:'', source:'home', file:null, projectId:null };
+let wizState = { step:0, mode:null, catId:null, subId:null, name:'', desc:'', source:'home', file:null, projectId:null, pickedFormId:null };
 
 function openCreateWizard(source){
   const src = source || (document.getElementById('panel-project').classList.contains('active') ? 'project' : 'home');
   const pid = src === 'project' ? projState.projectId : null;
-  wizState = { step:0, mode:null, catId:null, subId:null, name:'', desc:'', source:src, file:null, projectId:pid };
+  wizState = { step:0, mode:null, catId:null, subId:null, name:'', desc:'', source:src, file:null, projectId:pid, pickedFormId:null };
   document.getElementById('wizard-overlay').classList.add('open');
   renderWizard();
 }
@@ -1130,11 +1133,21 @@ function renderWizard(){
         <span>This will be a <b>site-specific form</b> for <b>${projName}</b>. It will only appear for this project and won't affect the generic form library.</span>
       </div>`;
     }
+    const importCard = wizState.source === 'project' ? `
+        <div class="mode-card ${wizState.mode==='import'?'selected':''}" onclick="wizPickMode('import')" style="grid-column:1/-1">
+          <div class="m-ico" style="background:#ede9fe;color:#7c3aed"><i class="fa-solid fa-copy"></i></div>
+          <div class="m-name">Import from Forms Home</div>
+          <div class="m-desc">Copy a generic form into this project so you can tailor it without affecting the original.</div>
+        </div>` : '';
+    const hint = wizState.source === 'project'
+      ? 'Pick a starting point — copy a form from the library, build new, or upload a document.'
+      : "You can build a form from scratch or upload an existing PDF / Word document and we'll convert it.";
     body.innerHTML = `
       ${genericNote}
       <h3>Choose a starting point</h3>
-      <p class="hint">You can build a form from scratch or upload an existing PDF / Word document and we'll convert it.</p>
+      <p class="hint">${hint}</p>
       <div class="mode-grid">
+        ${importCard}
         <div class="mode-card ${wizState.mode==='build'?'selected':''}" onclick="wizPickMode('build')">
           <div class="m-ico"><i class="fa-solid fa-pen-ruler"></i></div>
           <div class="m-name">Build from scratch</div>
@@ -1164,6 +1177,48 @@ function renderWizard(){
         `).join('')}
       </div>`;
     next.disabled = !wizState.catId;
+    next.innerHTML = 'Next <i class="fa-solid fa-arrow-right"></i>';
+  }
+  else if(step === 'Pick Form'){
+    const p = PROJECT_DATA[wizState.projectId];
+    const assignedIds = new Set(p.forms.map(f=>f.id));
+    const byCat = CATEGORIES.map(cat=>{
+      const forms = [];
+      cat.subs.forEach(sub=>{
+        sub.formIds.forEach(id=>{
+          const f = HOME_FORMS.find(x=>x.id===id);
+          if(f) forms.push({ ...f, sub });
+        });
+      });
+      return { cat, forms };
+    }).filter(g=>g.forms.length);
+    subtitle.textContent = `Pick a form to import into ${p.name}`;
+    body.innerHTML = `
+      <h3>Pick a form from the library</h3>
+      <p class="hint">Importing creates a project-specific copy you can edit freely. The original in Forms Home stays untouched.</p>
+      <div class="modal-field" style="margin-bottom:14px">
+        <input type="text" placeholder="Search forms..." oninput="wizFilterForms(this.value)" id="wiz-form-search">
+      </div>
+      <div id="wiz-form-list" style="max-height:340px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px">
+        ${byCat.map(g=>`
+          <div style="padding:8px 14px;background:#f8fafc;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0">${g.cat.name}</div>
+          ${g.forms.map(f=>{
+            const isAssigned = assignedIds.has(f.id);
+            const isSelected = wizState.pickedFormId === f.id;
+            return `
+              <div class="wiz-form-row" data-name="${f.title.toLowerCase()}" onclick="wizPickForm(${f.id})" style="padding:10px 14px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;align-items:center;gap:10px;background:${isSelected?'#fff7ed':'#fff'}">
+                <div style="width:28px;height:28px;border-radius:6px;background:${getCatColor(g.cat.theme)}22;color:${getCatColor(g.cat.theme)};display:flex;align-items:center;justify-content:center;font-size:12px"><i class="${f.sub.icon}"></i></div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13px;font-weight:600;color:#1b2a4a">${f.title}</div>
+                  <div style="font-size:11px;color:#64748b">${g.cat.name} › ${f.sub.name}</div>
+                </div>
+                ${isAssigned ? '<span style="font-size:11px;font-weight:600;color:#4338ca;background:#e0e7ff;padding:3px 8px;border-radius:10px;margin-right:6px">Already on project</span>' : ''}
+                ${isSelected ? '<i class="fa-solid fa-circle-check" style="color:#f5a623;font-size:16px"></i>' : '<i class="fa-regular fa-circle" style="color:#cbd5e1;font-size:16px"></i>'}
+              </div>`;
+          }).join('')}
+        `).join('')}
+      </div>`;
+    next.disabled = !wizState.pickedFormId;
     next.innerHTML = 'Next <i class="fa-solid fa-arrow-right"></i>';
   }
   else if(step === 'Subcategory'){
@@ -1228,6 +1283,24 @@ function renderWizard(){
     setTimeout(()=>document.getElementById('wiz-name').focus(),50);
   }
   else if(step === 'Review'){
+    if(wizState.mode === 'import'){
+      const f = HOME_FORMS.find(x=>x.id===wizState.pickedFormId);
+      let catCtx = null;
+      CATEGORIES.forEach(c=>c.subs.forEach(s=>{ if(s.formIds.includes(f.id)) catCtx = { cat:c, sub:s }; }));
+      subtitle.textContent = 'Review and import as project copy';
+      body.innerHTML = `
+        <h3>Review import</h3>
+        <p class="hint">This will create a <b>project-specific copy</b> of the form for <b>${PROJECT_DATA[wizState.projectId].name}</b>. Edits won't affect the generic library version.</p>
+        <div class="summary-row"><span class="s-label">Action</span><span class="s-val"><i class="fa-solid fa-copy" style="color:#7c3aed;margin-right:6px"></i>Import as project copy</span></div>
+        <div class="summary-row"><span class="s-label">Project</span><span class="s-val"><i class="fa-solid fa-folder-open" style="color:#1b2a4a;margin-right:6px"></i>${PROJECT_DATA[wizState.projectId].name}</span></div>
+        <div class="summary-row"><span class="s-label">Source form</span><span class="s-val">${f.title}</span></div>
+        ${catCtx ? `<div class="summary-row"><span class="s-label">Category</span><span class="s-val"><i class="${catCtx.cat.icon}" style="color:${getCatColor(catCtx.cat.theme)};margin-right:6px"></i>${catCtx.cat.name} › ${catCtx.sub.name}</span></div>` : ''}
+        <div class="summary-row"><span class="s-label">New name</span><span class="s-val">${wizState.name}</span></div>
+        ${wizState.desc ? `<div class="summary-row"><span class="s-label">Description</span><span class="s-val" style="font-weight:400">${wizState.desc}</span></div>` : ''}`;
+      next.disabled = false;
+      next.innerHTML = '<i class="fa-solid fa-copy"></i> Import & Create Copy';
+      return;
+    }
     const cat = CATEGORIES.find(c=>c.id===wizState.catId);
     const sub = cat.subs.find(s=>s.id===wizState.subId);
     subtitle.textContent = 'Review and create the form';
@@ -1257,9 +1330,29 @@ function getCatColor(theme){
   return {'cat-hs':'#dc2626','cat-plant':'#ea580c','cat-quality':'#16a34a','cat-admin':'#4338ca','cat-general':'#0891b2','cat-env':'#059669'}[theme] || '#f5a623';
 }
 
-function wizPickMode(m){ wizState.mode = m; renderWizard(); }
+function wizPickMode(m){
+  wizState.mode = m;
+  // Reset selections when mode changes
+  if(m !== 'import'){ wizState.pickedFormId = null; }
+  renderWizard();
+}
 function wizPickCat(id){ wizState.catId = id; wizState.subId = null; renderWizard(); }
 function wizPickSub(id){ wizState.subId = id; renderWizard(); }
+function wizPickForm(id){
+  wizState.pickedFormId = id;
+  // Pre-fill the name for import mode
+  if(wizState.mode === 'import' && wizState.projectId){
+    const f = HOME_FORMS.find(x=>x.id===id);
+    if(f) wizState.name = `${f.title} (${PROJECT_DATA[wizState.projectId].name})`;
+  }
+  renderWizard();
+}
+function wizFilterForms(q){
+  const query = q.toLowerCase();
+  document.querySelectorAll('.wiz-form-row').forEach(r=>{
+    r.style.display = (!query || r.dataset.name.includes(query)) ? '' : 'none';
+  });
+}
 
 function formatFileSize(bytes){
   if(bytes < 1024) return bytes + ' B';
@@ -1292,6 +1385,13 @@ function wizardNext(){
     wizState.step++;
     renderWizard();
   } else {
+    if(wizState.mode === 'import'){
+      const f = HOME_FORMS.find(x=>x.id===wizState.pickedFormId);
+      const p = PROJECT_DATA[wizState.projectId];
+      closeWizard();
+      alert(`Form imported as project copy:\n\n• ${wizState.name}\n• Copied from: ${f.title}\n• Project: ${p.name}\n\n(Would open the builder with fields prefilled from the source form.)`);
+      return;
+    }
     const cat = CATEGORIES.find(c=>c.id===wizState.catId);
     const sub = cat.subs.find(s=>s.id===wizState.subId);
     closeWizard();
