@@ -262,6 +262,8 @@ tbody tr.highlighted{background:#fafbfd}
 .assigned-to{color:#475569;font-size:12px}
 .proj-pill{display:inline-block;padding:3px 10px;border-radius:12px;background:#e0e7ff;color:#3730a3;font-size:11px;font-weight:500;margin:2px 4px 2px 0;white-space:nowrap}
 .proj-pill.muted{background:#f1f5f9;color:#64748b}
+.proj-pill.clickable{cursor:pointer;transition:all .12s}
+.proj-pill.clickable:hover{background:#c7d2fe;color:#312e81;text-decoration:underline}
 .proj-pill.equip{background:#ffedd5;color:#9a3412}
 
 /* Revision pill / column */
@@ -798,6 +800,27 @@ function categoryForForm(formId){
   }
   return null;
 }
+function categorySubForForm(formId){
+  for(const cat of CATEGORIES){
+    for(const sub of cat.subs){
+      if(sub.formIds.includes(formId)) return { cat, sub };
+    }
+  }
+  return null;
+}
+// Jump from Forms Home → the same form drilled into a specific project on the Project Forms tab.
+// SWMS forms drop into the revision history; other forms stop at the subcategory list.
+function jumpToProjectForm(formId, projectKey){
+  const ctx = categorySubForForm(formId);
+  if(!ctx){ return; }
+  switchTab('project');
+  projGoProject(projectKey);
+  projGoCategory(ctx.cat.id);
+  projGoSubcategory(ctx.sub.id);
+  if(isSwmsForm(formId)){
+    projGoRevisions(formId);
+  }
+}
 function isPlantForm(formId){
   const cat = categoryForForm(formId);
   return cat && cat.id === 'plant';
@@ -824,7 +847,7 @@ function setEquipmentForForm(formId, ids){
 function renderAssignedProjects(formId){
   const keys = getProjectsForForm(formId);
   if(!keys.length) return '<span class="proj-pill muted">Not assigned</span>';
-  return keys.map(k=>`<span class="proj-pill" title="${PROJECT_DATA[k].name}">${PROJECT_DATA[k].name}</span>`).join('');
+  return keys.map(k=>`<span class="proj-pill clickable" title="Open ${PROJECT_DATA[k].name}" onclick="event.stopPropagation();jumpToProjectForm(${formId},'${k}')">${PROJECT_DATA[k].name}</span>`).join('');
 }
 function renderAssignedEquipment(formId){
   const ids = getEquipmentForForm(formId);
