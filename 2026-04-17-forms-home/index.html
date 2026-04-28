@@ -855,23 +855,35 @@ function homeRowHtml(f){
 }
 
 function projectRowHtml(f){
-  const rcls = f.responses === 0 ? 'responses-val zero' : 'responses-val';
   const showRev = isSwmsForm(f.id) && projState.projectId;
-  let revCell = '';
   if(showRev){
     const cur = currentSwmsRevision(projState.projectId, f.id);
+    let revCell, signeesCell;
     if(cur){
       const cls = cur.status === 'locked' ? 'locked' : 'draft';
       const ico = cur.status === 'locked' ? '<i class="fa-solid fa-lock lock-ico"></i>' : '<i class="fa-solid fa-pen-to-square lock-ico"></i>';
       revCell = `<td><span class="rev-pill ${cls}" onclick="event.stopPropagation();projGoRevisions(${f.id})">${ico} Rev ${cur.rev}${cur.status==='draft'?' · Draft':''}</span></td>`;
+      const sig = cur.responses || 0;
+      const scls = sig === 0 ? 'responses-val zero' : 'responses-val';
+      signeesCell = `<td class="responses"><span class="${scls}">${sig}</span></td>`;
     } else {
       revCell = `<td><span class="rev-none" onclick="event.stopPropagation();projGoRevisions(${f.id})" style="cursor:pointer;text-decoration:underline">No revisions</span></td>`;
+      signeesCell = `<td class="responses"><span class="responses-val zero">—</span></td>`;
     }
+    return `
+      <tr>
+        <td class="form-title">${f.title}</td>
+        <td class="created-by">${f.by}</td>
+        <td class="last-edited">${f.date}</td>
+        ${revCell}
+        ${signeesCell}
+        <td class="actions"><button class="action-btn"><i class="fa-solid fa-ellipsis-vertical"></i></button></td>
+      </tr>`;
   }
+  const rcls = f.responses === 0 ? 'responses-val zero' : 'responses-val';
   return `
     <tr>
       <td class="form-title">${f.title}</td>
-      ${revCell}
       <td class="created-by">${f.by}</td>
       <td class="last-edited">${f.date}</td>
       <td class="assigned-to">${f.assigned}</td>
@@ -1134,9 +1146,9 @@ function renderProjectForms(){
   // Add a Revision column when we're inside the SWMS subcategory
   const isSwmsView = projState.catId === 'hs' && projState.subId === 'swms';
   document.getElementById('project-thead').innerHTML = isSwmsView
-    ? `<tr><th>Title</th><th style="width:170px">Revision</th><th>Created By</th><th>Last edited</th><th>Assigned To</th><th class="responses">Responses (Project)</th><th class="actions">Actions</th></tr>`
+    ? `<tr><th>Title</th><th>Created By</th><th>Last edited</th><th style="width:170px">Revision</th><th class="responses">Signees (to this revision)</th><th class="actions">Actions</th></tr>`
     : `<tr><th>Title</th><th>Created By</th><th>Last edited</th><th>Assigned To</th><th class="responses">Responses (Project)</th><th class="actions">Actions</th></tr>`;
-  const colspan = isSwmsView ? 7 : 6;
+  const colspan = 6;
   document.getElementById('project-tbody').innerHTML = forms.length
     ? forms.map(projectRowHtml).join('')
     : `<tr><td colspan="${colspan}" style="padding:40px;text-align:center;color:#94a3b8">No forms in this subcategory for this project.</td></tr>`;
