@@ -852,6 +852,22 @@ function findIncident(projKey, incId){
   return getIncidents(projKey).find(i=>i.id===incId);
 }
 
+// RFIs per project. Each row in the Quality > RFIs table is a single RFI document.
+// status: 'open' | 'closed'
+const RFIS = {
+  northside: [
+    { id:'rfi-014', title:'RFI #014 — Slab penetration coordinates at gridline B3', by:'Sarah Chen',     dateSubmitted:'08/04/2026', dateDue:'15/04/2026', dateClosed:null,         status:'open' },
+    { id:'rfi-013', title:'RFI #013 — Reinforcement clarification (footing F2)',     by:'Sarah Chen',     dateSubmitted:'02/04/2026', dateDue:'09/04/2026', dateClosed:'10/04/2026', status:'closed' },
+    { id:'rfi-012', title:'RFI #012 — Door schedule mismatch on level 1',            by:'Anna Borserini', dateSubmitted:'24/03/2026', dateDue:'31/03/2026', dateClosed:'29/03/2026', status:'closed' },
+    { id:'rfi-011', title:'RFI #011 — Tunnel waterproofing membrane spec',           by:'Sarah Chen',     dateSubmitted:'12/03/2026', dateDue:'19/03/2026', dateClosed:'21/03/2026', status:'closed' },
+  ],
+  metro: [
+    { id:'rfi-022', title:'RFI #022 — Platform edge tile specification',             by:'Lucia Romano',   dateSubmitted:'12/04/2026', dateDue:'19/04/2026', dateClosed:null,         status:'open' },
+    { id:'rfi-021', title:'RFI #021 — Hoist tie-back loading verification',          by:'Lucia Romano',   dateSubmitted:'04/04/2026', dateDue:'11/04/2026', dateClosed:'10/04/2026', status:'closed' },
+  ],
+};
+function getRfis(projKey){ return RFIS[projKey] || []; }
+
 function swmsKey(projKey, formId){ return projKey+':'+formId; }
 function getSwmsRevisions(projKey, formId){
   return SWMS_REVISIONS[swmsKey(projKey, formId)] || [];
@@ -1839,6 +1855,17 @@ function renderProjectForms(){
     return;
   }
 
+  const isRfiView = projState.catId === 'quality' && projState.subId === 'rfi';
+  if(isRfiView){
+    document.getElementById('project-thead').innerHTML =
+      `<tr><th>Title</th><th>Created By</th><th>Date Submitted</th><th>Date Closed</th><th>Client Response Due</th><th style="width:110px">Status</th><th class="actions">Actions</th></tr>`;
+    const rfis = getRfis(projState.projectId);
+    document.getElementById('project-tbody').innerHTML = rfis.length
+      ? rfis.map(rfiRowHtml).join('')
+      : `<tr><td colspan="7" style="padding:40px;text-align:center;color:#94a3b8">No RFIs raised on this project yet.</td></tr>`;
+    return;
+  }
+
   const isDailyPrestartView = projState.catId === 'hs' && projState.subId === 'daily-prestart';
   if(isDailyPrestartView){
     const forms = sub.formIds.map(id => p.forms.find(f=>f.id===id)).filter(Boolean);
@@ -1986,6 +2013,36 @@ function renderProjectPrestartSubmissionDetail(){
       <h4><i class="fa-solid fa-signature"></i> Signees <span style="margin-left:auto;font-weight:600;color:#64748b;font-size:11px">${sub.signees.length} people</span></h4>
       <div class="signee-list">${signeesHtml}</div>
     </div>`;
+}
+
+// Parse "DD/MM/YYYY" → Date
+function parseDmy(s){
+  if(!s) return null;
+  const [d,m,y] = s.split('/').map(Number);
+  return new Date(y, m-1, d);
+}
+function rfiRowHtml(r){
+  const closedCell = r.dateClosed ? r.dateClosed : '<span style="color:#94a3b8">—</span>';
+  const statusLabel = r.status === 'open' ? 'Open' : 'Closed';
+  // Highlight due date in red if open and past due
+  let dueDisplay = r.dateDue;
+  if(r.status === 'open' && r.dateDue){
+    const due = parseDmy(r.dateDue);
+    const today = new Date(2026, 3, 17); // 17 April 2026 — match the prototype's "today"
+    if(due && due < today){
+      dueDisplay = `<span style="color:#dc2626;font-weight:600">${r.dateDue} <i class="fa-solid fa-triangle-exclamation" style="margin-left:4px;font-size:11px"></i></span>`;
+    }
+  }
+  return `
+    <tr>
+      <td class="form-title">${r.title}</td>
+      <td class="created-by">${r.by}</td>
+      <td class="last-edited">${r.dateSubmitted}</td>
+      <td class="last-edited">${closedCell}</td>
+      <td class="last-edited">${dueDisplay}</td>
+      <td><span class="status-pill ${r.status}">${statusLabel}</span></td>
+      <td class="actions"><button class="action-btn"><i class="fa-solid fa-ellipsis-vertical"></i></button></td>
+    </tr>`;
 }
 
 function incidentRowHtml(inc){
