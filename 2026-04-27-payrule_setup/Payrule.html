@@ -499,6 +499,7 @@
     .pay-item-row.no-rdo { grid-template-columns:200px 28px 1fr 88px 32px; }
     .pay-item-select { width:100%; border:1px solid var(--border-solid); border-radius:var(--radius-sm); padding:7px 10px; font-family:'Roboto',sans-serif; font-size:13px; color:var(--text-primary); background:var(--bg-paper); outline:none; transition:border-color .15s; }
     .pay-item-select:focus { border-color:var(--primary); }
+    .pay-item-select.placeholder { color:var(--text-secondary); }
     .arrow-sep { color:var(--text-disabled); font-size:16px; text-align:center; }
     .hours-group { display:flex; align-items:center; gap:5px; font-size:13px; color:var(--text-secondary); }
     .hours-input { width:50px; border:1px solid var(--border-solid); border-radius:var(--radius-sm); padding:6px; font-family:'Roboto',sans-serif; font-size:13px; text-align:center; outline:none; transition:border-color .15s; }
@@ -1934,7 +1935,7 @@
   let rdoExpanded = true;
   let wcExpanded = true;
 
-  const PAY_ITEM_OPTIONS = ['Base Hour', 'Ordinary(1.5x)', 'Ordinary(2x)'];
+  const PAY_ITEM_OPTIONS = ['Base Hour', 'Overtime(1.5x)', 'Overtime(2x)'];
 
   const VARIABLE_OPTIONS = {
     'Project':      ['Highway 1 Upgrade', 'Bridge Deck Replacement', 'Site Remediation — North', 'Tunnel Boring Works', 'Culvert Installation'],
@@ -2468,7 +2469,7 @@
       if (!daySectionStates['Night Shift']) {
         daySectionStates['Night Shift'] = {
           differentRules: true, expanded: true,
-          payItems: [{ payItem: 'Base Hour', ruleType: 'hours', from: 0, to: 8, fromTime: '17:00', toTime: '06:00', rate: 1, rdo: false }]
+          payItems: [{ payItem: 'Base Hour', ruleType: 'hours', from: '', to: '', fromTime: '17:00', toTime: '06:00', rate: '', rdo: false }]
         };
       }
       bodyHtml =
@@ -2603,7 +2604,7 @@
       splitGroups.push(newDays);
       daySectionStates[key] = {
         differentRules: true, expanded: true,
-        payItems: [{ payItem: 'Base Hour', ruleType: 'hours', from: 0, to: 8, fromTime: '09:00', toTime: '17:00', rate: 1, rdo: false }]
+        payItems: [{ payItem: '', ruleType: 'hours', from: '', to: '', fromTime: '09:00', toTime: '17:00', rate: '', rdo: false }]
       };
     } else {
       // Split days out of an existing group
@@ -2629,7 +2630,7 @@
       splitGroups.splice(parentIdx + 1, 0, splitOut);
       daySectionStates[newChildKey] = {
         differentRules: true, expanded: true,
-        payItems: [{ payItem: 'Base Hour', ruleType: 'hours', from: 0, to: 8, fromTime: '09:00', toTime: '17:00', rate: 1, rdo: false }]
+        payItems: [{ payItem: '', ruleType: 'hours', from: '', to: '', fromTime: '09:00', toTime: '17:00', rate: '', rdo: false }]
       };
     }
 
@@ -2686,7 +2687,7 @@
     if (!daySectionStates['Weekdays']) {
       daySectionStates['Weekdays'] = {
         differentRules: true, expanded: true,
-        payItems: [{ payItem: 'Base Hour', ruleType: 'hours', from: 0, to: 8, fromTime: '09:00', toTime: '17:00', rate: 1, rdo: false }]
+        payItems: [{ payItem: '', ruleType: 'hours', from: '', to: '', fromTime: '09:00', toTime: '17:00', rate: '', rdo: false }]
       };
     }
 
@@ -2694,7 +2695,7 @@
     FIXED_DAY_TYPES.forEach(function(d) {
       if (d === 'Weekdays') return;
       if (!daySectionStates[d]) {
-        daySectionStates[d] = { differentRules: false, copyFrom: 'Weekdays', expanded: true, payItems: [{ payItem: 'Base Hour', ruleType: 'hours', from: 0, to: 8, fromTime: '09:00', toTime: '17:00', rate: 1, rdo: false }] };
+        daySectionStates[d] = { differentRules: false, copyFrom: 'Weekdays', expanded: true, payItems: [{ payItem: '', ruleType: 'hours', from: '', to: '', fromTime: '09:00', toTime: '17:00', rate: '', rdo: false }] };
       }
     });
 
@@ -2845,7 +2846,7 @@
 
   function addPayItem(dayType) {
     if (!daySectionStates[dayType]) return;
-    daySectionStates[dayType].payItems.push({ payItem: 'Base Hour', ruleType: 'hours', from: 0, to: 8, fromTime: '09:00', toTime: '17:00', rate: 1, rdo: false });
+    daySectionStates[dayType].payItems.push({ payItem: '', ruleType: 'hours', from: '', to: '', fromTime: '09:00', toTime: '17:00', rate: '', rdo: false });
     if (dayType === 'Night Shift') renderNightShiftCard(); else renderDaySections();
   }
 
@@ -2885,12 +2886,13 @@
         '<span></span>' +
       '</div>';
     const rows = items.map(function(item, idx) {
-      const options = PAY_ITEM_OPTIONS.map(o =>
-        '<option value="' + o + '"' + (item.payItem === o ? ' selected' : '') + '>' + o + '</option>'
-      ).join('');
+      const options = '<option value="" disabled' + (item.payItem === '' ? ' selected' : '') + '>Select pay item</option>' +
+        PAY_ITEM_OPTIONS.map(o =>
+          '<option value="' + o + '"' + (item.payItem === o ? ' selected' : '') + '>' + o + '</option>'
+        ).join('');
       var esc2 = dayType.replace(/'/g,"\\'");
       return '<div class="pay-item-row' + (showRdo ? '' : ' no-rdo') + '">' +
-        '<select class="pay-item-select" onchange="updatePayItem(\'' + dayType + '\',' + idx + ',\'payItem\',this.value)">' + options + '</select>' +
+        '<select class="pay-item-select' + (item.payItem === '' ? ' placeholder' : '') + '" onchange="updatePayItem(\'' + dayType + '\',' + idx + ',\'payItem\',this.value);this.classList.remove(\'placeholder\')">' + options + '</select>' +
         '<span class="arrow-sep">→</span>' +
         (function(){
           var esc = dayType.replace(/'/g,"\\'");
@@ -2905,11 +2907,11 @@
             '</div>';
           }
           return '<div class="rule-hours-group">'+tog+
-            'From <input class="hours-input" type="number" min="0" max="24" step="0.5" value="'+item.from+'" onchange="updatePayItem(\''+esc+'\','+idx+',\'from\',+this.value)"> hr '+
-            'to <input class="hours-input" type="number" min="0" max="24" step="0.5" value="'+item.to+'" onchange="updatePayItem(\''+esc+'\','+idx+',\'to\',+this.value)"> hr'+
+            'From <input class="hours-input" type="number" min="0" max="24" step="0.5" placeholder="0" value="'+(item.from===''||item.from===null||item.from===undefined?'':item.from)+'" onchange="updatePayItem(\''+esc+'\','+idx+',\'from\',this.value===\'\'?\'\':+this.value)"> hr '+
+            'to <input class="hours-input" type="number" min="0" max="24" step="0.5" placeholder="0" value="'+(item.to===''||item.to===null||item.to===undefined?'':item.to)+'" onchange="updatePayItem(\''+esc+'\','+idx+',\'to\',this.value===\'\'?\'\':+this.value)"> hr'+
           '</div>';
         })() +
-        '<input class="rate-input" type="number" min="0" step="0.1" placeholder="Rate*" value="' + item.rate + '" onchange="updatePayItem(\'' + dayType + '\',' + idx + ',\'rate\',+this.value)">' +
+        '<input class="rate-input" type="number" min="0" step="0.1" placeholder="Rate" value="' + (item.rate === '' || item.rate === null || item.rate === undefined ? '' : item.rate) + '" onchange="updatePayItem(\'' + dayType + '\',' + idx + ',\'rate\',this.value===\'\'?\'\':+this.value)">' +
         (showRdo
           ? '<label class="toggle-switch toggle-orange"><input type="checkbox"' + (item.rdo ? ' checked' : '') + ' onchange="updatePayItem(\'' + esc2 + '\',' + idx + ',\'rdo\',this.checked)"><span class="toggle-track"></span></label>'
           : '') +
@@ -3016,6 +3018,26 @@
 
     if (existingRules.some(function(r) { return r.ruleName === ruleName; })) {
       alert('A rule named "' + ruleName + '" already exists. Choose a different condition combination.');
+      return;
+    }
+
+    // Validate that Weekdays has at least one pay item with From, To and Rate filled in
+    const wdState = daySectionStates['Weekdays'];
+    if (!wdState || !wdState.payItems || wdState.payItems.length === 0) {
+      alert('Please set up at least one pay rule for Weekdays to continue.');
+      return;
+    }
+    const wdIncomplete = wdState.payItems.some(function(item) {
+      if (!item.payItem) return true;
+      if (item.ruleType === 'time') {
+        return !item.fromTime || !item.toTime || item.rate === '' || item.rate === null || item.rate === undefined;
+      }
+      return item.from === '' || item.from === null || item.from === undefined ||
+             item.to === '' || item.to === null || item.to === undefined ||
+             item.rate === '' || item.rate === null || item.rate === undefined;
+    });
+    if (wdIncomplete) {
+      alert('Please complete all pay rule fields (Pay Item, From, To, and Rate) for Weekdays before saving.');
       return;
     }
 
@@ -3263,7 +3285,7 @@
   let payGroups = [
     {
       name: 'Full-time Wages',
-      payItems: ['Base Hour', 'Ordinary (1.5x)', 'Ordinary (2x)'],
+      payItems: ['Base Hour', 'Overtime(1.5x)', 'Overtime(2x)'],
       frequency: 'Weekly',
       weekStart: 'Monday',
       startDate: '2026-01-06',
@@ -3283,7 +3305,7 @@
     },
     {
       name: 'Salary Staff',
-      payItems: ['Base Hour', 'Ordinary (1.5x)'],
+      payItems: ['Base Hour', 'Overtime(1.5x)'],
       frequency: 'Fortnightly',
       weekStart: 'Wednesday',
       startDate: '2026-01-15',
@@ -3720,9 +3742,9 @@
 
   function makePayItem(label, from, to, rate) {
     const payItem = rate === 1 ? 'Base Hour'
-      : rate === 1.5 ? 'Ordinary(1.5x)'
-      : rate === 2   ? 'Ordinary(2x)'
-      : 'Ordinary(' + rate + 'x)';
+      : rate === 1.5 ? 'Overtime(1.5x)'
+      : rate === 2   ? 'Overtime(2x)'
+      : 'Overtime(' + rate + 'x)';
     return { payItem, ruleType: 'hours', from, to, fromTime: '09:00', toTime: '17:00', rate, rdo: false };
   }
 
