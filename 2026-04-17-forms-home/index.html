@@ -271,6 +271,43 @@ tbody tr.highlighted{background:#fafbfd}
 .status-pill.open::before{content:'';width:6px;height:6px;border-radius:50%;background:#dc2626}
 .status-pill.closed{background:#dcfce7;color:#166534;border:1px solid #bbf7d0}
 .status-pill.closed::before{content:'';width:6px;height:6px;border-radius:50%;background:#16a34a}
+
+/* Open/Closed count cells in Forms Home incident table */
+.count-cell{text-align:center;width:120px}
+.count-link{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:14px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid transparent;transition:all .12s;font-family:'Inter',sans-serif;background:#f1f5f9;color:#64748b}
+.count-link.has-count.open{background:#fee2e2;color:#991b1b;border-color:#fecaca}
+.count-link.has-count.open:hover{background:#fecaca}
+.count-link.has-count.closed{background:#dcfce7;color:#166534;border-color:#bbf7d0}
+.count-link.has-count.closed:hover{background:#bbf7d0}
+.count-link.has-count{cursor:pointer}
+.count-link:not(.has-count){cursor:default}
+
+/* Status detail (incidents grouped by project) */
+.incident-group{background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:14px;overflow:hidden}
+.incident-group-header{padding:12px 18px;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .12s}
+.incident-group-header:hover{background:#f1f5f9}
+.incident-group-header .ig-name{font-size:14px;font-weight:700;color:#1b2a4a;flex:1}
+.incident-group-header .ig-count{font-size:12px;font-weight:600;padding:3px 10px;border-radius:10px;background:#e2e8f0;color:#475569}
+.incident-group-header .ig-arrow{color:#94a3b8;font-size:12px}
+.incident-group-header:hover .ig-arrow{color:#f5a623}
+.incident-row{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid #f1f5f9;cursor:pointer;transition:background .1s}
+.incident-row:last-child{border-bottom:none}
+.incident-row:hover{background:#fafbfd}
+.incident-row .ir-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.incident-row.open .ir-icon{background:#fee2e2;color:#dc2626}
+.incident-row.closed .ir-icon{background:#dcfce7;color:#16a34a}
+.incident-row .ir-info{flex:1;min-width:0}
+.incident-row .ir-title{font-size:13px;font-weight:600;color:#1b2a4a}
+.incident-row .ir-meta{font-size:11px;color:#64748b;margin-top:2px;display:flex;gap:14px}
+.incident-row .ir-meta i{margin-right:3px;opacity:.7}
+.status-detail-header{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:18px 20px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.status-detail-header .sdh-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.status-detail-header.open-detail .sdh-icon{background:#fee2e2;color:#dc2626}
+.status-detail-header.closed-detail .sdh-icon{background:#dcfce7;color:#16a34a}
+.status-detail-header .sdh-title{font-size:18px;font-weight:700;color:#1b2a4a}
+.status-detail-header .sdh-sub{font-size:13px;color:#64748b;margin-top:2px}
+.status-detail-header .sdh-stats{margin-left:auto;font-size:13px;color:#64748b}
+.status-detail-header .sdh-stats b{color:#1b2a4a;font-weight:700}
 .proj-pill.equip{background:#ffedd5;color:#9a3412}
 
 /* Revision pill / column */
@@ -418,7 +455,7 @@ tbody tr.highlighted{background:#fafbfd}
       <div id="view-forms" style="display:none">
         <div class="table-wrap" style="border-radius:8px;border-top:1px solid #e2e8f0">
           <table>
-            <thead>
+            <thead id="home-thead">
               <tr>
                 <th>Title</th>
                 <th>Created By</th>
@@ -431,6 +468,9 @@ tbody tr.highlighted{background:#fafbfd}
           </table>
         </div>
       </div>
+
+      <!-- Incident status detail view (Forms Home) -->
+      <div id="view-incident-status" style="display:none"></div>
     </div>
   </div>
 
@@ -963,7 +1003,12 @@ function renderBreadcrumbs(){
     if(currentSubcategory){
       const sub = cat.subs.find(s=>s.id===currentSubcategory);
       parts.push(`<span class="sep"><i class="fa-solid fa-chevron-right"></i></span>`);
-      parts.push(`<span class="crumb current">${sub.name}</span>`);
+      parts.push(`<span class="crumb ${currentIncidentStatus?'':'current'}" onclick="goSubcategory('${currentCategory}','${currentSubcategory}')">${sub.name}</span>`);
+      if(currentIncidentStatus){
+        const label = currentIncidentStatus === 'open' ? 'Open' : 'Closed';
+        parts.push(`<span class="sep"><i class="fa-solid fa-chevron-right"></i></span>`);
+        parts.push(`<span class="crumb current">${label} Incidents</span>`);
+      }
     }
   }
   bc.innerHTML = parts.join('');
@@ -973,10 +1018,16 @@ function countFormsInCategory(cat){
   return cat.subs.reduce((n,s)=>n + s.formIds.length, 0);
 }
 
+function hideIncidentStatusView(){
+  const v = document.getElementById('view-incident-status');
+  if(v) v.style.display = 'none';
+}
+
 function renderCategories(){
   document.getElementById('view-categories').style.display = '';
   document.getElementById('view-subcategories').style.display = 'none';
   document.getElementById('view-forms').style.display = 'none';
+  hideIncidentStatusView();
   document.getElementById('view-categories').innerHTML = CATEGORIES.map(cat=>`
     <div class="category-card ${cat.theme}" onclick="goCategory('${cat.id}')">
       <div class="category-icon"><i class="${cat.icon}"></i></div>
@@ -995,6 +1046,7 @@ function renderSubcategories(catId){
   document.getElementById('view-categories').style.display = 'none';
   document.getElementById('view-subcategories').style.display = '';
   document.getElementById('view-forms').style.display = 'none';
+  hideIncidentStatusView();
   document.getElementById('view-subcategories').innerHTML = cat.subs.map(sub=>`
     <div class="category-card ${cat.theme}" onclick="goSubcategory('${cat.id}','${sub.id}')">
       <div class="category-icon"><i class="${sub.icon}"></i></div>
@@ -1015,26 +1067,134 @@ function renderFormsForSub(catId, subId){
   document.getElementById('view-categories').style.display = 'none';
   document.getElementById('view-subcategories').style.display = 'none';
   document.getElementById('view-forms').style.display = '';
+  hideIncidentStatusView();
+
+  const isIncident = catId === 'hs' && subId === 'incident';
+  if(isIncident){
+    document.getElementById('home-thead').innerHTML =
+      `<tr><th>Title</th><th>Created By</th><th>Last edited</th><th>Assigned To</th><th class="count-cell">Reports Open</th><th class="count-cell">Reports Closed</th><th class="actions">Actions</th></tr>`;
+    document.getElementById('home-tbody').innerHTML = forms.length
+      ? forms.map(incidentFormRowHtml).join('')
+      : `<tr><td colspan="7" style="padding:40px;text-align:center;color:#94a3b8">No incident forms yet.</td></tr>`;
+    return;
+  }
+
+  document.getElementById('home-thead').innerHTML =
+    `<tr><th>Title</th><th>Created By</th><th>Last edited</th><th>Assigned To</th><th class="actions">Actions</th></tr>`;
   document.getElementById('home-tbody').innerHTML = forms.length
     ? forms.map(homeRowHtml).join('')
     : `<tr><td colspan="5" style="padding:40px;text-align:center;color:#94a3b8">No forms in this subcategory yet.</td></tr>`;
 }
 
+// Aggregate open/closed incident counts across all projects
+function totalIncidentCounts(){
+  let open = 0, closed = 0;
+  Object.values(INCIDENTS).forEach(list=>list.forEach(i=>{ if(i.status==='open') open++; else closed++; }));
+  return { open, closed };
+}
+function incidentFormRowHtml(f){
+  const counts = totalIncidentCounts();
+  const openHtml = `<span class="count-link ${counts.open>0?'has-count open':''}" ${counts.open>0?`onclick="event.stopPropagation();goIncidentStatus('open')"`:''}><i class="fa-regular fa-circle-dot"></i> ${counts.open}</span>`;
+  const closedHtml = `<span class="count-link ${counts.closed>0?'has-count closed':''}" ${counts.closed>0?`onclick="event.stopPropagation();goIncidentStatus('closed')"`:''}><i class="fa-solid fa-circle-check"></i> ${counts.closed}</span>`;
+  return `
+    <tr>
+      <td class="form-title">${f.title}</td>
+      <td class="created-by">${f.by}</td>
+      <td class="last-edited">${f.date}</td>
+      <td class="assigned-to">${renderAssignedProjects(f.id)}</td>
+      <td class="count-cell">${openHtml}</td>
+      <td class="count-cell">${closedHtml}</td>
+      <td class="actions" style="white-space:nowrap">
+        <button class="assign-btn" title="Assign to projects" onclick="openAssignModal(${f.id})"><i class="fa-solid fa-paper-plane"></i></button>
+        <button class="action-btn" title="More actions"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+      </td>
+    </tr>`;
+}
+
+let currentIncidentStatus = null; // 'open' | 'closed' | null
+
+function goIncidentStatus(status){
+  currentIncidentStatus = status;
+  renderBreadcrumbs();
+  renderIncidentStatusView();
+}
+
+function renderIncidentStatusView(){
+  document.getElementById('view-categories').style.display = 'none';
+  document.getElementById('view-subcategories').style.display = 'none';
+  document.getElementById('view-forms').style.display = 'none';
+  const view = document.getElementById('view-incident-status');
+  view.style.display = '';
+  const status = currentIncidentStatus;
+  const label = status === 'open' ? 'Open' : 'Closed';
+  // Build groups by project
+  const groups = Object.entries(INCIDENTS).map(([key, list])=>{
+    return { key, project: PROJECT_DATA[key], items: list.filter(i=>i.status===status) };
+  }).filter(g=>g.items.length);
+  const total = groups.reduce((n,g)=>n + g.items.length, 0);
+  const groupsHtml = groups.map(g=>`
+    <div class="incident-group">
+      <div class="incident-group-header" onclick="jumpToProjectIncidents('${g.key}')">
+        <i class="fa-solid fa-folder-open" style="color:#1b2a4a"></i>
+        <div class="ig-name">${g.project.name}</div>
+        <span class="ig-count">${g.items.length} ${label.toLowerCase()}</span>
+        <i class="fa-solid fa-arrow-right ig-arrow"></i>
+      </div>
+      ${g.items.map(i=>`
+        <div class="incident-row ${i.status}" onclick="jumpToProjectIncidents('${g.key}')">
+          <div class="ir-icon"><i class="fa-solid ${i.status==='open'?'fa-triangle-exclamation':'fa-circle-check'}"></i></div>
+          <div class="ir-info">
+            <div class="ir-title">${i.title}</div>
+            <div class="ir-meta">
+              <span><i class="fa-regular fa-calendar"></i>${i.date}</span>
+              <span><i class="fa-solid fa-user"></i>${i.by}</span>
+              <span><i class="fa-solid fa-inbox"></i>${i.responses} responses</span>
+            </div>
+          </div>
+          <span class="status-pill ${i.status}">${label}</span>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+  view.innerHTML = `
+    <div class="status-detail-header ${status}-detail">
+      <div class="sdh-icon"><i class="fa-solid ${status==='open'?'fa-triangle-exclamation':'fa-circle-check'}"></i></div>
+      <div>
+        <div class="sdh-title">${label} Incidents</div>
+        <div class="sdh-sub">All ${label.toLowerCase()} minor incidents organised by project</div>
+      </div>
+      <div class="sdh-stats"><b>${total}</b> ${label.toLowerCase()} · <b>${groups.length}</b> projects</div>
+    </div>
+    ${groups.length
+      ? groupsHtml
+      : `<div style="padding:40px;text-align:center;color:#94a3b8;background:#fff;border:1px solid #e2e8f0;border-radius:8px">No ${label.toLowerCase()} incidents.</div>`}`;
+}
+
+function jumpToProjectIncidents(projectKey){
+  switchTab('project');
+  projGoProject(projectKey);
+  projGoCategory('hs');
+  projGoSubcategory('incident');
+}
+
 function goHome(){
   currentCategory = null;
   currentSubcategory = null;
+  currentIncidentStatus = null;
   renderBreadcrumbs();
   renderCategories();
 }
 function goCategory(catId){
   currentCategory = catId;
   currentSubcategory = null;
+  currentIncidentStatus = null;
   renderBreadcrumbs();
   renderSubcategories(catId);
 }
 function goSubcategory(catId, subId){
   currentCategory = catId;
   currentSubcategory = subId;
+  currentIncidentStatus = null;
   renderBreadcrumbs();
   renderFormsForSub(catId, subId);
 }
