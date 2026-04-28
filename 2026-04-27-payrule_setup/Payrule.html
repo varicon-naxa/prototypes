@@ -1166,9 +1166,25 @@
     .target-cond-optional { font-size:11px; font-weight:500; background:var(--warn-bg); color:var(--secondary-dark); border-radius:var(--radius-sm); padding:2px 8px; border:1px solid rgba(241,145,0,0.35); }
     .target-cond-remove-btn { background:none; border:none; cursor:pointer; color:var(--text-disabled); font-size:12px; display:flex; align-items:center; gap:4px; padding:4px 8px; border-radius:var(--radius-sm); font-family:'Roboto',sans-serif; transition:color .15s,background .15s; }
     .target-cond-remove-btn:hover { color:var(--text-primary); background:var(--grey-100); }
-    .target-cond-rows { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
-    .target-cond-fieldset { border:1px solid var(--border-solid); border-radius:var(--radius-sm); padding:0 10px 8px; min-width:160px; position:relative; background:var(--bg-paper); }
+    .target-cond-rows { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; margin-top:4px; }
+    .target-cond-fieldset { border:1px solid var(--border-solid); border-radius:var(--radius-sm); padding:0 10px 8px; min-width:200px; width:220px; position:relative; background:var(--bg-paper); }
     .target-cond-legend { font-size:11px; color:var(--text-secondary); font-weight:500; padding:0 4px; }
+    /* dropdown trigger (replaces old <select>) */
+    .cond-dd-wrap { position:relative; }
+    .cond-dd-trigger { display:flex; align-items:center; justify-content:space-between; gap:6px; border:none; background:transparent; width:100%; padding:4px 0 2px; font-family:'Roboto',sans-serif; font-size:13px; cursor:pointer; text-align:left; outline:none; }
+    .cond-dd-trigger .cond-trigger-label { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .cond-dd-trigger .cond-trigger-label.placeholder { color:var(--text-secondary); }
+    .cond-dd-trigger svg { flex-shrink:0; color:var(--text-secondary); transition:transform .15s; }
+    .cond-dd-trigger.open svg { transform:rotate(180deg); }
+    .cond-dd-panel { display:none; position:absolute; top:calc(100% + 4px); left:-10px; width:240px; background:var(--bg-paper); border:1px solid var(--grey-200); border-radius:var(--radius-md); box-shadow:0 4px 20px rgba(0,0,0,.13); z-index:500; animation:ddFade .12s ease; overflow:hidden; }
+    .cond-dd-panel.open { display:block; }
+    .cond-dd-list { max-height:180px; overflow-y:auto; padding:4px 0; }
+    .cond-dd-list::-webkit-scrollbar { width:4px; }
+    .cond-dd-list::-webkit-scrollbar-thumb { background:var(--grey-300); border-radius:2px; }
+    .cond-dd-item { display:flex; align-items:center; gap:9px; padding:7px 12px; font-size:13px; color:var(--text-primary); cursor:pointer; transition:background .1s; user-select:none; white-space:normal; }
+    .cond-dd-item:hover { background:var(--grey-50); }
+    .cond-dd-item.selected { background:rgba(241,145,0,0.07); color:var(--secondary-dark); font-weight:500; }
+    .cond-dd-item input[type="checkbox"] { width:14px; height:14px; accent-color:var(--secondary); flex-shrink:0; cursor:pointer; pointer-events:none; }
     .target-cond-select { border:none; outline:none; font-family:'Roboto',sans-serif; font-size:13px; color:var(--text-primary); background:transparent; cursor:pointer; width:100%; padding:4px 0 2px; }
     .target-cond-select.placeholder { color:var(--text-secondary); }
     .target-cond-remove-row { background:none; border:none; cursor:pointer; color:var(--text-disabled); display:flex; align-items:center; padding:0 0 0 2px; transition:color .12s; align-self:center; flex-shrink:0; }
@@ -1910,14 +1926,15 @@
   let nightshiftTimes = { from: '17:00', to: '06:00' };
   // Target conditions (new)
   let targetConditionsVisible = false;
-  let targetCondRows = []; // [{ type:'Project', value:'' }, ...]
+  let targetCondRows = []; // [{ type:'Project', values:[] }, ...]
+  let condDdOpenIdx = null; // index of the open condition dropdown, or null
   const COND_TYPES = ['Project', 'Role', 'Allowance', 'Employee', 'Company', 'Pay Category'];
   let rdoSettings = { enabled: false, mode: 'Bi-weekly', weeklyThreshold: '', weeklyDeduction: '', dailyDeduction: '', percentage: '' };
   let weeklyCapSettings = { enabled: false, threshold: '', insideCapPayType: '', aboveCapPayType: '', spillRules: [] };
   let rdoExpanded = true;
   let wcExpanded = true;
 
-  const PAY_ITEM_OPTIONS = ['Base Hour', 'Ordinary(1.5x)', 'Ordinary(2x)', 'Night Shift'];
+  const PAY_ITEM_OPTIONS = ['Base Hour', 'Ordinary(1.5x)', 'Ordinary(2x)'];
 
   const VARIABLE_OPTIONS = {
     'Project':      ['Highway 1 Upgrade', 'Bridge Deck Replacement', 'Site Remediation — North', 'Tunnel Boring Works', 'Culvert Installation'],
@@ -1978,18 +1995,43 @@
       return '<button class="cond-type-pill' + active + '" type="button" onclick="toggleTargetCondType(\'' + t + '\')">' + t + '</button>';
     }).join('');
 
-    // One fieldset per row — no × button, no "Add target"
+    // One fieldset per row — dropdown trigger + panel (multi-select)
+    const chevronSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
     const rowsHtml = targetCondRows.map(function(row, idx) {
-      const opts = (VARIABLE_OPTIONS[row.type] || []).map(function(o) {
-        return '<option value="' + o + '"' + (row.value === o ? ' selected' : '') + '>' + o + '</option>';
+      const vals = row.values || (row.value ? [row.value] : []);
+      const isOpen = condDdOpenIdx === idx;
+      // Trigger label
+      let triggerLabel, triggerClass;
+      if (vals.length === 0) {
+        triggerLabel = 'Select one or more…';
+        triggerClass = 'cond-trigger-label placeholder';
+      } else if (vals.length === 1) {
+        triggerLabel = vals[0];
+        triggerClass = 'cond-trigger-label';
+      } else {
+        triggerLabel = vals.length + ' selected';
+        triggerClass = 'cond-trigger-label';
+      }
+      // Dropdown items
+      const items = (VARIABLE_OPTIONS[row.type] || []).map(function(o) {
+        const checked = vals.indexOf(o) !== -1;
+        const safeO = o.replace(/'/g,"\\'");
+        return '<div class="cond-dd-item' + (checked ? ' selected' : '') + '" onclick="toggleTargetCondValue(' + idx + ',\'' + safeO + '\')">' +
+          '<input type="checkbox"' + (checked ? ' checked' : '') + ' tabindex="-1">' +
+          '<span>' + o + '</span>' +
+        '</div>';
       }).join('');
-      const placeholderClass = row.value ? '' : ' placeholder';
       return '<fieldset class="target-cond-fieldset">' +
         '<legend class="target-cond-legend">' + row.type + '</legend>' +
-        '<select class="target-cond-select' + placeholderClass + '" onchange="updateTargetCondValue(' + idx + ',this.value);this.classList.remove(\'placeholder\')">' +
-          '<option value="" disabled' + (!row.value ? ' selected' : '') + ' hidden>Select…</option>' +
-          opts +
-        '</select>' +
+        '<div class="cond-dd-wrap">' +
+          '<button type="button" class="cond-dd-trigger' + (isOpen ? ' open' : '') + '" onclick="toggleCondDd(' + idx + ')">' +
+            '<span class="' + triggerClass + '">' + triggerLabel + '</span>' +
+            chevronSvg +
+          '</button>' +
+          '<div class="cond-dd-panel' + (isOpen ? ' open' : '') + '">' +
+            '<div class="cond-dd-list">' + items + '</div>' +
+          '</div>' +
+        '</div>' +
       '</fieldset>';
     }).join('');
 
@@ -2000,11 +2042,13 @@
         ' Remove' +
       '</button>';
 
+    const tooltipMsg = 'These conditions narrow down exactly which timesheets or employees this pay rule applies to. For example, selecting a Project means this rule only kicks in when an employee logs hours against that project.';
     card.innerHTML =
       '<div class="target-cond-card">' +
         '<div class="target-cond-head">' +
           '<div class="target-cond-title">' +
-            infoSvg + 'Refine Target Conditions' +
+            '<span class="has-tooltip" onmouseenter="showTooltip(this,\'' + tooltipMsg + '\')" onmouseleave="hideTooltip()" style="display:inline-flex;align-items:center;cursor:help;">' + infoSvg + '</span>' +
+            'Refine Target Conditions' +
             optionalBadge +
           '</div>' +
           removeBtn +
@@ -2019,8 +2063,12 @@
     const idx = targetCondRows.findIndex(function(r){ return r.type === type; });
     if (idx !== -1) {
       targetCondRows.splice(idx, 1);
+      if (condDdOpenIdx === idx) condDdOpenIdx = null;
+      else if (condDdOpenIdx !== null && condDdOpenIdx > idx) condDdOpenIdx--;
     } else {
-      targetCondRows.push({ type: type, value: '' });
+      targetCondRows.push({ type: type, values: [] }); // multi-select — values array
+      // auto-open the new dropdown
+      condDdOpenIdx = targetCondRows.length - 1;
     }
     renderTargetConditions();
   }
@@ -2028,13 +2076,35 @@
   // Keep addTargetCondType as alias for backward-compat (AI path)
   function addTargetCondType(type) { toggleTargetCondType(type); }
 
+  function toggleTargetCondValue(idx, val) {
+    const row = targetCondRows[idx];
+    if (!row) return;
+    const pos = row.values.indexOf(val);
+    if (pos !== -1) row.values.splice(pos, 1);
+    else row.values.push(val);
+    // keep dropdown open so user can select multiple
+    condDdOpenIdx = idx;
+    renderTargetConditions();
+  }
+
+  function toggleCondDd(idx) {
+    condDdOpenIdx = (condDdOpenIdx === idx) ? null : idx;
+    renderTargetConditions();
+  }
+
+  // Legacy single-value setter (kept for AI path)
   function updateTargetCondValue(idx, val) {
-    targetCondRows[idx].value = val;
+    const row = targetCondRows[idx];
+    if (!row) return;
+    if (!row.values) row.values = [];
+    if (row.values.indexOf(val) === -1) row.values.push(val);
+    renderTargetConditions();
   }
 
   function removeTargetConditions() {
     targetConditionsVisible = false;
     targetCondRows = [];
+    condDdOpenIdx = null;
     renderTargetConditions();
   }
 
@@ -2137,7 +2207,7 @@
     closeExistingRuleModal();
     isVariantMode = true;
     // Pre-open target conditions with this type already selected
-    targetCondRows = [{ type: condType, value: '' }];
+    targetCondRows = [{ type: condType, values: [] }];
     targetConditionsVisible = true;
     // Hide RDO and WC blocks, show night shift
     renderRdoSection();
@@ -2194,8 +2264,8 @@
       el.classList.toggle('selected', el.textContent.trim() === val)
     );
     closeAllMsDropdowns();
-    // Check if any rules already exist for this employment type
-    const hasExisting = existingRules.some(function(r) { return r.empType === val && !r.isVariant; });
+    // Check if any rules already exist for this employment type (skip modal when AI is populating)
+    const hasExisting = !aiApplying && existingRules.some(function(r) { return r.empType === val && !r.isVariant; });
     if (hasExisting) {
       showExistingRuleModal(val);
     } else {
@@ -2439,7 +2509,7 @@
   function updateRuleType(dayType, idx, val) {
     if (!daySectionStates[dayType]) return;
     daySectionStates[dayType].payItems[idx].ruleType = val;
-    renderDaySections();
+    if (dayType === 'Night Shift') renderNightShiftCard(); else renderDaySections();
   }
 
   function updateNightshiftTime(field, val) { nightshiftTimes[field] = val; }
@@ -2776,18 +2846,24 @@
   function addPayItem(dayType) {
     if (!daySectionStates[dayType]) return;
     daySectionStates[dayType].payItems.push({ payItem: 'Base Hour', ruleType: 'hours', from: 0, to: 8, fromTime: '09:00', toTime: '17:00', rate: 1, rdo: false });
-    renderDaySections();
+    if (dayType === 'Night Shift') renderNightShiftCard(); else renderDaySections();
   }
 
   function removePayItem(dayType, idx) {
     if (!daySectionStates[dayType]) return;
     daySectionStates[dayType].payItems.splice(idx, 1);
-    renderDaySections();
+    if (dayType === 'Night Shift') renderNightShiftCard(); else renderDaySections();
   }
 
   function updatePayItem(dayType, idx, field, val) {
     if (!daySectionStates[dayType]) return;
     daySectionStates[dayType].payItems[idx][field] = val;
+  }
+
+  function updateRuleTypeNs(idx, val) {
+    if (!daySectionStates['Night Shift']) return;
+    daySectionStates['Night Shift'].payItems[idx].ruleType = val;
+    renderNightShiftCard();
   }
 
   function renderPayItemBlock(dayType) {
@@ -2911,18 +2987,26 @@
   function saveRule() {
     if (!selectedEmpType) { alert('Please select an Employment Type.'); return; }
 
+    // Collect all selected values across all condition rows
+    function allCondVals() {
+      const out = [];
+      targetCondRows.forEach(function(r) {
+        const vs = r.values || (r.value ? [r.value] : []);
+        vs.forEach(function(v) { if (v) out.push(v); });
+      });
+      return out;
+    }
+
     let conditionTag = '';
     if (isVariantMode) {
-      // Variant mode — must have at least one filled target condition
-      const vals = targetCondRows.map(function(r) { return r.value; }).filter(Boolean);
+      const vals = allCondVals();
       if (vals.length === 0) {
         alert('Please select at least one target condition value to create a variant rule.');
         return;
       }
       conditionTag = '_' + vals.map(function(v) { return v.replace(/\s+/g,'_'); }).join('_');
     } else if (targetConditionsVisible && targetCondRows.length > 0) {
-      // Optional target conditions on a fresh rule
-      const vals = targetCondRows.map(function(r) { return r.value; }).filter(Boolean);
+      const vals = allCondVals();
       if (vals.length > 0) {
         conditionTag = '_' + vals.map(function(v) { return v.replace(/\s+/g,'_'); }).join('_');
       }
@@ -2960,7 +3044,7 @@
       rdo:           rdoVal,
       weeklyCap:     wcVal,
       conditions:    conditionTag ? conditionTag.replace(/^_/, '') : '',
-      ruleVariables: targetCondRows.filter(function(r){ return r.value; }).map(function(r){ return r.type; }),
+      ruleVariables: targetCondRows.filter(function(r){ return (r.values||[r.value]).some(Boolean); }).map(function(r){ return r.type; }),
       nightShift:    nightShiftEnabled,
       isVariant:     isVariantMode,
       baseEmpType:   isVariantMode ? selectedEmpType : '',
@@ -3492,6 +3576,14 @@
     if (!e.target.closest('.pg-emp-wrap')) { const d = document.getElementById('pg-emp-dd'); if (d) d.classList.remove('open'); }
   });
 
+  /* Close condition dropdown when clicking outside */
+  document.addEventListener('click', function(e) {
+    if (condDdOpenIdx !== null && !e.target.closest('.cond-dd-wrap')) {
+      condDdOpenIdx = null;
+      renderTargetConditions();
+    }
+  });
+
   /* Render sample data on load */
   renderPayGroupsTable();
 
@@ -3501,6 +3593,7 @@
 
   let aiChatOpen   = false;
   let aiResponding = false;
+  let aiApplying   = false; // suppresses emp-type modal during AI form population
 
   function toggleAiChat() {
     aiChatOpen = !aiChatOpen;
@@ -3554,106 +3647,338 @@
     if (el) el.remove();
   }
 
-  /* ── AI Parser: extract intent from user message ── */
+  /* ══════════════════════════════════════════════
+     AI CHAT — SMART PARSER + FORM POPULATION
+  ══════════════════════════════════════════════ */
+
   function processAiMessage(msg) {
     aiResponding = true;
     document.getElementById('ai-send-btn').disabled = true;
     addAiTyping();
-
     setTimeout(function() {
       removeAiTyping();
-      const result = parsePayRuleIntent(msg.toLowerCase());
-      const response = buildAiResponse(result);
+      const result = parsePayRuleIntent(msg);
+      if (result.noMatch) {
+        addAiBubble('agent',
+          '<div style="font-size:13px;">I couldn\'t detect specific pay rule details from that.<br><br>' +
+          'Try something like:<br>' +
+          '<em style="color:var(--primary);">"Wages employees, weekdays base rate, Saturday at 1.5x, Sunday at 2x, 38 hr weekly cap, bi-weekly RDO"</em><br><br>' +
+          'You can mention: employment type, day rates (1.5x, 2x), overtime hours, weekly cap, RDO mode, night shift, project or role conditions.</div>',
+          false);
+        aiResponding = false;
+        document.getElementById('ai-send-btn').disabled = false;
+        return;
+      }
       applyAiToForm(result);
-      addAiBubble('agent', response, true);
+      const bubble = buildAiPreviewBubble(result);
+      addAiBubble('agent', bubble, true);
       aiResponding = false;
       document.getElementById('ai-send-btn').disabled = false;
-    }, 1100 + Math.random() * 600);
+    }, 900 + Math.random() * 500);
   }
 
-  function parsePayRuleIntent(msg) {
-    const result = {
-      empType:   null,
-      dayTypes:  [],
-      rdoMode:   null,
-      weeklyCap: false,
-      notes:     [],
+  /* ── Helpers ── */
+  function aiParseRate(text) {
+    if (/double\s*time|2\.0x|\b2x\b/.test(text))          return 2;
+    if (/time\s*and\s*a?\s*half|1\.5x|\b1\.5\b/.test(text)) return 1.5;
+    if (/2\.5x|\b2\.5\b/.test(text))                       return 2.5;
+    if (/triple|3x|\b3\.0\b/.test(text))                   return 3;
+    const m = text.match(/(\d+(?:\.\d+)?)\s*[xX]/);
+    if (m) return parseFloat(m[1]);
+    if (/overtime|ot\b/.test(text))                        return 1.5;
+    return null;
+  }
+
+  function aiParseHrsRange(text) {
+    const m1 = text.match(/from\s+(\d+(?:\.\d+)?)\s*(?:hrs?|hours?)?\s+to\s+(\d+(?:\.\d+)?)/);
+    if (m1) return { from: parseFloat(m1[1]), to: parseFloat(m1[2]) };
+    const m2 = text.match(/(\d+(?:\.\d+)?)\s*(?:to|-)\s*(\d+(?:\.\d+)?)\s*(?:hrs?|hours?)/);
+    if (m2) return { from: parseFloat(m2[1]), to: parseFloat(m2[2]) };
+    const m3 = text.match(/after\s+(\d+(?:\.\d+)?)\s*(?:hrs?|hours?)/);
+    if (m3) return { from: parseFloat(m3[1]), to: 24 };
+    const m4 = text.match(/first\s+(\d+(?:\.\d+)?)\s*(?:hrs?|hours?)/);
+    if (m4) return { from: 0, to: parseFloat(m4[1]) };
+    return null;
+  }
+
+  function aiParseTime(str) {
+    str = str.replace(/\s/g,'').toLowerCase();
+    const ampm = str.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)$/);
+    if (ampm) {
+      let h = parseInt(ampm[1]), m = parseInt(ampm[2] || '0');
+      if (ampm[3] === 'pm' && h !== 12) h += 12;
+      if (ampm[3] === 'am' && h === 12) h = 0;
+      return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+    }
+    const plain = str.match(/^(\d{1,2})(?::(\d{2}))?$/);
+    if (plain) {
+      const h = parseInt(plain[1]), m = parseInt(plain[2] || '0');
+      return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+    }
+    return null;
+  }
+
+  function makePayItem(label, from, to, rate) {
+    const payItem = rate === 1 ? 'Base Hour'
+      : rate === 1.5 ? 'Ordinary(1.5x)'
+      : rate === 2   ? 'Ordinary(2x)'
+      : 'Ordinary(' + rate + 'x)';
+    return { payItem, ruleType: 'hours', from, to, fromTime: '09:00', toTime: '17:00', rate, rdo: false };
+  }
+
+  /* ── Main parser ── */
+  function parsePayRuleIntent(raw) {
+    const msg = raw.toLowerCase();
+    const r = {
+      empType: null,
+      dayItems: {}, // { 'Weekdays': [{...}], 'Saturday': [...] }
+      rdo: { enabled: false, mode: 'Bi-weekly' },
+      weeklyCap: { enabled: false, hrs: 38 },
+      nightShift: { enabled: false, from: '22:00', to: '06:00' },
+      conditions: [],
+      noMatch: false,
     };
 
-    /* Employment type */
-    if (/\bwages?\b/.test(msg))                              result.empType = 'Wages';
-    else if (/\bsalar(y|ied)\b/.test(msg))                   result.empType = 'Salary';
-    else if (/\bcasual\b/.test(msg))                         result.empType = 'Casual';
+    /* ── Employment Type ── */
+    if (/\bwages?\b/.test(msg))                           r.empType = 'Wages';
+    else if (/\bsalar(y|ied)\b|\bsalaried\b/.test(msg))  r.empType = 'Staff';
+    else if (/\bcasual\b/.test(msg))                      r.empType = 'Casual';
+    else if (/\bstaff\b/.test(msg))                       r.empType = 'Staff';
+    else if (/\bcontractor\b/.test(msg))                  r.empType = 'Contractor';
+    else if (/\bapprentice\b/.test(msg))                  r.empType = 'Apprentice';
 
-    /* Day types */
-    if (/\bweekdays?\b|\bmonday\b|\btuesday\b|\bwednesday\b|\bthursday\b|\bfriday\b/.test(msg)) result.dayTypes.push('Weekdays');
-    if (/\bsaturdays?\b/.test(msg))   result.dayTypes.push('Saturday');
-    if (/\bsundays?\b/.test(msg))     result.dayTypes.push('Sunday');
+    /* ── Day-specific pay items ──
+       Strategy: split message at day-keyword boundaries, parse each segment */
+    const DAY_MAP = [
+      { key: 'Weekdays',       rx: /\b(weekdays?|monday|tuesday|wednesday|thursday|friday)\b/ },
+      { key: 'Saturday',       rx: /\bsaturdays?\b/ },
+      { key: 'Sunday',         rx: /\bsundays?\b/ },
+      { key: 'Public Holiday', rx: /\bpublic[\s-]?holidays?\b|\bph\b/ },
+    ];
     if (/\bweekend\b/.test(msg)) {
-      if (!result.dayTypes.includes('Saturday')) result.dayTypes.push('Saturday');
-      if (!result.dayTypes.includes('Sunday'))   result.dayTypes.push('Sunday');
-    }
-    if (/\bpublic.?holiday\b|\bph\b/.test(msg)) result.dayTypes.push('Public Holiday');
-    if (/\bnight.?shift\b/.test(msg))            result.dayTypes.push('Night Shift');
-    if (/\brdo\b/.test(msg)) {
-      result.rdoMode = 'Bi-weekly';
-      result.notes.push('RDO deduction enabled');
-    }
-    if (/\bweekly.?cap\b|\bhour.?cap\b|\b38\s?hr/.test(msg)) {
-      result.weeklyCap = true;
-      result.notes.push('Weekly cap enabled');
-    }
-    if (result.dayTypes.length === 0 && !result.empType) {
-      result.notes.push('no_match');
-    }
-    return result;
-  }
-
-  function buildAiResponse(r) {
-    if (r.notes.includes('no_match') && !r.empType && r.dayTypes.length === 0) {
-      return 'I wasn\'t able to detect specific pay rule details from that. Try something like: <em>"Wages employees, overtime on Saturday and Sunday at 1.5x, with RDO deduction"</em>';
+      ['Saturday','Sunday'].forEach(function(d) {
+        if (!r.dayItems[d]) r.dayItems[d] = [];
+      });
     }
 
-    let parts = [];
-    if (r.empType)         parts.push('✅ Employment type set to <strong>' + r.empType + '</strong>');
-    if (r.dayTypes.length) parts.push('✅ Day types selected: <strong>' + r.dayTypes.join(', ') + '</strong>');
-    if (r.rdoMode)         parts.push('✅ RDO Deduction enabled (<strong>Bi-weekly</strong> mode)');
-    if (r.weeklyCap)       parts.push('✅ Weekly Cap rule enabled');
+    DAY_MAP.forEach(function(dm) {
+      if (!dm.rx.test(msg)) return;
+      r.dayItems[dm.key] = r.dayItems[dm.key] || [];
+      // extract text near day keyword (up to 60 chars forward)
+      const segs = [];
+      const re = new RegExp(dm.rx.source + '([^,;]{0,80})', 'g');
+      let m;
+      while ((m = re.exec(msg)) !== null) segs.push(m[0] + (m[1] || ''));
 
-    let reply = 'I\'ve detected the following from your description and updated the form:<br><br>' + parts.join('<br>');
-    reply += '<br><br>Review the form above and adjust any rates or conditions as needed. You can keep describing more details!';
-    return reply;
-  }
+      let foundRate = false;
+      segs.forEach(function(seg) {
+        const rate  = aiParseRate(seg);
+        const range = aiParseHrsRange(seg);
+        if (rate) {
+          foundRate = true;
+          if (range) {
+            r.dayItems[dm.key].push(makePayItem(dm.key, range.from, range.to, rate));
+          } else {
+            // Rate without range — assume base 0-8 if rate=1 else add as extra row
+            if (rate === 1) {
+              r.dayItems[dm.key].push(makePayItem(dm.key, 0, 8, 1));
+            } else {
+              if (!r.dayItems[dm.key].some(function(i){ return i.rate === 1; }))
+                r.dayItems[dm.key].push(makePayItem(dm.key, 0, 8, 1));
+              r.dayItems[dm.key].push(makePayItem(dm.key, 8, 24, rate));
+            }
+          }
+        }
+      });
+      // If day mentioned but no rate found → default base
+      if (!foundRate && r.dayItems[dm.key].length === 0) {
+        r.dayItems[dm.key].push(makePayItem(dm.key, 0, 8, 1));
+      }
+    });
 
-  function applyAiToForm(r) {
-    /* Employment type */
-    if (r.empType) {
-      selectEmpType(r.empType);
-      /* navigate to form if not already there */
-      if (document.getElementById('view-form').style.display === 'none' ||
-          document.getElementById('view-form').style.display === '') {
-        openAddPayRule();
+    /* ── Global overtime (no specific day mentioned) ── */
+    if (Object.keys(r.dayItems).length === 0) {
+      const gRate  = aiParseRate(msg);
+      const gRange = aiParseHrsRange(msg);
+      if (gRate && gRate > 1) {
+        r.dayItems['Weekdays'] = [
+          makePayItem('Weekdays', 0, gRange ? gRange.from : 8, 1),
+          makePayItem('Weekdays', gRange ? gRange.from : 8, gRange ? gRange.to : 24, gRate),
+        ];
       }
     }
 
-    /* Day types — blocks are always shown; just handle Night Shift */
-    if (r.dayTypes.indexOf('Night Shift') !== -1 && !nightShiftEnabled) {
-      nightShiftEnabled = true;
-      renderNightShiftCard();
+    /* ── RDO ── */
+    if (/\brdo\b/.test(msg)) {
+      r.rdo.enabled = true;
+      if (/monthly/.test(msg))                    r.rdo.mode = 'Monthly';
+      else if (/weekly[\s-]?threshold|threshold/.test(msg)) r.rdo.mode = 'Weekly Threshold';
+      else if (/percent/.test(msg))               r.rdo.mode = 'Percentage of Ordinary';
+      else if (/bi[\s-]?weekly/.test(msg))        r.rdo.mode = 'Bi-weekly';
+      else                                         r.rdo.mode = 'Bi-weekly';
     }
 
+    /* ── Weekly Cap ── */
+    const capM = msg.match(/(\d+(?:\.\d+)?)\s*(?:hr|hour)?\s*(?:weekly\s*)?cap/) ||
+                 msg.match(/cap\s*(?:at|of)?\s*(\d+(?:\.\d+)?)\s*(?:hr|hour)/) ||
+                 msg.match(/weekly\s*cap\s*(?:of|at)?\s*(\d+(?:\.\d+)?)/);
+    if (capM || /weekly[\s-]?cap/.test(msg) || /\b38\s*hr/.test(msg)) {
+      r.weeklyCap.enabled = true;
+      if (capM) r.weeklyCap.hrs = parseFloat(capM[1]);
+      else { const hm = msg.match(/\b(\d+)\s*(?:hr|hour)/); if (hm) r.weeklyCap.hrs = parseFloat(hm[1]); }
+    }
+
+    /* ── Night Shift ── */
+    if (/night[\s-]?shift/.test(msg)) {
+      r.nightShift.enabled = true;
+      const fromM = msg.match(/night[\s-]?shift.*?from\s+([\d]{1,2}(?::\d{2})?(?:am|pm)?)/);
+      const toM   = msg.match(/(?:night[\s-]?shift.*?to|to)\s+([\d]{1,2}(?::\d{2})?(?:am|pm)?)/);
+      if (fromM) { const t = aiParseTime(fromM[1]); if (t) r.nightShift.from = t; }
+      if (toM)   { const t = aiParseTime(toM[1]);   if (t) r.nightShift.to   = t; }
+    }
+
+    /* ── Target Conditions ── */
+    Object.keys(VARIABLE_OPTIONS).forEach(function(condType) {
+      (VARIABLE_OPTIONS[condType] || []).forEach(function(val) {
+        if (msg.indexOf(val.toLowerCase()) !== -1) {
+          r.conditions.push({ type: condType, value: val });
+        }
+      });
+    });
+
+    /* ── No match? ── */
+    if (!r.empType && Object.keys(r.dayItems).length === 0 &&
+        !r.rdo.enabled && !r.weeklyCap.enabled && !r.nightShift.enabled && !r.conditions.length) {
+      r.noMatch = true;
+    }
+
+    return r;
+  }
+
+  /* ── Apply parsed result to the form ── */
+  function applyAiToForm(r) {
+    // Open form if not already open
+    const isFormOpen = document.getElementById('view-form').style.display === 'flex';
+    if (!isFormOpen) openAddPayRule();
+
+    /* Employment type — bypass modal with aiApplying flag */
+    if (r.empType) {
+      aiApplying = true;
+      selectedEmpType = r.empType;
+      const lbl = document.getElementById('ms-emptype-label');
+      const trg = document.getElementById('ms-emptype-trigger');
+      if (lbl) lbl.textContent = r.empType;
+      if (trg) trg.classList.add('has-selection');
+      document.querySelectorAll('#ms-emptype-dd .ss-option').forEach(function(el) {
+        el.classList.toggle('selected', el.textContent.trim() === r.empType);
+      });
+      isVariantMode = false;
+      const rcb = document.getElementById('requiredConditionsBlock');
+      if (rcb) { rcb.style.display = 'none'; rcb.innerHTML = ''; }
+      const wrap = document.getElementById('add-cond-wrap');
+      if (wrap) wrap.style.display = '';
+      aiApplying = false;
+    }
+
+    /* Day sections — populate pay items */
+    Object.keys(r.dayItems).forEach(function(dayKey) {
+      if (!daySectionStates[dayKey]) {
+        daySectionStates[dayKey] = { differentRules: true, expanded: true, payItems: [] };
+      } else {
+        daySectionStates[dayKey].expanded = true;
+      }
+      if (r.dayItems[dayKey].length > 0) {
+        daySectionStates[dayKey].payItems = r.dayItems[dayKey];
+      }
+      if (dayKey !== 'Weekdays') {
+        daySectionStates[dayKey].differentRules = true;
+      }
+    });
+    renderDaySections();
+
     /* RDO */
-    if (r.rdoMode && !rdoSettings.enabled) {
+    if (r.rdo.enabled) {
       rdoSettings.enabled = true;
-      rdoSettings.mode    = r.rdoMode;
+      rdoSettings.mode    = r.rdo.mode;
       renderRdoSection();
     }
 
-    /* Weekly cap */
-    if (r.weeklyCap && !weeklyCapSettings.enabled) {
-      weeklyCapSettings.enabled = true;
+    /* Weekly Cap */
+    if (r.weeklyCap.enabled) {
+      weeklyCapSettings.enabled   = true;
+      weeklyCapSettings.threshold = String(r.weeklyCap.hrs);
       renderWeeklyCapSection();
     }
+
+    /* Night Shift */
+    if (r.nightShift.enabled) {
+      nightShiftEnabled     = true;
+      nightshiftTimes.from  = r.nightShift.from;
+      nightshiftTimes.to    = r.nightShift.to;
+      renderNightShiftCard();
+    }
+
+    /* Target Conditions */
+    if (r.conditions.length > 0) {
+      targetCondRows = r.conditions.map(function(c) { return { type: c.type, values: [c.value] }; });
+      targetConditionsVisible = true;
+      const wrap = document.getElementById('add-cond-wrap');
+      if (wrap) wrap.style.display = 'none';
+      renderTargetConditions();
+    }
+  }
+
+  /* ── Build chat preview bubble ── */
+  function buildAiPreviewBubble(r) {
+    const tag = function(label, color) {
+      return '<span style="display:inline-flex;align-items:center;padding:2px 8px;background:' + color + ';border-radius:12px;font-size:11px;font-weight:600;margin:2px 2px;">' + label + '</span>';
+    };
+    const row = function(icon, label, value) {
+      return '<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--grey-100);">' +
+        '<span style="color:var(--primary);flex-shrink:0;margin-top:1px;">' + icon + '</span>' +
+        '<span style="font-size:12px;color:var(--text-secondary);min-width:110px;flex-shrink:0;">' + label + '</span>' +
+        '<span style="font-size:12px;color:var(--text-primary);font-weight:500;flex:1;">' + value + '</span>' +
+      '</div>';
+    };
+
+    let html = '<div style="font-size:13px;font-weight:600;color:var(--primary);margin-bottom:10px;">✦ Rule detected — form populated</div>';
+
+    // Preview card
+    html += '<div style="background:var(--grey-50);border:1px solid var(--grey-200);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:10px;">';
+
+    if (r.empType) {
+      html += row('👤', 'Employment Type', '<span style="background:var(--primary-bg);color:var(--primary);padding:1px 8px;border-radius:10px;font-size:11px;font-weight:700;">' + r.empType + '</span>');
+    }
+
+    const dayKeys = Object.keys(r.dayItems);
+    if (dayKeys.length > 0) {
+      const dayHtml = dayKeys.map(function(dk) {
+        const items = r.dayItems[dk];
+        const itemStr = items.map(function(pi) {
+          return pi.rate + 'x (' + pi.from + '–' + pi.to + ' hrs)';
+        }).join(', ');
+        return '<div style="margin-bottom:3px;"><strong style="font-size:11px;">' + dk + ':</strong> <span style="font-size:11px;color:var(--text-secondary);">' + itemStr + '</span></div>';
+      }).join('');
+      html += row('📅', 'Day Rules', '<div>' + dayHtml + '</div>');
+    }
+
+    if (r.rdo.enabled) {
+      html += row('🔄', 'RDO Deduction', r.rdo.mode);
+    }
+    if (r.weeklyCap.enabled) {
+      html += row('⏱', 'Weekly Cap', r.weeklyCap.hrs + ' hrs');
+    }
+    if (r.nightShift.enabled) {
+      html += row('🌙', 'Night Shift', r.nightShift.from + ' → ' + r.nightShift.to);
+    }
+    if (r.conditions.length > 0) {
+      const condStr = r.conditions.map(function(c) { return c.type + ': ' + c.value; }).join(', ');
+      html += row('🎯', 'Conditions', condStr);
+    }
+
+    html += '</div>';
+    html += '<div style="font-size:11.5px;color:var(--text-secondary);">Review the form above and adjust any values. Keep chatting to refine!</div>';
+    return html;
   }
 
   /* ─── Wire up Add Pay Rule button ────────── */
