@@ -1646,6 +1646,17 @@ function renderProjectForms(){
     return;
   }
 
+  const isDailyPrestartView = projState.catId === 'hs' && projState.subId === 'daily-prestart';
+  if(isDailyPrestartView){
+    const forms = sub.formIds.map(id => p.forms.find(f=>f.id===id)).filter(Boolean);
+    document.getElementById('project-thead').innerHTML =
+      `<tr><th>Title</th><th>Created By</th><th>Last submitted</th><th class="responses">Responses Today</th><th class="actions">Actions</th></tr>`;
+    document.getElementById('project-tbody').innerHTML = forms.length
+      ? forms.map(dailyPrestartRowHtml).join('')
+      : `<tr><td colspan="5" style="padding:40px;text-align:center;color:#94a3b8">No daily prestart / toolbox talk forms on this project.</td></tr>`;
+    return;
+  }
+
   const forms = sub.formIds.map(id => p.forms.find(f=>f.id===id)).filter(Boolean);
   document.getElementById('project-thead').innerHTML = isSwmsView
     ? `<tr><th>Title</th><th>Created By</th><th>Last edited</th><th style="width:170px">Revision</th><th class="responses">Signees (to this revision)</th><th class="actions">Actions</th></tr>`
@@ -1653,6 +1664,25 @@ function renderProjectForms(){
   document.getElementById('project-tbody').innerHTML = forms.length
     ? forms.map(projectRowHtml).join('')
     : `<tr><td colspan="6" style="padding:40px;text-align:center;color:#94a3b8">No forms in this subcategory for this project.</td></tr>`;
+}
+
+// Hash a form id + project to a small "today" count so it looks realistic without random churn each render
+function responsesTodayFor(projKey, formId, total){
+  const seed = (projKey.length * 31 + formId * 7) % 17;
+  // Cap at total, but typically a small fraction of the total
+  return Math.min(total, Math.max(2, Math.round(total * 0.08) + (seed % 6)));
+}
+function dailyPrestartRowHtml(f){
+  const today = responsesTodayFor(projState.projectId, f.id, f.responses || 0);
+  const rcls = today === 0 ? 'responses-val zero' : 'responses-val';
+  return `
+    <tr>
+      <td class="form-title">${f.title}</td>
+      <td class="created-by">${f.by}</td>
+      <td class="last-edited">${f.date}</td>
+      <td class="responses"><span class="${rcls}">${today}</span></td>
+      <td class="actions"><button class="action-btn"><i class="fa-solid fa-ellipsis-vertical"></i></button></td>
+    </tr>`;
 }
 
 function incidentRowHtml(inc){
