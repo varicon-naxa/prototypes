@@ -867,6 +867,17 @@ const RFIS = {
   ],
 };
 function getRfis(projKey){ return RFIS[projKey] || []; }
+// Pull the highest RFI number from existing titles in a project and return next.
+// Matches "RFI #14", "RFI #014", "RFI 14", "RFI-14" — anything with the digits after RFI.
+function nextRfiNumberForProject(projKey){
+  const rfis = getRfis(projKey);
+  let maxN = 0;
+  rfis.forEach(r=>{
+    const m = (r.title||'').match(/RFI[^\d]*(\d+)/i);
+    if(m){ const n = parseInt(m[1], 10); if(n>maxN) maxN = n; }
+  });
+  return maxN + 1;
+}
 
 function swmsKey(projKey, formId){ return projKey+':'+formId; }
 function getSwmsRevisions(projKey, formId){
@@ -2684,7 +2695,18 @@ function wizPickMode(m){
   renderWizard();
 }
 function wizPickCat(id){ wizState.catId = id; wizState.subId = null; renderWizard(); }
-function wizPickSub(id){ wizState.subId = id; renderWizard(); }
+function wizPickSub(id){
+  wizState.subId = id;
+  // Auto-prefill RFI name with the next number for the selected project.
+  // Only when creating a fresh form (build/upload mode) at the project level.
+  // Re-prefills if the current name is empty or still matches the auto pattern.
+  const isAutoPrefill = !wizState.name || /^RFI \d+ — ?$/.test(wizState.name);
+  if(id === 'rfi' && wizState.source === 'project' && wizState.projectId && wizState.mode !== 'import' && isAutoPrefill){
+    const n = nextRfiNumberForProject(wizState.projectId);
+    wizState.name = `RFI ${n} — `;
+  }
+  renderWizard();
+}
 function wizPickForm(id){
   wizState.pickedFormId = id;
   // Pre-fill the name for import mode
