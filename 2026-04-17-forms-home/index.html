@@ -434,6 +434,18 @@ tbody tr.highlighted{background:#fafbfd}
 .t5-avatar:first-child{margin-left:0}
 .t5-avatar-more{width:26px;height:26px;border-radius:50%;background:#e2e8f0;color:#475569;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;border:2px solid #fff;margin-left:-6px}
 .t5-count{font-size:18px;font-weight:700;color:#1b2a4a;min-width:130px;text-align:right}
+
+/* Take 5 filter bar */
+.t5-filter-bar{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.t5-filter-group{display:flex;align-items:center;gap:8px}
+.t5-filter-label{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.t5-filter-label i{color:#f5a623;font-size:11px}
+.t5-filter-input{padding:7px 10px;border-radius:6px;border:1px solid #e2e8f0;font-size:13px;font-family:'Inter',sans-serif;color:#1b2a4a;background:#fff;cursor:pointer;font-weight:500;min-width:140px}
+.t5-filter-input:focus{outline:none;border-color:#f5a623}
+.t5-filter-reset{margin-left:auto;background:none;border:1px solid #fed7aa;color:#b45309;font-size:12px;font-weight:600;padding:7px 12px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:6px}
+.t5-filter-reset:hover{background:#fff7ed}
+.t5-filter-result{font-size:13px;color:#64748b;padding:8px 14px;background:#f8fafc;border-radius:14px;border:1px solid #e2e8f0;font-weight:500;white-space:nowrap}
+.t5-filter-result b{color:#1b2a4a;font-weight:700;font-size:14px}
 .proj-pill.equip{background:#ffedd5;color:#9a3412}
 
 /* Revision pill / column */
@@ -2058,9 +2070,53 @@ function renderProjectTake5Days(){
   view.style.display = '';
   const f = HOME_FORMS.find(x=>x.id===projState.take5FormId);
   const p = PROJECT_DATA[projState.projectId];
-  const days = getTake5DaySummary(projState.projectId, projState.take5FormId);
+
+  // Pull all raw submissions so we can build the unfiltered person list and date span
+  const allSubs = getTake5Submissions(projState.projectId, projState.take5FormId);
+  const allPeople = [...new Set(allSubs.map(s=>s.by))].sort();
+  const allDates = allSubs.map(s=>parseDmy(s.date));
+  const minD = allDates.length ? new Date(Math.min(...allDates)) : null;
+  const maxD = allDates.length ? new Date(Math.max(...allDates)) : null;
+  const isoMin = minD ? `${minD.getFullYear()}-${String(minD.getMonth()+1).padStart(2,'0')}-${String(minD.getDate()).padStart(2,'0')}` : '';
+  const isoMax = maxD ? `${maxD.getFullYear()}-${String(maxD.getMonth()+1).padStart(2,'0')}-${String(maxD.getDate()).padStart(2,'0')}` : '';
+
+  // Apply filters
+  const filtered = applyTake5Filter(allSubs);
+  // Re-group by date
+  const dayMap = new Map();
+  filtered.forEach(s=>{
+    if(!dayMap.has(s.date)) dayMap.set(s.date, []);
+    dayMap.get(s.date).push(s);
+  });
+  const days = [...dayMap.entries()].map(([date, items])=>({ date, count:items.length, items }));
+  days.sort((a,b)=> parseDmy(b.date) - parseDmy(a.date));
+
   const totalSubs = days.reduce((n,d)=>n+d.count, 0);
   const maxCount = days.reduce((m,d)=>Math.max(m, d.count), 0) || 1;
+  const isFiltered = take5Filter.from || take5Filter.to || take5Filter.person !== 'all';
+  const filterChips = [];
+  if(take5Filter.from) filterChips.push(`From ${take5Filter.from.split('-').reverse().join('/')}`);
+  if(take5Filter.to)   filterChips.push(`To ${take5Filter.to.split('-').reverse().join('/')}`);
+  if(take5Filter.person !== 'all') filterChips.push(take5Filter.person);
+
+  const filterBar = `
+    <div class="t5-filter-bar">
+      <div class="t5-filter-group">
+        <label class="t5-filter-label"><i class="fa-regular fa-calendar"></i> Date range</label>
+        <input type="date" class="t5-filter-input" min="${isoMin}" max="${isoMax}" value="${take5Filter.from}" onchange="setTake5Filter('from', this.value)" placeholder="From">
+        <span style="color:#94a3b8;font-size:12px">→</span>
+        <input type="date" class="t5-filter-input" min="${isoMin}" max="${isoMax}" value="${take5Filter.to}" onchange="setTake5Filter('to', this.value)" placeholder="To">
+      </div>
+      <div class="t5-filter-group">
+        <label class="t5-filter-label"><i class="fa-solid fa-user"></i> Personnel</label>
+        <select class="t5-filter-input" onchange="setTake5Filter('person', this.value)">
+          <option value="all" ${take5Filter.person==='all'?'selected':''}>All personnel</option>
+          ${allPeople.map(name=>`<option value="${name}" ${take5Filter.person===name?'selected':''}>${name}</option>`).join('')}
+        </select>
+      </div>
+      ${isFiltered ? `<button class="t5-filter-reset" onclick="resetTake5Filter()"><i class="fa-solid fa-xmark"></i> Clear filters</button>` : '<div style="margin-left:auto"></div>'}
+      <div class="t5-filter-result"><b>${totalSubs}</b> ${totalSubs===1?'submission':'submissions'} ${isFiltered?'in selection':'total'}</div>
+    </div>`;
   const rowsHtml = days.map(d=>{
     // Generate up to 4 unique-by-name avatars to show who submitted that day
     const uniqueByName = [];
@@ -2085,6 +2141,9 @@ function renderProjectTake5Days(){
         <div class="t5-count">${d.count} <span style="font-size:11px;color:#64748b;font-weight:500">submission${d.count===1?'':'s'}</span></div>
       </div>`;
   }).join('');
+  const emptyMsg = isFiltered
+    ? `No ${f?f.title:'Take 5'} submissions match the current filters.`
+    : `No ${f?f.title:'Take 5'} submissions on ${p.name} yet.`;
   view.innerHTML = `
     <div class="rev-form-header">
       <div class="rfh-icon" style="background:#fef3c7;color:#b45309"><i class="fa-solid fa-list-check"></i></div>
@@ -2093,14 +2152,15 @@ function renderProjectTake5Days(){
         <div class="rfh-sub">${p.name} · Health &amp; Safety › Take 5s / JSAs</div>
       </div>
       <div class="rfh-stats">
-        <span><b>${totalSubs}</b> total submissions</span>
+        <span><b>${totalSubs}</b> ${isFiltered?'in selection':'total submissions'}</span>
         <span><b>${days.length}</b> days submitted</span>
         <span><b>${days[0]?days[0].date:'—'}</b> last day</span>
       </div>
     </div>
+    ${filterBar}
     ${days.length
       ? `<div class="t5-day-list">${rowsHtml}</div>`
-      : `<div style="padding:40px;text-align:center;color:#94a3b8;background:#fff;border:1px solid #e2e8f0;border-radius:8px">No ${f?f.title:'Take 5'} submissions on ${p.name} yet.</div>`}`;
+      : `<div style="padding:40px;text-align:center;color:#94a3b8;background:#fff;border:1px solid #e2e8f0;border-radius:8px">${emptyMsg}</div>`}`;
 }
 
 function dailyPrestartRowHtml(f){
@@ -2295,10 +2355,47 @@ function projGoSubcategory(subId){
   renderProjectBreadcrumbs();
   renderProjectForms();
 }
+// Filter state for the Take 5 day breakdown view (date range + person)
+let take5Filter = { from:'', to:'', person:'all' };
+
 function projGoTake5(formId){
+  if(projState.take5FormId !== formId){
+    take5Filter = { from:'', to:'', person:'all' };
+  }
   projState.take5FormId = formId;
   renderProjectBreadcrumbs();
   renderProjectTake5Days();
+}
+function setTake5Filter(field, value){
+  take5Filter[field] = value;
+  renderProjectTake5Days();
+}
+function resetTake5Filter(){
+  take5Filter = { from:'', to:'', person:'all' };
+  renderProjectTake5Days();
+}
+// Convert "YYYY-MM-DD" (HTML date input) to a Date
+function parseIso(s){
+  if(!s) return null;
+  const [y,m,d] = s.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+// Convert "DD/MM/YYYY" to "YYYY-MM-DD" for HTML date input default values
+function dmyToIso(s){
+  if(!s) return '';
+  const [d,m,y] = s.split('/').map(Number);
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+function applyTake5Filter(subs){
+  const fromD = parseIso(take5Filter.from);
+  const toD   = parseIso(take5Filter.to);
+  return subs.filter(s=>{
+    if(take5Filter.person !== 'all' && s.by !== take5Filter.person) return false;
+    const d = parseDmy(s.date);
+    if(fromD && d < fromD) return false;
+    if(toD && d > toD) return false;
+    return true;
+  });
 }
 function projGoPrestartForm(formId){
   projState.prestartFormId = formId; projState.submissionId = null;
