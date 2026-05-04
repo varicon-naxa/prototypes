@@ -515,6 +515,14 @@
     .pay-item-select { width:100%; border:1px solid var(--border-solid); border-radius:var(--radius-sm); padding:7px 10px; font-family:'Roboto',sans-serif; font-size:13px; color:var(--text-primary); background:var(--bg-paper); outline:none; transition:border-color .15s; }
     .pay-item-select:focus { border-color:var(--primary); }
     .pay-item-select.placeholder { color:var(--text-secondary); }
+    .cond-type-select { border:1px solid var(--border-solid); border-radius:var(--radius-sm); padding:7px 10px; font-family:'Roboto',sans-serif; font-size:13px; color:var(--text-primary); background:var(--bg-paper); outline:none; transition:border-color .15s; flex-shrink:0; }
+    .cond-type-select:focus { border-color:var(--primary); }
+    .cond-type-select.placeholder { color:var(--text-secondary); }
+    .rule-hours-group.cond-mode { flex-wrap:wrap; align-items:flex-start; gap:12px; }
+    .cond-subfields-wrap { display:flex; align-items:flex-start; gap:32px; flex-wrap:wrap; }
+    .cond-subfield-group { display:flex; flex-direction:column; gap:6px; }
+    .cond-subfield-label { font-size:12px; font-weight:600; color:var(--text-primary); }
+    .cond-subfield-row { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-secondary); }
     .arrow-sep { color:var(--text-disabled); font-size:16px; text-align:center; }
     .hours-group { display:flex; align-items:center; gap:5px; font-size:13px; color:var(--text-secondary); }
     .hours-input { width:50px; border:1px solid var(--border-solid); border-radius:var(--radius-sm); padding:6px; font-family:'Roboto',sans-serif; font-size:13px; text-align:center; outline:none; transition:border-color .15s; }
@@ -525,6 +533,8 @@
     .remove-row-btn:hover { background:#FAE9E8; color:#D2281B; border-color:rgba(210,40,27,0.3); }
     .add-pay-item-btn { display:inline-flex; align-items:center; gap:6px; background:none; border:none; color:var(--secondary); font-family:'Roboto',sans-serif; font-size:13px; font-weight:500; cursor:pointer; padding:4px 0; margin-top:4px; transition:color .12s; }
     .add-pay-item-btn:hover { color:var(--secondary-dark); }
+    .cond-rules-divider { margin:16px 0 14px; border:none; border-top:1px solid var(--grey-200); }
+    .cond-rules-heading { font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:12px; }
 
     /* ─── Form footer ─────────────────────── */
     .form-footer { background:var(--bg-paper); border-top:1px solid var(--grey-200); padding:16px 32px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; gap:16px; }
@@ -1180,6 +1190,10 @@
     .alw-field-label { font-size:12.5px; font-weight:500; color:var(--text-secondary); }
     .alw-field-label .req { color:var(--error-main, #D2281B); margin-left:2px; }
     .alw-field-hint { font-size:11.5px; color:var(--text-disabled); margin-top:2px; line-height:1.4; }
+    .alw-type-hint  { font-size:11.5px; font-style:italic; color:var(--text-disabled); margin-top:2px; }
+    .alw-sub-field { display:flex; flex-direction:column; gap:5px; }
+    .alw-sub-label { font-size:12px; font-weight:500; color:var(--text-secondary); }
+    .alw-chips-row:empty { display:none; }
     .alw-input {
       border:1px solid var(--border-solid); border-radius:var(--radius-sm);
       padding:8px 12px; font-family:'Roboto',sans-serif; font-size:13px;
@@ -1793,11 +1807,10 @@
                 <span>Allowance Type</span>
                 <button class="dd-clear-inline" onclick="clearAlwTypeFilter()">Clear</button>
               </div>
-              <label class="dd-option"><input type="checkbox" value="Amount ($)" onchange="updateAlwTypeFilter()"> Amount ($)</label>
-              <label class="dd-option"><input type="checkbox" value="Fixed Hours" onchange="updateAlwTypeFilter()"> Fixed Hours</label>
-              <label class="dd-option"><input type="checkbox" value="Timesheet Hours" onchange="updateAlwTypeFilter()"> Timesheet Hours</label>
+              <label class="dd-option"><input type="checkbox" value="Fixed Unit" onchange="updateAlwTypeFilter()"> Fixed Unit</label>
+              <label class="dd-option"><input type="checkbox" value="Timesheet Based" onchange="updateAlwTypeFilter()"> Timesheet Based</label>
               <label class="dd-option"><input type="checkbox" value="Quantity Based" onchange="updateAlwTypeFilter()"> Quantity Based</label>
-              <label class="dd-option"><input type="checkbox" value="After Certain Hours" onchange="updateAlwTypeFilter()"> After Certain Hours</label>
+              <label class="dd-option"><input type="checkbox" value="Hourly Based" onchange="updateAlwTypeFilter()"> Hourly Based</label>
               <label class="dd-option"><input type="checkbox" value="Consecutive Hours Threshold" onchange="updateAlwTypeFilter()"> Consecutive Hours Threshold</label>
             </div>
           </div>
@@ -2928,6 +2941,31 @@
     if (dayType === 'Night Shift') renderNightShiftCard(); else renderDaySections();
   }
 
+  function addCondPayItem(dayType) {
+    if (!daySectionStates[dayType]) return;
+    if (!daySectionStates[dayType].condPayItems) daySectionStates[dayType].condPayItems = [];
+    daySectionStates[dayType].condPayItems.push({ payItem: '', ruleType: 'hours', from: '', to: '', fromTime: '09:00', toTime: '17:00', conditionType: '', condAppliesFrom: '', condAppliesTo: '', shiftStartFrom: '', shiftStartTo: '', hoursWorked: '' });
+    renderDaySections();
+  }
+
+  function removeCondPayItem(dayType, idx) {
+    if (!daySectionStates[dayType] || !daySectionStates[dayType].condPayItems) return;
+    daySectionStates[dayType].condPayItems.splice(idx, 1);
+    renderDaySections();
+  }
+
+  function updateCondPayItem(dayType, idx, field, val) {
+    if (!daySectionStates[dayType] || !daySectionStates[dayType].condPayItems) return;
+    daySectionStates[dayType].condPayItems[idx][field] = val;
+    if (field === 'payItem' || field === 'conditionType') renderDaySections();
+  }
+
+  function updateCondRuleType(dayType, idx, val) {
+    if (!daySectionStates[dayType] || !daySectionStates[dayType].condPayItems) return;
+    daySectionStates[dayType].condPayItems[idx].ruleType = val;
+    renderDaySections();
+  }
+
   function updateNightshiftTime(field, val) {
     nightshiftTimes[field] = val;
     if (field === 'detectionMode') renderNightShiftCard();
@@ -3033,7 +3071,8 @@
       splitGroups.push(newDays);
       daySectionStates[key] = {
         differentRules: true, expanded: true,
-        payItems: [{ payItem: '', isAuto: false, ruleType: 'hours', from: '', to: '', fromTime: '09:00', toTime: '17:00', rate: '' }]
+        payItems: [{ payItem: '', isAuto: false, ruleType: 'hours', from: '', to: '', fromTime: '09:00', toTime: '17:00', rate: '' }],
+        condPayItems: []
       };
     } else {
       // Split days out of an existing group
@@ -3059,7 +3098,8 @@
       splitGroups.splice(parentIdx + 1, 0, splitOut);
       daySectionStates[newChildKey] = {
         differentRules: true, expanded: true,
-        payItems: [{ payItem: '', isAuto: false, ruleType: 'hours', from: '', to: '', fromTime: '09:00', toTime: '17:00', rate: '' }]
+        payItems: [{ payItem: '', isAuto: false, ruleType: 'hours', from: '', to: '', fromTime: '09:00', toTime: '17:00', rate: '' }],
+        condPayItems: []
       };
     }
 
@@ -3116,7 +3156,8 @@
     if (!daySectionStates['Weekdays']) {
       daySectionStates['Weekdays'] = {
         differentRules: true, expanded: true,
-        payItems: [{ payItem: '', isAuto: false, ruleType: 'hours', from: '', to: '', fromTime: '09:00', toTime: '17:00', rate: '' }]
+        payItems: [{ payItem: '', isAuto: false, ruleType: 'hours', from: '', to: '', fromTime: '09:00', toTime: '17:00', rate: '' }],
+        condPayItems: []
       };
     }
 
@@ -3124,7 +3165,7 @@
     FIXED_DAY_TYPES.forEach(function(d) {
       if (d === 'Weekdays') return;
       if (!daySectionStates[d]) {
-        daySectionStates[d] = { differentRules: true, copyFrom: 'Weekdays', expanded: true, payItems: [{ payItem: '', isAuto: false, ruleType: 'hours', from: '', to: '', fromTime: '09:00', toTime: '17:00', rate: '' }] };
+        daySectionStates[d] = { differentRules: true, copyFrom: 'Weekdays', expanded: true, payItems: [{ payItem: '', isAuto: false, ruleType: 'hours', from: '', to: '', fromTime: '09:00', toTime: '17:00', rate: '' }], condPayItems: [] };
       }
     });
 
@@ -3374,17 +3415,15 @@
         });
       });
 
-      // Build options: Standard + condition-based
+      // Build options: Standard pay items + condition-based items when target conditions are selected
       var opts = '<option value="" disabled' + (item.payItem === '' ? ' selected' : '') + '>Select pay item</option>';
       opts += PAY_ITEM_OPTIONS.map(function(o) {
         return '<option value="' + o + '"' + (item.payItem === o ? ' selected' : '') + '>' + o + '</option>';
       }).join('');
       if (condPayItems.length > 0) {
-        opts += '<optgroup label="Condition Based">';
         opts += condPayItems.map(function(o) {
           return '<option value="' + o + '"' + (item.payItem === o ? ' selected' : '') + '>' + o + '</option>';
         }).join('');
-        opts += '</optgroup>';
       }
 
       var selectEl = '<select class="pay-item-select' + (item.payItem === '' ? ' placeholder' : '') + '" onchange="updatePayItem(\'' + esc + '\',' + idx + ',\'payItem\',this.value)">' + opts + '</select>';
@@ -3414,7 +3453,101 @@
         '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
         ' Add pay item' +
       '</button>';
-    return colHeaders + rows + addBtn;
+
+    // ── Conditional Rules section (only when target conditions have values) ──
+    var condSectionHtml = '';
+    // condValues and condPayItems were computed above in the rows loop; re-derive here at block scope
+    var condVals = [];
+    targetCondRows.forEach(function(row) {
+      (row.values || []).forEach(function(v) { if (condVals.indexOf(v) === -1) condVals.push(v); });
+    });
+    var condPayItemsList = [];
+    condVals.forEach(function(v) {
+      PAY_ITEM_OPTIONS.forEach(function(base) { condPayItemsList.push(base + '_' + v); });
+    });
+
+    if (condPayItemsList.length > 0) {
+      var condItems = (daySectionStates[dayType] && daySectionStates[dayType].condPayItems) || [];
+      var escDt = dayType.replace(/'/g, "\\'");
+      var condRows = condItems.map(function(citem, cidx) {
+        var cRemoveBtn = '<button class="remove-row-btn" type="button" onclick="removeCondPayItem(\'' + escDt + '\',' + cidx + ')" title="Remove"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
+        var cTog = '<div class="rule-type-toggle">' +
+          '<button class="rule-type-btn' + (citem.ruleType === 'hours' ? ' active' : '') + '" type="button" onclick="updateCondRuleType(\'' + escDt + '\',' + cidx + ',\'hours\')">Hrs</button>' +
+          '<button class="rule-type-btn' + (citem.ruleType === 'time' ? ' active' : '') + '" type="button" onclick="updateCondRuleType(\'' + escDt + '\',' + cidx + ',\'time\')">Time</button>' +
+          '<button class="rule-type-btn' + (citem.ruleType === 'condition' ? ' active' : '') + '" type="button" onclick="updateCondRuleType(\'' + escDt + '\',' + cidx + ',\'condition\')">Condition</button>' +
+        '</div>';
+        var cHoursGroup;
+        if (citem.ruleType === 'time') {
+          cHoursGroup = '<div class="rule-hours-group">' + cTog +
+            'From <input class="time-input" type="time" value="' + citem.fromTime + '" onchange="updateCondPayItem(\'' + escDt + '\',' + cidx + ',\'fromTime\',this.value)">' +
+            'To <input class="time-input" type="time" value="' + citem.toTime + '" onchange="updateCondPayItem(\'' + escDt + '\',' + cidx + ',\'toTime\',this.value)">' +
+          '</div>';
+        } else if (citem.ruleType === 'condition') {
+          var COND_RULE_TYPES = ['All Day', 'Time Bound', 'After Hours Worked'];
+          var condTypeSelect = '<select class="cond-type-select' + (citem.conditionType === '' ? ' placeholder' : '') + '" onchange="updateCondPayItem(\'' + escDt + '\',' + cidx + ',\'conditionType\',this.value)">' +
+            '<option value="" disabled' + (citem.conditionType === '' ? ' selected' : '') + '>Select condition</option>' +
+            COND_RULE_TYPES.map(function(ct) {
+              return '<option value="' + ct + '"' + (citem.conditionType === ct ? ' selected' : '') + '>' + ct + '</option>';
+            }).join('') +
+          '</select>';
+          var condExtraFields = '';
+          if (citem.conditionType === 'After Hours Worked') {
+            condExtraFields =
+              '<div class="cond-subfield-group">' +
+                '<div class="cond-subfield-row">' +
+                  '<input class="hours-input" type="number" min="0" step="0.5" placeholder="0" value="' + (citem.hoursWorked || '') + '" onchange="updateCondPayItem(\'' + escDt + '\',' + cidx + ',\'hoursWorked\',this.value===\'\'?\'\':+this.value)"> hr' +
+                '</div>' +
+              '</div>';
+          } else if (citem.conditionType === 'Time Bound') {
+            condExtraFields =
+              '<div class="cond-subfields-wrap">' +
+                '<div class="cond-subfield-group">' +
+                  '<span class="cond-subfield-label">Condition Applies</span>' +
+                  '<div class="cond-subfield-row">' +
+                    'From <input class="time-input" type="time" value="' + (citem.condAppliesFrom || '') + '" onchange="updateCondPayItem(\'' + escDt + '\',' + cidx + ',\'condAppliesFrom\',this.value)">' +
+                    ' To <input class="time-input" type="time" value="' + (citem.condAppliesTo || '') + '" onchange="updateCondPayItem(\'' + escDt + '\',' + cidx + ',\'condAppliesTo\',this.value)">' +
+                  '</div>' +
+                '</div>' +
+                '<div class="cond-subfield-group">' +
+                  '<span class="cond-subfield-label">Applies to shift starting</span>' +
+                  '<div class="cond-subfield-row">' +
+                    'From <input class="time-input" type="time" value="' + (citem.shiftStartFrom || '') + '" onchange="updateCondPayItem(\'' + escDt + '\',' + cidx + ',\'shiftStartFrom\',this.value)">' +
+                    ' To <input class="time-input" type="time" value="' + (citem.shiftStartTo || '') + '" onchange="updateCondPayItem(\'' + escDt + '\',' + cidx + ',\'shiftStartTo\',this.value)">' +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+          }
+          cHoursGroup = '<div class="rule-hours-group cond-mode">' + cTog + condTypeSelect + condExtraFields + '</div>';
+        } else {
+          cHoursGroup = '<div class="rule-hours-group">' + cTog +
+            'From <input class="hours-input" type="number" min="0" max="24" step="0.5" placeholder="0" value="' + (citem.from === '' || citem.from === null || citem.from === undefined ? '' : citem.from) + '" onchange="updateCondPayItem(\'' + escDt + '\',' + cidx + ',\'from\',this.value===\'\'?\'\':+this.value)"> hr ' +
+            'to <input class="hours-input" type="number" min="0" max="24" step="0.5" placeholder="0" value="' + (citem.to === '' || citem.to === null || citem.to === undefined ? '' : citem.to) + '" onchange="updateCondPayItem(\'' + escDt + '\',' + cidx + ',\'to\',this.value===\'\'?\'\':+this.value)"> hr' +
+          '</div>';
+        }
+        var cOpts = '<option value="" disabled' + (citem.payItem === '' ? ' selected' : '') + '>Select pay item</option>';
+        cOpts += condPayItemsList.map(function(o) {
+          return '<option value="' + o + '"' + (citem.payItem === o ? ' selected' : '') + '>' + o + '</option>';
+        }).join('');
+        var cSelectEl = '<select class="pay-item-select' + (citem.payItem === '' ? ' placeholder' : '') + '" onchange="updateCondPayItem(\'' + escDt + '\',' + cidx + ',\'payItem\',this.value)">' + cOpts + '</select>';
+        return '<div class="pay-item-row no-rdo">' +
+          cSelectEl +
+          '<span class="arrow-sep">→</span>' +
+          cHoursGroup +
+          cRemoveBtn +
+        '</div>';
+      }).join('');
+
+      condSectionHtml =
+        '<hr class="cond-rules-divider">' +
+        '<div class="cond-rules-heading">Conditional Rules</div>' +
+        condRows +
+        '<button class="add-pay-item-btn" type="button" onclick="addCondPayItem(\'' + escDt + '\')">' +
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+          ' Add pay item' +
+        '</button>';
+    }
+
+    return colHeaders + rows + addBtn + condSectionHtml;
   }
 
   function toggleDayExpanded(dayType) {
@@ -4703,19 +4836,18 @@
   ══════════════════════════════════════════════════════ */
 
   const ALLOWANCE_DATA = [
-    // Amount ($) — 2 entries
-    { name: 'Tool Allowance',       displayName: 'Tool Allowance',       qty: '',  rate: '$10.00', unit: '',  payPer: 'day',   type: 'Amount ($)'                  },
-    { name: 'Travel Allowance',     displayName: 'Travel Allowance',     qty: '',  rate: '$25.00', unit: '',  payPer: 'day',   type: 'Amount ($)'                  },
-    // Fixed Hours — 2 entries
-    { name: 'Meal Allowance',       displayName: 'Meal Allowance',       qty: '',  rate: '$15.00', unit: '',  payPer: 'shift', type: 'Fixed Hours'                 },
-    { name: 'Site Allowance',       displayName: 'Site Allowance',       qty: '',  rate: '$18.50', unit: '',  payPer: 'day',   type: 'Fixed Hours'                 },
-    // Timesheet Hours — 1 entry
-    { name: 'First Aid Allowance',  displayName: 'First Aid Allowance',  qty: '',  rate: '$12.00', unit: '',  payPer: 'shift', type: 'Timesheet Hours'            },
+    // Fixed Unit — 4 entries
+    { name: 'Tool Allowance',       displayName: 'Tool Allowance',       qty: '',  rate: '$10.00', unit: '',  payPer: 'day',   type: 'Fixed Unit'                  },
+    { name: 'Travel Allowance',     displayName: 'Travel Allowance',     qty: '',  rate: '$25.00', unit: '',  payPer: 'day',   type: 'Quantity Based'              },
+    { name: 'Meal Allowance',       displayName: 'Meal Allowance',       qty: '',  rate: '$15.00', unit: '',  payPer: 'shift', type: 'Hourly Based'                },
+    { name: 'Site Allowance',       displayName: 'Site Allowance',       qty: '',  rate: '$18.50', unit: '',  payPer: 'day',   type: 'Timesheet Based'             },
+    // Timesheet Based — 1 entry
+    { name: 'First Aid Allowance',  displayName: 'First Aid Allowance',  qty: '',  rate: '$12.00', unit: '',  payPer: 'shift', type: 'Timesheet Based'            },
     // Quantity Based — 2 entries
     { name: 'Dirty Work Allowance', displayName: 'Dirty Work Allowance', qty: '',  rate: '$3.50',  unit: '',  payPer: 'hr',    type: 'Quantity Based'             },
     { name: 'Uniform Allowance',    displayName: 'Uniform Allowance',    qty: '',  rate: '$5.00',  unit: '',  payPer: 'week',  type: 'Quantity Based'             },
-    // After Certain Hours — 1 entry
-    { name: 'Height Allowance',     displayName: 'Height Allowance',     qty: '3', rate: '$4.00',  unit: '',  payPer: 'hr',    type: 'After Certain Hours'        },
+    // Hourly Based — 1 entry
+    { name: 'Height Allowance',     displayName: 'Height Allowance',     qty: '3', rate: '$4.00',  unit: '',  payPer: 'hr',    type: 'Hourly Based'        },
     // Consecutive Hours Threshold — 1 entry
     { name: 'Cold Work Allowance',  displayName: 'Cold Work Allowance',  qty: '2', rate: '$3.00',  unit: '',  payPer: 'hr',    type: 'Consecutive Hours Threshold'},
   ];
@@ -4725,11 +4857,10 @@
 
   function alwTypeBadgeClass(type) {
     var map = {
-      'Amount ($)':                  'badge-amt-dollar',
-      'Fixed Hours':                 'badge-fixed-hrs',
-      'Timesheet Hours':             'badge-timesheet',
+      'Fixed Unit':                  'badge-fixed-hrs',
+      'Timesheet Based':             'badge-timesheet',
       'Quantity Based':              'badge-qty-based',
-      'After Certain Hours':         'badge-after-hrs',
+      'Hourly Based':         'badge-after-hrs',
       'Consecutive Hours Threshold': 'badge-consec',
     };
     return map[type] || 'badge-amt-dollar';
@@ -4891,14 +5022,24 @@
   function onAlwTypeChange(type) {
     var container      = document.getElementById('alw-type-container');
     var thresholdField = document.getElementById('alw-threshold-field');
+    var hint           = document.getElementById('alw-type-hint');
+    var hintMap = {
+      'Timesheet Based':            'eg. Site allowance',
+      'Quantity Based':             'eg. Travel allowance',
+      'Hourly Based':        'eg. Meal allowance',
+    };
+    if (hint) {
+      var hintText = hintMap[type] || '';
+      hint.textContent = hintText;
+      hint.style.display = hintText ? '' : 'none';
+    }
     if (!type) {
       container.style.display = 'none';
       return;
     }
     container.style.display = '';
-    var needsThreshold = (type === 'After Certain Hours' || type === 'Consecutive Hours Threshold');
+    var needsThreshold = (type === 'Hourly Based' || type === 'Consecutive Hours Threshold');
     thresholdField.style.display = needsThreshold ? '' : 'none';
-    // 3 fields → single row (3-col grid); 4 fields → 2×2 grid
     if (needsThreshold) {
       container.classList.remove('three-fields');
     } else {
@@ -4922,7 +5063,7 @@
     var checks    = document.querySelectorAll('#' + ddId + ' input:checked');
     var lbl       = document.getElementById(labelId);
     var trigger   = document.getElementById(triggerId);
-    var placeholder = (group === 'modules') ? 'Select modules' : 'Select roles';
+    var placeholder = group === 'modules' ? 'Select modules' : group === 'emptype' ? 'Select employee type' : 'Select roles';
     if (checks.length === 0) {
       lbl.textContent = placeholder;
       if (trigger) trigger.classList.remove('has-sel');
@@ -4996,7 +5137,7 @@
     var unit    = document.getElementById('alw-unit').value.trim();
     var payPer  = document.getElementById('alw-pay-type').value;
     var threshold = '';
-    if (type === 'After Certain Hours' || type === 'Consecutive Hours Threshold') {
+    if (type === 'Hourly Based' || type === 'Consecutive Hours Threshold') {
       threshold = document.getElementById('alw-threshold-hrs').value.trim();
     }
     var displayName = document.getElementById('alw-display-name').value.trim() || name;
@@ -5159,13 +5300,13 @@
       <label class="alw-field-label">Allowance Type <span class="req">*</span></label>
       <select class="alw-input alw-select" id="alw-type-select" onchange="onAlwTypeChange(this.value)">
         <option value="">Select type</option>
-        <option value="Amount ($)">Amount ($)</option>
-        <option value="Fixed Hours">Fixed Hours</option>
-        <option value="Timesheet Hours">Timesheet Hours</option>
+        <option value="Fixed Unit">Fixed Unit</option>
+        <option value="Timesheet Based">Timesheet Based</option>
         <option value="Quantity Based">Quantity Based</option>
-        <option value="After Certain Hours">After Certain Hours</option>
+        <option value="Hourly Based">Hourly Based</option>
         <option value="Consecutive Hours Threshold">Consecutive Hours Threshold</option>
       </select>
+      <span class="alw-type-hint" id="alw-type-hint" style="display:none;"></span>
 
       <!-- Dynamic fields — shown after type is chosen -->
       <div class="alw-type-container three-fields" id="alw-type-container" style="display:none;">
@@ -5197,7 +5338,7 @@
           </select>
         </div>
 
-        <!-- Hours (Threshold) — only for After Certain Hours & Consecutive Hours Threshold -->
+        <!-- Hours (Threshold) — only for Hourly Based & Consecutive Hours Threshold -->
         <div class="alw-type-field" id="alw-threshold-field" style="display:none;">
           <label class="alw-field-label">Hours (Threshold)</label>
           <input class="alw-input" type="number" min="0" step="0.5" placeholder="e.g. 8" id="alw-threshold-hrs">
@@ -5222,43 +5363,69 @@
 
     <hr class="alw-divider">
 
-    <!-- Applicable Modules -->
+    <!-- Applicable To -->
     <div class="alw-field">
-      <label class="alw-field-label">Applicable Modules</label>
-      <span class="alw-field-hint">Select which modules this allowance will be available in.</span>
-      <div style="position:relative;">
-        <button class="alw-ms-trigger" id="alw-modules-trigger" onclick="toggleAlwMs('alw-modules-dd','alw-modules-trigger')">
-          <span id="alw-modules-label">Select modules</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-        <div class="alw-ms-dd" id="alw-modules-dd">
-          <div class="alw-ms-option"><input type="checkbox" value="Projects" onchange="alwMsChange('modules')"> Projects</div>
-          <div class="alw-ms-option"><input type="checkbox" value="Timesheet" onchange="alwMsChange('modules')"> Timesheet</div>
-          <div class="alw-ms-option"><input type="checkbox" value="Employee" onchange="alwMsChange('modules')"> Employee</div>
-        </div>
+      <div style="display:flex;align-items:center;gap:5px;">
+        <label class="alw-field-label">Applicable To</label>
+        <span class="has-tooltip" onmouseenter="showTooltip(this,'Use these filters to control who this allowance appears for. It will only show up as an option when assigning to employees that match the selected employee type, module, and role.')" onmouseleave="hideTooltip()" style="display:flex;align-items:center;color:var(--text-disabled);cursor:default;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </span>
       </div>
-      <div class="alw-chips-row" id="alw-modules-chips"></div>
-    </div>
 
-    <!-- Applicable To (Roles) -->
-    <div class="alw-field">
-      <label class="alw-field-label">Applicable To</label>
-      <div style="position:relative;">
-        <button class="alw-ms-trigger" id="alw-roles-trigger" onclick="toggleAlwMs('alw-roles-dd','alw-roles-trigger')">
-          <span id="alw-roles-label">Select roles</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-        <div class="alw-ms-dd" id="alw-roles-dd">
-          <div class="alw-ms-option"><input type="checkbox" value="Project Manager" onchange="alwMsChange('roles')"> Project Manager</div>
-          <div class="alw-ms-option"><input type="checkbox" value="Site Supervisor" onchange="alwMsChange('roles')"> Site Supervisor</div>
-          <div class="alw-ms-option"><input type="checkbox" value="Foreman" onchange="alwMsChange('roles')"> Foreman</div>
-          <div class="alw-ms-option"><input type="checkbox" value="Engineer" onchange="alwMsChange('roles')"> Engineer</div>
-          <div class="alw-ms-option"><input type="checkbox" value="Labourer" onchange="alwMsChange('roles')"> Labourer</div>
-          <div class="alw-ms-option"><input type="checkbox" value="Admin" onchange="alwMsChange('roles')"> Admin</div>
-          <div class="alw-ms-option"><input type="checkbox" value="Operator" onchange="alwMsChange('roles')"> Operator</div>
+      <!-- Employee Type -->
+      <div class="alw-sub-field">
+        <span class="alw-sub-label">Employee Type</span>
+        <div style="position:relative;">
+          <button class="alw-ms-trigger" id="alw-emptype-trigger" onclick="toggleAlwMs('alw-emptype-dd','alw-emptype-trigger')">
+            <span id="alw-emptype-label">Select employee type</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="alw-ms-dd" id="alw-emptype-dd">
+            <div class="alw-ms-option"><input type="checkbox" value="Wages" onchange="alwMsChange('emptype')"> Wages</div>
+            <div class="alw-ms-option"><input type="checkbox" value="Salary" onchange="alwMsChange('emptype')"> Salary</div>
+            <div class="alw-ms-option"><input type="checkbox" value="Casual" onchange="alwMsChange('emptype')"> Casual</div>
+          </div>
         </div>
+        <div class="alw-chips-row" id="alw-emptype-chips"></div>
       </div>
-      <div class="alw-chips-row" id="alw-roles-chips"></div>
+
+      <!-- Modules -->
+      <div class="alw-sub-field">
+        <span class="alw-sub-label">Modules</span>
+        <div style="position:relative;">
+          <button class="alw-ms-trigger" id="alw-modules-trigger" onclick="toggleAlwMs('alw-modules-dd','alw-modules-trigger')">
+            <span id="alw-modules-label">Select modules</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="alw-ms-dd" id="alw-modules-dd">
+            <div class="alw-ms-option"><input type="checkbox" value="Projects" onchange="alwMsChange('modules')"> Projects</div>
+            <div class="alw-ms-option"><input type="checkbox" value="Timesheet" onchange="alwMsChange('modules')"> Timesheet</div>
+            <div class="alw-ms-option"><input type="checkbox" value="Employee" onchange="alwMsChange('modules')"> Employee</div>
+          </div>
+        </div>
+        <div class="alw-chips-row" id="alw-modules-chips"></div>
+      </div>
+
+      <!-- Roles -->
+      <div class="alw-sub-field">
+        <span class="alw-sub-label">Roles</span>
+        <div style="position:relative;">
+          <button class="alw-ms-trigger" id="alw-roles-trigger" onclick="toggleAlwMs('alw-roles-dd','alw-roles-trigger')">
+            <span id="alw-roles-label">Select roles</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="alw-ms-dd" id="alw-roles-dd">
+            <div class="alw-ms-option"><input type="checkbox" value="Project Manager" onchange="alwMsChange('roles')"> Project Manager</div>
+            <div class="alw-ms-option"><input type="checkbox" value="Site Supervisor" onchange="alwMsChange('roles')"> Site Supervisor</div>
+            <div class="alw-ms-option"><input type="checkbox" value="Foreman" onchange="alwMsChange('roles')"> Foreman</div>
+            <div class="alw-ms-option"><input type="checkbox" value="Engineer" onchange="alwMsChange('roles')"> Engineer</div>
+            <div class="alw-ms-option"><input type="checkbox" value="Labourer" onchange="alwMsChange('roles')"> Labourer</div>
+            <div class="alw-ms-option"><input type="checkbox" value="Admin" onchange="alwMsChange('roles')"> Admin</div>
+            <div class="alw-ms-option"><input type="checkbox" value="Operator" onchange="alwMsChange('roles')"> Operator</div>
+          </div>
+        </div>
+        <div class="alw-chips-row" id="alw-roles-chips"></div>
+      </div>
     </div>
 
   </div><!-- /alw-drawer-body -->
