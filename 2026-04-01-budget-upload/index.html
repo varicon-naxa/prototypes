@@ -1776,6 +1776,70 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
   </div>
 </div>
 
+<!-- Dayworks Records Selection Modal -->
+<div class="modal-overlay" id="dayworksRecordsModal">
+  <div class="modal" style="width:920px;max-width:95%;text-align:left;max-height:90vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div style="width:44px;height:44px;border-radius:10px;background:#f0fdf4;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-clipboard-list" style="font-size:20px;color:#16a34a"></i></div>
+      <div style="flex:1">
+        <h3 style="font-size:16px;font-weight:600;color:#1b2a4a;margin:0">Select Dayworks Records</h3>
+        <p style="font-size:13px;color:#64748b;margin:0">Choose the dayworks records you'd like to include in this variation. Selected items will pre-fill the build-up.</p>
+      </div>
+      <span style="color:#94a3b8;cursor:pointer;font-size:18px" onclick="closeDayworksRecordsModal()"><i class="fas fa-times"></i></span>
+    </div>
+
+    <!-- Filter / Search bar -->
+    <div style="display:flex;gap:10px;margin-bottom:14px;align-items:center">
+      <div style="flex:1;position:relative">
+        <i class="fas fa-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:13px"></i>
+        <input id="dwRecordsSearch" placeholder="Search by description, docket #, or worker..." style="width:100%;padding:9px 12px 9px 34px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;outline:none" oninput="filterDayworksRecords()">
+      </div>
+      <select id="dwRecordsStatusFilter" class="budget-select" style="min-width:140px" onchange="filterDayworksRecords()">
+        <option value="all">All statuses</option>
+        <option value="approved">Approved only</option>
+        <option value="pending">Pending only</option>
+      </select>
+      <select id="dwRecordsClaimedFilter" class="budget-select" style="min-width:160px" onchange="filterDayworksRecords()">
+        <option value="unclaimed">Unclaimed only</option>
+        <option value="all">Show all</option>
+      </select>
+    </div>
+
+    <!-- Table of dayworks records -->
+    <div style="overflow-y:auto;flex:1;border:1px solid #e2e8f0;border-radius:8px">
+      <table class="budget-table" style="margin:0">
+        <thead style="position:sticky;top:0;z-index:1">
+          <tr>
+            <th style="width:40px"><input type="checkbox" id="dwSelectAll" onchange="toggleAllDayworks(this)"></th>
+            <th style="width:90px">Date</th>
+            <th style="width:90px">Docket #</th>
+            <th>Description</th>
+            <th>Resources</th>
+            <th class="right" style="width:110px">Total ($)</th>
+            <th style="width:90px">Status</th>
+          </tr>
+        </thead>
+        <tbody id="dwRecordsBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Selection summary -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding:12px 14px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">
+      <div style="font-size:13px;color:#475569">
+        <span id="dwSelectedCount" style="font-weight:600;color:#1b2a4a">0</span> records selected
+      </div>
+      <div style="font-size:13px;color:#475569">
+        Selected total: <span id="dwSelectedTotal" style="font-weight:600;color:#16a34a">$0.00</span>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="margin-top:16px;display:flex;gap:10px;justify-content:space-between;align-items:center">
+      <button class="btn btn-outline" onclick="proceedDayworksWithoutRecords()"><i class="fas fa-edit"></i> Skip — Build Manually</button>
+      <button class="btn btn-primary" id="addDwRecordsBtn" onclick="addSelectedDayworksToVariation()" disabled><i class="fas fa-arrow-right"></i> Add Selected to Variation</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"><i class="fas fa-check-circle" style="color:#22c55e"></i><span id="toastText"></span></div>
 
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
@@ -4761,6 +4825,7 @@ function selectVariationType(type) {
   } else if (type === 'dayworks') {
     // Dayworks always uses rates
     pendingVarPricingMethod = 'rates';
+    // After mapping is sorted, dayworks variations get a records selection step
     proceedToMappingOrBuild();
   } else {
     showToast('Cost Plus Variation — coming soon');
@@ -4789,9 +4854,18 @@ function selectPricedMethod(method) {
 
 function proceedToMappingOrBuild() {
   if (allResourcesMapped && !hasNewUnmappedResources) {
-    showVariationBuildPage();
+    proceedAfterMapping();
   } else {
     showPlantMappingModal(pendingVarType);
+  }
+}
+
+// After mapping is confirmed/completed, dayworks variations show records selection first
+function proceedAfterMapping() {
+  if (pendingVarType === 'dayworks') {
+    showDayworksRecordsModal();
+  } else {
+    showVariationBuildPage();
   }
 }
 
@@ -4853,7 +4927,7 @@ function plantMappingResponse(mapped) {
   if (!pendingVarPricingMethod) pendingVarPricingMethod = 'rates';
   if (mapped) {
     allResourcesMapped = true;
-    showVariationBuildPage();
+    proceedAfterMapping();
   } else {
     // Check if rates have been uploaded
     if (hasRatesUploaded || selectedSchedule === 'dw') {
@@ -5014,8 +5088,331 @@ function saveMappings() {
   hasNewUnmappedResources = false;
   closeRateMappingOverlay();
   showToast('Plant & labour rates mapped successfully');
-  // Proceed to variation build page
-  setTimeout(function() { showVariationBuildPage(); }, 400);
+  // Proceed to variation build page (or records selection for dayworks)
+  setTimeout(function() { proceedAfterMapping(); }, 400);
+}
+
+/* ═══════════════════════════════════════════
+   DAYWORKS RECORDS SELECTION (for dayworks variations)
+   ═══════════════════════════════════════════ */
+
+// Sample dayworks records on the project. In production these would come from
+// the Daywork Docket module. Each record has labour, plant and material lines
+// that get folded into the variation build-up.
+var dayworksRecords = [
+  {
+    id: 'DW-1042', date: '2026-04-22', desc: 'Additional excavation — unforeseen rock at chainage 1+200',
+    status: 'approved', claimed: false,
+    items: {
+      labour: [
+        { name: 'Site Foreman', hrs: 4, days: 1, rate: 95, amount: 380 },
+        { name: 'General Labourer', hrs: 8, days: 1, rate: 62, amount: 496 }
+      ],
+      plant: [
+        { name: '20T Excavator — Wet Hire', hrs: 6, days: 1, rate: 260, amount: 1560 },
+        { name: 'Tipper 10T — Wet Hire', hrs: 6, days: 1, rate: 210, amount: 1260 }
+      ],
+      materials: []
+    }
+  },
+  {
+    id: 'DW-1045', date: '2026-04-23', desc: 'Re-grade access road after heavy rainfall',
+    status: 'approved', claimed: false,
+    items: {
+      labour: [
+        { name: 'Skilled Labourer', hrs: 8, days: 1, rate: 78, amount: 624 }
+      ],
+      plant: [
+        { name: 'Roller — Smooth Drum', hrs: 6, days: 1, rate: 185, amount: 1110 },
+        { name: 'Bobcat — Wet Hire', hrs: 4, days: 1, rate: 165, amount: 660 }
+      ],
+      materials: [
+        { desc: 'Road base imported', qty: 12, unit: 'm³', rate: 65, amount: 780 }
+      ]
+    }
+  },
+  {
+    id: 'DW-1051', date: '2026-04-24', desc: 'Install temporary stormwater diversion (client request)',
+    status: 'pending', claimed: false,
+    items: {
+      labour: [
+        { name: 'Site Foreman', hrs: 6, days: 1, rate: 95, amount: 570 },
+        { name: 'General Labourer', hrs: 8, days: 2, rate: 62, amount: 992 }
+      ],
+      plant: [
+        { name: '5T Excavator — Wet Hire', hrs: 5, days: 1, rate: 195, amount: 975 }
+      ],
+      materials: [
+        { desc: '600mm RCP pipe', qty: 18, unit: 'lm', rate: 145, amount: 2610 },
+        { desc: 'Geofabric', qty: 80, unit: 'm²', rate: 12, amount: 960 }
+      ]
+    }
+  },
+  {
+    id: 'DW-1058', date: '2026-04-25', desc: 'Standby — site closed by client (waiting on inspection)',
+    status: 'approved', claimed: false,
+    items: {
+      labour: [
+        { name: 'Site Foreman', hrs: 8, days: 1, rate: 95, amount: 760 },
+        { name: 'General Labourer', hrs: 8, days: 1, rate: 62, amount: 496 },
+        { name: 'Skilled Labourer', hrs: 8, days: 1, rate: 78, amount: 624 }
+      ],
+      plant: [
+        { name: '20T Excavator — Dry Hire (standby)', hrs: 8, days: 1, rate: 90, amount: 720 }
+      ],
+      materials: []
+    }
+  },
+  {
+    id: 'DW-1063', date: '2026-04-26', desc: 'Concrete cut & make-good — additional service relocation',
+    status: 'approved', claimed: false,
+    items: {
+      labour: [
+        { name: 'Concrete Finisher', hrs: 6, days: 1, rate: 88, amount: 528 },
+        { name: 'Skilled Labourer', hrs: 6, days: 1, rate: 78, amount: 468 }
+      ],
+      plant: [
+        { name: 'Concrete Saw — Wet Hire', hrs: 4, days: 1, rate: 110, amount: 440 }
+      ],
+      materials: [
+        { desc: 'Patch concrete N32', qty: 1.5, unit: 'm³', rate: 320, amount: 480 }
+      ]
+    }
+  },
+  {
+    id: 'DW-1067', date: '2026-04-27', desc: 'Extra steel fixing for retaining wall reinforcement upgrade',
+    status: 'pending', claimed: false,
+    items: {
+      labour: [
+        { name: 'Steel Fixer', hrs: 8, days: 2, rate: 92, amount: 1472 }
+      ],
+      plant: [],
+      materials: [
+        { desc: 'N16 reinforcement bar', qty: 850, unit: 'kg', rate: 2.4, amount: 2040 },
+        { desc: 'Tie wire', qty: 1, unit: 'roll', rate: 85, amount: 85 }
+      ]
+    }
+  },
+  {
+    id: 'DW-1071', date: '2026-04-28', desc: 'Damaged kerb replacement (third-party impact)',
+    status: 'approved', claimed: true,
+    items: {
+      labour: [
+        { name: 'Skilled Labourer', hrs: 8, days: 1, rate: 78, amount: 624 }
+      ],
+      plant: [
+        { name: 'Bobcat — Wet Hire', hrs: 3, days: 1, rate: 165, amount: 495 }
+      ],
+      materials: [
+        { desc: 'Concrete kerb units', qty: 18, unit: 'lm', rate: 95, amount: 1710 }
+      ]
+    }
+  }
+];
+
+var selectedDayworksRecordIds = new Set();
+
+function recordTotal(r) {
+  var t = 0;
+  ['labour','plant','materials'].forEach(function(k) {
+    (r.items[k] || []).forEach(function(it) { t += (it.amount || 0); });
+  });
+  return t;
+}
+
+function showDayworksRecordsModal() {
+  selectedDayworksRecordIds = new Set();
+  document.getElementById('dwRecordsSearch').value = '';
+  document.getElementById('dwRecordsStatusFilter').value = 'all';
+  document.getElementById('dwRecordsClaimedFilter').value = 'unclaimed';
+  document.getElementById('dwSelectAll').checked = false;
+  renderDayworksRecords();
+  document.getElementById('dayworksRecordsModal').classList.add('show');
+}
+
+function closeDayworksRecordsModal() {
+  document.getElementById('dayworksRecordsModal').classList.remove('show');
+}
+
+function renderDayworksRecords() {
+  var search = (document.getElementById('dwRecordsSearch').value || '').toLowerCase();
+  var statusF = document.getElementById('dwRecordsStatusFilter').value;
+  var claimedF = document.getElementById('dwRecordsClaimedFilter').value;
+
+  var visible = dayworksRecords.filter(function(r) {
+    if (statusF !== 'all' && r.status !== statusF) return false;
+    if (claimedF === 'unclaimed' && r.claimed) return false;
+    if (search) {
+      var hay = (r.id + ' ' + r.desc + ' ' + r.date).toLowerCase();
+      if (hay.indexOf(search) === -1) return false;
+    }
+    return true;
+  });
+
+  var tbody = document.getElementById('dwRecordsBody');
+  if (!visible.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:#94a3b8;font-style:italic">No dayworks records match your filters.</td></tr>';
+    updateDayworksSelectionSummary();
+    return;
+  }
+
+  tbody.innerHTML = visible.map(function(r) {
+    var labourCount = (r.items.labour || []).length;
+    var plantCount = (r.items.plant || []).length;
+    var matCount = (r.items.materials || []).length;
+    var summaryParts = [];
+    if (labourCount) summaryParts.push('<span style="font-size:11px;background:#eff6ff;color:#1d4ed8;padding:2px 6px;border-radius:10px;margin-right:4px"><i class="fas fa-hard-hat" style="margin-right:3px"></i>' + labourCount + '</span>');
+    if (plantCount) summaryParts.push('<span style="font-size:11px;background:#fff7ed;color:#c2410c;padding:2px 6px;border-radius:10px;margin-right:4px"><i class="fas fa-truck-monster" style="margin-right:3px"></i>' + plantCount + '</span>');
+    if (matCount) summaryParts.push('<span style="font-size:11px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:10px;margin-right:4px"><i class="fas fa-cubes" style="margin-right:3px"></i>' + matCount + '</span>');
+
+    var statusBadge = r.status === 'approved'
+      ? '<span style="font-size:11px;background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;font-weight:600"><i class="fas fa-check-circle" style="margin-right:3px"></i>Approved</span>'
+      : '<span style="font-size:11px;background:#fef3c7;color:#a16207;padding:2px 8px;border-radius:10px;font-weight:600"><i class="fas fa-clock" style="margin-right:3px"></i>Pending</span>';
+
+    var claimedBadge = r.claimed ? '<div style="font-size:10px;color:#94a3b8;margin-top:2px;font-style:italic">Already claimed</div>' : '';
+    var checked = selectedDayworksRecordIds.has(r.id) ? 'checked' : '';
+    var disabled = r.claimed ? 'disabled' : '';
+    var rowOpacity = r.claimed ? 'opacity:0.55;' : '';
+
+    return '<tr style="' + rowOpacity + '">' +
+      '<td><input type="checkbox" data-dw-record="' + r.id + '" onchange="toggleDayworksRecord(\'' + r.id + '\')" ' + checked + ' ' + disabled + '></td>' +
+      '<td style="font-size:12px;color:#475569;white-space:nowrap">' + r.date + '</td>' +
+      '<td style="font-size:12px;font-weight:600;color:#1b2a4a">' + r.id + '</td>' +
+      '<td style="font-size:12px">' + r.desc + claimedBadge + '</td>' +
+      '<td>' + summaryParts.join('') + '</td>' +
+      '<td class="right" style="white-space:nowrap;font-weight:600">$' + recordTotal(r).toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
+      '<td>' + statusBadge + '</td>' +
+    '</tr>';
+  }).join('');
+
+  updateDayworksSelectionSummary();
+}
+
+function filterDayworksRecords() {
+  renderDayworksRecords();
+}
+
+function toggleAllDayworks(checkbox) {
+  // Only act on currently visible (non-claimed) checkboxes
+  var visibleBoxes = document.querySelectorAll('#dwRecordsBody input[type="checkbox"][data-dw-record]:not(:disabled)');
+  visibleBoxes.forEach(function(cb) {
+    var id = cb.dataset.dwRecord;
+    if (checkbox.checked) selectedDayworksRecordIds.add(id);
+    else selectedDayworksRecordIds.delete(id);
+    cb.checked = checkbox.checked;
+  });
+  updateDayworksSelectionSummary();
+}
+
+function toggleDayworksRecord(id) {
+  if (selectedDayworksRecordIds.has(id)) selectedDayworksRecordIds.delete(id);
+  else selectedDayworksRecordIds.add(id);
+  updateDayworksSelectionSummary();
+}
+
+function updateDayworksSelectionSummary() {
+  var count = selectedDayworksRecordIds.size;
+  document.getElementById('dwSelectedCount').textContent = count;
+  var total = 0;
+  selectedDayworksRecordIds.forEach(function(id) {
+    var rec = dayworksRecords.find(function(r) { return r.id === id; });
+    if (rec) total += recordTotal(rec);
+  });
+  document.getElementById('dwSelectedTotal').textContent = '$' + total.toLocaleString('en-US',{minimumFractionDigits:2});
+  document.getElementById('addDwRecordsBtn').disabled = count === 0;
+}
+
+function proceedDayworksWithoutRecords() {
+  closeDayworksRecordsModal();
+  pendingPrefilledDayworks = null;
+  showVariationBuildPage();
+}
+
+var pendingPrefilledDayworks = null;
+
+function addSelectedDayworksToVariation() {
+  // Collect all line items from selected records, grouped by type
+  var combined = { labour: [], plant: [], materials: [], sourceIds: [] };
+  selectedDayworksRecordIds.forEach(function(id) {
+    var rec = dayworksRecords.find(function(r) { return r.id === id; });
+    if (!rec) return;
+    combined.sourceIds.push(rec.id);
+    (rec.items.labour || []).forEach(function(it) {
+      combined.labour.push(Object.assign({ source: rec.id }, it));
+    });
+    (rec.items.plant || []).forEach(function(it) {
+      combined.plant.push(Object.assign({ source: rec.id }, it));
+    });
+    (rec.items.materials || []).forEach(function(it) {
+      combined.materials.push(Object.assign({ source: rec.id }, it));
+    });
+  });
+  pendingPrefilledDayworks = combined;
+  closeDayworksRecordsModal();
+  showVariationBuildPage();
+}
+
+function prefillDayworksVariation() {
+  if (!pendingPrefilledDayworks) return;
+  var data = pendingPrefilledDayworks;
+
+  // Auto-fill description if blank
+  var titleInput = document.querySelector('#varBuildOverlay .card-section:first-child .editable-input');
+  if (titleInput && !titleInput.value) {
+    titleInput.value = 'Dayworks Variation — ' + data.sourceIds.length + ' record' + (data.sourceIds.length !== 1 ? 's' : '');
+    if (typeof checkVarDetailsComplete === 'function') checkVarDetailsComplete();
+  }
+
+  // Render labour rows
+  var labourBody = document.getElementById('varRateLabourBody');
+  if (labourBody && data.labour.length) {
+    labourBody.innerHTML = data.labour.map(function(it) {
+      return '<tr>' +
+        '<td><div style="font-size:13px">' + it.name + '</div><div style="font-size:10px;color:#94a3b8;margin-top:2px"><i class="fas fa-link" style="font-size:9px;margin-right:3px"></i>' + it.source + '</div></td>' +
+        '<td><input class="editable-input short" value="' + (it.hrs || '') + '" style="width:60px"></td>' +
+        '<td><input class="editable-input short" value="' + (it.days || 1) + '" style="width:60px"></td>' +
+        '<td style="text-align:right">$' + (it.rate || 0).toFixed(2) + '</td>' +
+        '<td style="text-align:right;font-weight:600">$' + (it.amount || 0).toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
+        '<td><span style="color:#ef4444;cursor:pointer" onclick="this.closest(\'tr\').remove();updateVarRateTotals()"><i class="fas fa-trash-alt"></i></span></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  // Render plant rows
+  var plantBody = document.getElementById('varRatePlantBody');
+  if (plantBody && data.plant.length) {
+    plantBody.innerHTML = data.plant.map(function(it) {
+      return '<tr>' +
+        '<td><div style="font-size:13px">' + it.name + '</div><div style="font-size:10px;color:#94a3b8;margin-top:2px"><i class="fas fa-link" style="font-size:9px;margin-right:3px"></i>' + it.source + '</div></td>' +
+        '<td><input class="editable-input short" value="' + (it.hrs || '') + '" style="width:60px"></td>' +
+        '<td><input class="editable-input short" value="' + (it.days || 1) + '" style="width:60px"></td>' +
+        '<td style="text-align:right">$' + (it.rate || 0).toFixed(2) + '</td>' +
+        '<td style="text-align:right;font-weight:600">$' + (it.amount || 0).toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
+        '<td><span style="color:#ef4444;cursor:pointer" onclick="this.closest(\'tr\').remove();updateVarRateTotals()"><i class="fas fa-trash-alt"></i></span></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  // Render materials rows
+  var matBody = document.getElementById('varRateMaterialBody');
+  if (matBody && data.materials.length) {
+    matBody.innerHTML = data.materials.map(function(it) {
+      return '<tr>' +
+        '<td><div style="font-size:13px">' + (it.desc || '') + '</div><div style="font-size:10px;color:#94a3b8;margin-top:2px"><i class="fas fa-link" style="font-size:9px;margin-right:3px"></i>' + it.source + '</div></td>' +
+        '<td><input class="editable-input short" value="' + (it.qty || '') + '" style="width:60px"></td>' +
+        '<td><input class="editable-input short" value="' + (it.unit || '') + '" style="width:50px"></td>' +
+        '<td style="text-align:right"><input class="budget-input" value="' + (it.rate || 0).toFixed(2) + '" style="width:90px"></td>' +
+        '<td style="text-align:right;font-weight:600">$' + (it.amount || 0).toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
+        '<td><span style="color:#ef4444;cursor:pointer" onclick="this.closest(\'tr\').remove();updateVarRateTotals()"><i class="fas fa-trash-alt"></i></span></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  // Update summary cards if calculator function exists
+  if (typeof updateVarRateTotals === 'function') updateVarRateTotals();
+
+  showToast(data.sourceIds.length + ' dayworks record' + (data.sourceIds.length !== 1 ? 's' : '') + ' added to variation');
+  pendingPrefilledDayworks = null;
 }
 
 function populateVarMappingDropdowns() {
@@ -5128,7 +5525,11 @@ function showVariationBuildPage() {
       titleInput.removeEventListener('input', checkVarDetailsComplete);
       titleInput.addEventListener('input', checkVarDetailsComplete);
     }
-  }, 100);
+    // Pre-fill from selected dayworks records if applicable
+    if (isDayworks && pendingPrefilledDayworks) {
+      prefillDayworksVariation();
+    }
+  }, 150);
 }
 
 function closeVariationBuild() {
