@@ -2003,9 +2003,27 @@ function renderStepper() {
 /* ═══════════════════════════════════════════
    NAVIGATION
    ═══════════════════════════════════════════ */
+function _scrollAllToTop() {
+  try {
+    window.scrollTo(0, 0);
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+    var main = document.querySelector('.main');
+    if (main) main.scrollTop = 0;
+    // Also clear any focus that might cause the browser to scroll a field into view
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  } catch (e) {}
+}
+
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  // Scroll to top whenever a new page is shown — synchronously and after layout
+  _scrollAllToTop();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_scrollAllToTop);
+  setTimeout(_scrollAllToTop, 0);
+  setTimeout(_scrollAllToTop, 50);
+  setTimeout(_scrollAllToTop, 200);
 }
 
 function goToStep(step) {
@@ -2038,20 +2056,13 @@ function goToStep(step) {
       if (step === 4) { buildReviewPage(); showPage('pageReview'); }
     }
   }
-  // Force-scroll to top of the new page. We do it now AND on the next frame
-  // because some pages run layout-affecting work (buildBudgetCC, renderCCRows, etc.)
-  // after showPage() that can shift the scroll position back.
-  function _toTop() {
-    window.scrollTo(0, 0);
-    if (document.documentElement) document.documentElement.scrollTop = 0;
-    if (document.body) document.body.scrollTop = 0;
-    var main = document.querySelector('.main');
-    if (main && main.scrollTo) main.scrollTo(0, 0);
-    if (main) main.scrollTop = 0;
-  }
-  _toTop();
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_toTop);
-  setTimeout(_toTop, 0);
+  // showPage already scrolls to top (sync + rAF + timeouts), but also do it here
+  // for explicit step transitions in case showPage was bypassed.
+  _scrollAllToTop();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_scrollAllToTop);
+  setTimeout(_scrollAllToTop, 0);
+  setTimeout(_scrollAllToTop, 100);
+  setTimeout(_scrollAllToTop, 300);
 }
 
 function goBack() {
