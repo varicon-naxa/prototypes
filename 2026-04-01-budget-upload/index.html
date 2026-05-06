@@ -6482,6 +6482,174 @@ function downloadBOQTemplate() {
     showToast('Loading library, try again in a moment...');
     return;
   }
+  return downloadBOQTemplateV2();
+}
+
+function downloadBOQTemplateV2() {
+  // Style helpers (xlsx-js-style)
+  var thin = { style:'thin', color:{rgb:'CCCCCC'} };
+  var border = { top:thin, bottom:thin, left:thin, right:thin };
+  var hdrStyle  = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:'1B2A4A'}}, alignment:{vertical:'center',horizontal:'center'}, border:border };
+  var l1Style   = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:'1B2A4A'}}, alignment:{vertical:'center'}, border:border };
+  var l1Right   = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:'1B2A4A'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:border };
+  var l2Style   = { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:'F0F2F5'}}, alignment:{vertical:'center'}, border:border };
+  var l2Right   = { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:'F0F2F5'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:border };
+  var l3Style   = { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, alignment:{vertical:'center'}, border:border };
+  var l3Right   = { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:border };
+  var l3Qty     = { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'#,##0', border:border };
+  var l1Prov    = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:'A16207'}}, alignment:{vertical:'center'}, border:border };
+  var l1ProvR   = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:'A16207'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:border };
+  var l2Prov    = { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'92400E'}}, fill:{patternType:'solid',fgColor:{rgb:'FEF3C7'}}, alignment:{vertical:'center'}, border:border };
+  var l2ProvR   = { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'92400E'}}, fill:{patternType:'solid',fgColor:{rgb:'FEF3C7'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:border };
+  var l3Prov    = { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, fill:{patternType:'solid',fgColor:{rgb:'FFFBEB'}}, alignment:{vertical:'center'}, border:border };
+  var l3ProvR   = { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, fill:{patternType:'solid',fgColor:{rgb:'FFFBEB'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:border };
+  var l3ProvQty = { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, fill:{patternType:'solid',fgColor:{rgb:'FFFBEB'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'#,##0', border:border };
+  var totalLeft = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:'E8ECF0'}}, alignment:{vertical:'center'}, border:{top:{style:'medium',color:{rgb:'1B2A4A'}},bottom:{style:'medium',color:{rgb:'1B2A4A'}},left:thin,right:thin} };
+  var totalLabel = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:'E8ECF0'}}, alignment:{vertical:'center',horizontal:'right'}, border:{top:{style:'medium',color:{rgb:'1B2A4A'}},bottom:{style:'medium',color:{rgb:'1B2A4A'}},left:thin,right:thin} };
+  var totalRight = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:'E8ECF0'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:{top:{style:'medium',color:{rgb:'1B2A4A'}},bottom:{style:'medium',color:{rgb:'1B2A4A'}},left:thin,right:thin} };
+
+  function setCell(ws, r, c, v, s) {
+    var ref = XLSX.utils.encode_cell({r:r,c:c});
+    if (typeof v === 'object' && v !== null && v.f) {
+      ws[ref] = { t:'n', f:v.f, s:s };
+    } else if (v === '' || v === null || v === undefined) {
+      ws[ref] = { t:'s', v:'', s:s };
+    } else if (typeof v === 'number') {
+      ws[ref] = { t:'n', v:v, s:s };
+    } else {
+      ws[ref] = { t:'s', v:String(v), s:s };
+    }
+    var range = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : { s:{r:0,c:0}, e:{r:0,c:0} };
+    if (r > range.e.r) range.e.r = r;
+    if (c > range.e.c) range.e.c = c;
+    ws['!ref'] = XLSX.utils.encode_range(range);
+  }
+
+  // [code, desc, unit, qty, rate, amountFormulaOrEmpty, level, isProvisional]
+  var em = '—';   // em dash
+  var sup2 = '²'; // m²
+  var sup3 = '³'; // m³
+  var rows = [
+    ['1',     'Preliminaries',                                              '',          '', '',     {f:'F3+F6'}, 1, false],
+    ['1.1',   '   Site Preparation',                                        '',          '', '',     {f:'SUM(F4:F5)'}, 2, false],
+    ['1.1.1', '      Site Clearing & Grubbing',                             'm'+sup2, 5200, 12.50,   {f:'D4*E4'}, 3, false],
+    ['1.1.2', '      Topsoil Stripping & Stockpiling',                      'm'+sup3, 1800, 18.00,   {f:'D5*E5'}, 3, false],
+    ['1.2',   '   Earthworks',                                              '',          '', '',     {f:'SUM(F7:F8)'}, 2, false],
+    ['1.2.1', '      Bulk Earthworks '+em+' Cut to Fill',                   'm'+sup3, 3500, 42.00,   {f:'D7*E7'}, 3, false],
+    ['1.2.2', '      Subgrade Preparation',                                 'm'+sup2, 4000, 8.50,    {f:'D8*E8'}, 3, false],
+    ['2',     'Structural Works',                                           '',          '', '',     {f:'F10+F13+F16'}, 1, false],
+    ['2.1',   '   Concrete',                                                '',          '', '',     {f:'SUM(F11:F12)'}, 2, false],
+    ['2.1.1', '      Concrete Supply & Pour '+em+' Footings',               'm'+sup3,  480, 295.00,  {f:'D11*E11'}, 3, false],
+    ['2.1.2', '      Concrete Supply & Pour '+em+' Slabs',                  'm'+sup3,  320, 285.00,  {f:'D12*E12'}, 3, false],
+    ['2.2',   '   Reinforcement',                                           '',          '', '',     {f:'SUM(F14:F15)'}, 2, false],
+    ['2.2.1', '      Steel Reinforcement '+em+' Supply & Fix',              'tonne',   120, 2100.00, {f:'D14*E14'}, 3, false],
+    ['2.2.2', '      Mesh Reinforcement '+em+' Supply & Fix',               'm'+sup2, 2400, 28.00,   {f:'D15*E15'}, 3, false],
+    ['2.3',   '   Formwork',                                                '',          '', '',     {f:'SUM(F17:F18)'}, 2, false],
+    ['2.3.1', '      Formwork '+em+' Walls & Columns',                      'm'+sup2, 1800, 58.00,   {f:'D17*E17'}, 3, false],
+    ['2.3.2', '      Formwork '+em+' Beams',                                'm'+sup2,  600, 65.00,   {f:'D18*E18'}, 3, false],
+    ['3',     'Structural Steel',                                           '',          '', '',     {f:'F20'}, 1, false],
+    ['3.1',   '   Steelwork',                                               '',          '', '',     {f:'F21'}, 2, false],
+    ['3.1.1', '      Structural Steelwork '+em+' Supply & Erect',           'tonne',    65, 3800.00, {f:'D21*E21'}, 3, false],
+    ['4',     'Drainage',                                                   '',          '', '',     {f:'F23'}, 1, false],
+    ['4.1',   '   Stormwater',                                              '',          '', '',     {f:'SUM(F24:F25)'}, 2, false],
+    ['4.1.1', '      Stormwater Pipes '+em+' Supply & Lay',                 'lm',      900, 85.00,   {f:'D24*E24'}, 3, false],
+    ['4.1.2', '      Pits & Headwalls',                                     'each',     24, 2200.00, {f:'D25*E25'}, 3, false],
+    ['5',     'Roadway Construction',                                       '',          '', '',     {f:'F27'}, 1, false],
+    ['5.1',   '   Asphalt',                                                 '',          '', '',     {f:'SUM(F28:F29)'}, 2, false],
+    ['5.1.1', '      Asphalt '+em+' Base Course',                           'm'+sup2, 8000, 18.00,   {f:'D28*E28'}, 3, false],
+    ['5.1.2', '      Asphalt '+em+' Wearing Course',                        'm'+sup2, 8000, 22.00,   {f:'D29*E29'}, 3, false],
+    ['P',     'Provisional Items',                                          '',          '', '',     {f:'F31'}, 1, true],
+    ['P.1',   '   Provisional Sums',                                        '',          '', '',     {f:'SUM(F32:F34)'}, 2, true],
+    ['P.1.1', '      Survey & Set-Out (provisional)',                       'item',      1, 8500.00, {f:'D32*E32'}, 3, true],
+    ['P.1.2', '      Site Investigation Allowance',                         'item',      1, 12000.00,{f:'D33*E33'}, 3, true],
+    ['P.1.3', '      Traffic Management Contingency',                       'item',      1, 15000.00,{f:'D34*E34'}, 3, true],
+  ];
+
+  var ws = { '!ref':'A1' };
+  ['Item Code','Description','Unit','Qty','Rate ($)','Amount ($)'].forEach(function(h, ci) { setCell(ws, 0, ci, h, hdrStyle); });
+
+  rows.forEach(function(r, ri) {
+    var rowIdx = ri + 1;
+    var code = r[0], desc = r[1], unit = r[2], qty = r[3], rate = r[4], amount = r[5], level = r[6], prov = r[7];
+    var sCode, sDesc, sUnit, sQty, sRate, sAmt;
+    if (level === 1) {
+      sCode = sDesc = sUnit = sQty = sRate = (prov ? l1Prov : l1Style);
+      sAmt = (prov ? l1ProvR : l1Right);
+    } else if (level === 2) {
+      sCode = sDesc = sUnit = sQty = sRate = (prov ? l2Prov : l2Style);
+      sAmt = (prov ? l2ProvR : l2Right);
+    } else {
+      sCode = sDesc = sUnit = (prov ? l3Prov : l3Style);
+      sQty = (prov ? l3ProvQty : l3Qty);
+      sRate = sAmt = (prov ? l3ProvR : l3Right);
+    }
+    setCell(ws, rowIdx, 0, code, sCode);
+    setCell(ws, rowIdx, 1, desc, sDesc);
+    setCell(ws, rowIdx, 2, unit, sUnit);
+    setCell(ws, rowIdx, 3, qty, sQty);
+    setCell(ws, rowIdx, 4, rate, sRate);
+    setCell(ws, rowIdx, 5, amount, sAmt);
+  });
+
+  var totalIdx = rows.length + 1;
+  setCell(ws, totalIdx, 0, '', totalLeft);
+  setCell(ws, totalIdx, 1, '', totalLeft);
+  setCell(ws, totalIdx, 2, '', totalLeft);
+  setCell(ws, totalIdx, 3, '', totalLeft);
+  setCell(ws, totalIdx, 4, 'TOTAL', totalLabel);
+  setCell(ws, totalIdx, 5, { f:'F2+F9+F19+F22+F26+F30' }, totalRight);
+
+  ws['!cols'] = [{wch:11},{wch:50},{wch:9},{wch:10},{wch:14},{wch:18}];
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  // Instructions sheet
+  var instr = { '!ref':'A1' };
+  setCell(instr, 0, 0, 'BOQ Upload Template '+em+' Instructions', { font:{name:'Calibri',sz:14,bold:true,color:{rgb:'1B2A4A'}}, alignment:{vertical:'center'} });
+  var lines = [
+    ['Purpose', 'Use this template to upload your Bill of Quantities (BOQ) into Varicon Budget Setup.'],
+    ['', ''],
+    ['Three-level hierarchy', 'The template supports three levels with automatic roll-up.'],
+    ['  Level 1', 'Section header (e.g. "1" Preliminaries). Amount = SUM of Level 2 children.'],
+    ['  Level 2', 'Sub-section header (e.g. "1.1" Site Preparation). Amount = SUM of Level 3 children.'],
+    ['  Level 3', 'Line item (e.g. "1.1.1" Site Clearing). Amount = Qty × Rate.'],
+    ['', ''],
+    ['Provisional Items', 'Use code prefix "P" (e.g. P, P.1, P.1.1) for Provisional Items.'],
+    ['', 'These render at the bottom of the budget setup page in an amber palette so they stand out from fixed budget items.'],
+    ['', ''],
+    ['Required Columns', 'Item Code | Description | Unit | Qty | Rate ($) | Amount ($)'],
+    ['  Item Code', 'Use 1, 1.1, 1.1.1 (or P, P.1, P.1.1) format. The number of dots determines the level.'],
+    ['  Description', 'Section, sub-section title, or line item description.'],
+    ['  Unit', 'Unit of measurement '+em+' Level 3 only.'],
+    ['  Qty', 'Quantity of work '+em+' must be a number '+em+' Level 3 only.'],
+    ['  Rate ($)', 'Unit rate in dollars '+em+' must be a number '+em+' Level 3 only.'],
+    ['  Amount ($)', 'Auto-calculated '+em+' do not edit. Level 1/2 use SUM; Level 3 uses Qty × Rate.'],
+    ['', ''],
+    ['Tips', ''],
+    ['  1.', 'Do not rename, reorder, or delete columns.'],
+    ['  2.', 'Add as many rows as needed at any level.'],
+    ['  3.', 'Accepted upload formats: .xlsx, .xls, .csv.'],
+    ['  4.', 'Replace the example rows with your real data '+em+' keep the structure.'],
+    ['  5.', 'This template is also used as the basis for claims.'],
+  ];
+  var instrSubHdr = { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'1B2A4A'}}, alignment:{vertical:'center'} };
+  var instrBody = { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, alignment:{vertical:'top',wrapText:true} };
+  lines.forEach(function(line, li) {
+    var ri2 = li + 2;
+    var isHdr = line[0] && line[0].length && line[0].charAt(0) !== ' ';
+    setCell(instr, ri2, 0, line[0], isHdr ? instrSubHdr : instrBody);
+    setCell(instr, ri2, 1, line[1], instrBody);
+  });
+  instr['!cols'] = [{wch:24},{wch:75}];
+
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'BOQ');
+  XLSX.utils.book_append_sheet(wb, instr, 'Instructions');
+
+  XLSX.writeFile(wb, 'BOQ_Upload_Template.xlsx');
+  showToast('BOQ template downloaded');
+}
+
+function downloadBOQTemplateLegacy_unused() {
   const wb = XLSX.utils.book_new();
   const rows = [
     ['Item Code', 'Description', 'Unit', 'Qty', 'Rate ($)', 'Amount ($)'],
