@@ -2595,6 +2595,7 @@ var budgetSplitCounter = 0;
 function addBudgetSplit(idx) {
   var container = document.getElementById('budgetSplitRows' + idx);
   var zoneContainer = document.getElementById('budgetSplitZones' + idx);
+  var boqContainer = document.getElementById('boqSplitRows' + idx);
   if (!container) return;
 
   var primarySelect = document.querySelector('[data-cc-select="' + idx + '"]');
@@ -2620,12 +2621,17 @@ function addBudgetSplit(idx) {
     var pSid = budgetSplitCounter++;
     container.appendChild(makeBudgetSplitRow(pSid, idx, opts, ccVal, amtVal));
     if (zoneContainer) zoneContainer.appendChild(makeBudgetZoneRow(pSid, zoneVal));
+    if (boqContainer) boqContainer.appendChild(makeBudgetBOQRow(pSid, idx, 0));
   }
 
   // Add new empty split row
   var newSid = budgetSplitCounter++;
   container.appendChild(makeBudgetSplitRow(newSid, idx, opts, '', ''));
   if (zoneContainer) zoneContainer.appendChild(makeBudgetZoneRow(newSid, 'Project Wide'));
+  if (boqContainer) boqContainer.appendChild(makeBudgetBOQRow(newSid, idx, 0));
+
+  // Auto-rebalance BOQ splits evenly across all rows
+  rebalanceBOQSplits(idx);
 
   // Add "+ Add Cost Centre" button if not present
   if (!container.parentElement.querySelector('.budget-add-cc-btn')) {
@@ -2643,11 +2649,14 @@ function addBudgetSplit(idx) {
 function addBudgetSplitExtra(idx) {
   var container = document.getElementById('budgetSplitRows' + idx);
   var zoneContainer = document.getElementById('budgetSplitZones' + idx);
+  var boqContainer = document.getElementById('boqSplitRows' + idx);
   if (!container) return;
   var opts = selectedCC.map(function(c) { return '<option>' + c + '</option>'; }).join('') + '<option value="__addcc">+ Add Cost Centre</option>';
   var newSid = budgetSplitCounter++;
   container.appendChild(makeBudgetSplitRow(newSid, idx, opts, '', ''));
   if (zoneContainer) zoneContainer.appendChild(makeBudgetZoneRow(newSid, 'Project Wide'));
+  if (boqContainer) boqContainer.appendChild(makeBudgetBOQRow(newSid, idx, 0));
+  rebalanceBOQSplits(idx);
   calcCC();
 }
 
@@ -2706,20 +2715,94 @@ function makeBudgetZoneRow(splitId, zoneValue) {
   return row;
 }
 
+function makeBudgetBOQRow(splitId, idx, boqValue) {
+  var row = document.createElement('div');
+  row.className = 'boq-split-row';
+  row.setAttribute('data-budget-boq-split-id', splitId);
+  row.style.marginTop = '6px';
+  row.style.display = 'flex';
+  row.style.alignItems = 'center';
+  row.style.justifyContent = 'flex-end';
+  var formatted = (Number(boqValue) || 0).toLocaleString('en-US',{minimumFractionDigits:2});
+  row.innerHTML = '<input class="budget-input" style="width:100px;text-align:right;color:#3b82f6;font-weight:600" value="' + formatted + '" oninput="onBOQSplitInput(' + idx + ')" data-budget-boq-amount="bs' + splitId + '">';
+  return row;
+}
+
+// Rebalance the BOQ splits so they sum to the original BOQ total. Called when
+// a new split is added, an old one is removed, or the user wants to reset.
+function rebalanceBOQSplits(idx) {
+  var boqDisplay = document.querySelector('[data-boq-total-cc="' + idx + '"]');
+  if (!boqDisplay) return;
+  var base = parseFloat(boqDisplay.dataset.boqBase || '0') || 0;
+  var container = document.getElementById('boqSplitRows' + idx);
+  if (!container) return;
+  var inputs = container.querySelectorAll('[data-budget-boq-amount]');
+  if (!inputs.length) return;
+  var per = base / inputs.length;
+  // Round to 2dp; put rounding remainder into the last row
+  var rounded = Math.round(per * 100) / 100;
+  var sum = 0;
+  inputs.forEach(function(inp, i) {
+    var val = (i === inputs.length - 1) ? (Math.round((base - sum) * 100) / 100) : rounded;
+    inp.value = val.toLocaleString('en-US',{minimumFractionDigits:2});
+    sum += val;
+  });
+  updateBOQTotalDisplay(idx);
+}
+
+function onBOQSplitInput(idx) {
+  updateBOQTotalDisplay(idx);
+}
+
+// When BOQ is split, the headline value above the splits shows the running total
+// of the splits (so the user can see if it matches the original BOQ amount).
+function updateBOQTotalDisplay(idx) {
+  var boqDisplay = document.querySelector('[data-boq-total-cc="' + idx + '"]');
+  if (!boqDisplay) return;
+  var base = parseFloat(boqDisplay.dataset.boqBase || '0') || 0;
+  var container = document.getElementById('boqSplitRows' + idx);
+  if (!container) return;
+  var inputs = container.querySelectorAll('[data-budget-boq-amount]');
+  if (!inputs.length) {
+    // No splits — show the original BOQ amount
+    boqDisplay.textContent = base.toLocaleString('en-US',{minimumFractionDigits:2});
+    boqDisplay.style.color = '#3b82f6';
+    return;
+  }
+  var sum = 0;
+  inputs.forEach(function(inp) {
+    sum += parseFloat((inp.value || '0').toString().replace(/,/g, '')) || 0;
+  });
+  boqDisplay.textContent = sum.toLocaleString('en-US',{minimumFractionDigits:2});
+  // Highlight if sum doesn't match the original BOQ total
+  if (Math.abs(sum - base) < 0.01) {
+    boqDisplay.style.color = '#3b82f6';
+    boqDisplay.title = '';
+  } else {
+    boqDisplay.style.color = '#ef4444';
+    var diff = sum - base;
+    boqDisplay.title = (diff > 0 ? 'Over' : 'Under') + ' BOQ by $' + Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2});
+  }
+}
+
 function removeBudgetSplitRow(el, parentIdx) {
   var splitRow = el.closest('.split-row');
   var splitId = splitRow ? splitRow.getAttribute('data-budget-split-id') : null;
   if (splitRow) splitRow.remove();
-  // Remove matching zone row
+  // Remove matching zone row and BOQ row
   if (splitId) {
     var zoneRow = document.querySelector('[data-budget-zone-split-id="' + splitId + '"]');
     if (zoneRow) zoneRow.remove();
+    var boqRow = document.querySelector('[data-budget-boq-split-id="' + splitId + '"]');
+    if (boqRow) boqRow.remove();
   }
   // If only one split row left, revert to primary
   var container = document.getElementById('budgetSplitRows' + parentIdx);
   var remaining = container ? container.querySelectorAll('.split-row') : [];
   if (remaining.length <= 1) {
     revertBudgetToPrimary(parentIdx);
+  } else {
+    rebalanceBOQSplits(parentIdx);
   }
   calcCC();
 }
@@ -2743,9 +2826,13 @@ function revertBudgetToPrimary(idx) {
   var amtInput = document.querySelector('[data-cc-amount="' + idx + '"]');
   if (amtInput) { amtInput.readOnly = false; amtInput.style.background = ''; amtInput.style.color = ''; }
 
-  // Clear containers
+  // Clear containers (CC splits, zone splits, BOQ splits)
   if (container) container.innerHTML = '';
   if (zoneContainer) zoneContainer.innerHTML = '';
+  var boqContainer = document.getElementById('boqSplitRows' + idx);
+  if (boqContainer) boqContainer.innerHTML = '';
+  // Restore the BOQ total display to the original amount
+  updateBOQTotalDisplay(idx);
 
   // Show split button, remove add cc button
   var td = container ? container.parentElement : null;
@@ -2781,7 +2868,7 @@ function setBudgetSplitType(splitId, parentIdx, type) {
   if (oldInput) oldInput.remove();
 
   var boqTotalCell = document.querySelector('[data-boq-total-cc="' + parentIdx + '"]');
-  var boqVal = boqTotalCell ? parseFloat(boqTotalCell.textContent.replace(/[$,]/g,'')) || 0 : 0;
+  var boqVal = boqTotalCell ? (parseFloat(boqTotalCell.dataset.boqBase) || parseFloat(boqTotalCell.textContent.replace(/[$,]/g,'')) || 0) : 0;
 
   if (type === 'lump') {
     area.innerHTML = '';
@@ -2819,7 +2906,7 @@ function calcBudgetSplitPct(key, parentIdx) {
   if (!pctInput) return;
   var pctField = pctInput.closest('div').querySelector('input:not([type="hidden"])');
   var boqTotalCell = document.querySelector('[data-boq-total-cc="' + parentIdx + '"]');
-  var boqVal = boqTotalCell ? parseFloat(boqTotalCell.textContent.replace(/[$,]/g,'')) || 0 : 0;
+  var boqVal = boqTotalCell ? (parseFloat(boqTotalCell.dataset.boqBase) || parseFloat(boqTotalCell.textContent.replace(/[$,]/g,'')) || 0) : 0;
   var pct = pctField ? (parseFloat(pctField.value) || 0) : 0;
   var amount = boqVal * (pct / 100);
   var splitId = key.replace('bs','');
@@ -3016,7 +3103,10 @@ function renderCCRows() {
         ? `<input class="editable-input med" value="${r.rate||''}" oninput="updateManualCalc('cc',${i},this)" data-field="rate">`
         : rateStr
       }</td>
-      <td style="text-align:right;font-weight:600;color:#3b82f6" data-boq-total-cc="${i}">${amtStr}</td>
+      <td style="text-align:right;vertical-align:top" data-boq-total-cell-cc="${i}">
+        <span style="font-weight:600;color:#3b82f6;white-space:nowrap" data-boq-total-cc="${i}" data-boq-base="${boqAmt}">${amtStr}</span>
+        <div id="boqSplitRows${i}"></div>
+      </td>
       <td style="vertical-align:top">
         <select class="budget-select" data-cc-select="${i}" onchange="handleBudgetCCChange(this,${i})">${ccOpts}</select>
         <div id="budgetSplitRows${i}"></div>
