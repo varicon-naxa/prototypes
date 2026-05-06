@@ -126,6 +126,13 @@ tr.level-1 td{background:#1b2a4a;color:#fff!important;font-weight:700;font-size:
 tr.level-2 td{background:#f0f2f5;font-weight:600;font-size:13px;padding:8px 14px}
 tr.level-total td{background:#e8ecf0;border-top:2px solid #1b2a4a}
 .amount{font-weight:600;text-align:right}
+/* Provisional Items — distinct amber palette so they stand out from fixed budget */
+tr.provisional.level-1 td{background:#a16207!important;color:#fff!important;border-top:2px solid #f5a623}
+tr.provisional.level-2 td{background:#fef3c7!important;color:#92400e!important}
+tr.provisional td{border-left:0}
+.provisional-row td{background:#fffbeb!important}
+.provisional-row td:first-child{box-shadow:inset 3px 0 0 #f5a623}
+.provisional-badge{display:inline-block;background:#f5a623;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:8px;letter-spacing:.3px;text-transform:uppercase;vertical-align:middle}
 
 /* ── Cost Centre Checklist ── */
 .cc-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px}
@@ -1906,7 +1913,15 @@ const boqData = [
       { code: '5.1.1', desc: 'Asphalt — Base Course', level: 3, unit: 'm²', qty: 8000, rate: 18.00, amount: 144000 },
       { code: '5.1.2', desc: 'Asphalt — Wearing Course', level: 3, unit: 'm²', qty: 8000, rate: 22.00, amount: 176000 },
 
-  // TOTAL = 278,400 + 695,400 + 247,000 + 129,300 + 320,000 = 1,670,100
+  // P. Provisional Items = 8,500 + 12,000 + 15,000 = 35,500
+  // Always rendered at the bottom of the table, distinguished by isProvisional flag.
+  { code: 'P', desc: 'Provisional Items', level: 1, isHeader: true, isProvisional: true, amount: 35500 },
+    { code: 'P.1', desc: 'Provisional Sums', level: 2, isHeader: true, isProvisional: true, amount: 35500 },
+      { code: 'P.1.1', desc: 'Survey & Set-Out (provisional)', level: 3, unit: 'item', qty: 1, rate: 8500.00, amount: 8500, isProvisional: true },
+      { code: 'P.1.2', desc: 'Site Investigation Allowance', level: 3, unit: 'item', qty: 1, rate: 12000.00, amount: 12000, isProvisional: true },
+      { code: 'P.1.3', desc: 'Traffic Management Contingency', level: 3, unit: 'item', qty: 1, rate: 15000.00, amount: 15000, isProvisional: true },
+
+  // TOTAL = 278,400 + 695,400 + 247,000 + 129,300 + 320,000 + 35,500 = 1,705,600
 ];
 
 const defaultCostCenters = [
@@ -2116,20 +2131,23 @@ function handleBOQUpload(path) {
 
   const lineItems = boqData.filter(r => !r.isHeader);
   document.getElementById(tableId).innerHTML = boqData.map((r, i) => {
+    const provClass = r.isProvisional ? ' provisional' : '';
+    const provBadge = r.isProvisional && r.level === 1 ? '<span class="provisional-badge">Provisional</span>' : '';
+    const provRowClass = r.isProvisional && r.level === 3 ? ' class="provisional-row"' : '';
     if (r.level === 1) {
-      return `<tr class="section-header level-1">
-        <td colspan="5" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}</td>
+      return `<tr class="section-header level-1${provClass}">
+        <td colspan="5" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}${provBadge}</td>
         <td class="amount" style="color:#fff;font-weight:700">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
       </tr>`;
     }
     if (r.level === 2) {
-      return `<tr class="section-header level-2">
+      return `<tr class="section-header level-2${provClass}">
         <td style="padding-left:16px;font-weight:600;color:#1b2a4a">${r.code}</td>
         <td colspan="4" style="font-weight:600;color:#1b2a4a">${r.desc}</td>
         <td class="amount" style="font-weight:600;color:#1b2a4a">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
       </tr>`;
     }
-    return `<tr><td style="padding-left:20px;font-weight:500;color:#64748b;white-space:nowrap">${r.code}</td><td>${r.desc}</td><td>${r.unit}</td><td>${r.qty.toLocaleString()}</td><td class="amount">${r.rate.toLocaleString('en-US',{minimumFractionDigits:2})}</td><td class="amount">$${r.amount.toLocaleString('en-US',{minimumFractionDigits:2})}</td></tr>`;
+    return `<tr${provRowClass}><td style="padding-left:20px;font-weight:500;color:#64748b;white-space:nowrap">${r.code}</td><td>${r.desc}</td><td>${r.unit}</td><td>${r.qty.toLocaleString()}</td><td class="amount">${r.rate.toLocaleString('en-US',{minimumFractionDigits:2})}</td><td class="amount">$${r.amount.toLocaleString('en-US',{minimumFractionDigits:2})}</td></tr>`;
   }).join('') + `<tr class="section-header level-total"><td colspan="5" style="font-weight:700;color:#1b2a4a;text-align:right;padding-right:14px">TOTAL</td><td class="amount" style="font-weight:700;color:#1b2a4a;font-size:14px">$${boqData.filter(r=>r.level===1).reduce((s,r)=>s+(r.amount||0),0).toLocaleString('en-US',{minimumFractionDigits:2})}</td></tr>`;
 
   boqUploaded[path] = true;
@@ -2227,16 +2245,18 @@ function renderWBSRows() {
   const tbody = document.getElementById('budgetTableWBS');
 
   tbody.innerHTML = data.map((r, i) => {
+    const provClass = r.isProvisional ? ' provisional' : '';
+    const provBadge = r.isProvisional && r.level === 1 ? '<span class="provisional-badge">Provisional</span>' : '';
     if (r.level === 1) {
-      return `<tr class="section-header level-1">
-        <td colspan="4" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}</td>
+      return `<tr class="section-header level-1${provClass}">
+        <td colspan="4" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}${provBadge}</td>
         <td class="amount">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
         <td></td>
         <td class="amount" data-wbs-budget-rollup="${i}">$0</td>
       </tr>`;
     }
     if (r.level === 2) {
-      return `<tr class="section-header level-2">
+      return `<tr class="section-header level-2${provClass}">
         <td style="padding-left:16px;font-weight:600;color:#1b2a4a">${r.code}</td>
         <td colspan="3" style="font-weight:600;color:#1b2a4a">${r.desc}</td>
         <td style="text-align:right;font-weight:600;color:#3b82f6">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
@@ -2247,8 +2267,9 @@ function renderWBSRows() {
     const boqAmt = r.amount || 0;
     const rateStr = (r.rate || 0).toLocaleString('en-US',{minimumFractionDigits:2});
     const amtStr = boqAmt.toLocaleString();
+    const provRowClass = r.isProvisional ? ' class="provisional-row"' : '';
 
-    return `<tr>
+    return `<tr${provRowClass}>
       <td style="padding-left:20px;font-weight:500;color:#64748b;white-space:nowrap">${r.code || ''}</td>
       <td>${isManual
         ? `<input class="editable-input" placeholder="Description" value="${r.desc||''}" onchange="manualBOQ.wbs[${i}].desc=this.value">
@@ -3055,11 +3076,13 @@ function renderCCRows() {
   const tbody = document.getElementById('budgetTableCC');
 
   tbody.innerHTML = data.map((r, i) => {
+    const provClass = r.isProvisional ? ' provisional' : '';
+    const provBadge = r.isProvisional && r.level === 1 ? '<span class="provisional-badge">Provisional</span>' : '';
     if (r.level === 1) {
       const l1CCOpts = '<option value="">— Select —</option>' + selectedCC.map(c => '<option>' + c + '</option>').join('') + '<option value="__addcc">+ Add Cost Centre</option>';
       const l1ZoneOpts = zones.map(z => '<option>' + z + '</option>').join('') + '<option value="__add">+ Add Zone</option>';
-      return `<tr class="section-header level-1">
-        <td colspan="4" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}</td>
+      return `<tr class="section-header level-1${provClass}">
+        <td colspan="4" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}${provBadge}</td>
         <td class="amount">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
         <td><select class="budget-select" style="background:#fff!important;color:#1b2a4a!important;border-color:rgba(255,255,255,.3)" data-cc-level1="${i}" onchange="applyL1CC(${i},this)">${l1CCOpts}</select></td>
         <td><select class="budget-select" style="background:#fff!important;color:#1b2a4a!important;border-color:rgba(255,255,255,.3)" data-zone-level1="${i}" onchange="applyL1Zone(${i},this)">${l1ZoneOpts}</select></td>
@@ -3070,7 +3093,7 @@ function renderCCRows() {
     if (r.level === 2) {
       const l2CCOpts = '<option value="">— Select —</option>' + selectedCC.map(c => '<option>' + c + '</option>').join('') + '<option value="__addcc">+ Add Cost Centre</option>';
       const l2ZoneOpts = zones.map(z => '<option>' + z + '</option>').join('') + '<option value="__add">+ Add Zone</option>';
-      return `<tr class="section-header level-2">
+      return `<tr class="section-header level-2${provClass}">
         <td style="padding-left:16px;font-weight:600;color:#1b2a4a">${r.code}</td>
         <td colspan="3" style="font-weight:600;color:#1b2a4a">${r.desc}</td>
         <td style="text-align:right;font-weight:600;color:#3b82f6">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
@@ -3085,8 +3108,9 @@ function renderCCRows() {
     const amtStr = boqAmt.toLocaleString();
     const ccOpts = '<option value="">— Select —</option>' + selectedCC.map(c => '<option>' + c + '</option>').join('') + '<option value="__addcc">+ Add Cost Centre</option>';
     const zoneOpts = zones.map(z => '<option>' + z + '</option>').join('') + '<option value="__add">+ Add Zone</option>';
+    const provRowClass = r.isProvisional ? ' provisional-row' : '';
 
-    return `<tr id="ccRow${i}">
+    return `<tr id="ccRow${i}" class="${provRowClass}">
       <td style="padding-left:20px;font-weight:500;color:#64748b;white-space:nowrap">${r.code || ''}</td>
       <td>${isManual
         ? `<input class="editable-input" placeholder="Description" value="${r.desc||''}" onchange="manualBOQ.cc[${i}].desc=this.value">
@@ -3275,16 +3299,18 @@ function buildAssignCCPage() {
   }
 
   tbody.innerHTML = data.map((r, i) => {
+    const provClass = r.isProvisional ? ' provisional' : '';
+    const provBadge = r.isProvisional && r.level === 1 ? '<span class="provisional-badge">Provisional</span>' : '';
     if (r.level === 1) {
-      return `<tr class="section-header level-1">
-        <td colspan="2" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}</td>
+      return `<tr class="section-header level-1${provClass}">
+        <td colspan="2" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}${provBadge}</td>
         <td class="amount">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
         <td class="amount">$${assignBa[i].toLocaleString('en-US',{minimumFractionDigits:2})}</td>
         <td colspan="2"></td>
       </tr>`;
     }
     if (r.level === 2) {
-      return `<tr class="section-header level-2">
+      return `<tr class="section-header level-2${provClass}">
         <td style="padding-left:16px;font-weight:600;color:#1b2a4a">${r.code}</td>
         <td style="font-weight:600;color:#1b2a4a">${r.desc}</td>
         <td style="text-align:right;font-weight:600;color:#3b82f6">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
@@ -4026,10 +4052,12 @@ function buildReviewPage() {
     const bAmt = reviewBudgets[ri];
     const mPct = boqAmt > 0 ? ((boqAmt - bAmt) / boqAmt * 100) : 0;
 
+    const provClass = r.isProvisional ? ' provisional' : '';
+    const provBadge = r.isProvisional && r.level === 1 ? '<span class="provisional-badge">Provisional</span>' : '';
     if (r.level === 1) {
-      return `<tr class="section-header level-1">
+      return `<tr class="section-header level-1${provClass}">
         <td style="padding-left:4px;white-space:nowrap"><span style="color:rgba(255,255,255,.6)">${r.code}</span></td>
-        <td>${r.desc}</td>
+        <td>${r.desc}${provBadge}</td>
         <td class="right amount" style="white-space:nowrap">$${boqAmt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
         <td class="right amount" style="white-space:nowrap">$${bAmt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
         ${isCC ? '<td></td>' : ''}
@@ -4037,7 +4065,7 @@ function buildReviewPage() {
       </tr>`;
     }
     if (r.level === 2) {
-      return `<tr class="section-header level-2">
+      return `<tr class="section-header level-2${provClass}">
         <td style="padding-left:16px;font-weight:600;color:#1b2a4a;white-space:nowrap">${r.code}</td>
         <td style="font-weight:600;color:#1b2a4a">${r.desc}</td>
         <td class="right" style="font-weight:600;color:#3b82f6;white-space:nowrap">$${boqAmt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
@@ -4048,7 +4076,8 @@ function buildReviewPage() {
     }
     const margin = r.amount > 0 ? (((r.amount - r.budgetAmt) / r.amount) * 100) : 0;
     const marginClass = margin >= 0 ? 'positive' : 'negative';
-    return `<tr>
+    const provRowClass = r.isProvisional ? ' class="provisional-row"' : '';
+    return `<tr${provRowClass}>
       <td style="padding-left:20px;font-weight:500;color:#64748b;white-space:nowrap">${r.code || ''}</td>
       <td>${r.desc || '—'}</td>
       <td class="right" style="white-space:nowrap">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
@@ -4443,11 +4472,13 @@ function buildBudgetViewPage() {
     var profit = boqAmt - budgetAmt;
     var margin = boqAmt > 0 ? (profit / boqAmt * 100) : 0;
 
+    var provClass = r.isProvisional ? ' provisional' : '';
+    var provBadge = r.isProvisional && r.level === 1 ? ' <span class="provisional-badge">Provisional</span>' : '';
     if (r.level === 1) {
-      return '<tr class="section-header level-1">' +
+      return '<tr class="section-header level-1' + provClass + '">' +
         '<td></td>' +
         '<td style="color:rgba(255,255,255,.6)">' + r.code + '</td>' +
-        '<td>' + (r.desc || '') + '</td>' +
+        '<td>' + (r.desc || '') + provBadge + '</td>' +
         '<td class="right amount" style="white-space:nowrap">$' + boqAmt.toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
         '<td class="right amount" style="white-space:nowrap">$' + budgetAmt.toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
         ccCol +
@@ -4456,7 +4487,7 @@ function buildBudgetViewPage() {
       '</tr>';
     }
     if (r.level === 2) {
-      return '<tr class="section-header level-2">' +
+      return '<tr class="section-header level-2' + provClass + '">' +
         '<td></td>' +
         '<td style="font-weight:600;color:#94a3b8">' + r.code + '</td>' +
         '<td style="font-weight:600;color:#1b2a4a">' + (r.desc || '') + '</td>' +
@@ -4478,8 +4509,9 @@ function buildBudgetViewPage() {
       colCount = 8;
     }
     var bvRowId = 'bvBoqRow' + i;
+    var provRowAttr = r.isProvisional ? ' class="provisional-row"' : '';
 
-    var row = '<tr>' +
+    var row = '<tr' + provRowAttr + '>' +
       '<td></td>' +
       '<td style="color:#94a3b8;font-size:12px">' + (r.code || '') + '</td>' +
       '<td style="padding-left:4px">' + (r.desc || '\u2014') + '</td>' +
