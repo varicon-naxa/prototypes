@@ -1044,7 +1044,7 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
       <div class="actions-bar">
         <button class="btn btn-secondary" id="reviewBackBtn" onclick="goToStep(currentStep-1)"><i class="fas fa-arrow-left"></i> Back to Edit</button>
         <div style="display:flex;gap:10px">
-          <button class="btn btn-outline" onclick="showToast('Exported to CSV')"><i class="fas fa-file-export"></i> Export</button>
+          <button class="btn btn-outline" onclick="exportBudget()"><i class="fas fa-file-export"></i> Export</button>
           <button class="btn btn-primary" onclick="submitBudget()"><i class="fas fa-check"></i> Confirm & Submit</button>
         </div>
       </div>
@@ -1078,7 +1078,7 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
           <span id="bvZoneTab" style="display:none" onclick="switchBVView('zone')"><i class="fas fa-map-marker-alt" style="margin-right:4px"></i> Zones</span>
         </div>
         <div style="display:flex;gap:10px">
-          <button class="btn btn-outline" onclick="showToast('Exported to CSV')"><i class="fas fa-file-export"></i> Export</button>
+          <button class="btn btn-outline" onclick="exportBudget()"><i class="fas fa-file-export"></i> Export</button>
           <button class="btn btn-primary" style="background:#1b2a4a" onclick="showVariationModal()"><i class="fas fa-plus"></i> Add Variation</button>
         </div>
       </div>
@@ -5946,6 +5946,308 @@ function calcVarMargin() {
     marginEl.textContent = marginPct.toFixed(2) + '%';
     marginEl.style.color = marginPct >= 0 ? '#16a34a' : '#ef4444';
   }
+}
+
+/* ═══════════════════════════════════════════
+   BUDGET EXPORT (matches the new budget layout)
+   ═══════════════════════════════════════════ */
+function exportBudget() {
+  if (typeof XLSX === 'undefined') {
+    showToast('Export library still loading — try again');
+    return;
+  }
+  var data = getActiveData(currentPath);
+  var isCC = currentPath === 'cc';
+  var amtKey = isCC ? 'cc' : 'wbs';
+  var fmt$ = '$#,##0.00';
+  var fmtPct = '0.00%';
+  var fmtQty = '#,##0';
+
+  // ---- Compute budget rollups from inputs ----
+  var budgetAmts = [];
+  data.forEach(function(r, i) {
+    if (r.level === 1 || r.level === 2) { budgetAmts[i] = 0; return; }
+    var inp = document.querySelector('[data-' + amtKey + '-amount="' + i + '"]');
+    budgetAmts[i] = inp ? (parseFloat(inp.value.replace(/,/g,'')) || 0) : (r.amount || 0);
+  });
+  // Roll up L2 = sum of L3 children
+  for (var j = 0; j < data.length; j++) {
+    if (data[j].level === 2) {
+      var s2 = 0;
+      for (var k = j + 1; k < data.length; k++) {
+        if (data[k].level === 1 || data[k].level === 2) break;
+        s2 += budgetAmts[k] || 0;
+      }
+      budgetAmts[j] = s2;
+    }
+  }
+  // Roll up L1 = sum of L2 children
+  for (var j2 = 0; j2 < data.length; j2++) {
+    if (data[j2].level === 1) {
+      var s1 = 0;
+      for (var k1 = j2 + 1; k1 < data.length; k1++) {
+        if (data[k1].level === 1) break;
+        if (data[k1].level === 2) s1 += budgetAmts[k1] || 0;
+      }
+      budgetAmts[j2] = s1;
+    }
+  }
+
+  // ---- Top-line totals ----
+  var totalContract = 0, totalBudget = 0;
+  data.forEach(function(r, i) {
+    if (r.level === 1) {
+      totalContract += (r.amount || 0);
+      totalBudget += (budgetAmts[i] || 0);
+    }
+  });
+
+  // Add unmapped cost centres to the budget total
+  var unmappedTotal = 0;
+  if (isCC && typeof getUnmappedCCData === 'function') {
+    try {
+      getUnmappedCCData().forEach(function(u) { unmappedTotal += (u.amount || 0); });
+    } catch(e) {}
+  }
+  totalBudget += unmappedTotal;
+  var totalProfit = totalContract - totalBudget;
+  var totalMargin = totalContract > 0 ? (totalProfit / totalContract) : 0;
+
+  // ---- Workbook ----
+  var wb = XLSX.utils.book_new();
+
+  // ============ SHEET 1: SUMMARY ============
+  var summaryRows = [
+    ['Budget Export'],
+    ['Generated', new Date().toLocaleString('en-AU')],
+    ['Project', "Cookie's Civil — Sample Project"],
+    ['Tracking Method', isCC ? 'Cost Centres' : 'WBS'],
+    [],
+    ['Total Contract Sum', totalContract],
+    ['Estimated Budget Cost', totalBudget],
+    ['Total Profit', totalProfit],
+    ['Estimated Budget Margin', totalMargin],
+    [],
+    ['Notes'],
+    ['• Provisional Items are included in the totals and shown at the bottom of the BOQ tab.'],
+    ['• Cost Centres tab groups items by their assigned cost centre.'],
+    ['• Zones tab groups items by their assigned zone.'],
+  ];
+  var wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+  wsSummary['!cols'] = [{ wch: 28 }, { wch: 28 }];
+  // Number formats
+  ['B6','B7','B8'].forEach(function(c) { if (wsSummary[c]) wsSummary[c].z = fmt$; });
+  if (wsSummary['B9']) wsSummary['B9'].z = fmtPct;
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+  // ============ SHEET 2: BOQ LINE ITEMS ============
+  var boqHeaders = isCC
+    ? ['BOQ Number', 'Description', 'Unit', 'Qty', 'BOQ Rate ($)', 'Contract Sum ($)', 'Cost Centre', 'Zone', 'Budget Cost ($)', 'Profit ($)', 'Margin %', 'Provisional']
+    : ['BOQ Number', 'Description', 'Unit', 'Qty', 'BOQ Rate ($)', 'Contract Sum ($)', 'Budget Cost ($)', 'Profit ($)', 'Margin %', 'Provisional'];
+  var boqRows = [boqHeaders];
+  data.forEach(function(r, i) {
+    var contract = r.amount || 0;
+    var budget = budgetAmts[i] || 0;
+    var profit = contract - budget;
+    var marginPct = contract > 0 ? (profit / contract) : 0;
+    var prov = r.isProvisional ? 'Yes' : '';
+
+    if (r.level === 1) {
+      var row = [r.code, r.desc, '', '', '', contract];
+      if (isCC) row.push('', '');
+      row.push(budget, profit, marginPct, prov);
+      boqRows.push(row);
+    } else if (r.level === 2) {
+      var row2 = [r.code, '   ' + r.desc, '', '', '', contract];
+      if (isCC) row2.push('', '');
+      row2.push(budget, profit, marginPct, prov);
+      boqRows.push(row2);
+    } else {
+      // Level 3
+      var ccName = '', zoneName = '';
+      if (isCC) {
+        var ccSel = document.querySelector('[data-cc-select="' + i + '"]') || document.querySelector('[data-assign-cc="' + i + '"]');
+        ccName = (ccSel && ccSel.value && ccSel.value !== '__addcc') ? ccSel.value : '';
+        var zSel = document.querySelector('[data-zone-select="' + i + '"]') || document.querySelector('[data-assign-zone="' + i + '"]');
+        zoneName = (zSel && zSel.value && zSel.value !== '__add') ? zSel.value : 'Project Wide';
+      }
+      var row3 = [r.code, '      ' + r.desc, r.unit || '', r.qty || '', r.rate || '', contract];
+      if (isCC) row3.push(ccName, zoneName);
+      row3.push(budget, profit, marginPct, prov);
+      boqRows.push(row3);
+
+      // Append split rows (if any) so the export is complete
+      if (isCC) {
+        var splitContainer = document.getElementById('budgetSplitRows' + i);
+        if (splitContainer) {
+          var splitRows = splitContainer.querySelectorAll('.split-row');
+          splitRows.forEach(function(sr, sIdx) {
+            var sCC = sr.querySelector('select.budget-select');
+            var sCCName = sCC && sCC.value && sCC.value !== '__addcc' ? sCC.value : '';
+            var sAmtInput = sr.querySelector('[data-budget-split-amount]');
+            var sAmt = sAmtInput ? (parseFloat(sAmtInput.value.replace(/,/g,'')) || 0) : 0;
+            // Try to find matching BOQ split amount by index
+            var splitId = sr.getAttribute('data-budget-split-id');
+            var sBoqInput = document.querySelector('[data-budget-boq-amount="bs' + splitId + '"]');
+            var sBoq = sBoqInput ? (parseFloat(sBoqInput.value.replace(/,/g,'')) || 0) : 0;
+            var sZoneRow = document.querySelector('[data-budget-zone-split-id="' + splitId + '"] select');
+            var sZone = sZoneRow ? sZoneRow.value : zoneName;
+            var sProfit = sBoq - sAmt;
+            var sMarginPct = sBoq > 0 ? (sProfit / sBoq) : 0;
+            boqRows.push(['', '         ↳ Split ' + (sIdx+1), '', '', '', sBoq, sCCName, sZone, sAmt, sProfit, sMarginPct, '']);
+          });
+        }
+      }
+    }
+  });
+  // TOTAL row
+  var totalRow = ['', 'TOTAL', '', '', '', totalContract];
+  if (isCC) totalRow.push('', '');
+  totalRow.push(totalBudget, totalProfit, totalMargin, '');
+  boqRows.push(totalRow);
+
+  var wsBOQ = XLSX.utils.aoa_to_sheet(boqRows);
+  wsBOQ['!cols'] = isCC
+    ? [{wch:11},{wch:48},{wch:8},{wch:9},{wch:13},{wch:16},{wch:18},{wch:14},{wch:16},{wch:14},{wch:11},{wch:11}]
+    : [{wch:11},{wch:48},{wch:8},{wch:9},{wch:13},{wch:16},{wch:16},{wch:14},{wch:11},{wch:11}];
+  // Apply number formats by column index
+  var rateIdx = 4, contractIdx = 5;
+  var ccCount = isCC ? 2 : 0;
+  var qtyIdx = 3;
+  var budgetIdx = 6 + ccCount;
+  var profitIdx = 7 + ccCount;
+  var marginIdx = 8 + ccCount;
+  for (var rr = 1; rr < boqRows.length; rr++) {
+    var ref;
+    ref = XLSX.utils.encode_cell({r:rr, c:qtyIdx}); if (wsBOQ[ref] && typeof wsBOQ[ref].v === 'number') wsBOQ[ref].z = fmtQty;
+    ref = XLSX.utils.encode_cell({r:rr, c:rateIdx}); if (wsBOQ[ref] && typeof wsBOQ[ref].v === 'number') wsBOQ[ref].z = fmt$;
+    ref = XLSX.utils.encode_cell({r:rr, c:contractIdx}); if (wsBOQ[ref] && typeof wsBOQ[ref].v === 'number') wsBOQ[ref].z = fmt$;
+    ref = XLSX.utils.encode_cell({r:rr, c:budgetIdx}); if (wsBOQ[ref] && typeof wsBOQ[ref].v === 'number') wsBOQ[ref].z = fmt$;
+    ref = XLSX.utils.encode_cell({r:rr, c:profitIdx}); if (wsBOQ[ref] && typeof wsBOQ[ref].v === 'number') wsBOQ[ref].z = fmt$;
+    ref = XLSX.utils.encode_cell({r:rr, c:marginIdx}); if (wsBOQ[ref] && typeof wsBOQ[ref].v === 'number') wsBOQ[ref].z = fmtPct;
+  }
+  XLSX.utils.book_append_sheet(wb, wsBOQ, 'BOQ Line Items');
+
+  // ============ SHEET 3 (CC path only): COST CENTRES ============
+  if (isCC) {
+    var ccMap = {};
+    data.forEach(function(r, i) {
+      if (r.level === 1 || r.level === 2) return;
+      var ccSel = document.querySelector('[data-cc-select="' + i + '"]') || document.querySelector('[data-assign-cc="' + i + '"]');
+      var ccName = ccSel && ccSel.value && ccSel.value !== '__addcc' ? ccSel.value : 'Unassigned';
+      if (!ccMap[ccName]) ccMap[ccName] = { contract: 0, budget: 0, items: [] };
+      var contract = r.amount || 0;
+      var budget = budgetAmts[i] || 0;
+      ccMap[ccName].contract += contract;
+      ccMap[ccName].budget += budget;
+      ccMap[ccName].items.push({ code: r.code, desc: r.desc, contract: contract, budget: budget, isProvisional: r.isProvisional });
+      // Splits
+      var splitContainer = document.getElementById('budgetSplitRows' + i);
+      if (splitContainer) {
+        var splitRows = splitContainer.querySelectorAll('.split-row');
+        splitRows.forEach(function(sr) {
+          var sCC = sr.querySelector('select.budget-select');
+          var sCCName = sCC && sCC.value && sCC.value !== '__addcc' ? sCC.value : null;
+          if (!sCCName || sCCName === ccName) return;
+          var sAmtInput = sr.querySelector('[data-budget-split-amount]');
+          var sAmt = sAmtInput ? (parseFloat(sAmtInput.value.replace(/,/g,'')) || 0) : 0;
+          if (sAmt <= 0) return;
+          var splitId = sr.getAttribute('data-budget-split-id');
+          var sBoqInput = document.querySelector('[data-budget-boq-amount="bs' + splitId + '"]');
+          var sBoq = sBoqInput ? (parseFloat(sBoqInput.value.replace(/,/g,'')) || 0) : 0;
+          if (!ccMap[sCCName]) ccMap[sCCName] = { contract: 0, budget: 0, items: [] };
+          ccMap[sCCName].contract += sBoq;
+          ccMap[sCCName].budget += sAmt;
+          ccMap[sCCName].items.push({ code: r.code, desc: r.desc + ' (split)', contract: sBoq, budget: sAmt, isProvisional: r.isProvisional });
+        });
+      }
+    });
+    // Unmapped CCs
+    if (typeof getUnmappedCCData === 'function') {
+      try {
+        getUnmappedCCData().forEach(function(u) {
+          if (!u.amount) return;
+          var ccName = u.cc || 'Other';
+          if (!ccMap[ccName]) ccMap[ccName] = { contract: 0, budget: 0, items: [] };
+          ccMap[ccName].budget += u.amount;
+          ccMap[ccName].items.push({ code: '', desc: (u.desc || '') + ' (additional)', contract: 0, budget: u.amount, isProvisional: false });
+        });
+      } catch(e) {}
+    }
+
+    var ccRows = [['Cost Centre', 'Description', 'Contract Value ($)', 'Budget Value ($)', 'Profit ($)', 'Margin %']];
+    var ccGrandC = 0, ccGrandB = 0;
+    Object.keys(ccMap).forEach(function(name) {
+      var cc = ccMap[name];
+      var p = cc.contract - cc.budget;
+      var m = cc.contract > 0 ? (p / cc.contract) : 0;
+      ccGrandC += cc.contract; ccGrandB += cc.budget;
+      ccRows.push([name, '', cc.contract, cc.budget, p, m]);
+      cc.items.forEach(function(it) {
+        var ip = it.contract - it.budget;
+        var im = it.contract > 0 ? (ip / it.contract) : 0;
+        ccRows.push(['', '   ' + (it.code ? it.code + ' — ' : '') + it.desc, it.contract, it.budget, ip, im]);
+      });
+    });
+    var ccProfit = ccGrandC - ccGrandB;
+    var ccMargin = ccGrandC > 0 ? (ccProfit / ccGrandC) : 0;
+    ccRows.push(['Total', '', ccGrandC, ccGrandB, ccProfit, ccMargin]);
+
+    var wsCC = XLSX.utils.aoa_to_sheet(ccRows);
+    wsCC['!cols'] = [{wch:24},{wch:48},{wch:20},{wch:20},{wch:18},{wch:11}];
+    for (var rc = 1; rc < ccRows.length; rc++) {
+      [2,3,4].forEach(function(ci) { var ref = XLSX.utils.encode_cell({r:rc,c:ci}); if (wsCC[ref] && typeof wsCC[ref].v === 'number') wsCC[ref].z = fmt$; });
+      var rmRef = XLSX.utils.encode_cell({r:rc,c:5}); if (wsCC[rmRef] && typeof wsCC[rmRef].v === 'number') wsCC[rmRef].z = fmtPct;
+    }
+    XLSX.utils.book_append_sheet(wb, wsCC, 'Cost Centres');
+  }
+
+  // ============ SHEET 4 (CC path only): ZONES ============
+  if (isCC) {
+    var zoneMap = {};
+    data.forEach(function(r, i) {
+      if (r.isHeader) return;
+      var zSel = document.querySelector('[data-zone-select="' + i + '"]') || document.querySelector('[data-assign-zone="' + i + '"]');
+      var zName = (zSel && zSel.value && zSel.value !== '__add') ? zSel.value : 'Project Wide';
+      if (!zoneMap[zName]) zoneMap[zName] = { contract: 0, budget: 0, items: [] };
+      var contract = r.amount || 0;
+      var budget = budgetAmts[i] || 0;
+      zoneMap[zName].contract += contract;
+      zoneMap[zName].budget += budget;
+      zoneMap[zName].items.push({ code: r.code, desc: r.desc, contract: contract, budget: budget, isProvisional: r.isProvisional });
+    });
+
+    var zoneRows = [['Zone', 'Description', 'Contract Value ($)', 'Budget Value ($)', 'Profit ($)', 'Margin %']];
+    var zGrandC = 0, zGrandB = 0;
+    Object.keys(zoneMap).forEach(function(name) {
+      var z = zoneMap[name];
+      var p = z.contract - z.budget;
+      var m = z.contract > 0 ? (p / z.contract) : 0;
+      zGrandC += z.contract; zGrandB += z.budget;
+      zoneRows.push([name, '', z.contract, z.budget, p, m]);
+      z.items.forEach(function(it) {
+        var ip = it.contract - it.budget;
+        var im = it.contract > 0 ? (ip / it.contract) : 0;
+        zoneRows.push(['', '   ' + (it.code ? it.code + ' — ' : '') + it.desc, it.contract, it.budget, ip, im]);
+      });
+    });
+    var zProfit = zGrandC - zGrandB;
+    var zMargin = zGrandC > 0 ? (zProfit / zGrandC) : 0;
+    zoneRows.push(['Total', '', zGrandC, zGrandB, zProfit, zMargin]);
+
+    var wsZone = XLSX.utils.aoa_to_sheet(zoneRows);
+    wsZone['!cols'] = [{wch:18},{wch:48},{wch:20},{wch:20},{wch:18},{wch:11}];
+    for (var rz = 1; rz < zoneRows.length; rz++) {
+      [2,3,4].forEach(function(ci) { var ref = XLSX.utils.encode_cell({r:rz,c:ci}); if (wsZone[ref] && typeof wsZone[ref].v === 'number') wsZone[ref].z = fmt$; });
+      var zmRef = XLSX.utils.encode_cell({r:rz,c:5}); if (wsZone[zmRef] && typeof wsZone[zmRef].v === 'number') wsZone[zmRef].z = fmtPct;
+    }
+    XLSX.utils.book_append_sheet(wb, wsZone, 'Zones');
+  }
+
+  // ---- Download ----
+  var ts = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, 'Budget_Export_' + ts + '.xlsx');
+  showToast('Budget exported');
 }
 
 function showToast(msg) {
