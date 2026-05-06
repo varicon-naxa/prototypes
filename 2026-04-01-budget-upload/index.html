@@ -2298,7 +2298,10 @@ function renderWBSRows() {
         ? `<input class="editable-input med" value="${r.rate||''}" oninput="updateManualCalc('wbs',${i},this)" data-field="rate">`
         : rateStr
       }</td>
-      <td style="text-align:right;font-weight:600;color:#3b82f6" data-boq-total-wbs="${i}">${amtStr}</td>
+      <td style="text-align:right;vertical-align:top">${budgetMethod.wbs === 'resource'
+        ? `<input class="budget-input" placeholder="0.00" value="${boqAmt||''}" data-boq-total-wbs="${i}" data-boq-base="${boqAmt}" readonly title="Auto-calculated from resource BOQ amounts" style="background:#eff6ff;color:#3b82f6;font-weight:600;cursor:not-allowed;text-align:right;width:110px">`
+        : `<span style="font-weight:600;color:#3b82f6" data-boq-total-wbs="${i}">${amtStr}</span>`
+      }</td>
       <td>
         ${budgetMethod.wbs === 'margin' ? `
           <div style="display:flex;align-items:center;gap:6px">
@@ -2306,17 +2309,23 @@ function renderWBSRows() {
           </div>
         ` : budgetMethod.wbs === 'resource' ? `
           <div class="resource-rows" id="resourcesWBS${i}" style="display:block">
+            <div style="display:flex;gap:6px;font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;margin-bottom:4px;padding-left:148px">
+              <span style="width:90px;text-align:right">BOQ ($)</span>
+              <span style="width:90px;text-align:right">Budget ($)</span>
+            </div>
             <div class="resource-row">
               <select class="res-name"><option>Labour</option><option>Plant and Equipment</option><option>Material</option><option>Subcontract</option><option>Miscellaneous</option></select>
-              <input class="budget-input" placeholder="0.00" style="width:100px" oninput="calcResourceTotal('wbs',${i})">
+              <input class="budget-input res-boq" placeholder="0.00" style="width:90px" oninput="calcResourceTotal('wbs',${i})" value="${boqAmt||''}">
+              <input class="budget-input res-budget" placeholder="0.00" style="width:90px" oninput="calcResourceTotal('wbs',${i})">
             </div>
             <button class="add-resource-btn" onclick="addResourceWBS(${i}, this)"><i class="fas fa-plus"></i> Add Resource</button>
           </div>
         ` : `<span style="font-size:12px;color:#94a3b8">Lump Sum</span>`}
       </td>
-      <td style="text-align:right">
-        <input class="budget-input" placeholder="0.00" value="" oninput="calcWBS()" data-wbs-amount="${i}">
-      </td>
+      <td style="text-align:right">${budgetMethod.wbs === 'resource'
+        ? `<input class="budget-input" placeholder="0.00" value="" data-wbs-amount="${i}" readonly title="Auto-calculated from resource totals" style="background:#f1f5f9;color:#1b2a4a;font-weight:600;cursor:not-allowed">`
+        : `<input class="budget-input" placeholder="0.00" value="" oninput="calcWBS()" data-wbs-amount="${i}">`
+      }</td>
     </tr>`;
   }).join('');
   calcWBS();
@@ -2981,14 +2990,32 @@ function calcResourceTotal(path, idx) {
   var prefix = path === 'wbs' ? 'wbs' : 'cc';
   var amtInput = document.querySelector('[data-' + prefix + '-amount="' + idx + '"]');
   if (!amtInput) return;
-  // Find the closest tr then all budget-inputs inside resource-rows
+  // Find the closest tr to scope the resource lookups
   var row = amtInput.closest('tr');
   if (!row) return;
-  var total = 0;
-  row.querySelectorAll('.resource-rows .budget-input').forEach(function(inp) {
-    total += parseFloat(inp.value.replace(/,/g,'')) || 0;
+  // Sum the budget side (.res-budget) and the BOQ side (.res-boq) separately
+  var budgetTotal = 0;
+  var boqTotal = 0;
+  row.querySelectorAll('.resource-rows .res-budget').forEach(function(inp) {
+    budgetTotal += parseFloat((inp.value || '').toString().replace(/,/g,'')) || 0;
   });
-  amtInput.value = total > 0 ? total.toLocaleString() : '';
+  row.querySelectorAll('.resource-rows .res-boq').forEach(function(inp) {
+    boqTotal += parseFloat((inp.value || '').toString().replace(/,/g,'')) || 0;
+  });
+  // Backward compat: if no res-boq/res-budget classes (older render), fall back to all budget-inputs
+  if (row.querySelectorAll('.resource-rows .res-budget').length === 0) {
+    var fallback = 0;
+    row.querySelectorAll('.resource-rows .budget-input').forEach(function(inp) {
+      fallback += parseFloat((inp.value || '').toString().replace(/,/g,'')) || 0;
+    });
+    budgetTotal = fallback;
+  }
+  amtInput.value = budgetTotal > 0 ? budgetTotal.toLocaleString('en-US',{minimumFractionDigits:2}) : '';
+  // Update BOQ total cell as well (resource mode only)
+  var boqInput = row.querySelector('[data-boq-total-' + prefix + '="' + idx + '"]');
+  if (boqInput && boqInput.tagName === 'INPUT' && boqInput.readOnly) {
+    boqInput.value = boqTotal > 0 ? boqTotal.toLocaleString('en-US',{minimumFractionDigits:2}) : '';
+  }
   if (path === 'wbs') calcWBS(); else calcCC();
 }
 
@@ -3014,7 +3041,10 @@ function addResourceWBS(idx, fromBtn) {
   var btn = container.querySelector('.add-resource-btn');
   var row = document.createElement('div');
   row.className = 'resource-row';
-  row.innerHTML = '<select class="res-name"><option>Labour</option><option>Plant and Equipment</option><option>Material</option><option>Subcontract</option><option>Miscellaneous</option></select><input class="budget-input" placeholder="0.00" style="width:100px" oninput="calcResourceTotal(\'wbs\',' + idx + ')"><span style="color:#ef4444;cursor:pointer;font-size:13px;margin-left:6px" onclick="this.parentElement.remove();calcResourceTotal(\'wbs\',' + idx + ')"><i class="fas fa-times"></i></span>';
+  row.innerHTML = '<select class="res-name"><option>Labour</option><option>Plant and Equipment</option><option>Material</option><option>Subcontract</option><option>Miscellaneous</option></select>' +
+    '<input class="budget-input res-boq" placeholder="0.00" style="width:90px" oninput="calcResourceTotal(\'wbs\',' + idx + ')">' +
+    '<input class="budget-input res-budget" placeholder="0.00" style="width:90px" oninput="calcResourceTotal(\'wbs\',' + idx + ')">' +
+    '<span style="color:#ef4444;cursor:pointer;font-size:13px;margin-left:6px" onclick="this.parentElement.remove();calcResourceTotal(\'wbs\',' + idx + ')"><i class="fas fa-times"></i></span>';
   if (btn) container.insertBefore(row, btn); else container.appendChild(row);
 }
 
@@ -3142,8 +3172,10 @@ function renderCCRows() {
         ? `<input class="editable-input med" value="${r.rate||''}" oninput="updateManualCalc('cc',${i},this)" data-field="rate">`
         : rateStr
       }</td>
-      <td style="text-align:right;vertical-align:top" data-boq-total-cell-cc="${i}">
-        <span style="font-weight:600;color:#3b82f6;white-space:nowrap" data-boq-total-cc="${i}" data-boq-base="${boqAmt}">${amtStr}</span>
+      <td style="text-align:right;vertical-align:top" data-boq-total-cell-cc="${i}">${budgetMethod.cc === 'resource'
+        ? `<input class="budget-input" placeholder="0.00" value="${boqAmt||''}" data-boq-total-cc="${i}" data-boq-base="${boqAmt}" readonly title="Auto-calculated from resource BOQ amounts" style="background:#eff6ff;color:#3b82f6;font-weight:600;cursor:not-allowed;text-align:right;width:110px">`
+        : `<span style="font-weight:600;color:#3b82f6;white-space:nowrap" data-boq-total-cc="${i}" data-boq-base="${boqAmt}">${amtStr}</span>`
+      }
         <div id="boqSplitRows${i}"></div>
       </td>
       <td style="vertical-align:top">
@@ -3162,15 +3194,23 @@ function renderCCRows() {
           </div>
         ` : budgetMethod.cc === 'resource' ? `
           <div class="resource-rows" id="resourcesCC${i}" style="display:block">
+            <div style="display:flex;gap:6px;font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;margin-bottom:4px;padding-left:148px">
+              <span style="width:90px;text-align:right">BOQ ($)</span>
+              <span style="width:90px;text-align:right">Budget ($)</span>
+            </div>
             <div class="resource-row">
               <select class="res-name"><option>Labour</option><option>Plant and Equipment</option><option>Material</option><option>Subcontract</option><option>Miscellaneous</option></select>
-              <input class="budget-input" placeholder="0.00" style="width:100px" oninput="calcResourceTotal('cc',${i})">
+              <input class="budget-input res-boq" placeholder="0.00" style="width:90px" oninput="calcResourceTotal('cc',${i})" value="${boqAmt||''}">
+              <input class="budget-input res-budget" placeholder="0.00" style="width:90px" oninput="calcResourceTotal('cc',${i})">
             </div>
             <button class="add-resource-btn" onclick="addResourceCC(${i}, this)"><i class="fas fa-plus"></i> Add Resource</button>
           </div>
         ` : `<span style="font-size:12px;color:#94a3b8">Lump Sum</span>`}
       </td>
-      <td style="text-align:right"><input class="budget-input" placeholder="0.00" value="" oninput="calcCC()" data-cc-amount="${i}"></td>
+      <td style="text-align:right">${budgetMethod.cc === 'resource'
+        ? `<input class="budget-input" placeholder="0.00" value="" data-cc-amount="${i}" readonly title="Auto-calculated from resource budget amounts" style="background:#f1f5f9;color:#1b2a4a;font-weight:600;cursor:not-allowed;text-align:right;width:110px">`
+        : `<input class="budget-input" placeholder="0.00" value="" oninput="calcCC()" data-cc-amount="${i}">`
+      }</td>
     </tr>`;
   }).join('');
 
@@ -3192,7 +3232,10 @@ function addResourceCC(idx, fromBtn) {
   var btn = container.querySelector('.add-resource-btn');
   var row = document.createElement('div');
   row.className = 'resource-row';
-  row.innerHTML = '<select class="res-name"><option>Labour</option><option>Plant and Equipment</option><option>Material</option><option>Subcontract</option><option>Miscellaneous</option></select><input class="budget-input" placeholder="0.00" style="width:100px" oninput="calcResourceTotal(\'cc\',' + idx + ')"><span style="color:#ef4444;cursor:pointer;font-size:13px;margin-left:6px" onclick="this.parentElement.remove();calcResourceTotal(\'cc\',' + idx + ')"><i class="fas fa-times"></i></span>';
+  row.innerHTML = '<select class="res-name"><option>Labour</option><option>Plant and Equipment</option><option>Material</option><option>Subcontract</option><option>Miscellaneous</option></select>' +
+    '<input class="budget-input res-boq" placeholder="0.00" style="width:90px" oninput="calcResourceTotal(\'cc\',' + idx + ')">' +
+    '<input class="budget-input res-budget" placeholder="0.00" style="width:90px" oninput="calcResourceTotal(\'cc\',' + idx + ')">' +
+    '<span style="color:#ef4444;cursor:pointer;font-size:13px;margin-left:6px" onclick="this.parentElement.remove();calcResourceTotal(\'cc\',' + idx + ')"><i class="fas fa-times"></i></span>';
   if (btn) container.insertBefore(row, btn); else container.appendChild(row);
 }
 
