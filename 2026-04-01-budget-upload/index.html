@@ -2005,25 +2005,46 @@ function renderStepper() {
    ═══════════════════════════════════════════ */
 function _scrollAllToTop() {
   try {
-    window.scrollTo(0, 0);
+    // Blur any focused element FIRST to prevent browser from re-scrolling to it
+    if (document.activeElement && document.activeElement.blur && document.activeElement !== document.body) {
+      document.activeElement.blur();
+    }
+    // Reset every possible scroll container
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     if (document.documentElement) document.documentElement.scrollTop = 0;
     if (document.body) document.body.scrollTop = 0;
     var main = document.querySelector('.main');
     if (main) main.scrollTop = 0;
-    // Also clear any focus that might cause the browser to scroll a field into view
-    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    // ScrollIntoView on the topbar — most reliable across scroll-container setups
+    var topbar = document.querySelector('.topbar') || document.querySelector('.main > *');
+    if (topbar && topbar.scrollIntoView) {
+      topbar.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'auto' });
+    }
   } catch (e) {}
 }
 
 function showPage(id) {
+  // Disable browser scroll anchoring so it doesn't try to keep the same DOM
+  // node visible across the page swap (this is what causes "land on provisional"
+  // when going from a long previous page to the create budget page).
+  document.documentElement.style.overflowAnchor = 'none';
+  if (document.body) document.body.style.overflowAnchor = 'none';
+  // Force scroll to (0,0) BEFORE swapping pages so the new page renders from the top
+  _scrollAllToTop();
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  // Scroll to top whenever a new page is shown — synchronously and after layout
+  // Scroll again AFTER the page is shown to overcome any late layout shifts
   _scrollAllToTop();
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_scrollAllToTop);
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function() {
+      _scrollAllToTop();
+      requestAnimationFrame(_scrollAllToTop);
+    });
+  }
   setTimeout(_scrollAllToTop, 0);
   setTimeout(_scrollAllToTop, 50);
-  setTimeout(_scrollAllToTop, 200);
+  setTimeout(_scrollAllToTop, 150);
+  setTimeout(_scrollAllToTop, 400);
 }
 
 function goToStep(step) {
