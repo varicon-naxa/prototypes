@@ -126,6 +126,13 @@ tr.level-1 td{background:#1b2a4a;color:#fff!important;font-weight:700;font-size:
 tr.level-2 td{background:#f0f2f5;font-weight:600;font-size:13px;padding:8px 14px}
 tr.level-total td{background:#e8ecf0;border-top:2px solid #1b2a4a}
 .amount{font-weight:600;text-align:right}
+/* Provisional Items — distinct amber palette so they stand out from fixed budget */
+tr.provisional.level-1 td{background:#a16207!important;color:#fff!important;border-top:2px solid #f5a623}
+tr.provisional.level-2 td{background:#fef3c7!important;color:#92400e!important}
+tr.provisional td{border-left:0}
+.provisional-row td{background:#fffbeb!important}
+.provisional-row td:first-child{box-shadow:inset 3px 0 0 #f5a623}
+.provisional-badge{display:inline-block;background:#f5a623;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:8px;letter-spacing:.3px;text-transform:uppercase;vertical-align:middle}
 
 /* ── Cost Centre Checklist ── */
 .cc-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px}
@@ -1037,7 +1044,7 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
       <div class="actions-bar">
         <button class="btn btn-secondary" id="reviewBackBtn" onclick="goToStep(currentStep-1)"><i class="fas fa-arrow-left"></i> Back to Edit</button>
         <div style="display:flex;gap:10px">
-          <button class="btn btn-outline" onclick="showToast('Exported to CSV')"><i class="fas fa-file-export"></i> Export</button>
+          <button class="btn btn-outline" onclick="exportBudget()"><i class="fas fa-file-export"></i> Export</button>
           <button class="btn btn-primary" onclick="submitBudget()"><i class="fas fa-check"></i> Confirm & Submit</button>
         </div>
       </div>
@@ -1071,7 +1078,7 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
           <span id="bvZoneTab" style="display:none" onclick="switchBVView('zone')"><i class="fas fa-map-marker-alt" style="margin-right:4px"></i> Zones</span>
         </div>
         <div style="display:flex;gap:10px">
-          <button class="btn btn-outline" onclick="showToast('Exported to CSV')"><i class="fas fa-file-export"></i> Export</button>
+          <button class="btn btn-outline" onclick="exportBudget()"><i class="fas fa-file-export"></i> Export</button>
           <button class="btn btn-primary" style="background:#1b2a4a" onclick="showVariationModal()"><i class="fas fa-plus"></i> Add Variation</button>
         </div>
       </div>
@@ -1842,7 +1849,7 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
 
 <div class="toast" id="toast"><i class="fas fa-check-circle" style="color:#22c55e"></i><span id="toastText"></span></div>
 
-<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script>
 /* ═══════════════════════════════════════════
    STATE
@@ -1906,7 +1913,15 @@ const boqData = [
       { code: '5.1.1', desc: 'Asphalt — Base Course', level: 3, unit: 'm²', qty: 8000, rate: 18.00, amount: 144000 },
       { code: '5.1.2', desc: 'Asphalt — Wearing Course', level: 3, unit: 'm²', qty: 8000, rate: 22.00, amount: 176000 },
 
-  // TOTAL = 278,400 + 695,400 + 247,000 + 129,300 + 320,000 = 1,670,100
+  // P. Provisional Items = 8,500 + 12,000 + 15,000 = 35,500
+  // Always rendered at the bottom of the table, distinguished by isProvisional flag.
+  { code: 'P', desc: 'Provisional Items', level: 1, isHeader: true, isProvisional: true, amount: 35500 },
+    { code: 'P.1', desc: 'Provisional Sums', level: 2, isHeader: true, isProvisional: true, amount: 35500 },
+      { code: 'P.1.1', desc: 'Survey & Set-Out (provisional)', level: 3, unit: 'item', qty: 1, rate: 8500.00, amount: 8500, isProvisional: true },
+      { code: 'P.1.2', desc: 'Site Investigation Allowance', level: 3, unit: 'item', qty: 1, rate: 12000.00, amount: 12000, isProvisional: true },
+      { code: 'P.1.3', desc: 'Traffic Management Contingency', level: 3, unit: 'item', qty: 1, rate: 15000.00, amount: 15000, isProvisional: true },
+
+  // TOTAL = 278,400 + 695,400 + 247,000 + 129,300 + 320,000 + 35,500 = 1,705,600
 ];
 
 const defaultCostCenters = [
@@ -1988,9 +2003,48 @@ function renderStepper() {
 /* ═══════════════════════════════════════════
    NAVIGATION
    ═══════════════════════════════════════════ */
+function _scrollAllToTop() {
+  try {
+    // Blur any focused element FIRST to prevent browser from re-scrolling to it
+    if (document.activeElement && document.activeElement.blur && document.activeElement !== document.body) {
+      document.activeElement.blur();
+    }
+    // Reset every possible scroll container
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+    var main = document.querySelector('.main');
+    if (main) main.scrollTop = 0;
+    // ScrollIntoView on the topbar — most reliable across scroll-container setups
+    var topbar = document.querySelector('.topbar') || document.querySelector('.main > *');
+    if (topbar && topbar.scrollIntoView) {
+      topbar.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'auto' });
+    }
+  } catch (e) {}
+}
+
 function showPage(id) {
+  // Disable browser scroll anchoring so it doesn't try to keep the same DOM
+  // node visible across the page swap (this is what causes "land on provisional"
+  // when going from a long previous page to the create budget page).
+  document.documentElement.style.overflowAnchor = 'none';
+  if (document.body) document.body.style.overflowAnchor = 'none';
+  // Force scroll to (0,0) BEFORE swapping pages so the new page renders from the top
+  _scrollAllToTop();
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  // Scroll again AFTER the page is shown to overcome any late layout shifts
+  _scrollAllToTop();
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function() {
+      _scrollAllToTop();
+      requestAnimationFrame(_scrollAllToTop);
+    });
+  }
+  setTimeout(_scrollAllToTop, 0);
+  setTimeout(_scrollAllToTop, 50);
+  setTimeout(_scrollAllToTop, 150);
+  setTimeout(_scrollAllToTop, 400);
 }
 
 function goToStep(step) {
@@ -2023,8 +2077,13 @@ function goToStep(step) {
       if (step === 4) { buildReviewPage(); showPage('pageReview'); }
     }
   }
-  window.scrollTo(0, 0);
-  document.querySelector('.main').scrollTo(0, 0);
+  // showPage already scrolls to top (sync + rAF + timeouts), but also do it here
+  // for explicit step transitions in case showPage was bypassed.
+  _scrollAllToTop();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_scrollAllToTop);
+  setTimeout(_scrollAllToTop, 0);
+  setTimeout(_scrollAllToTop, 100);
+  setTimeout(_scrollAllToTop, 300);
 }
 
 function goBack() {
@@ -2116,20 +2175,23 @@ function handleBOQUpload(path) {
 
   const lineItems = boqData.filter(r => !r.isHeader);
   document.getElementById(tableId).innerHTML = boqData.map((r, i) => {
+    const provClass = r.isProvisional ? ' provisional' : '';
+    const provBadge = r.isProvisional && r.level === 1 ? '<span class="provisional-badge">Provisional</span>' : '';
+    const provRowClass = r.isProvisional && r.level === 3 ? ' class="provisional-row"' : '';
     if (r.level === 1) {
-      return `<tr class="section-header level-1">
-        <td colspan="5" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}</td>
+      return `<tr class="section-header level-1${provClass}">
+        <td colspan="5" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}${provBadge}</td>
         <td class="amount" style="color:#fff;font-weight:700">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
       </tr>`;
     }
     if (r.level === 2) {
-      return `<tr class="section-header level-2">
+      return `<tr class="section-header level-2${provClass}">
         <td style="padding-left:16px;font-weight:600;color:#1b2a4a">${r.code}</td>
         <td colspan="4" style="font-weight:600;color:#1b2a4a">${r.desc}</td>
         <td class="amount" style="font-weight:600;color:#1b2a4a">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
       </tr>`;
     }
-    return `<tr><td style="padding-left:20px;font-weight:500;color:#64748b;white-space:nowrap">${r.code}</td><td>${r.desc}</td><td>${r.unit}</td><td>${r.qty.toLocaleString()}</td><td class="amount">${r.rate.toLocaleString('en-US',{minimumFractionDigits:2})}</td><td class="amount">$${r.amount.toLocaleString('en-US',{minimumFractionDigits:2})}</td></tr>`;
+    return `<tr${provRowClass}><td style="padding-left:20px;font-weight:500;color:#64748b;white-space:nowrap">${r.code}</td><td>${r.desc}</td><td>${r.unit}</td><td>${r.qty.toLocaleString()}</td><td class="amount">${r.rate.toLocaleString('en-US',{minimumFractionDigits:2})}</td><td class="amount">$${r.amount.toLocaleString('en-US',{minimumFractionDigits:2})}</td></tr>`;
   }).join('') + `<tr class="section-header level-total"><td colspan="5" style="font-weight:700;color:#1b2a4a;text-align:right;padding-right:14px">TOTAL</td><td class="amount" style="font-weight:700;color:#1b2a4a;font-size:14px">$${boqData.filter(r=>r.level===1).reduce((s,r)=>s+(r.amount||0),0).toLocaleString('en-US',{minimumFractionDigits:2})}</td></tr>`;
 
   boqUploaded[path] = true;
@@ -2227,16 +2289,18 @@ function renderWBSRows() {
   const tbody = document.getElementById('budgetTableWBS');
 
   tbody.innerHTML = data.map((r, i) => {
+    const provClass = r.isProvisional ? ' provisional' : '';
+    const provBadge = r.isProvisional && r.level === 1 ? '<span class="provisional-badge">Provisional</span>' : '';
     if (r.level === 1) {
-      return `<tr class="section-header level-1">
-        <td colspan="4" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}</td>
+      return `<tr class="section-header level-1${provClass}">
+        <td colspan="4" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}${provBadge}</td>
         <td class="amount">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
         <td></td>
         <td class="amount" data-wbs-budget-rollup="${i}">$0</td>
       </tr>`;
     }
     if (r.level === 2) {
-      return `<tr class="section-header level-2">
+      return `<tr class="section-header level-2${provClass}">
         <td style="padding-left:16px;font-weight:600;color:#1b2a4a">${r.code}</td>
         <td colspan="3" style="font-weight:600;color:#1b2a4a">${r.desc}</td>
         <td style="text-align:right;font-weight:600;color:#3b82f6">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
@@ -2247,8 +2311,9 @@ function renderWBSRows() {
     const boqAmt = r.amount || 0;
     const rateStr = (r.rate || 0).toLocaleString('en-US',{minimumFractionDigits:2});
     const amtStr = boqAmt.toLocaleString();
+    const provRowClass = r.isProvisional ? ' class="provisional-row"' : '';
 
-    return `<tr>
+    return `<tr${provRowClass}>
       <td style="padding-left:20px;font-weight:500;color:#64748b;white-space:nowrap">${r.code || ''}</td>
       <td>${isManual
         ? `<input class="editable-input" placeholder="Description" value="${r.desc||''}" onchange="manualBOQ.wbs[${i}].desc=this.value">
@@ -2265,25 +2330,34 @@ function renderWBSRows() {
         ? `<input class="editable-input med" value="${r.rate||''}" oninput="updateManualCalc('wbs',${i},this)" data-field="rate">`
         : rateStr
       }</td>
-      <td style="text-align:right;font-weight:600;color:#3b82f6" data-boq-total-wbs="${i}">${amtStr}</td>
+      <td style="text-align:right;vertical-align:top">${budgetMethod.wbs === 'resource'
+        ? `<input class="budget-input" placeholder="0.00" value="${boqAmt||''}" data-boq-total-wbs="${i}" data-boq-base="${boqAmt}" readonly title="Auto-calculated from resource BOQ amounts" style="background:#eff6ff;color:#3b82f6;font-weight:600;cursor:not-allowed;text-align:right;width:110px">`
+        : `<span style="font-weight:600;color:#3b82f6" data-boq-total-wbs="${i}">${amtStr}</span>`
+      }</td>
       <td>
         ${budgetMethod.wbs === 'margin' ? `
           <div style="display:flex;align-items:center;gap:6px">
             <input class="margin-input" placeholder="0" oninput="applyMargin('wbs',${i},this.value)" data-margin-wbs="${i}"> <span style="font-size:12px;color:#64748b">%</span>
           </div>
         ` : budgetMethod.wbs === 'resource' ? `
-          <div class="resource-rows" style="display:block">
+          <div class="resource-rows" id="resourcesWBS${i}" style="display:block">
+            <div style="display:flex;gap:6px;font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;margin-bottom:4px;padding-left:148px">
+              <span style="width:90px;text-align:right">BOQ ($)</span>
+              <span style="width:90px;text-align:right">Budget ($)</span>
+            </div>
             <div class="resource-row">
               <select class="res-name"><option>Labour</option><option>Plant and Equipment</option><option>Material</option><option>Subcontract</option><option>Miscellaneous</option></select>
-              <input class="budget-input" placeholder="0.00" style="width:100px" oninput="calcResourceTotal('wbs',${i})">
+              <input class="budget-input res-boq" placeholder="0.00" style="width:90px" oninput="calcResourceTotal('wbs',${i})" value="${boqAmt||''}">
+              <input class="budget-input res-budget" placeholder="0.00" style="width:90px" oninput="calcResourceTotal('wbs',${i})">
             </div>
-            <button class="add-resource-btn" onclick="addResourceWBS(${i})"><i class="fas fa-plus"></i> Add Resource</button>
+            <button class="add-resource-btn" onclick="addResourceWBS(${i}, this)"><i class="fas fa-plus"></i> Add Resource</button>
           </div>
         ` : `<span style="font-size:12px;color:#94a3b8">Lump Sum</span>`}
       </td>
-      <td style="text-align:right">
-        <input class="budget-input" placeholder="0.00" value="" oninput="calcWBS()" data-wbs-amount="${i}">
-      </td>
+      <td style="text-align:right">${budgetMethod.wbs === 'resource'
+        ? `<input class="budget-input" placeholder="0.00" value="" data-wbs-amount="${i}" readonly title="Auto-calculated from resource totals" style="background:#f1f5f9;color:#1b2a4a;font-weight:600;cursor:not-allowed">`
+        : `<input class="budget-input" placeholder="0.00" value="" oninput="calcWBS()" data-wbs-amount="${i}">`
+      }</td>
     </tr>`;
   }).join('');
   calcWBS();
@@ -2595,6 +2669,7 @@ var budgetSplitCounter = 0;
 function addBudgetSplit(idx) {
   var container = document.getElementById('budgetSplitRows' + idx);
   var zoneContainer = document.getElementById('budgetSplitZones' + idx);
+  var boqContainer = document.getElementById('boqSplitRows' + idx);
   if (!container) return;
 
   var primarySelect = document.querySelector('[data-cc-select="' + idx + '"]');
@@ -2620,12 +2695,17 @@ function addBudgetSplit(idx) {
     var pSid = budgetSplitCounter++;
     container.appendChild(makeBudgetSplitRow(pSid, idx, opts, ccVal, amtVal));
     if (zoneContainer) zoneContainer.appendChild(makeBudgetZoneRow(pSid, zoneVal));
+    if (boqContainer) boqContainer.appendChild(makeBudgetBOQRow(pSid, idx, 0));
   }
 
   // Add new empty split row
   var newSid = budgetSplitCounter++;
   container.appendChild(makeBudgetSplitRow(newSid, idx, opts, '', ''));
   if (zoneContainer) zoneContainer.appendChild(makeBudgetZoneRow(newSid, 'Project Wide'));
+  if (boqContainer) boqContainer.appendChild(makeBudgetBOQRow(newSid, idx, 0));
+
+  // Auto-rebalance BOQ splits evenly across all rows
+  rebalanceBOQSplits(idx);
 
   // Add "+ Add Cost Centre" button if not present
   if (!container.parentElement.querySelector('.budget-add-cc-btn')) {
@@ -2643,11 +2723,14 @@ function addBudgetSplit(idx) {
 function addBudgetSplitExtra(idx) {
   var container = document.getElementById('budgetSplitRows' + idx);
   var zoneContainer = document.getElementById('budgetSplitZones' + idx);
+  var boqContainer = document.getElementById('boqSplitRows' + idx);
   if (!container) return;
   var opts = selectedCC.map(function(c) { return '<option>' + c + '</option>'; }).join('') + '<option value="__addcc">+ Add Cost Centre</option>';
   var newSid = budgetSplitCounter++;
   container.appendChild(makeBudgetSplitRow(newSid, idx, opts, '', ''));
   if (zoneContainer) zoneContainer.appendChild(makeBudgetZoneRow(newSid, 'Project Wide'));
+  if (boqContainer) boqContainer.appendChild(makeBudgetBOQRow(newSid, idx, 0));
+  rebalanceBOQSplits(idx);
   calcCC();
 }
 
@@ -2706,20 +2789,94 @@ function makeBudgetZoneRow(splitId, zoneValue) {
   return row;
 }
 
+function makeBudgetBOQRow(splitId, idx, boqValue) {
+  var row = document.createElement('div');
+  row.className = 'boq-split-row';
+  row.setAttribute('data-budget-boq-split-id', splitId);
+  row.style.marginTop = '6px';
+  row.style.display = 'flex';
+  row.style.alignItems = 'center';
+  row.style.justifyContent = 'flex-end';
+  var formatted = (Number(boqValue) || 0).toLocaleString('en-US',{minimumFractionDigits:2});
+  row.innerHTML = '<input class="budget-input" style="width:100px;text-align:right;color:#3b82f6;font-weight:600" value="' + formatted + '" oninput="onBOQSplitInput(' + idx + ')" data-budget-boq-amount="bs' + splitId + '">';
+  return row;
+}
+
+// Rebalance the BOQ splits so they sum to the original BOQ total. Called when
+// a new split is added, an old one is removed, or the user wants to reset.
+function rebalanceBOQSplits(idx) {
+  var boqDisplay = document.querySelector('[data-boq-total-cc="' + idx + '"]');
+  if (!boqDisplay) return;
+  var base = parseFloat(boqDisplay.dataset.boqBase || '0') || 0;
+  var container = document.getElementById('boqSplitRows' + idx);
+  if (!container) return;
+  var inputs = container.querySelectorAll('[data-budget-boq-amount]');
+  if (!inputs.length) return;
+  var per = base / inputs.length;
+  // Round to 2dp; put rounding remainder into the last row
+  var rounded = Math.round(per * 100) / 100;
+  var sum = 0;
+  inputs.forEach(function(inp, i) {
+    var val = (i === inputs.length - 1) ? (Math.round((base - sum) * 100) / 100) : rounded;
+    inp.value = val.toLocaleString('en-US',{minimumFractionDigits:2});
+    sum += val;
+  });
+  updateBOQTotalDisplay(idx);
+}
+
+function onBOQSplitInput(idx) {
+  updateBOQTotalDisplay(idx);
+}
+
+// When BOQ is split, the headline value above the splits shows the running total
+// of the splits (so the user can see if it matches the original BOQ amount).
+function updateBOQTotalDisplay(idx) {
+  var boqDisplay = document.querySelector('[data-boq-total-cc="' + idx + '"]');
+  if (!boqDisplay) return;
+  var base = parseFloat(boqDisplay.dataset.boqBase || '0') || 0;
+  var container = document.getElementById('boqSplitRows' + idx);
+  if (!container) return;
+  var inputs = container.querySelectorAll('[data-budget-boq-amount]');
+  if (!inputs.length) {
+    // No splits — show the original BOQ amount
+    boqDisplay.textContent = base.toLocaleString('en-US',{minimumFractionDigits:2});
+    boqDisplay.style.color = '#3b82f6';
+    return;
+  }
+  var sum = 0;
+  inputs.forEach(function(inp) {
+    sum += parseFloat((inp.value || '0').toString().replace(/,/g, '')) || 0;
+  });
+  boqDisplay.textContent = sum.toLocaleString('en-US',{minimumFractionDigits:2});
+  // Highlight if sum doesn't match the original BOQ total
+  if (Math.abs(sum - base) < 0.01) {
+    boqDisplay.style.color = '#3b82f6';
+    boqDisplay.title = '';
+  } else {
+    boqDisplay.style.color = '#ef4444';
+    var diff = sum - base;
+    boqDisplay.title = (diff > 0 ? 'Over' : 'Under') + ' BOQ by $' + Math.abs(diff).toLocaleString('en-US',{minimumFractionDigits:2});
+  }
+}
+
 function removeBudgetSplitRow(el, parentIdx) {
   var splitRow = el.closest('.split-row');
   var splitId = splitRow ? splitRow.getAttribute('data-budget-split-id') : null;
   if (splitRow) splitRow.remove();
-  // Remove matching zone row
+  // Remove matching zone row and BOQ row
   if (splitId) {
     var zoneRow = document.querySelector('[data-budget-zone-split-id="' + splitId + '"]');
     if (zoneRow) zoneRow.remove();
+    var boqRow = document.querySelector('[data-budget-boq-split-id="' + splitId + '"]');
+    if (boqRow) boqRow.remove();
   }
   // If only one split row left, revert to primary
   var container = document.getElementById('budgetSplitRows' + parentIdx);
   var remaining = container ? container.querySelectorAll('.split-row') : [];
   if (remaining.length <= 1) {
     revertBudgetToPrimary(parentIdx);
+  } else {
+    rebalanceBOQSplits(parentIdx);
   }
   calcCC();
 }
@@ -2743,9 +2900,13 @@ function revertBudgetToPrimary(idx) {
   var amtInput = document.querySelector('[data-cc-amount="' + idx + '"]');
   if (amtInput) { amtInput.readOnly = false; amtInput.style.background = ''; amtInput.style.color = ''; }
 
-  // Clear containers
+  // Clear containers (CC splits, zone splits, BOQ splits)
   if (container) container.innerHTML = '';
   if (zoneContainer) zoneContainer.innerHTML = '';
+  var boqContainer = document.getElementById('boqSplitRows' + idx);
+  if (boqContainer) boqContainer.innerHTML = '';
+  // Restore the BOQ total display to the original amount
+  updateBOQTotalDisplay(idx);
 
   // Show split button, remove add cc button
   var td = container ? container.parentElement : null;
@@ -2781,7 +2942,7 @@ function setBudgetSplitType(splitId, parentIdx, type) {
   if (oldInput) oldInput.remove();
 
   var boqTotalCell = document.querySelector('[data-boq-total-cc="' + parentIdx + '"]');
-  var boqVal = boqTotalCell ? parseFloat(boqTotalCell.textContent.replace(/[$,]/g,'')) || 0 : 0;
+  var boqVal = boqTotalCell ? (parseFloat(boqTotalCell.dataset.boqBase) || parseFloat(boqTotalCell.textContent.replace(/[$,]/g,'')) || 0) : 0;
 
   if (type === 'lump') {
     area.innerHTML = '';
@@ -2819,7 +2980,7 @@ function calcBudgetSplitPct(key, parentIdx) {
   if (!pctInput) return;
   var pctField = pctInput.closest('div').querySelector('input:not([type="hidden"])');
   var boqTotalCell = document.querySelector('[data-boq-total-cc="' + parentIdx + '"]');
-  var boqVal = boqTotalCell ? parseFloat(boqTotalCell.textContent.replace(/[$,]/g,'')) || 0 : 0;
+  var boqVal = boqTotalCell ? (parseFloat(boqTotalCell.dataset.boqBase) || parseFloat(boqTotalCell.textContent.replace(/[$,]/g,'')) || 0) : 0;
   var pct = pctField ? (parseFloat(pctField.value) || 0) : 0;
   var amount = boqVal * (pct / 100);
   var splitId = key.replace('bs','');
@@ -2861,14 +3022,32 @@ function calcResourceTotal(path, idx) {
   var prefix = path === 'wbs' ? 'wbs' : 'cc';
   var amtInput = document.querySelector('[data-' + prefix + '-amount="' + idx + '"]');
   if (!amtInput) return;
-  // Find the closest tr then all budget-inputs inside resource-rows
+  // Find the closest tr to scope the resource lookups
   var row = amtInput.closest('tr');
   if (!row) return;
-  var total = 0;
-  row.querySelectorAll('.resource-rows .budget-input').forEach(function(inp) {
-    total += parseFloat(inp.value.replace(/,/g,'')) || 0;
+  // Sum the budget side (.res-budget) and the BOQ side (.res-boq) separately
+  var budgetTotal = 0;
+  var boqTotal = 0;
+  row.querySelectorAll('.resource-rows .res-budget').forEach(function(inp) {
+    budgetTotal += parseFloat((inp.value || '').toString().replace(/,/g,'')) || 0;
   });
-  amtInput.value = total > 0 ? total.toLocaleString() : '';
+  row.querySelectorAll('.resource-rows .res-boq').forEach(function(inp) {
+    boqTotal += parseFloat((inp.value || '').toString().replace(/,/g,'')) || 0;
+  });
+  // Backward compat: if no res-boq/res-budget classes (older render), fall back to all budget-inputs
+  if (row.querySelectorAll('.resource-rows .res-budget').length === 0) {
+    var fallback = 0;
+    row.querySelectorAll('.resource-rows .budget-input').forEach(function(inp) {
+      fallback += parseFloat((inp.value || '').toString().replace(/,/g,'')) || 0;
+    });
+    budgetTotal = fallback;
+  }
+  amtInput.value = budgetTotal > 0 ? budgetTotal.toLocaleString('en-US',{minimumFractionDigits:2}) : '';
+  // Update BOQ total cell as well (resource mode only)
+  var boqInput = row.querySelector('[data-boq-total-' + prefix + '="' + idx + '"]');
+  if (boqInput && boqInput.tagName === 'INPUT' && boqInput.readOnly) {
+    boqInput.value = boqTotal > 0 ? boqTotal.toLocaleString('en-US',{minimumFractionDigits:2}) : '';
+  }
   if (path === 'wbs') calcWBS(); else calcCC();
 }
 
@@ -2886,13 +3065,19 @@ function applyMargin(path, idx, pct) {
   if (path === 'wbs') calcWBS(); else calcCC();
 }
 
-function addResourceWBS(idx) {
-  const container = document.getElementById(`resourcesWBS${idx}`);
-  const btn = container.querySelector('.add-resource-btn');
-  const row = document.createElement('div');
+function addResourceWBS(idx, fromBtn) {
+  var container = document.getElementById('resourcesWBS' + idx);
+  if (!container && fromBtn && fromBtn.closest) container = fromBtn.closest('.resource-rows');
+  if (!container && typeof event !== 'undefined' && event.target && event.target.closest) container = event.target.closest('.resource-rows');
+  if (!container) { console.warn('addResourceWBS: container not found', idx); return; }
+  var btn = container.querySelector('.add-resource-btn');
+  var row = document.createElement('div');
   row.className = 'resource-row';
-  row.innerHTML = `<select class="res-name"><option>Labour</option><option>Plant and Equipment</option><option>Material</option><option>Subcontract</option><option>Miscellaneous</option></select><input class="budget-input" placeholder="0.00" style="width:100px" oninput="calcResourceTotal('wbs',${idx})">`;
-  container.insertBefore(row, btn);
+  row.innerHTML = '<select class="res-name"><option>Labour</option><option>Plant and Equipment</option><option>Material</option><option>Subcontract</option><option>Miscellaneous</option></select>' +
+    '<input class="budget-input res-boq" placeholder="0.00" style="width:90px" oninput="calcResourceTotal(\'wbs\',' + idx + ')">' +
+    '<input class="budget-input res-budget" placeholder="0.00" style="width:90px" oninput="calcResourceTotal(\'wbs\',' + idx + ')">' +
+    '<span style="color:#ef4444;cursor:pointer;font-size:13px;margin-left:6px" onclick="this.parentElement.remove();calcResourceTotal(\'wbs\',' + idx + ')"><i class="fas fa-times"></i></span>';
+  if (btn) container.insertBefore(row, btn); else container.appendChild(row);
 }
 
 function calcWBS() {
@@ -2968,11 +3153,13 @@ function renderCCRows() {
   const tbody = document.getElementById('budgetTableCC');
 
   tbody.innerHTML = data.map((r, i) => {
+    const provClass = r.isProvisional ? ' provisional' : '';
+    const provBadge = r.isProvisional && r.level === 1 ? '<span class="provisional-badge">Provisional</span>' : '';
     if (r.level === 1) {
       const l1CCOpts = '<option value="">— Select —</option>' + selectedCC.map(c => '<option>' + c + '</option>').join('') + '<option value="__addcc">+ Add Cost Centre</option>';
       const l1ZoneOpts = zones.map(z => '<option>' + z + '</option>').join('') + '<option value="__add">+ Add Zone</option>';
-      return `<tr class="section-header level-1">
-        <td colspan="4" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}</td>
+      return `<tr class="section-header level-1${provClass}">
+        <td colspan="4" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}${provBadge}</td>
         <td class="amount">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
         <td><select class="budget-select" style="background:#fff!important;color:#1b2a4a!important;border-color:rgba(255,255,255,.3)" data-cc-level1="${i}" onchange="applyL1CC(${i},this)">${l1CCOpts}</select></td>
         <td><select class="budget-select" style="background:#fff!important;color:#1b2a4a!important;border-color:rgba(255,255,255,.3)" data-zone-level1="${i}" onchange="applyL1Zone(${i},this)">${l1ZoneOpts}</select></td>
@@ -2983,7 +3170,7 @@ function renderCCRows() {
     if (r.level === 2) {
       const l2CCOpts = '<option value="">— Select —</option>' + selectedCC.map(c => '<option>' + c + '</option>').join('') + '<option value="__addcc">+ Add Cost Centre</option>';
       const l2ZoneOpts = zones.map(z => '<option>' + z + '</option>').join('') + '<option value="__add">+ Add Zone</option>';
-      return `<tr class="section-header level-2">
+      return `<tr class="section-header level-2${provClass}">
         <td style="padding-left:16px;font-weight:600;color:#1b2a4a">${r.code}</td>
         <td colspan="3" style="font-weight:600;color:#1b2a4a">${r.desc}</td>
         <td style="text-align:right;font-weight:600;color:#3b82f6">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
@@ -2998,8 +3185,9 @@ function renderCCRows() {
     const amtStr = boqAmt.toLocaleString();
     const ccOpts = '<option value="">— Select —</option>' + selectedCC.map(c => '<option>' + c + '</option>').join('') + '<option value="__addcc">+ Add Cost Centre</option>';
     const zoneOpts = zones.map(z => '<option>' + z + '</option>').join('') + '<option value="__add">+ Add Zone</option>';
+    const provRowClass = r.isProvisional ? ' provisional-row' : '';
 
-    return `<tr id="ccRow${i}">
+    return `<tr id="ccRow${i}" class="${provRowClass}">
       <td style="padding-left:20px;font-weight:500;color:#64748b;white-space:nowrap">${r.code || ''}</td>
       <td>${isManual
         ? `<input class="editable-input" placeholder="Description" value="${r.desc||''}" onchange="manualBOQ.cc[${i}].desc=this.value">
@@ -3016,7 +3204,12 @@ function renderCCRows() {
         ? `<input class="editable-input med" value="${r.rate||''}" oninput="updateManualCalc('cc',${i},this)" data-field="rate">`
         : rateStr
       }</td>
-      <td style="text-align:right;font-weight:600;color:#3b82f6" data-boq-total-cc="${i}">${amtStr}</td>
+      <td style="text-align:right;vertical-align:top" data-boq-total-cell-cc="${i}">${budgetMethod.cc === 'resource'
+        ? `<input class="budget-input" placeholder="0.00" value="${boqAmt||''}" data-boq-total-cc="${i}" data-boq-base="${boqAmt}" readonly title="Auto-calculated from resource BOQ amounts" style="background:#eff6ff;color:#3b82f6;font-weight:600;cursor:not-allowed;text-align:right;width:110px">`
+        : `<span style="font-weight:600;color:#3b82f6;white-space:nowrap" data-boq-total-cc="${i}" data-boq-base="${boqAmt}">${amtStr}</span>`
+      }
+        <div id="boqSplitRows${i}"></div>
+      </td>
       <td style="vertical-align:top">
         <select class="budget-select" data-cc-select="${i}" onchange="handleBudgetCCChange(this,${i})">${ccOpts}</select>
         <div id="budgetSplitRows${i}"></div>
@@ -3032,16 +3225,24 @@ function renderCCRows() {
             <input class="margin-input" placeholder="0" oninput="applyMargin('cc',${i},this.value)" data-margin-cc="${i}"> <span style="font-size:12px;color:#64748b">%</span>
           </div>
         ` : budgetMethod.cc === 'resource' ? `
-          <div class="resource-rows" style="display:block">
+          <div class="resource-rows" id="resourcesCC${i}" style="display:block">
+            <div style="display:flex;gap:6px;font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;margin-bottom:4px;padding-left:148px">
+              <span style="width:90px;text-align:right">BOQ ($)</span>
+              <span style="width:90px;text-align:right">Budget ($)</span>
+            </div>
             <div class="resource-row">
               <select class="res-name"><option>Labour</option><option>Plant and Equipment</option><option>Material</option><option>Subcontract</option><option>Miscellaneous</option></select>
-              <input class="budget-input" placeholder="0.00" style="width:100px" oninput="calcResourceTotal('cc',${i})">
+              <input class="budget-input res-boq" placeholder="0.00" style="width:90px" oninput="calcResourceTotal('cc',${i})" value="${boqAmt||''}">
+              <input class="budget-input res-budget" placeholder="0.00" style="width:90px" oninput="calcResourceTotal('cc',${i})">
             </div>
-            <button class="add-resource-btn" onclick="addResourceCC(${i})"><i class="fas fa-plus"></i> Add Resource</button>
+            <button class="add-resource-btn" onclick="addResourceCC(${i}, this)"><i class="fas fa-plus"></i> Add Resource</button>
           </div>
         ` : `<span style="font-size:12px;color:#94a3b8">Lump Sum</span>`}
       </td>
-      <td style="text-align:right"><input class="budget-input" placeholder="0.00" value="" oninput="calcCC()" data-cc-amount="${i}"></td>
+      <td style="text-align:right">${budgetMethod.cc === 'resource'
+        ? `<input class="budget-input" placeholder="0.00" value="" data-cc-amount="${i}" readonly title="Auto-calculated from resource budget amounts" style="background:#f1f5f9;color:#1b2a4a;font-weight:600;cursor:not-allowed;text-align:right;width:110px">`
+        : `<input class="budget-input" placeholder="0.00" value="" oninput="calcCC()" data-cc-amount="${i}">`
+      }</td>
     </tr>`;
   }).join('');
 
@@ -3054,13 +3255,20 @@ function addManualLineCC() {
   showToast('Line item added');
 }
 
-function addResourceCC(idx) {
-  const container = document.getElementById(`resourcesCC${idx}`);
-  const btn = container.querySelector('.add-resource-btn');
-  const row = document.createElement('div');
+function addResourceCC(idx, fromBtn) {
+  // Find the container — prefer id, fall back to event.target.closest, then DOM walk
+  var container = document.getElementById('resourcesCC' + idx);
+  if (!container && fromBtn && fromBtn.closest) container = fromBtn.closest('.resource-rows');
+  if (!container && typeof event !== 'undefined' && event.target && event.target.closest) container = event.target.closest('.resource-rows');
+  if (!container) { console.warn('addResourceCC: container not found', idx); return; }
+  var btn = container.querySelector('.add-resource-btn');
+  var row = document.createElement('div');
   row.className = 'resource-row';
-  row.innerHTML = `<select class="res-name"><option>Labour</option><option>Plant and Equipment</option><option>Material</option><option>Subcontract</option><option>Miscellaneous</option></select><input class="budget-input" placeholder="0.00" style="width:100px" oninput="calcResourceTotal('cc',${idx})">`;
-  container.insertBefore(row, btn);
+  row.innerHTML = '<select class="res-name"><option>Labour</option><option>Plant and Equipment</option><option>Material</option><option>Subcontract</option><option>Miscellaneous</option></select>' +
+    '<input class="budget-input res-boq" placeholder="0.00" style="width:90px" oninput="calcResourceTotal(\'cc\',' + idx + ')">' +
+    '<input class="budget-input res-budget" placeholder="0.00" style="width:90px" oninput="calcResourceTotal(\'cc\',' + idx + ')">' +
+    '<span style="color:#ef4444;cursor:pointer;font-size:13px;margin-left:6px" onclick="this.parentElement.remove();calcResourceTotal(\'cc\',' + idx + ')"><i class="fas fa-times"></i></span>';
+  if (btn) container.insertBefore(row, btn); else container.appendChild(row);
 }
 
 function addSplit(idx) {
@@ -3185,16 +3393,18 @@ function buildAssignCCPage() {
   }
 
   tbody.innerHTML = data.map((r, i) => {
+    const provClass = r.isProvisional ? ' provisional' : '';
+    const provBadge = r.isProvisional && r.level === 1 ? '<span class="provisional-badge">Provisional</span>' : '';
     if (r.level === 1) {
-      return `<tr class="section-header level-1">
-        <td colspan="2" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}</td>
+      return `<tr class="section-header level-1${provClass}">
+        <td colspan="2" style="padding-left:4px"><span style="margin-right:10px;color:rgba(255,255,255,.6)">${r.code}</span>${r.desc}${provBadge}</td>
         <td class="amount">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
         <td class="amount">$${assignBa[i].toLocaleString('en-US',{minimumFractionDigits:2})}</td>
         <td colspan="2"></td>
       </tr>`;
     }
     if (r.level === 2) {
-      return `<tr class="section-header level-2">
+      return `<tr class="section-header level-2${provClass}">
         <td style="padding-left:16px;font-weight:600;color:#1b2a4a">${r.code}</td>
         <td style="font-weight:600;color:#1b2a4a">${r.desc}</td>
         <td style="text-align:right;font-weight:600;color:#3b82f6">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
@@ -3936,10 +4146,12 @@ function buildReviewPage() {
     const bAmt = reviewBudgets[ri];
     const mPct = boqAmt > 0 ? ((boqAmt - bAmt) / boqAmt * 100) : 0;
 
+    const provClass = r.isProvisional ? ' provisional' : '';
+    const provBadge = r.isProvisional && r.level === 1 ? '<span class="provisional-badge">Provisional</span>' : '';
     if (r.level === 1) {
-      return `<tr class="section-header level-1">
+      return `<tr class="section-header level-1${provClass}">
         <td style="padding-left:4px;white-space:nowrap"><span style="color:rgba(255,255,255,.6)">${r.code}</span></td>
-        <td>${r.desc}</td>
+        <td>${r.desc}${provBadge}</td>
         <td class="right amount" style="white-space:nowrap">$${boqAmt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
         <td class="right amount" style="white-space:nowrap">$${bAmt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
         ${isCC ? '<td></td>' : ''}
@@ -3947,7 +4159,7 @@ function buildReviewPage() {
       </tr>`;
     }
     if (r.level === 2) {
-      return `<tr class="section-header level-2">
+      return `<tr class="section-header level-2${provClass}">
         <td style="padding-left:16px;font-weight:600;color:#1b2a4a;white-space:nowrap">${r.code}</td>
         <td style="font-weight:600;color:#1b2a4a">${r.desc}</td>
         <td class="right" style="font-weight:600;color:#3b82f6;white-space:nowrap">$${boqAmt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
@@ -3958,7 +4170,8 @@ function buildReviewPage() {
     }
     const margin = r.amount > 0 ? (((r.amount - r.budgetAmt) / r.amount) * 100) : 0;
     const marginClass = margin >= 0 ? 'positive' : 'negative';
-    return `<tr>
+    const provRowClass = r.isProvisional ? ' class="provisional-row"' : '';
+    return `<tr${provRowClass}>
       <td style="padding-left:20px;font-weight:500;color:#64748b;white-space:nowrap">${r.code || ''}</td>
       <td>${r.desc || '—'}</td>
       <td class="right" style="white-space:nowrap">$${(r.amount||0).toLocaleString('en-US',{minimumFractionDigits:2})}</td>
@@ -4353,11 +4566,13 @@ function buildBudgetViewPage() {
     var profit = boqAmt - budgetAmt;
     var margin = boqAmt > 0 ? (profit / boqAmt * 100) : 0;
 
+    var provClass = r.isProvisional ? ' provisional' : '';
+    var provBadge = r.isProvisional && r.level === 1 ? ' <span class="provisional-badge">Provisional</span>' : '';
     if (r.level === 1) {
-      return '<tr class="section-header level-1">' +
+      return '<tr class="section-header level-1' + provClass + '">' +
         '<td></td>' +
         '<td style="color:rgba(255,255,255,.6)">' + r.code + '</td>' +
-        '<td>' + (r.desc || '') + '</td>' +
+        '<td>' + (r.desc || '') + provBadge + '</td>' +
         '<td class="right amount" style="white-space:nowrap">$' + boqAmt.toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
         '<td class="right amount" style="white-space:nowrap">$' + budgetAmt.toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
         ccCol +
@@ -4366,7 +4581,7 @@ function buildBudgetViewPage() {
       '</tr>';
     }
     if (r.level === 2) {
-      return '<tr class="section-header level-2">' +
+      return '<tr class="section-header level-2' + provClass + '">' +
         '<td></td>' +
         '<td style="font-weight:600;color:#94a3b8">' + r.code + '</td>' +
         '<td style="font-weight:600;color:#1b2a4a">' + (r.desc || '') + '</td>' +
@@ -4388,8 +4603,9 @@ function buildBudgetViewPage() {
       colCount = 8;
     }
     var bvRowId = 'bvBoqRow' + i;
+    var provRowAttr = r.isProvisional ? ' class="provisional-row"' : '';
 
-    var row = '<tr>' +
+    var row = '<tr' + provRowAttr + '>' +
       '<td></td>' +
       '<td style="color:#94a3b8;font-size:12px">' + (r.code || '') + '</td>' +
       '<td style="padding-left:4px">' + (r.desc || '\u2014') + '</td>' +
@@ -5826,6 +6042,525 @@ function calcVarMargin() {
   }
 }
 
+/* ═══════════════════════════════════════════
+   BUDGET EXPORT (matches the new budget layout)
+   ═══════════════════════════════════════════ */
+/* ═══════════════════════════════════════════
+   BUDGET EXPORT v2 — matches the on-screen
+   tabbed layout (BOQ Line Items / Cost Centres /
+   Zones) including super-headers and Tracked
+   to Date column.
+   ═══════════════════════════════════════════ */
+
+// Style helpers (xlsx-js-style)
+var XL_NAVY = '1B2A4A';
+var XL_AMBER = 'F5A623';
+var XL_AMBER_DARK = 'A16207';
+var XL_AMBER_LIGHT = 'FEF3C7';
+var XL_AMBER_TINT = 'FFFBEB';
+var XL_GREY = 'F0F2F5';
+var XL_GREY_DARK = 'E8ECF0';
+var XL_BORDER = 'CCCCCC';
+var XL_GREEN = '16A34A';
+var XL_RED = 'EF4444';
+var XL_BLUE = '3B82F6';
+
+function _xlBorder() {
+  var b = { style: 'thin', color: { rgb: XL_BORDER } };
+  return { top: b, bottom: b, left: b, right: b };
+}
+function _xlSuperHeader(){
+  return { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:XL_NAVY}}, alignment:{vertical:'center',horizontal:'left'}, border:_xlBorder() };
+}
+function _xlSuperHeaderRight(){
+  return { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:XL_NAVY}}, alignment:{vertical:'center',horizontal:'right'}, border:_xlBorder() };
+}
+function _xlSubHeader(){
+  return { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'475569'}}, fill:{patternType:'solid',fgColor:{rgb:'F8FAFC'}}, alignment:{vertical:'center'}, border:_xlBorder() };
+}
+function _xlSubHeaderRight(){
+  return { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'475569'}}, fill:{patternType:'solid',fgColor:{rgb:'F8FAFC'}}, alignment:{vertical:'center',horizontal:'right'}, border:_xlBorder() };
+}
+function _xlL1(prov){
+  var fg = prov ? XL_AMBER_DARK : XL_NAVY;
+  return { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:fg}}, alignment:{vertical:'center'}, border:_xlBorder() };
+}
+function _xlL1Right(prov){
+  var fg = prov ? XL_AMBER_DARK : XL_NAVY;
+  return { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:fg}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:_xlBorder() };
+}
+function _xlL2(prov){
+  var fg = prov ? XL_AMBER_LIGHT : XL_GREY;
+  var fc = prov ? '92400E' : '1B2A4A';
+  return { font:{name:'Calibri',sz:10,bold:true,color:{rgb:fc}}, fill:{patternType:'solid',fgColor:{rgb:fg}}, alignment:{vertical:'center'}, border:_xlBorder() };
+}
+function _xlL2Right(prov){
+  var fg = prov ? XL_AMBER_LIGHT : XL_GREY;
+  var fc = prov ? '92400E' : XL_BLUE;
+  return { font:{name:'Calibri',sz:10,bold:true,color:{rgb:fc}}, fill:{patternType:'solid',fgColor:{rgb:fg}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:_xlBorder() };
+}
+function _xlL3(prov){
+  var fg = prov ? XL_AMBER_TINT : 'FFFFFF';
+  return { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, fill:{patternType:'solid',fgColor:{rgb:fg}}, alignment:{vertical:'center'}, border:_xlBorder() };
+}
+function _xlL3Right(prov){
+  var fg = prov ? XL_AMBER_TINT : 'FFFFFF';
+  return { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, fill:{patternType:'solid',fgColor:{rgb:fg}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:_xlBorder() };
+}
+function _xlL3Pct(prov, pos){
+  var fg = prov ? XL_AMBER_TINT : 'FFFFFF';
+  var fc = pos ? XL_GREEN : XL_RED;
+  return { font:{name:'Calibri',sz:10,bold:true,color:{rgb:fc}}, fill:{patternType:'solid',fgColor:{rgb:fg}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'0.00%', border:_xlBorder() };
+}
+function _xlL3Qty(prov){
+  var fg = prov ? XL_AMBER_TINT : 'FFFFFF';
+  return { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, fill:{patternType:'solid',fgColor:{rgb:fg}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'#,##0', border:_xlBorder() };
+}
+function _xlTotalRow(){
+  return { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:XL_GREY_DARK}}, alignment:{vertical:'center'}, border:{top:{style:'medium',color:{rgb:XL_NAVY}},bottom:{style:'medium',color:{rgb:XL_NAVY}},left:_xlBorder().left,right:_xlBorder().right} };
+}
+function _xlTotalRight(){
+  return { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:XL_GREY_DARK}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:{top:{style:'medium',color:{rgb:XL_NAVY}},bottom:{style:'medium',color:{rgb:XL_NAVY}},left:_xlBorder().left,right:_xlBorder().right} };
+}
+function _xlTotalPct(){
+  return { font:{name:'Calibri',sz:11,bold:true,color:{rgb:XL_GREEN}}, fill:{patternType:'solid',fgColor:{rgb:XL_GREY_DARK}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'0.00%', border:{top:{style:'medium',color:{rgb:XL_NAVY}},bottom:{style:'medium',color:{rgb:XL_NAVY}},left:_xlBorder().left,right:_xlBorder().right} };
+}
+
+// Set a cell value + style on a worksheet at row/col (0-indexed)
+function _xlSet(ws, r, c, v, s) {
+  var ref = XLSX.utils.encode_cell({r:r,c:c});
+  if (v === '' || v === null || v === undefined) {
+    ws[ref] = { t:'s', v:'', s:s };
+  } else if (typeof v === 'number') {
+    ws[ref] = { t:'n', v:v, s:s };
+  } else {
+    ws[ref] = { t:'s', v:String(v), s:s };
+  }
+  // Update sheet range
+  var range = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : { s:{r:0,c:0}, e:{r:0,c:0} };
+  if (r > range.e.r) range.e.r = r;
+  if (c > range.e.c) range.e.c = c;
+  ws['!ref'] = XLSX.utils.encode_range(range);
+}
+
+function exportBudget() {
+  if (typeof XLSX === 'undefined') {
+    showToast('Export library still loading — try again');
+    return;
+  }
+  var data = getActiveData(currentPath);
+  var isCC = currentPath === 'cc';
+  var amtKey = isCC ? 'cc' : 'wbs';
+
+  // ---- Compute budget rollups from inputs (matches the on-screen budget view) ----
+  var budgetAmts = [];
+  data.forEach(function(r, i) {
+    if (r.level === 1 || r.level === 2) { budgetAmts[i] = 0; return; }
+    var inp = document.querySelector('[data-' + amtKey + '-amount="' + i + '"]');
+    budgetAmts[i] = inp ? (parseFloat((inp.value || '').replace(/,/g,'')) || 0) : (r.amount || 0);
+  });
+  for (var j = 0; j < data.length; j++) {
+    if (data[j].level === 2) {
+      var s2 = 0;
+      for (var k = j + 1; k < data.length; k++) {
+        if (data[k].level === 1 || data[k].level === 2) break;
+        s2 += budgetAmts[k] || 0;
+      }
+      budgetAmts[j] = s2;
+    }
+  }
+  for (var j2 = 0; j2 < data.length; j2++) {
+    if (data[j2].level === 1) {
+      var s1 = 0;
+      for (var k1 = j2 + 1; k1 < data.length; k1++) {
+        if (data[k1].level === 1) break;
+        if (data[k1].level === 2) s1 += budgetAmts[k1] || 0;
+      }
+      budgetAmts[j2] = s1;
+    }
+  }
+
+  // Top-line totals
+  var totalContract = 0, totalBudget = 0;
+  data.forEach(function(r, i) {
+    if (r.level === 1) {
+      totalContract += (r.amount || 0);
+      totalBudget += (budgetAmts[i] || 0);
+    }
+  });
+  var unmappedTotal = 0;
+  if (isCC && typeof getUnmappedCCData === 'function') {
+    try { getUnmappedCCData().forEach(function(u){ unmappedTotal += (u.amount || 0); }); } catch(e) {}
+  }
+  totalBudget += unmappedTotal;
+  var totalTracked = 0; // post-submission this would come from tracked transactions
+  var totalProfit = totalContract - totalBudget;
+  var totalMargin = totalContract > 0 ? (totalProfit / totalContract) : 0;
+
+  var wb = XLSX.utils.book_new();
+
+  // ============================================================
+  // SHEET 1 — SUMMARY (matches the 5-stat banner above the tabs)
+  // ============================================================
+  var wsSummary = { '!ref':'A1' };
+  _xlSet(wsSummary, 0, 0, 'Budget Export', { font:{name:'Calibri',sz:18,bold:true,color:{rgb:XL_NAVY}} });
+  _xlSet(wsSummary, 1, 0, 'Generated', _xlSubHeader());
+  _xlSet(wsSummary, 1, 1, new Date().toLocaleString('en-AU'), _xlL3());
+  _xlSet(wsSummary, 2, 0, 'Project', _xlSubHeader());
+  _xlSet(wsSummary, 2, 1, "Cookie's Civil — Sample Project", _xlL3());
+  _xlSet(wsSummary, 3, 0, 'Tracking Method', _xlSubHeader());
+  _xlSet(wsSummary, 3, 1, isCC ? 'Cost Centres' : 'WBS', _xlL3());
+  _xlSet(wsSummary, 4, 0, 'Status', _xlSubHeader());
+  _xlSet(wsSummary, 4, 1, 'Submitted', { font:{name:'Calibri',sz:10,bold:true,color:{rgb:XL_GREEN}}, fill:{patternType:'solid',fgColor:{rgb:'DCFCE7'}}, alignment:{vertical:'center'}, border:_xlBorder() });
+  // Blank row 5
+  _xlSet(wsSummary, 6, 0, 'Stat', _xlSuperHeader());
+  _xlSet(wsSummary, 6, 1, 'Value', _xlSuperHeaderRight());
+  _xlSet(wsSummary, 7, 0, 'Total Contract Sum', _xlL3());
+  _xlSet(wsSummary, 7, 1, totalContract, { font:{name:'Calibri',sz:11,bold:true,color:{rgb:XL_BLUE}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:_xlBorder() });
+  _xlSet(wsSummary, 8, 0, 'Estimated Budget Cost', _xlL3());
+  _xlSet(wsSummary, 8, 1, totalBudget, { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1B2A4A'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:_xlBorder() });
+  _xlSet(wsSummary, 9, 0, 'Tracked to Date', _xlL3());
+  _xlSet(wsSummary, 9, 1, totalTracked, { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1B2A4A'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:_xlBorder() });
+  _xlSet(wsSummary, 10, 0, 'Total Profit', _xlL3());
+  _xlSet(wsSummary, 10, 1, totalProfit, { font:{name:'Calibri',sz:11,bold:true,color:{rgb:totalProfit>=0?XL_GREEN:XL_RED}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:_xlBorder() });
+  _xlSet(wsSummary, 11, 0, 'Estimated Budget Margin', _xlL3());
+  _xlSet(wsSummary, 11, 1, totalMargin, { font:{name:'Calibri',sz:11,bold:true,color:{rgb:totalMargin>=0?XL_GREEN:XL_RED}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'0.00%', border:_xlBorder() });
+  wsSummary['!cols'] = [{wch:32},{wch:24}];
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+  // ============================================================
+  // SHEET 2 — BOQ LINE ITEMS (matches BOQ Line Items tab layout)
+  //   Super header: "" | "BOQ Number" | "Description" | "Contract" | "Estimated Budget" | ["Cost Centre"] | "Tracked" | "Margin"
+  //   Sub header:    "" | ""           | "Task"        | "Contract Sum" | "Estimated Budget Cost" | [""]      | "Tracked to Date" | "Budget Margin"
+  // ============================================================
+  var wsBOQ = { '!ref':'A1' };
+  // Build column layout (col indices)
+  // 0: spacer, 1: BOQ Number, 2: Description, 3: Contract Sum, 4: Estimated Budget Cost, [5: Cost Centre when CC], 6/5: Tracked, 7/6: Margin
+  var bCols;
+  if (isCC) bCols = { spacer:0, code:1, desc:2, contract:3, budget:4, cc:5, tracked:6, margin:7 };
+  else bCols = { spacer:0, code:1, desc:2, contract:3, budget:4, tracked:5, margin:6 };
+  var bColCount = isCC ? 8 : 7;
+
+  // Super-header row (row 0)
+  _xlSet(wsBOQ, 0, bCols.spacer, '', _xlSuperHeader());
+  _xlSet(wsBOQ, 0, bCols.code, 'BOQ Number', _xlSuperHeader());
+  _xlSet(wsBOQ, 0, bCols.desc, 'Description', _xlSuperHeader());
+  _xlSet(wsBOQ, 0, bCols.contract, 'Contract', _xlSuperHeaderRight());
+  _xlSet(wsBOQ, 0, bCols.budget, 'Estimated Budget', _xlSuperHeaderRight());
+  if (isCC) _xlSet(wsBOQ, 0, bCols.cc, 'Cost Centre', _xlSuperHeaderRight());
+  _xlSet(wsBOQ, 0, bCols.tracked, 'Tracked', _xlSuperHeaderRight());
+  _xlSet(wsBOQ, 0, bCols.margin, 'Margin', _xlSuperHeaderRight());
+  // Sub-header row (row 1)
+  _xlSet(wsBOQ, 1, bCols.spacer, '', _xlSubHeader());
+  _xlSet(wsBOQ, 1, bCols.code, '', _xlSubHeader());
+  _xlSet(wsBOQ, 1, bCols.desc, 'Task', _xlSubHeader());
+  _xlSet(wsBOQ, 1, bCols.contract, 'Contract Sum', _xlSubHeaderRight());
+  _xlSet(wsBOQ, 1, bCols.budget, 'Estimated Budget Cost', _xlSubHeaderRight());
+  if (isCC) _xlSet(wsBOQ, 1, bCols.cc, '', _xlSubHeader());
+  _xlSet(wsBOQ, 1, bCols.tracked, 'Tracked to Date', _xlSubHeaderRight());
+  _xlSet(wsBOQ, 1, bCols.margin, 'Budget Margin', _xlSubHeaderRight());
+
+  var rowOut = 2;
+  data.forEach(function(r, i) {
+    var prov = !!r.isProvisional;
+    var contract = r.amount || 0;
+    var budget = budgetAmts[i] || 0;
+    var profit = contract - budget;
+    var marginPct = contract > 0 ? (profit / contract) : 0;
+    var tracked = 0; // placeholder for live tracked totals
+
+    if (r.level === 1) {
+      _xlSet(wsBOQ, rowOut, bCols.spacer, '', _xlL1(prov));
+      _xlSet(wsBOQ, rowOut, bCols.code, r.code, _xlL1(prov));
+      _xlSet(wsBOQ, rowOut, bCols.desc, r.desc + (prov ? '   PROVISIONAL' : ''), _xlL1(prov));
+      _xlSet(wsBOQ, rowOut, bCols.contract, contract, _xlL1Right(prov));
+      _xlSet(wsBOQ, rowOut, bCols.budget, budget, _xlL1Right(prov));
+      if (isCC) _xlSet(wsBOQ, rowOut, bCols.cc, '', _xlL1(prov));
+      _xlSet(wsBOQ, rowOut, bCols.tracked, tracked, _xlL1Right(prov));
+      _xlSet(wsBOQ, rowOut, bCols.margin, marginPct, { font:{name:'Calibri',sz:11,bold:true,color:{rgb:marginPct>=0?'86EFAC':'FCA5A5'}}, fill:{patternType:'solid',fgColor:{rgb:prov?XL_AMBER_DARK:XL_NAVY}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'0.00%', border:_xlBorder() });
+      rowOut++;
+    } else if (r.level === 2) {
+      _xlSet(wsBOQ, rowOut, bCols.spacer, '', _xlL2(prov));
+      _xlSet(wsBOQ, rowOut, bCols.code, r.code, _xlL2(prov));
+      _xlSet(wsBOQ, rowOut, bCols.desc, '   ' + r.desc, _xlL2(prov));
+      _xlSet(wsBOQ, rowOut, bCols.contract, contract, _xlL2Right(prov));
+      _xlSet(wsBOQ, rowOut, bCols.budget, budget, { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:prov?XL_AMBER_LIGHT:XL_GREY}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:_xlBorder() });
+      if (isCC) _xlSet(wsBOQ, rowOut, bCols.cc, '', _xlL2(prov));
+      _xlSet(wsBOQ, rowOut, bCols.tracked, tracked, { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'94A3B8'}}, fill:{patternType:'solid',fgColor:{rgb:prov?XL_AMBER_LIGHT:XL_GREY}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:_xlBorder() });
+      _xlSet(wsBOQ, rowOut, bCols.margin, marginPct, { font:{name:'Calibri',sz:10,bold:true,color:{rgb:marginPct>=0?XL_GREEN:XL_RED}}, fill:{patternType:'solid',fgColor:{rgb:prov?XL_AMBER_LIGHT:XL_GREY}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'0.00%', border:_xlBorder() });
+      rowOut++;
+    } else {
+      var ccName = '', zoneName = '';
+      if (isCC) {
+        var ccSel = document.querySelector('[data-cc-select="' + i + '"]') || document.querySelector('[data-assign-cc="' + i + '"]');
+        ccName = (ccSel && ccSel.value && ccSel.value !== '__addcc') ? ccSel.value : '';
+      }
+      _xlSet(wsBOQ, rowOut, bCols.spacer, '', _xlL3(prov));
+      _xlSet(wsBOQ, rowOut, bCols.code, r.code, { font:{name:'Calibri',sz:10,color:{rgb:'94A3B8'}}, fill:{patternType:'solid',fgColor:{rgb:prov?XL_AMBER_TINT:'FFFFFF'}}, alignment:{vertical:'center'}, border:_xlBorder() });
+      _xlSet(wsBOQ, rowOut, bCols.desc, '      ' + r.desc, _xlL3(prov));
+      _xlSet(wsBOQ, rowOut, bCols.contract, contract, _xlL3Right(prov));
+      _xlSet(wsBOQ, rowOut, bCols.budget, budget, _xlL3Right(prov));
+      if (isCC) _xlSet(wsBOQ, rowOut, bCols.cc, ccName, { font:{name:'Calibri',sz:10,color:{rgb:'64748B'}}, fill:{patternType:'solid',fgColor:{rgb:prov?XL_AMBER_TINT:'FFFFFF'}}, alignment:{vertical:'center',horizontal:'right'}, border:_xlBorder() });
+      _xlSet(wsBOQ, rowOut, bCols.tracked, tracked, { font:{name:'Calibri',sz:10,color:{rgb:'94A3B8'}}, fill:{patternType:'solid',fgColor:{rgb:prov?XL_AMBER_TINT:'FFFFFF'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:_xlBorder() });
+      _xlSet(wsBOQ, rowOut, bCols.margin, marginPct, _xlL3Pct(prov, marginPct >= 0));
+      rowOut++;
+
+      // Splits
+      if (isCC) {
+        var splitContainer = document.getElementById('budgetSplitRows' + i);
+        if (splitContainer) {
+          var splitRows = splitContainer.querySelectorAll('.split-row');
+          splitRows.forEach(function(sr, sIdx) {
+            var sCC = sr.querySelector('select.budget-select');
+            var sCCName = sCC && sCC.value && sCC.value !== '__addcc' ? sCC.value : '';
+            var sAmtInput = sr.querySelector('[data-budget-split-amount]');
+            var sAmt = sAmtInput ? (parseFloat((sAmtInput.value||'').replace(/,/g,'')) || 0) : 0;
+            var splitId = sr.getAttribute('data-budget-split-id');
+            var sBoqInput = document.querySelector('[data-budget-boq-amount="bs' + splitId + '"]');
+            var sBoq = sBoqInput ? (parseFloat((sBoqInput.value||'').replace(/,/g,'')) || 0) : 0;
+            var sProfit = sBoq - sAmt;
+            var sMarginPct = sBoq > 0 ? (sProfit / sBoq) : 0;
+            var splitStyle = { font:{name:'Calibri',sz:9,italic:true,color:{rgb:'64748B'}}, fill:{patternType:'solid',fgColor:{rgb:'F8FAFC'}}, alignment:{vertical:'center'}, border:_xlBorder() };
+            var splitRight = Object.assign({}, splitStyle, { alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00' });
+            _xlSet(wsBOQ, rowOut, bCols.spacer, '', splitStyle);
+            _xlSet(wsBOQ, rowOut, bCols.code, '', splitStyle);
+            _xlSet(wsBOQ, rowOut, bCols.desc, '         ↳ Split ' + (sIdx+1), splitStyle);
+            _xlSet(wsBOQ, rowOut, bCols.contract, sBoq, splitRight);
+            _xlSet(wsBOQ, rowOut, bCols.budget, sAmt, splitRight);
+            _xlSet(wsBOQ, rowOut, bCols.cc, sCCName, splitStyle);
+            _xlSet(wsBOQ, rowOut, bCols.tracked, 0, splitRight);
+            _xlSet(wsBOQ, rowOut, bCols.margin, sMarginPct, Object.assign({}, splitStyle, { alignment:{vertical:'center',horizontal:'right'}, numFmt:'0.00%' }));
+            rowOut++;
+          });
+        }
+      }
+    }
+  });
+  // TOTAL row
+  _xlSet(wsBOQ, rowOut, bCols.spacer, '', _xlTotalRow());
+  _xlSet(wsBOQ, rowOut, bCols.code, '', _xlTotalRow());
+  _xlSet(wsBOQ, rowOut, bCols.desc, 'TOTAL', _xlTotalRow());
+  _xlSet(wsBOQ, rowOut, bCols.contract, totalContract, _xlTotalRight());
+  _xlSet(wsBOQ, rowOut, bCols.budget, totalBudget, _xlTotalRight());
+  if (isCC) _xlSet(wsBOQ, rowOut, bCols.cc, '', _xlTotalRow());
+  _xlSet(wsBOQ, rowOut, bCols.tracked, totalTracked, _xlTotalRight());
+  _xlSet(wsBOQ, rowOut, bCols.margin, totalMargin, _xlTotalPct());
+
+  // Column widths
+  wsBOQ['!cols'] = isCC
+    ? [{wch:4},{wch:11},{wch:50},{wch:18},{wch:22},{wch:18},{wch:18},{wch:14}]
+    : [{wch:4},{wch:11},{wch:50},{wch:18},{wch:22},{wch:18},{wch:14}];
+  // Merge super-header for "BOQ Number" + "Description" both spanning (just sub-row blanks for code col is enough)
+  // Freeze the two header rows
+  wsBOQ['!freeze'] = { xSplit: 0, ySplit: 2 };
+  XLSX.utils.book_append_sheet(wb, wsBOQ, 'BOQ Line Items');
+
+  // ============================================================
+  // SHEET 3 — COST CENTRES (CC path only)
+  //   Super header: "" | "Cost Centres" | "Contract Value" | "Budget Value" | "Tracked" | "Profit" | "Margin %"
+  //   Sub header:    "" | "Description"  | "Contract Sum"   | "Budget Sum"   | "Tracked to Date" | "Total Profit" | "Margin %"
+  // ============================================================
+  if (isCC) {
+    var ccMap = {};
+    data.forEach(function(r, i) {
+      if (r.level === 1 || r.level === 2) return;
+      var ccSel = document.querySelector('[data-cc-select="' + i + '"]') || document.querySelector('[data-assign-cc="' + i + '"]');
+      var ccName = ccSel && ccSel.value && ccSel.value !== '__addcc' ? ccSel.value : 'Unassigned';
+      if (!ccMap[ccName]) ccMap[ccName] = { contract: 0, budget: 0, items: [] };
+      var contract = r.amount || 0;
+      var budget = budgetAmts[i] || 0;
+      ccMap[ccName].contract += contract;
+      ccMap[ccName].budget += budget;
+      ccMap[ccName].items.push({ code: r.code, desc: r.desc, contract: contract, budget: budget, isProvisional: r.isProvisional });
+      // Splits
+      var splitContainer = document.getElementById('budgetSplitRows' + i);
+      if (splitContainer) {
+        splitContainer.querySelectorAll('.split-row').forEach(function(sr) {
+          var sCC = sr.querySelector('select.budget-select');
+          var sCCName = sCC && sCC.value && sCC.value !== '__addcc' ? sCC.value : null;
+          if (!sCCName || sCCName === ccName) return;
+          var sAmtInput = sr.querySelector('[data-budget-split-amount]');
+          var sAmt = sAmtInput ? (parseFloat((sAmtInput.value||'').replace(/,/g,'')) || 0) : 0;
+          if (sAmt <= 0) return;
+          var splitId = sr.getAttribute('data-budget-split-id');
+          var sBoqInput = document.querySelector('[data-budget-boq-amount="bs' + splitId + '"]');
+          var sBoq = sBoqInput ? (parseFloat((sBoqInput.value||'').replace(/,/g,'')) || 0) : 0;
+          if (!ccMap[sCCName]) ccMap[sCCName] = { contract: 0, budget: 0, items: [] };
+          ccMap[sCCName].contract += sBoq;
+          ccMap[sCCName].budget += sAmt;
+          ccMap[sCCName].items.push({ code: r.code, desc: r.desc + ' (split)', contract: sBoq, budget: sAmt, isProvisional: r.isProvisional });
+        });
+      }
+    });
+    if (typeof getUnmappedCCData === 'function') {
+      try {
+        getUnmappedCCData().forEach(function(u) {
+          if (!u.amount) return;
+          var ccName = u.cc || 'Other';
+          if (!ccMap[ccName]) ccMap[ccName] = { contract: 0, budget: 0, items: [] };
+          ccMap[ccName].budget += u.amount;
+          ccMap[ccName].items.push({ code: '', desc: (u.desc || '') + ' (additional)', contract: 0, budget: u.amount, isProvisional: false });
+        });
+      } catch(e) {}
+    }
+
+    var wsCC = { '!ref':'A1' };
+    // Super header row 0
+    _xlSet(wsCC, 0, 0, '', _xlSuperHeader());
+    _xlSet(wsCC, 0, 1, 'Cost Centres', _xlSuperHeader());
+    _xlSet(wsCC, 0, 2, 'Contract Value', _xlSuperHeaderRight());
+    _xlSet(wsCC, 0, 3, 'Budget Value', _xlSuperHeaderRight());
+    _xlSet(wsCC, 0, 4, 'Tracked', _xlSuperHeaderRight());
+    _xlSet(wsCC, 0, 5, 'Profit', _xlSuperHeaderRight());
+    _xlSet(wsCC, 0, 6, 'Margin %', _xlSuperHeaderRight());
+    // Sub header row 1
+    _xlSet(wsCC, 1, 0, '', _xlSubHeader());
+    _xlSet(wsCC, 1, 1, 'Description', _xlSubHeader());
+    _xlSet(wsCC, 1, 2, 'Contract Sum', _xlSubHeaderRight());
+    _xlSet(wsCC, 1, 3, 'Budget Sum', _xlSubHeaderRight());
+    _xlSet(wsCC, 1, 4, 'Tracked to Date', _xlSubHeaderRight());
+    _xlSet(wsCC, 1, 5, 'Total Profit', _xlSubHeaderRight());
+    _xlSet(wsCC, 1, 6, 'Margin %', _xlSubHeaderRight());
+
+    var ccRowOut = 2;
+    var ccGrandC = 0, ccGrandB = 0;
+    Object.keys(ccMap).forEach(function(name) {
+      var cc = ccMap[name];
+      var p = cc.contract - cc.budget;
+      var m = cc.contract > 0 ? (p / cc.contract) : 0;
+      ccGrandC += cc.contract; ccGrandB += cc.budget;
+      var parentStyle = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:'F8FAFC'}}, alignment:{vertical:'center'}, border:_xlBorder() };
+      var parentRight = Object.assign({}, parentStyle, { alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00' });
+      var parentPct = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:m>=0?XL_GREEN:XL_RED}}, fill:{patternType:'solid',fgColor:{rgb:'F8FAFC'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'0.00%', border:_xlBorder() };
+      _xlSet(wsCC, ccRowOut, 0, '', parentStyle);
+      _xlSet(wsCC, ccRowOut, 1, name, parentStyle);
+      _xlSet(wsCC, ccRowOut, 2, cc.contract, parentRight);
+      _xlSet(wsCC, ccRowOut, 3, cc.budget, parentRight);
+      _xlSet(wsCC, ccRowOut, 4, 0, parentRight);
+      _xlSet(wsCC, ccRowOut, 5, p, Object.assign({}, parentRight, { font:{name:'Calibri',sz:11,bold:true,color:{rgb:p>=0?XL_GREEN:XL_RED}} }));
+      _xlSet(wsCC, ccRowOut, 6, m, parentPct);
+      ccRowOut++;
+      cc.items.forEach(function(it) {
+        var ip = it.contract - it.budget;
+        var im = it.contract > 0 ? (ip / it.contract) : 0;
+        var childStyle = { font:{name:'Calibri',sz:10,color:{rgb:'64748B'}}, fill:{patternType:'solid',fgColor:{rgb:'FFFFFF'}}, alignment:{vertical:'center'}, border:_xlBorder() };
+        var childRight = Object.assign({}, childStyle, { alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00' });
+        _xlSet(wsCC, ccRowOut, 0, '', childStyle);
+        _xlSet(wsCC, ccRowOut, 1, '   ' + (it.code ? it.code + ' — ' : '') + it.desc, childStyle);
+        _xlSet(wsCC, ccRowOut, 2, it.contract, childRight);
+        _xlSet(wsCC, ccRowOut, 3, it.budget, childRight);
+        _xlSet(wsCC, ccRowOut, 4, 0, childRight);
+        _xlSet(wsCC, ccRowOut, 5, ip, Object.assign({}, childRight, { font:{name:'Calibri',sz:10,color:{rgb:ip>=0?XL_GREEN:XL_RED}} }));
+        _xlSet(wsCC, ccRowOut, 6, im, Object.assign({}, childRight, { font:{name:'Calibri',sz:10,color:{rgb:im>=0?XL_GREEN:XL_RED}}, numFmt:'0.00%' }));
+        ccRowOut++;
+      });
+    });
+    var ccProfit = ccGrandC - ccGrandB;
+    var ccMargin = ccGrandC > 0 ? (ccProfit / ccGrandC) : 0;
+    _xlSet(wsCC, ccRowOut, 0, '', _xlTotalRow());
+    _xlSet(wsCC, ccRowOut, 1, 'Total', _xlTotalRow());
+    _xlSet(wsCC, ccRowOut, 2, ccGrandC, _xlTotalRight());
+    _xlSet(wsCC, ccRowOut, 3, ccGrandB, _xlTotalRight());
+    _xlSet(wsCC, ccRowOut, 4, 0, _xlTotalRight());
+    _xlSet(wsCC, ccRowOut, 5, ccProfit, _xlTotalRight());
+    _xlSet(wsCC, ccRowOut, 6, ccMargin, _xlTotalPct());
+
+    wsCC['!cols'] = [{wch:4},{wch:36},{wch:18},{wch:18},{wch:18},{wch:16},{wch:11}];
+    wsCC['!freeze'] = { xSplit: 0, ySplit: 2 };
+    XLSX.utils.book_append_sheet(wb, wsCC, 'Cost Centres');
+  }
+
+  // ============================================================
+  // SHEET 4 — ZONES (CC path only)
+  // ============================================================
+  if (isCC) {
+    var zoneMap = {};
+    data.forEach(function(r, i) {
+      if (r.isHeader) return;
+      var ccSel = document.querySelector('[data-cc-select="' + i + '"]') || document.querySelector('[data-assign-cc="' + i + '"]');
+      var ccName = ccSel && ccSel.value && ccSel.value !== '__addcc' ? ccSel.value : 'Unassigned';
+      var zSel = document.querySelector('[data-zone-select="' + i + '"]') || document.querySelector('[data-assign-zone="' + i + '"]');
+      var zName = (zSel && zSel.value && zSel.value !== '__add') ? zSel.value : 'Project Wide';
+      if (!zoneMap[zName]) zoneMap[zName] = { contract: 0, budget: 0, ccs: {} };
+      var contract = r.amount || 0;
+      var budget = budgetAmts[i] || 0;
+      zoneMap[zName].contract += contract;
+      zoneMap[zName].budget += budget;
+      if (!zoneMap[zName].ccs[ccName]) zoneMap[zName].ccs[ccName] = { contract: 0, budget: 0 };
+      zoneMap[zName].ccs[ccName].contract += contract;
+      zoneMap[zName].ccs[ccName].budget += budget;
+    });
+
+    var wsZone = { '!ref':'A1' };
+    _xlSet(wsZone, 0, 0, '', _xlSuperHeader());
+    _xlSet(wsZone, 0, 1, 'Zones', _xlSuperHeader());
+    _xlSet(wsZone, 0, 2, 'Contract Value', _xlSuperHeaderRight());
+    _xlSet(wsZone, 0, 3, 'Budget Value', _xlSuperHeaderRight());
+    _xlSet(wsZone, 0, 4, 'Tracked', _xlSuperHeaderRight());
+    _xlSet(wsZone, 0, 5, 'Profit', _xlSuperHeaderRight());
+    _xlSet(wsZone, 0, 6, 'Margin %', _xlSuperHeaderRight());
+    _xlSet(wsZone, 1, 0, '', _xlSubHeader());
+    _xlSet(wsZone, 1, 1, 'Description', _xlSubHeader());
+    _xlSet(wsZone, 1, 2, 'Contract Sum', _xlSubHeaderRight());
+    _xlSet(wsZone, 1, 3, 'Budget Sum', _xlSubHeaderRight());
+    _xlSet(wsZone, 1, 4, 'Tracked to Date', _xlSubHeaderRight());
+    _xlSet(wsZone, 1, 5, 'Total Profit', _xlSubHeaderRight());
+    _xlSet(wsZone, 1, 6, 'Margin %', _xlSubHeaderRight());
+
+    var zRowOut = 2;
+    var zGrandC = 0, zGrandB = 0;
+    Object.keys(zoneMap).forEach(function(zName) {
+      var z = zoneMap[zName];
+      var p = z.contract - z.budget;
+      var m = z.contract > 0 ? (p / z.contract) : 0;
+      zGrandC += z.contract; zGrandB += z.budget;
+      var parentStyle = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:'F8FAFC'}}, alignment:{vertical:'center'}, border:_xlBorder() };
+      var parentRight = Object.assign({}, parentStyle, { alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00' });
+      _xlSet(wsZone, zRowOut, 0, '', parentStyle);
+      _xlSet(wsZone, zRowOut, 1, zName, parentStyle);
+      _xlSet(wsZone, zRowOut, 2, z.contract, parentRight);
+      _xlSet(wsZone, zRowOut, 3, z.budget, parentRight);
+      _xlSet(wsZone, zRowOut, 4, 0, parentRight);
+      _xlSet(wsZone, zRowOut, 5, p, Object.assign({}, parentRight, { font:{name:'Calibri',sz:11,bold:true,color:{rgb:p>=0?XL_GREEN:XL_RED}} }));
+      _xlSet(wsZone, zRowOut, 6, m, Object.assign({}, parentRight, { font:{name:'Calibri',sz:11,bold:true,color:{rgb:m>=0?XL_GREEN:XL_RED}}, numFmt:'0.00%' }));
+      zRowOut++;
+      Object.keys(z.ccs).forEach(function(ccName) {
+        var cc = z.ccs[ccName];
+        var ip = cc.contract - cc.budget;
+        var im = cc.contract > 0 ? (ip / cc.contract) : 0;
+        var childStyle = { font:{name:'Calibri',sz:10,color:{rgb:'64748B'}}, fill:{patternType:'solid',fgColor:{rgb:'FFFFFF'}}, alignment:{vertical:'center'}, border:_xlBorder() };
+        var childRight = Object.assign({}, childStyle, { alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00' });
+        _xlSet(wsZone, zRowOut, 0, '', childStyle);
+        _xlSet(wsZone, zRowOut, 1, '   ' + ccName, childStyle);
+        _xlSet(wsZone, zRowOut, 2, cc.contract, childRight);
+        _xlSet(wsZone, zRowOut, 3, cc.budget, childRight);
+        _xlSet(wsZone, zRowOut, 4, 0, childRight);
+        _xlSet(wsZone, zRowOut, 5, ip, Object.assign({}, childRight, { font:{name:'Calibri',sz:10,color:{rgb:ip>=0?XL_GREEN:XL_RED}} }));
+        _xlSet(wsZone, zRowOut, 6, im, Object.assign({}, childRight, { font:{name:'Calibri',sz:10,color:{rgb:im>=0?XL_GREEN:XL_RED}}, numFmt:'0.00%' }));
+        zRowOut++;
+      });
+    });
+    var zProfit = zGrandC - zGrandB;
+    var zMargin = zGrandC > 0 ? (zProfit / zGrandC) : 0;
+    _xlSet(wsZone, zRowOut, 0, '', _xlTotalRow());
+    _xlSet(wsZone, zRowOut, 1, 'Total', _xlTotalRow());
+    _xlSet(wsZone, zRowOut, 2, zGrandC, _xlTotalRight());
+    _xlSet(wsZone, zRowOut, 3, zGrandB, _xlTotalRight());
+    _xlSet(wsZone, zRowOut, 4, 0, _xlTotalRight());
+    _xlSet(wsZone, zRowOut, 5, zProfit, _xlTotalRight());
+    _xlSet(wsZone, zRowOut, 6, zMargin, _xlTotalPct());
+
+    wsZone['!cols'] = [{wch:4},{wch:32},{wch:18},{wch:18},{wch:18},{wch:16},{wch:11}];
+    wsZone['!freeze'] = { xSplit: 0, ySplit: 2 };
+    XLSX.utils.book_append_sheet(wb, wsZone, 'Zones');
+  }
+
+  // ---- Download ----
+  var ts = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, 'Budget_Export_' + ts + '.xlsx');
+  showToast('Budget exported to Excel');
+}
+
 function showToast(msg) {
   const t = document.getElementById('toast');
   document.getElementById('toastText').textContent = msg;
@@ -5841,6 +6576,174 @@ function downloadBOQTemplate() {
     showToast('Loading library, try again in a moment...');
     return;
   }
+  return downloadBOQTemplateV2();
+}
+
+function downloadBOQTemplateV2() {
+  // Style helpers (xlsx-js-style)
+  var thin = { style:'thin', color:{rgb:'CCCCCC'} };
+  var border = { top:thin, bottom:thin, left:thin, right:thin };
+  var hdrStyle  = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:'1B2A4A'}}, alignment:{vertical:'center',horizontal:'center'}, border:border };
+  var l1Style   = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:'1B2A4A'}}, alignment:{vertical:'center'}, border:border };
+  var l1Right   = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:'1B2A4A'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:border };
+  var l2Style   = { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:'F0F2F5'}}, alignment:{vertical:'center'}, border:border };
+  var l2Right   = { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:'F0F2F5'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:border };
+  var l3Style   = { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, alignment:{vertical:'center'}, border:border };
+  var l3Right   = { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:border };
+  var l3Qty     = { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'#,##0', border:border };
+  var l1Prov    = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:'A16207'}}, alignment:{vertical:'center'}, border:border };
+  var l1ProvR   = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'FFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:'A16207'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:border };
+  var l2Prov    = { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'92400E'}}, fill:{patternType:'solid',fgColor:{rgb:'FEF3C7'}}, alignment:{vertical:'center'}, border:border };
+  var l2ProvR   = { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'92400E'}}, fill:{patternType:'solid',fgColor:{rgb:'FEF3C7'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:border };
+  var l3Prov    = { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, fill:{patternType:'solid',fgColor:{rgb:'FFFBEB'}}, alignment:{vertical:'center'}, border:border };
+  var l3ProvR   = { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, fill:{patternType:'solid',fgColor:{rgb:'FFFBEB'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:border };
+  var l3ProvQty = { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, fill:{patternType:'solid',fgColor:{rgb:'FFFBEB'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'#,##0', border:border };
+  var totalLeft = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:'E8ECF0'}}, alignment:{vertical:'center'}, border:{top:{style:'medium',color:{rgb:'1B2A4A'}},bottom:{style:'medium',color:{rgb:'1B2A4A'}},left:thin,right:thin} };
+  var totalLabel = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:'E8ECF0'}}, alignment:{vertical:'center',horizontal:'right'}, border:{top:{style:'medium',color:{rgb:'1B2A4A'}},bottom:{style:'medium',color:{rgb:'1B2A4A'}},left:thin,right:thin} };
+  var totalRight = { font:{name:'Calibri',sz:11,bold:true,color:{rgb:'1B2A4A'}}, fill:{patternType:'solid',fgColor:{rgb:'E8ECF0'}}, alignment:{vertical:'center',horizontal:'right'}, numFmt:'$#,##0.00', border:{top:{style:'medium',color:{rgb:'1B2A4A'}},bottom:{style:'medium',color:{rgb:'1B2A4A'}},left:thin,right:thin} };
+
+  function setCell(ws, r, c, v, s) {
+    var ref = XLSX.utils.encode_cell({r:r,c:c});
+    if (typeof v === 'object' && v !== null && v.f) {
+      ws[ref] = { t:'n', f:v.f, s:s };
+    } else if (v === '' || v === null || v === undefined) {
+      ws[ref] = { t:'s', v:'', s:s };
+    } else if (typeof v === 'number') {
+      ws[ref] = { t:'n', v:v, s:s };
+    } else {
+      ws[ref] = { t:'s', v:String(v), s:s };
+    }
+    var range = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : { s:{r:0,c:0}, e:{r:0,c:0} };
+    if (r > range.e.r) range.e.r = r;
+    if (c > range.e.c) range.e.c = c;
+    ws['!ref'] = XLSX.utils.encode_range(range);
+  }
+
+  // [code, desc, unit, qty, rate, amountFormulaOrEmpty, level, isProvisional]
+  var em = '—';   // em dash
+  var sup2 = '²'; // m²
+  var sup3 = '³'; // m³
+  var rows = [
+    ['1',     'Preliminaries',                                              '',          '', '',     {f:'F3+F6'}, 1, false],
+    ['1.1',   '   Site Preparation',                                        '',          '', '',     {f:'SUM(F4:F5)'}, 2, false],
+    ['1.1.1', '      Site Clearing & Grubbing',                             'm'+sup2, 5200, 12.50,   {f:'D4*E4'}, 3, false],
+    ['1.1.2', '      Topsoil Stripping & Stockpiling',                      'm'+sup3, 1800, 18.00,   {f:'D5*E5'}, 3, false],
+    ['1.2',   '   Earthworks',                                              '',          '', '',     {f:'SUM(F7:F8)'}, 2, false],
+    ['1.2.1', '      Bulk Earthworks '+em+' Cut to Fill',                   'm'+sup3, 3500, 42.00,   {f:'D7*E7'}, 3, false],
+    ['1.2.2', '      Subgrade Preparation',                                 'm'+sup2, 4000, 8.50,    {f:'D8*E8'}, 3, false],
+    ['2',     'Structural Works',                                           '',          '', '',     {f:'F10+F13+F16'}, 1, false],
+    ['2.1',   '   Concrete',                                                '',          '', '',     {f:'SUM(F11:F12)'}, 2, false],
+    ['2.1.1', '      Concrete Supply & Pour '+em+' Footings',               'm'+sup3,  480, 295.00,  {f:'D11*E11'}, 3, false],
+    ['2.1.2', '      Concrete Supply & Pour '+em+' Slabs',                  'm'+sup3,  320, 285.00,  {f:'D12*E12'}, 3, false],
+    ['2.2',   '   Reinforcement',                                           '',          '', '',     {f:'SUM(F14:F15)'}, 2, false],
+    ['2.2.1', '      Steel Reinforcement '+em+' Supply & Fix',              'tonne',   120, 2100.00, {f:'D14*E14'}, 3, false],
+    ['2.2.2', '      Mesh Reinforcement '+em+' Supply & Fix',               'm'+sup2, 2400, 28.00,   {f:'D15*E15'}, 3, false],
+    ['2.3',   '   Formwork',                                                '',          '', '',     {f:'SUM(F17:F18)'}, 2, false],
+    ['2.3.1', '      Formwork '+em+' Walls & Columns',                      'm'+sup2, 1800, 58.00,   {f:'D17*E17'}, 3, false],
+    ['2.3.2', '      Formwork '+em+' Beams',                                'm'+sup2,  600, 65.00,   {f:'D18*E18'}, 3, false],
+    ['3',     'Structural Steel',                                           '',          '', '',     {f:'F20'}, 1, false],
+    ['3.1',   '   Steelwork',                                               '',          '', '',     {f:'F21'}, 2, false],
+    ['3.1.1', '      Structural Steelwork '+em+' Supply & Erect',           'tonne',    65, 3800.00, {f:'D21*E21'}, 3, false],
+    ['4',     'Drainage',                                                   '',          '', '',     {f:'F23'}, 1, false],
+    ['4.1',   '   Stormwater',                                              '',          '', '',     {f:'SUM(F24:F25)'}, 2, false],
+    ['4.1.1', '      Stormwater Pipes '+em+' Supply & Lay',                 'lm',      900, 85.00,   {f:'D24*E24'}, 3, false],
+    ['4.1.2', '      Pits & Headwalls',                                     'each',     24, 2200.00, {f:'D25*E25'}, 3, false],
+    ['5',     'Roadway Construction',                                       '',          '', '',     {f:'F27'}, 1, false],
+    ['5.1',   '   Asphalt',                                                 '',          '', '',     {f:'SUM(F28:F29)'}, 2, false],
+    ['5.1.1', '      Asphalt '+em+' Base Course',                           'm'+sup2, 8000, 18.00,   {f:'D28*E28'}, 3, false],
+    ['5.1.2', '      Asphalt '+em+' Wearing Course',                        'm'+sup2, 8000, 22.00,   {f:'D29*E29'}, 3, false],
+    ['P',     'Provisional Items',                                          '',          '', '',     {f:'F31'}, 1, true],
+    ['P.1',   '   Provisional Sums',                                        '',          '', '',     {f:'SUM(F32:F34)'}, 2, true],
+    ['P.1.1', '      Survey & Set-Out (provisional)',                       'item',      1, 8500.00, {f:'D32*E32'}, 3, true],
+    ['P.1.2', '      Site Investigation Allowance',                         'item',      1, 12000.00,{f:'D33*E33'}, 3, true],
+    ['P.1.3', '      Traffic Management Contingency',                       'item',      1, 15000.00,{f:'D34*E34'}, 3, true],
+  ];
+
+  var ws = { '!ref':'A1' };
+  ['Item Code','Description','Unit','Qty','Rate ($)','Amount ($)'].forEach(function(h, ci) { setCell(ws, 0, ci, h, hdrStyle); });
+
+  rows.forEach(function(r, ri) {
+    var rowIdx = ri + 1;
+    var code = r[0], desc = r[1], unit = r[2], qty = r[3], rate = r[4], amount = r[5], level = r[6], prov = r[7];
+    var sCode, sDesc, sUnit, sQty, sRate, sAmt;
+    if (level === 1) {
+      sCode = sDesc = sUnit = sQty = sRate = (prov ? l1Prov : l1Style);
+      sAmt = (prov ? l1ProvR : l1Right);
+    } else if (level === 2) {
+      sCode = sDesc = sUnit = sQty = sRate = (prov ? l2Prov : l2Style);
+      sAmt = (prov ? l2ProvR : l2Right);
+    } else {
+      sCode = sDesc = sUnit = (prov ? l3Prov : l3Style);
+      sQty = (prov ? l3ProvQty : l3Qty);
+      sRate = sAmt = (prov ? l3ProvR : l3Right);
+    }
+    setCell(ws, rowIdx, 0, code, sCode);
+    setCell(ws, rowIdx, 1, desc, sDesc);
+    setCell(ws, rowIdx, 2, unit, sUnit);
+    setCell(ws, rowIdx, 3, qty, sQty);
+    setCell(ws, rowIdx, 4, rate, sRate);
+    setCell(ws, rowIdx, 5, amount, sAmt);
+  });
+
+  var totalIdx = rows.length + 1;
+  setCell(ws, totalIdx, 0, '', totalLeft);
+  setCell(ws, totalIdx, 1, '', totalLeft);
+  setCell(ws, totalIdx, 2, '', totalLeft);
+  setCell(ws, totalIdx, 3, '', totalLeft);
+  setCell(ws, totalIdx, 4, 'TOTAL', totalLabel);
+  setCell(ws, totalIdx, 5, { f:'F2+F9+F19+F22+F26+F30' }, totalRight);
+
+  ws['!cols'] = [{wch:11},{wch:50},{wch:9},{wch:10},{wch:14},{wch:18}];
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  // Instructions sheet
+  var instr = { '!ref':'A1' };
+  setCell(instr, 0, 0, 'BOQ Upload Template '+em+' Instructions', { font:{name:'Calibri',sz:14,bold:true,color:{rgb:'1B2A4A'}}, alignment:{vertical:'center'} });
+  var lines = [
+    ['Purpose', 'Use this template to upload your Bill of Quantities (BOQ) into Varicon Budget Setup.'],
+    ['', ''],
+    ['Three-level hierarchy', 'The template supports three levels with automatic roll-up.'],
+    ['  Level 1', 'Section header (e.g. "1" Preliminaries). Amount = SUM of Level 2 children.'],
+    ['  Level 2', 'Sub-section header (e.g. "1.1" Site Preparation). Amount = SUM of Level 3 children.'],
+    ['  Level 3', 'Line item (e.g. "1.1.1" Site Clearing). Amount = Qty × Rate.'],
+    ['', ''],
+    ['Provisional Items', 'Use code prefix "P" (e.g. P, P.1, P.1.1) for Provisional Items.'],
+    ['', 'These render at the bottom of the budget setup page in an amber palette so they stand out from fixed budget items.'],
+    ['', ''],
+    ['Required Columns', 'Item Code | Description | Unit | Qty | Rate ($) | Amount ($)'],
+    ['  Item Code', 'Use 1, 1.1, 1.1.1 (or P, P.1, P.1.1) format. The number of dots determines the level.'],
+    ['  Description', 'Section, sub-section title, or line item description.'],
+    ['  Unit', 'Unit of measurement '+em+' Level 3 only.'],
+    ['  Qty', 'Quantity of work '+em+' must be a number '+em+' Level 3 only.'],
+    ['  Rate ($)', 'Unit rate in dollars '+em+' must be a number '+em+' Level 3 only.'],
+    ['  Amount ($)', 'Auto-calculated '+em+' do not edit. Level 1/2 use SUM; Level 3 uses Qty × Rate.'],
+    ['', ''],
+    ['Tips', ''],
+    ['  1.', 'Do not rename, reorder, or delete columns.'],
+    ['  2.', 'Add as many rows as needed at any level.'],
+    ['  3.', 'Accepted upload formats: .xlsx, .xls, .csv.'],
+    ['  4.', 'Replace the example rows with your real data '+em+' keep the structure.'],
+    ['  5.', 'This template is also used as the basis for claims.'],
+  ];
+  var instrSubHdr = { font:{name:'Calibri',sz:10,bold:true,color:{rgb:'1B2A4A'}}, alignment:{vertical:'center'} };
+  var instrBody = { font:{name:'Calibri',sz:10,color:{rgb:'334155'}}, alignment:{vertical:'top',wrapText:true} };
+  lines.forEach(function(line, li) {
+    var ri2 = li + 2;
+    var isHdr = line[0] && line[0].length && line[0].charAt(0) !== ' ';
+    setCell(instr, ri2, 0, line[0], isHdr ? instrSubHdr : instrBody);
+    setCell(instr, ri2, 1, line[1], instrBody);
+  });
+  instr['!cols'] = [{wch:24},{wch:75}];
+
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'BOQ');
+  XLSX.utils.book_append_sheet(wb, instr, 'Instructions');
+
+  XLSX.writeFile(wb, 'BOQ_Upload_Template.xlsx');
+  showToast('BOQ template downloaded');
+}
+
+function downloadBOQTemplateLegacy_unused() {
   const wb = XLSX.utils.book_new();
   const rows = [
     ['Item Code', 'Description', 'Unit', 'Qty', 'Rate ($)', 'Amount ($)'],
