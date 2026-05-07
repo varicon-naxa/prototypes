@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Varicon Mobile — Site Dockets Flow</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', Roboto, sans-serif; background: #f5f5f5; color: #1a1a2e; max-width: 414px; margin: 0 auto; min-height: 100vh; overflow-x: hidden; }
+
+  .status-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px; background: #fff; font-size: 12px; font-weight: 600; }
+  .status-bar .right { display: flex; gap: 6px; align-items: center; }
+
+  .screen { display: none; min-height: 100vh; padding-bottom: 80px; }
+  .screen.active { display: block; }
+
+  /* Top nav */
+  .nav { display: flex; align-items: center; padding: 14px 16px; background: #fff; border-bottom: 1px solid #e8e8e8; }
+  .nav .menu, .nav .back { font-size: 22px; cursor: pointer; color: #1a1a2e; margin-right: 14px; }
+  .nav .back { color: #f7941d; }
+  .nav h1 { font-size: 18px; font-weight: 700; flex: 1; color: #1a1a2e; }
+  .nav .icons { display: flex; gap: 16px; font-size: 18px; color: #6b7280; }
+  .nav .icons span { cursor: pointer; }
+
+  /* Welcome */
+  .welcome { padding: 16px; background: #fff; border-bottom: 1px solid #eee; position: relative; }
+  .welcome h2 { font-size: 22px; font-weight: 700; color: #1a1a2e; }
+  .welcome .prev-label { font-size: 13px; color: #9aa1ad; margin-top: 12px; }
+  .welcome .prev-project { font-size: 18px; font-weight: 700; margin-top: 2px; }
+  .welcome .prev-range { font-size: 13px; color: #9aa1ad; margin-top: 4px; max-width: 70%; }
+  .welcome .today { position: absolute; right: 16px; top: 70px; font-size: 13px; color: #6b7280; }
+
+  /* Clock in */
+  .clock-btn { display: block; width: calc(100% - 32px); margin: 18px 16px 0; padding: 18px; border: none; border-radius: 999px; font-size: 18px; font-weight: 700; cursor: pointer; background: #f7941d; color: #1a1a2e; }
+  .clock-btn:active { background: #e8850f; }
+
+  .add-ts { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; font-size: 16px; color: #1a1a2e; cursor: pointer; }
+  .add-ts .plus { color: #6b7280; font-size: 20px; }
+
+  /* Section divider */
+  .divider { height: 8px; background: #f0f3f7; }
+
+  /* Leave actions */
+  .leave-actions { display: flex; gap: 10px; padding: 16px; background: #fff; }
+  .leave-btn { flex: 1; padding: 14px; border-radius: 10px; text-align: center; font-size: 14px; font-weight: 700; cursor: pointer; border: 1px solid #1a1a2e; }
+  .leave-btn.primary { background: #f7941d; color: #1a1a2e; border-color: #f7941d; }
+  .leave-btn.outline { background: #fff; color: #1a1a2e; }
+
+  /* Timesheet card */
+  .ts-section { padding: 12px 16px; background: #f0f3f7; }
+  .ts-card { background: #fff; border-radius: 12px; border: 1px solid #e6e9ee; padding: 16px; display: flex; gap: 12px; }
+  .ts-card .date-pill { background: #f5f5f7; border-radius: 10px; padding: 8px 10px; min-width: 56px; text-align: center; }
+  .ts-card .date-pill .dow { font-size: 12px; color: #6b7280; font-weight: 600; }
+  .ts-card .date-pill .day { font-size: 22px; color: #1a1a2e; font-weight: 700; line-height: 1.1; }
+  .ts-card .date-pill .mon { font-size: 11px; color: #6b7280; font-weight: 600; }
+  .ts-card .body { flex: 1; }
+  .ts-card .top-row { display: flex; align-items: center; justify-content: space-between; }
+  .ts-card .project { font-size: 16px; font-weight: 700; color: #1a1a2e; }
+  .ts-card .multi-day { background: #cfd5de; color: #1a1a2e; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; }
+  .ts-card .clocked-row { font-size: 13px; color: #6b7280; margin-top: 8px; display: flex; align-items: center; gap: 12px; }
+  .ts-card .clocked-row .hours { color: #e53935; font-weight: 700; font-size: 14px; }
+  .ts-card .clocked-row .break { color: #6b7280; }
+  .ts-card .tags { display: flex; gap: 6px; margin-top: 10px; }
+  .ts-tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+  .ts-tag.amber { background: #fff4e0; color: #e65100; }
+  .ts-tag.blue { background: #e6f0ff; color: #1976d2; }
+  .ts-card .status { display: flex; justify-content: flex-end; margin-top: 12px; }
+  .status-pill { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; background: #fff4e0; color: #e65100; }
+
+  /* FAB */
+  .fab { position: fixed; right: calc(50% - 200px); bottom: 90px; background: #f7941d; color: #1a1a2e; border: none; padding: 14px 20px; border-radius: 999px; font-size: 14px; font-weight: 700; box-shadow: 0 6px 16px rgba(247,148,29,.45); display: flex; align-items: center; gap: 8px; cursor: pointer; z-index: 9; }
+
+  /* Bottom nav (6 tabs) */
+  .bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 414px; max-width: 100vw; background: #fff; border-top: 1px solid #e6e9ee; display: flex; padding: 6px 0 14px; z-index: 10; }
+  .btab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 0; cursor: pointer; color: #6b7280; font-size: 10px; font-weight: 600; }
+  .btab .ico { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 16px; }
+  .btab.active { color: #f7941d; }
+  .btab.active .ico { background: #f7941d; color: #1a1a2e; }
+  .btab .label { font-size: 10px; text-align: center; line-height: 1.1; }
+
+  /* ===== CAMERA SCREEN ===== */
+  .cam-screen { background: #0a0a0a; min-height: 100vh; padding-bottom: 0; color: #fff; position: relative; }
+  .cam-top { position: absolute; top: 0; left: 0; right: 0; padding: 14px 16px; display: flex; align-items: center; gap: 14px; z-index: 5; background: linear-gradient(180deg, rgba(0,0,0,.6), transparent); }
+  .cam-top .x { font-size: 26px; cursor: pointer; }
+  .cam-top h1 { font-size: 16px; font-weight: 700; flex: 1; }
+  .cam-top .flash { font-size: 20px; cursor: pointer; opacity: .85; }
+
+  .cam-viewfinder { position: relative; width: 100%; height: 100vh; background: #111; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .cam-viewfinder::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at center, #2a2a2a, #0a0a0a 70%); }
+  .frame-hint { position: relative; width: 78%; max-width: 320px; aspect-ratio: 3/4; border: 2px dashed rgba(255,255,255,.55); border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+  .frame-hint .text { position: absolute; bottom: -42px; left: 0; right: 0; text-align: center; font-size: 13px; color: rgba(255,255,255,.85); font-weight: 600; }
+  .corner { position: absolute; width: 28px; height: 28px; border-color: #f7941d; border-style: solid; border-width: 0; }
+  .corner.tl { top: -2px; left: -2px; border-top-width: 4px; border-left-width: 4px; border-top-left-radius: 8px; }
+  .corner.tr { top: -2px; right: -2px; border-top-width: 4px; border-right-width: 4px; border-top-right-radius: 8px; }
+  .corner.bl { bottom: -2px; left: -2px; border-bottom-width: 4px; border-left-width: 4px; border-bottom-left-radius: 8px; }
+  .corner.br { bottom: -2px; right: -2px; border-bottom-width: 4px; border-right-width: 4px; border-bottom-right-radius: 8px; }
+
+  .cam-controls { position: absolute; bottom: 0; left: 0; right: 0; padding: 24px 32px 36px; display: flex; align-items: center; justify-content: space-between; background: linear-gradient(0deg, rgba(0,0,0,.85), transparent); }
+  .cam-thumb { width: 48px; height: 48px; border-radius: 8px; background: #2b2b2b; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #aaa; cursor: pointer; }
+  .shutter { width: 76px; height: 76px; border-radius: 50%; background: #fff; border: 5px solid rgba(255,255,255,.35); cursor: pointer; box-shadow: 0 0 0 4px rgba(0,0,0,.4) inset; }
+  .shutter:active { transform: scale(.94); }
+  .cam-flip { width: 48px; height: 48px; border-radius: 50%; background: rgba(255,255,255,.12); display: flex; align-items: center; justify-content: center; font-size: 22px; cursor: pointer; }
+
+  .file-input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+
+  /* ===== REVIEW SCREEN ===== */
+  .review-photo { background: #f5f5f5; padding: 16px; }
+  .review-photo .photo-wrap { width: 100%; aspect-ratio: 3/4; max-height: 60vh; background: #ddd; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; color: #888; font-size: 14px; }
+  .review-photo .photo-wrap img { width: 100%; height: 100%; object-fit: cover; }
+  .review-photo .retake { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 12px; padding: 12px; border: 1px solid #d0d0d0; border-radius: 10px; background: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+
+  .field-card { margin: 12px 16px; background: #fff; border-radius: 12px; border: 1px solid #e6e9ee; overflow: hidden; }
+  .field-card .row { padding: 14px 16px; border-bottom: 1px solid #f0f0f0; }
+  .field-card .row:last-child { border-bottom: none; }
+  .field-card .label { font-size: 11px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+  .field-card input, .field-card select, .field-card textarea { width: 100%; border: none; font-size: 15px; font-family: inherit; color: #1a1a2e; background: transparent; padding: 0; outline: none; }
+  .field-card textarea { resize: none; min-height: 60px; }
+
+  .save-btn { display: block; width: calc(100% - 32px); margin: 18px 16px; padding: 16px; border: none; border-radius: 999px; font-size: 16px; font-weight: 700; cursor: pointer; background: #f7941d; color: #1a1a2e; }
+
+  /* ===== DOCKETS LIST ===== */
+  .docket-list { padding: 12px 16px; }
+  .docket-card { background: #fff; border-radius: 12px; border: 1px solid #e6e9ee; padding: 12px; display: flex; gap: 12px; margin-bottom: 10px; }
+  .docket-card .thumb { width: 64px; height: 64px; border-radius: 8px; background: #ddd; flex-shrink: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #888; }
+  .docket-card .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .docket-card .info { flex: 1; min-width: 0; }
+  .docket-card .info .num { font-size: 14px; font-weight: 700; color: #1a1a2e; }
+  .docket-card .info .meta { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .docket-card .info .proj { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .docket-card .pill { font-size: 11px; padding: 3px 8px; border-radius: 6px; align-self: flex-start; }
+  .pill-pending { background: #fff4e0; color: #e65100; }
+  .pill-synced { background: #e6f7ec; color: #2e7d32; }
+
+  .empty-state { text-align: center; padding: 60px 32px; color: #6b7280; }
+  .empty-state .ico-big { font-size: 48px; margin-bottom: 12px; opacity: .4; }
+  .empty-state .title { font-size: 16px; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
+  .empty-state .sub { font-size: 13px; line-height: 1.5; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: #1a1a2e; color: #fff; padding: 12px 20px; border-radius: 999px; font-size: 14px; font-weight: 600; z-index: 100; opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+
+  /* System nav (Android) */
+  .sys-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 414px; max-width: 100vw; background: #000; height: 14px; z-index: 11; }
+</style>
+</head>
+<body>
+
+<!-- ===== SCREEN 1: TIMESHEET HOME ===== -->
+<div class="screen active" id="screen-home">
+  <div class="status-bar">
+    <span>15:23</span>
+    <div class="right"><span>🔇</span><span>📶</span><span>🔋64</span></div>
+  </div>
+  <div class="nav">
+    <span class="menu">☰</span>
+    <h1>My Timesheet</h1>
+    <div class="icons"><span>↻</span><span>🔔</span><span>▽</span></div>
+  </div>
+
+  <div class="welcome">
+    <h2>Welcome back Alec!</h2>
+    <div class="prev-label">Previously worked on</div>
+    <div class="prev-project">Troughton Rd</div>
+    <div class="prev-range">From Thu, 30 Apr, 2026 - Fri, 08 May, 2026</div>
+    <div class="today">Thu, 07 May, 2026</div>
+  </div>
+
+  <button class="clock-btn">Clock in</button>
+  <div class="add-ts"><span class="plus">+</span> Add Timesheet</div>
+
+  <div class="divider"></div>
+
+  <div class="leave-actions">
+    <div class="leave-btn primary">Request leave</div>
+    <div class="leave-btn outline">View all leave</div>
+  </div>
+
+  <div class="ts-section">
+    <div class="ts-card">
+      <div class="date-pill">
+        <div class="dow">Thu</div>
+        <div class="day">30</div>
+        <div class="mon">APR</div>
+      </div>
+      <div class="body">
+        <div class="top-row">
+          <div class="project">(123456) Troughton Rd</div>
+          <div class="multi-day">+1DAY</div>
+        </div>
+        <div class="clocked-row">
+          <span>CLOCKED:</span>
+          <span class="hours">23h 59m</span>
+          <span class="break">☕ 0m</span>
+        </div>
+        <div class="tags">
+          <span class="ts-tag amber">⏱ 1</span>
+          <span class="ts-tag blue">🚜 1</span>
+          <span class="ts-tag blue">📋 1</span>
+        </div>
+        <div class="status"><span class="status-pill">Unapproved</span></div>
+      </div>
+    </div>
+  </div>
+
+  <button class="fab" onclick="goCamera()">⚏ Scan QR</button>
+
+  <div class="bottom-nav">
+    <div class="btab active" onclick="goHome()"><div class="ico">⏱</div><div class="label">Timesheet</div></div>
+    <div class="btab"><div class="ico">📅</div><div class="label">Shifts</div></div>
+    <div class="btab"><div class="ico">📝</div><div class="label">Forms</div></div>
+    <div class="btab"><div class="ico">🚚</div><div class="label">Docket</div></div>
+    <div class="btab" onclick="goCamera()"><div class="ico">📷</div><div class="label">Site Docket</div></div>
+    <div class="btab"><div class="ico">📁</div><div class="label">File</div></div>
+  </div>
+</div>
+
+<!-- ===== SCREEN 2: CAMERA ===== -->
+<div class="screen cam-screen" id="screen-camera">
+  <div class="cam-top">
+    <span class="x" onclick="goHome()">✕</span>
+    <h1>Capture Site Docket</h1>
+    <span class="flash" id="flash-toggle" onclick="toggleFlash()">⚡</span>
+  </div>
+
+  <div class="cam-viewfinder">
+    <div class="frame-hint">
+      <span class="corner tl"></span>
+      <span class="corner tr"></span>
+      <span class="corner bl"></span>
+      <span class="corner br"></span>
+      <div class="text">Align the docket inside the frame</div>
+    </div>
+  </div>
+
+  <div class="cam-controls">
+    <div class="cam-thumb" onclick="goList()">🖼</div>
+    <button class="shutter" onclick="capture()" aria-label="Capture"></button>
+    <div class="cam-flip">⟲</div>
+  </div>
+
+  <input type="file" id="file-input" class="file-input" accept="image/*" capture="environment" onchange="onFileSelected(event)">
+</div>
+
+<!-- ===== SCREEN 3: REVIEW ===== -->
+<div class="screen" id="screen-review">
+  <div class="status-bar">
+    <span>15:24</span>
+    <div class="right"><span>🔇</span><span>📶</span><span>🔋64</span></div>
+  </div>
+  <div class="nav">
+    <span class="back" onclick="goCamera()">←</span>
+    <h1>Review Docket</h1>
+  </div>
+
+  <div class="review-photo">
+    <div class="photo-wrap" id="review-photo-wrap">
+      <span>Photo preview</span>
+    </div>
+    <div class="retake" onclick="goCamera()">↻ Retake photo</div>
+  </div>
+
+  <div class="field-card">
+    <div class="row">
+      <div class="label">Project</div>
+      <input value="(123456) Troughton Rd" />
+    </div>
+    <div class="row">
+      <div class="label">Docket Number</div>
+      <input id="docket-num" placeholder="e.g. DK-00482" />
+    </div>
+    <div class="row">
+      <div class="label">Supplier</div>
+      <input placeholder="e.g. ACME Aggregates" />
+    </div>
+    <div class="row">
+      <div class="label">Date</div>
+      <input value="Thu, 07 May, 2026" />
+    </div>
+  </div>
+
+  <div class="field-card">
+    <div class="row">
+      <div class="label">Notes</div>
+      <textarea placeholder="Add notes about this docket..."></textarea>
+    </div>
+  </div>
+
+  <button class="save-btn" onclick="saveDocket()">Save Docket</button>
+</div>
+
+<!-- ===== SCREEN 4: DOCKETS LIST ===== -->
+<div class="screen" id="screen-list">
+  <div class="status-bar">
+    <span>15:25</span>
+    <div class="right"><span>🔇</span><span>📶</span><span>🔋64</span></div>
+  </div>
+  <div class="nav">
+    <span class="back" onclick="goHome()">←</span>
+    <h1>Site Dockets</h1>
+    <div class="icons"><span onclick="goCamera()">＋</span></div>
+  </div>
+
+  <div class="docket-list" id="docket-list">
+    <div class="empty-state" id="empty-state">
+      <div class="ico-big">📷</div>
+      <div class="title">No site dockets yet</div>
+      <div class="sub">Tap the camera button below to capture a docket photo.</div>
+    </div>
+  </div>
+
+  <button class="fab" onclick="goCamera()" style="bottom: 90px;">📷 Capture</button>
+
+  <div class="bottom-nav">
+    <div class="btab" onclick="goHome()"><div class="ico">⏱</div><div class="label">Timesheet</div></div>
+    <div class="btab"><div class="ico">📅</div><div class="label">Shifts</div></div>
+    <div class="btab"><div class="ico">📝</div><div class="label">Forms</div></div>
+    <div class="btab"><div class="ico">🚚</div><div class="label">Docket</div></div>
+    <div class="btab active" onclick="goList()"><div class="ico">📷</div><div class="label">Site Docket</div></div>
+    <div class="btab"><div class="ico">📁</div><div class="label">File</div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Saved</div>
+<div class="sys-nav"></div>
+
+<script>
+  const dockets = [];
+  let currentPhoto = null;
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    window.scrollTo(0, 0);
+  }
+
+  function goHome() { showScreen('screen-home'); }
+
+  function goCamera() {
+    showScreen('screen-camera');
+    setTimeout(() => document.getElementById('file-input').click(), 250);
+  }
+
+  function goReview() { showScreen('screen-review'); }
+
+  function goList() {
+    renderList();
+    showScreen('screen-list');
+  }
+
+  function capture() {
+    document.getElementById('file-input').click();
+  }
+
+  function onFileSelected(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      currentPhoto = ev.target.result;
+      const wrap = document.getElementById('review-photo-wrap');
+      wrap.innerHTML = '<img src="' + currentPhoto + '" alt="Docket photo" />';
+      const num = 'DK-' + String(Math.floor(Math.random() * 90000) + 10000);
+      document.getElementById('docket-num').value = num;
+      goReview();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function toggleFlash() {
+    const el = document.getElementById('flash-toggle');
+    el.style.opacity = el.style.opacity === '0.4' ? '0.85' : '0.4';
+  }
+
+  function saveDocket() {
+    const num = document.getElementById('docket-num').value || 'DK-00000';
+    dockets.unshift({
+      num,
+      photo: currentPhoto,
+      date: 'Thu, 07 May 2026',
+      project: '(123456) Troughton Rd',
+      status: 'pending'
+    });
+    showToast('Docket saved');
+    goList();
+  }
+
+  function renderList() {
+    const list = document.getElementById('docket-list');
+    if (dockets.length === 0) {
+      list.innerHTML = '<div class="empty-state"><div class="ico-big">📷</div><div class="title">No site dockets yet</div><div class="sub">Tap the camera button below to capture a docket photo.</div></div>';
+      return;
+    }
+    list.innerHTML = dockets.map(d => `
+      <div class="docket-card">
+        <div class="thumb">${d.photo ? `<img src="${d.photo}" />` : '📄'}</div>
+        <div class="info">
+          <div class="num">${d.num}</div>
+          <div class="proj">${d.project}</div>
+          <div class="meta">${d.date}</div>
+        </div>
+        <div class="pill ${d.status === 'pending' ? 'pill-pending' : 'pill-synced'}">${d.status === 'pending' ? 'Pending' : 'Synced'}</div>
+      </div>
+    `).join('');
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1800);
+  }
+</script>
+
+</body>
+</html>

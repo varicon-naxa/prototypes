@@ -224,6 +224,9 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
 .summary-card.primary .s-value{color:#f5a623}
 .summary-card.boq-total{border-color:#3b82f6;background:#eff6ff}
 .summary-card.boq-total .s-value{color:#3b82f6}
+.summary-card.provisional-card{border-color:#f5a623;background:#fffbeb}
+.summary-card.provisional-card .s-value{color:#a16207}
+.summary-card.provisional-card .s-label{color:#a16207;font-weight:600}
 
 /* ── Buttons ── */
 .btn{padding:10px 22px;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;border:none;transition:all .15s;font-family:'Inter',sans-serif;display:inline-flex;align-items:center;gap:8px}
@@ -656,6 +659,7 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
           <div class="summary-card boq-total"><div class="s-label">BOQ Total</div><div class="s-value" id="wbsBOQTotal">$0</div></div>
           <div class="summary-card"><div class="s-label">Budgeted Items</div><div class="s-value" id="wbsBudgeted">0</div></div>
           <div class="summary-card primary"><div class="s-label">Budget Total</div><div class="s-value" id="wbsTotal">$0</div></div>
+          <div class="summary-card provisional-card" id="wbsProvisionalCard" style="display:none"><div class="s-label">Provisional</div><div class="s-value" id="wbsProvisional">$0</div></div>
         </div>
         <div class="actions-bar">
           <button class="btn btn-secondary" onclick="goToStep(2)"><i class="fas fa-arrow-left"></i> Back</button>
@@ -833,6 +837,7 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
           <div class="summary-card boq-total"><div class="s-label">BOQ Total</div><div class="s-value" id="ccBOQTotal">$0</div></div>
           <div class="summary-card"><div class="s-label">Budgeted Items</div><div class="s-value" id="ccBudgeted">0</div></div>
           <div class="summary-card primary"><div class="s-label">Budget Total</div><div class="s-value" id="ccTotal">$0</div></div>
+          <div class="summary-card provisional-card" id="ccProvisionalCard" style="display:none"><div class="s-label">Provisional</div><div class="s-value" id="ccProvisional">$0</div></div>
         </div>
         <div class="actions-bar">
           <button class="btn btn-secondary" onclick="goToStep(2)"><i class="fas fa-arrow-left"></i> Back</button>
@@ -3082,8 +3087,9 @@ function addResourceWBS(idx, fromBtn) {
 
 function calcWBS() {
   const data = getActiveData('wbs');
-  const lineItems = data.filter(r => !r.isHeader);
+  const lineItems = data.filter(r => !r.isHeader && !r.isProvisional);
   let total = 0, budgeted = 0, boqTotal = 0;
+  let provBudget = 0;
 
   // Collect per-row budget amounts
   var ba = [];
@@ -3092,8 +3098,12 @@ function calcWBS() {
     var inp = document.querySelector('[data-wbs-amount="' + i + '"]');
     var v = inp ? (parseFloat(inp.value.replace(/,/g,'')) || 0) : 0;
     ba[i] = v;
-    total += v;
-    if (v > 0) budgeted++;
+    if (r.isProvisional) {
+      provBudget += v;
+    } else {
+      total += v;
+      if (v > 0) budgeted++;
+    }
   });
 
   // Roll up level 2
@@ -3125,11 +3135,29 @@ function calcWBS() {
     el.textContent = '$' + ba[idx].toLocaleString('en-US',{minimumFractionDigits:2});
   });
 
-  data.forEach(r => { if (!r.isHeader) boqTotal += (r.amount || 0); });
+  // BOQ total excludes provisional items; track provisional BOQ separately
+  var provBoq = 0;
+  data.forEach(function(r) {
+    if (r.isHeader) return;
+    if (r.isProvisional) provBoq += (r.amount || 0);
+    else boqTotal += (r.amount || 0);
+  });
   document.getElementById('wbsLineCount').textContent = lineItems.length;
   document.getElementById('wbsBOQTotal').textContent = '$' + boqTotal.toLocaleString();
   document.getElementById('wbsBudgeted').textContent = budgeted;
   document.getElementById('wbsTotal').textContent = '$' + total.toLocaleString();
+  // Show / hide provisional card
+  var wProvCard = document.getElementById('wbsProvisionalCard');
+  var wProvEl = document.getElementById('wbsProvisional');
+  if (wProvCard && wProvEl) {
+    if (provBoq > 0 || provBudget > 0) {
+      wProvCard.style.display = '';
+      wProvEl.innerHTML = '$' + (provBudget > 0 ? provBudget : provBoq).toLocaleString() +
+        '<div style="font-size:11px;font-weight:500;color:#a16207;margin-top:2px;opacity:.8">BOQ $' + provBoq.toLocaleString() + '</div>';
+    } else {
+      wProvCard.style.display = 'none';
+    }
+  }
 }
 
 /* ═══════════════════════════════════════════
@@ -3284,8 +3312,9 @@ function addSplit(idx) {
 
 function calcCC() {
   const data = getActiveData('cc');
-  const lineItems = data.filter(r => !r.isHeader);
+  const lineItems = data.filter(r => !r.isHeader && !r.isProvisional);
   let total = 0, budgeted = 0, boqTotal = 0;
+  let provBudget = 0; // provisional budget total tracked separately
 
   // Collect per-row budget amounts, summing split rows if present
   var ba = [];
@@ -3296,24 +3325,21 @@ function calcCC() {
     // Check if this row has split rows
     var splitContainer = document.getElementById('budgetSplitRows' + i);
     var splitRows = splitContainer ? splitContainer.querySelectorAll('.split-row') : [];
+    var amount = 0;
     if (splitRows.length > 0) {
-      // Sum all split amounts
-      var splitTotal = 0;
       splitContainer.querySelectorAll('[data-budget-split-amount]').forEach(function(sInp) {
-        splitTotal += parseFloat(sInp.value.replace(/,/g,'')) || 0;
+        amount += parseFloat(sInp.value.replace(/,/g,'')) || 0;
       });
-      // Write back to main input
-      if (inp) {
-        inp.value = splitTotal > 0 ? splitTotal.toLocaleString() : '';
-      }
-      ba[i] = splitTotal;
-      total += splitTotal;
-      if (splitTotal > 0) budgeted++;
+      if (inp) inp.value = amount > 0 ? amount.toLocaleString() : '';
     } else {
-      var v = inp ? (parseFloat(inp.value.replace(/,/g,'')) || 0) : 0;
-      ba[i] = v;
-      total += v;
-      if (v > 0) budgeted++;
+      amount = inp ? (parseFloat(inp.value.replace(/,/g,'')) || 0) : 0;
+    }
+    ba[i] = amount;
+    if (r.isProvisional) {
+      provBudget += amount;
+    } else {
+      total += amount;
+      if (amount > 0) budgeted++;
     }
   });
 
@@ -3346,11 +3372,31 @@ function calcCC() {
     el.textContent = '$' + ba[idx].toLocaleString('en-US',{minimumFractionDigits:2});
   });
 
-  data.forEach(r => { if (!r.isHeader) boqTotal += (r.amount || 0); });
+  // BOQ total excludes provisional items; track provisional BOQ separately
+  var provBoq = 0;
+  data.forEach(function(r) {
+    if (r.isHeader) return;
+    if (r.isProvisional) provBoq += (r.amount || 0);
+    else boqTotal += (r.amount || 0);
+  });
   document.getElementById('ccLineCount').textContent = lineItems.length;
   document.getElementById('ccBOQTotal').textContent = '$' + boqTotal.toLocaleString();
   document.getElementById('ccBudgeted').textContent = budgeted;
   document.getElementById('ccTotal').textContent = '$' + total.toLocaleString();
+  // Show / hide provisional card
+  var provCard = document.getElementById('ccProvisionalCard');
+  var provEl = document.getElementById('ccProvisional');
+  var provTotal = provBoq + provBudget;
+  if (provCard && provEl) {
+    if (provBoq > 0 || provBudget > 0) {
+      provCard.style.display = '';
+      // Show "BOQ → Budget" so the user can see both
+      provEl.innerHTML = '$' + (provBudget > 0 ? provBudget : provBoq).toLocaleString() +
+        '<div style="font-size:11px;font-weight:500;color:#a16207;margin-top:2px;opacity:.8">BOQ $' + provBoq.toLocaleString() + '</div>';
+    } else {
+      provCard.style.display = 'none';
+    }
+  }
 }
 
 /* ═══════════════════════════════════════════
@@ -4065,6 +4111,7 @@ function buildReviewPage() {
   // Collect budget amounts from the budget page inputs
   const prefix = isCC ? 'cc' : 'wbs';
   let totalContract = 0, totalBudget = 0;
+  let provContract = 0, provBudget = 0;
   const rows = [];
 
   data.forEach((r, i) => {
@@ -4075,8 +4122,13 @@ function buildReviewPage() {
     const boqAmt = r.amount || 0;
     const amtInput = document.querySelector(`[data-${prefix}-amount="${i}"]`);
     const budgetAmt = amtInput ? (parseFloat(amtInput.value.replace(/,/g,'')) || 0) : 0;
-    totalContract += boqAmt;
-    totalBudget += budgetAmt;
+    if (r.isProvisional) {
+      provContract += boqAmt;
+      provBudget += budgetAmt;
+    } else {
+      totalContract += boqAmt;
+      totalBudget += budgetAmt;
+    }
 
     // For CC path, get the selected cost centre & zone (budget page first, then assign page)
     let ccName = '', zoneName = '';
@@ -4094,8 +4146,9 @@ function buildReviewPage() {
 
   const marginAmt = totalContract - totalBudget;
   const marginPct = totalContract > 0 ? ((marginAmt / totalContract) * 100) : 0;
+  const hasProvisional = (provContract > 0 || provBudget > 0);
 
-  // Stats
+  // Stats — provisional shown separately, not added to main totals
   document.getElementById('reviewStats').innerHTML = `
     <div class="forecast-stat">
       <div class="fs-label">Total Contract Sum</div>
@@ -4109,6 +4162,12 @@ function buildReviewPage() {
       <div class="fs-label">Estimated Budget Margin</div>
       <div class="fs-value ${marginPct >= 0 ? 'green' : ''}">${marginPct.toFixed(2)}%</div>
     </div>
+    ${hasProvisional ? `
+    <div class="forecast-stat" style="background:#fffbeb;border:1px solid #fbbf24">
+      <div class="fs-label" style="color:#a16207;font-weight:600">Provisional <span style="font-weight:400;font-size:10px">(excluded from totals)</span></div>
+      <div class="fs-value" style="color:#a16207">$ ${(provBudget>0?provBudget:provContract).toLocaleString('en-US',{minimumFractionDigits:2})}</div>
+      <div style="font-size:11px;color:#a16207;margin-top:2px">BOQ $ ${provContract.toLocaleString('en-US',{minimumFractionDigits:2})}</div>
+    </div>` : ''}
   `;
 
   // Pre-calculate budget roll-ups for level 1 and 2
@@ -4480,20 +4539,29 @@ function buildBudgetViewPage() {
   const data = getActiveData(currentPath);
   const isCC = currentPath === 'cc';
   let totalContract = 0, totalBudget = 0;
+  let provContract = 0, provBudget = 0;
 
-  // Calc totals
-  data.forEach(r => {
-    if (r.level === 3 || (!r.level)) {
-      totalContract += (r.amount || 0);
+  // Calc totals — exclude provisional items
+  var amtKey0 = currentPath === 'wbs' ? 'wbs' : 'cc';
+  data.forEach(function(r, i) {
+    if (r.isHeader) return;
+    var contract = r.amount || 0;
+    var inp = document.querySelector('[data-' + amtKey0 + '-amount="' + i + '"]');
+    var budget = inp ? (parseFloat(inp.value.replace(/,/g,'')) || 0) : 0;
+    if (r.isProvisional) {
+      provContract += contract;
+      provBudget += budget;
+    } else {
+      totalContract += contract;
+      totalBudget += budget;
     }
   });
-  document.querySelectorAll(`[data-${currentPath === 'wbs' ? 'wbs' : 'cc'}-amount]`).forEach(inp => {
-    totalBudget += parseFloat(inp.value.replace(/,/g,'')) || 0;
-  });
   if (totalBudget === 0) totalBudget = totalContract;
+  if (provBudget === 0 && provContract > 0) provBudget = provContract;
   const marginPct = totalContract > 0 ? ((totalContract - totalBudget) / totalContract * 100) : 0;
+  const hasProvisional = (provContract > 0 || provBudget > 0);
 
-  // Stats bar
+  // Stats bar — Provisional shown as a separate stat, not added to main totals
   document.getElementById('bvStats').innerHTML =
     '<div class="forecast-stat">' +
       '<div class="fs-label">Total Contract Sum</div>' +
@@ -4511,6 +4579,12 @@ function buildBudgetViewPage() {
       '<div class="fs-label">Estimated Budget Margin</div>' +
       '<div class="fs-value ' + (marginPct >= 0 ? 'green' : '') + '">' + marginPct.toFixed(2) + '%</div>' +
     '</div>' +
+    (hasProvisional ?
+    '<div class="forecast-stat" style="background:#fffbeb;border:1px solid #fbbf24">' +
+      '<div class="fs-label" style="color:#a16207;font-weight:600">Provisional <span style="font-weight:400;font-size:10px">(excluded)</span></div>' +
+      '<div class="fs-value" style="color:#a16207">$ ' + provBudget.toLocaleString('en-US',{minimumFractionDigits:2}) + '</div>' +
+      '<div style="font-size:11px;color:#a16207;margin-top:2px">BOQ $ ' + provContract.toLocaleString('en-US',{minimumFractionDigits:2}) + '</div>' +
+    '</div>' : '') +
     '<div class="forecast-stat">' +
       '<div class="fs-label">Status</div>' +
       '<div><span class="bv-status-badge submitted"><i class="fas fa-check-circle"></i> Submitted</span></div>' +
