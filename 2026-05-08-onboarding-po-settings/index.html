@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Onboarding · PO Settings</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; overflow: hidden; }
+
+  /* ============== Wizard chrome ============== */
+  .wizard-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: #fff; z-index: 9999; display: flex; flex-direction: column;
+    overflow-x: hidden;
+  }
+  .wizard-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 32px; background: #1a1a2e; color: #fff; flex-shrink: 0;
+  }
+  .wizard-topbar-left { display: flex; align-items: center; gap: 12px; }
+  .wizard-topbar .v-icon {
+    width: 36px; height: 36px; background: linear-gradient(135deg, #f7941d, #f15a24);
+    border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    color: white; font-weight: 700; font-size: 20px;
+  }
+  .wizard-topbar h1 { font-size: 16px; font-weight: 600; }
+  .wizard-topbar .step-indicator { font-size: 13px; color: rgba(255,255,255,0.6); }
+
+  .wizard-stepper {
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px 16px 16px; background: #fafafa; border-bottom: 1px solid #e0e0e0;
+    flex-shrink: 0; overflow-x: auto;
+  }
+  .wiz-step { display: flex; align-items: center; gap: 5px; }
+  .wiz-step-circle {
+    width: 28px; height: 28px; border-radius: 50%; border: 2px solid #d0d0d0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: #999; background: #fff;
+    transition: all 0.3s; flex-shrink: 0;
+  }
+  .wiz-step-circle.active { border-color: #f7941d; color: #f7941d; background: #fff8f0; }
+  .wiz-step-circle.done { border-color: #4caf50; color: #fff; background: #4caf50; }
+  .wiz-step-label { font-size: 10px; font-weight: 600; letter-spacing: 0.2px; color: #999; white-space: nowrap; transition: color 0.3s; }
+  .wiz-step-label.active { color: #f7941d; }
+  .wiz-step-label.done { color: #4caf50; }
+  .wiz-step-line { width: 24px; height: 2px; background: #d0d0d0; margin: 0 4px; transition: background 0.3s; }
+  .wiz-step-line.done { background: #4caf50; }
+
+  .wizard-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 32px 32px 100px; display: flex; justify-content: center; align-items: flex-start; scroll-behavior: smooth; }
+  .wizard-content { width: 100%; max-width: 800px; }
+  .wizard-content h2 { font-size: 24px; font-weight: 500; margin-bottom: 8px; color: #1a1a2e; }
+  .wizard-content .subtitle { font-size: 14px; color: #666; margin-bottom: 28px; line-height: 1.5; }
+
+  /* ============== Section card with progressive disclosure ============== */
+  .sect {
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+    margin-bottom: 16px; transition: all 0.2s;
+    position: relative; overflow: hidden;
+  }
+  .sect.active { border-color: #d0d0d0; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .sect.locked { background: #fafafa; }
+
+  .sect-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px;
+  }
+  .sect.active .sect-header { border-bottom: 1px solid #f0f0f0; }
+  .sect-header-left { display: flex; align-items: flex-start; gap: 12px; }
+  .sect-badge {
+    width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; transition: all 0.2s;
+    margin-top: 2px;
+  }
+  .sect-badge.active { background: #fff; color: #f7941d; border: 2px solid #f7941d; }
+  .sect-badge.complete { background: #4caf50; color: #fff; }
+  .sect-badge.locked { background: #f0f0f0; color: #aaa; border: 1px solid #d0d0d0; }
+  .sect-title { font-size: 15px; font-weight: 600; color: #1a1a2e; line-height: 1.3; transition: color 0.3s ease; }
+  .sect.locked .sect-title { color: #999; }
+  .sect-hint {
+    font-size: 12px; color: #999; line-height: 1.4;
+    max-height: 0; opacity: 0; overflow: hidden; margin-top: 0;
+    transition: max-height 0.3s ease, opacity 0.25s ease, margin 0.3s ease;
+  }
+  .sect.locked .sect-hint { max-height: 24px; opacity: 1; margin-top: 2px; }
+
+  .sect-action { display: flex; align-items: center; gap: 8px; }
+  .sect-action-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: none; border: none; color: #f7941d; font-size: 12px; font-weight: 600;
+    cursor: pointer; padding: 6px 8px; border-radius: 4px;
+  }
+  .sect-action-link:hover { background: #fff8f0; }
+  .sect-pencil {
+    width: 28px; height: 28px; border-radius: 6px; display: flex;
+    align-items: center; justify-content: center; cursor: pointer;
+    color: #999; transition: all 0.15s; background: none; border: none;
+  }
+  .sect-pencil:hover { background: #f5f5f5; color: #555; }
+
+  /* Animated body — uses max-height + opacity instead of display:none for smooth transitions */
+  .sect-body {
+    padding: 0 20px;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.28s ease 0.05s,
+                padding 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .sect.active .sect-body {
+    padding: 20px;
+    max-height: 3000px;
+    opacity: 1;
+  }
+
+  .sect-summary {
+    padding: 0 20px 0 56px;
+    font-size: 12px;
+    color: #666;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.3s ease 0.12s,
+                padding 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .sect.complete .sect-summary {
+    padding: 0 20px 14px 56px;
+    max-height: 240px;
+    opacity: 1;
+  }
+  .sect-summary-prefilled { color: #999; font-size: 11px; }
+  .sect-summary-prefilled strong { color: #666; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-right: 4px; }
+
+  .sect-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; max-height: 0; opacity: 0; overflow: hidden;
+    border-top: 1px solid transparent; background: #fafafa;
+    transition: max-height 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.28s ease 0.05s,
+                padding 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 0.4s ease;
+  }
+  .sect.active .sect-footer {
+    padding: 12px 20px;
+    max-height: 64px;
+    opacity: 1;
+    border-top-color: #f0f0f0;
+  }
+  .sect-footer-hint { font-size: 11px; color: #999; }
+  .sect-footer-hint kbd { background: #f0f0f0; border: 1px solid #d0d0d0; border-radius: 3px; padding: 1px 4px; font-size: 10px; font-family: -apple-system, monospace; color: #555; margin: 0 1px; }
+
+  /* ============== Form rows ============== */
+  .form-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0; border-bottom: 1px solid #f5f5f5;
+  }
+  .form-row:last-child { border-bottom: none; }
+  .form-label { font-size: 14px; color: #444; display: flex; align-items: center; gap: 6px; }
+  .form-label .info-tip {
+    width: 16px; height: 16px; background: #ddd; color: #666; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; cursor: help; position: relative;
+  }
+  .form-label .info-tip .tooltip {
+    display: none; position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #333; color: #fff; font-size: 12px; font-weight: 400; padding: 8px 12px;
+    border-radius: 6px; width: 320px; line-height: 1.4; z-index: 10;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+  .form-label .info-tip:hover .tooltip { display: block; }
+
+  .form-select, .form-input {
+    padding: 8px 12px; border: 1px solid #d0d0d0; border-radius: 6px;
+    font-size: 13px; background: #fff; min-width: 260px;
+    font-family: inherit;
+  }
+  .form-select { padding-right: 32px; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+  }
+  .form-input:focus, .form-select:focus { outline: none; border-color: #f7941d; }
+
+  .toggle { width: 44px; height: 24px; background: #ccc; border-radius: 12px; position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+  .toggle.on { background: #f7941d; }
+  .toggle::after { content: ''; position: absolute; width: 20px; height: 20px; background: #fff; border-radius: 50%; top: 2px; left: 2px; transition: transform 0.2s; }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* Recommended-setting warning */
+  .warn-tip {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #c62828; color: #fff;
+    display: none; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; cursor: help; position: relative;
+    margin-right: 4px;
+  }
+  .warn-tip.on { display: inline-flex; }
+  .warn-tip .tooltip {
+    display: none; position: absolute; bottom: 28px; left: 50%; transform: translateX(-50%);
+    background: #c62828; color: #fff; font-size: 12px; font-weight: 400;
+    padding: 10px 14px; border-radius: 8px; width: 280px; line-height: 1.4; z-index: 50;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+  }
+  .warn-tip .tooltip::after {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: #c62828;
+  }
+  .warn-tip:hover .tooltip { display: block; }
+
+  /* Token legend */
+  .token-legend {
+    padding: 8px 0 4px; font-size: 12px; color: #666; line-height: 1.6;
+  }
+  .token-legend strong { color: #444; }
+  .token-legend code {
+    background: #f0f0f0; padding: 2px 6px; border-radius: 3px;
+    font-family: 'SF Mono', Menlo, monospace; font-size: 11px;
+  }
+
+  /* PO preview block */
+  .po-preview-card {
+    padding: 14px 16px; background: #fff8f0; border: 1px dashed #f7941d;
+    border-radius: 8px; margin: 16px 0;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .po-preview-card-label { font-size: 11px; font-weight: 700; color: #f7941d; text-transform: uppercase; letter-spacing: 0.6px; }
+  .po-preview-card-value { font-size: 22px; font-weight: 700; color: #1a1a2e; font-family: 'SF Mono', Menlo, monospace; margin-top: 2px; }
+  .po-preview-card-tag { font-size: 10px; color: #999; background: #fff; padding: 3px 8px; border-radius: 4px; border: 1px solid #e0e0e0; font-family: 'SF Mono', Menlo, monospace; }
+
+  /* Required pill */
+  .required-marker { color: #e53935; font-weight: 700; margin-left: 2px; }
+
+  /* ============== How approvals work readme ============== */
+  .readme {
+    background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px;
+    padding: 16px; margin-bottom: 20px;
+  }
+  .readme-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .readme-head-title {
+    font-size: 11px; font-weight: 700; color: #444;
+    text-transform: uppercase; letter-spacing: 0.7px;
+  }
+  .readme-head-meta {
+    font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .readme-stages {
+    display: grid; grid-template-columns: 1fr auto 1fr auto 1fr;
+    gap: 8px; align-items: stretch;
+  }
+  .readme-stage {
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+    padding: 10px 12px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .readme-stage-head { display: flex; align-items: center; gap: 6px; }
+  .readme-stage-num {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff8f0; color: #f7941d; border: 1px solid #ffd9a8;
+    font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  }
+  .readme-stage-label { font-size: 13px; font-weight: 600; color: #1a1a2e; }
+  .readme-stage-what { font-size: 11px; color: #666; line-height: 1.4; }
+  .readme-arrow { display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 14px; }
+
+  .readme-default {
+    background: #fff; border: 1px solid #e0e0e0; border-radius: 6px;
+    padding: 12px; margin-top: 12px;
+  }
+  .readme-default-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .readme-default-title {
+    font-size: 10px; font-weight: 700; color: #888;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .readme-default-meta {
+    font-size: 10px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .readme-default p { font-size: 12px; color: #555; line-height: 1.5; }
+  .readme-default p strong { color: #1a1a2e; }
+
+  .readme-disclosure {
+    margin-top: 12px;
+  }
+  .readme-disclosure summary {
+    cursor: pointer; list-style: none; color: #f7941d;
+    font-size: 12px; font-weight: 600;
+    padding: 4px 0;
+  }
+  .readme-disclosure summary::-webkit-details-marker { display: none; }
+  .readme-disclosure ul {
+    margin-top: 8px; padding-left: 4px; font-size: 12px; color: #666;
+    line-height: 1.6; list-style: none;
+  }
+  .readme-disclosure li { padding: 3px 0; }
+  .readme-disclosure li strong { color: #1a1a2e; }
+
+  /* ============== Workflow stage cards ============== */
+  .stages-row {
+    display: flex; gap: 10px; align-items: stretch; margin-bottom: 12px;
+  }
+  .stage-card {
+    flex: 1; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;
+    padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .stage-card-head {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .stage-card-label {
+    font-size: 11px; font-weight: 700; color: #888;
+    text-transform: uppercase; letter-spacing: 0.6px;
+  }
+  .stage-card-count {
+    background: #f0f0f0; color: #666; font-size: 10px; font-weight: 700;
+    padding: 2px 6px; border-radius: 4px;
+  }
+
+  .approver-chip {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #fff8f0; border: 1px solid #ffd9a8; border-radius: 6px;
+    padding: 6px 8px; gap: 6px;
+  }
+  .approver-chip-name {
+    font-size: 12px; font-weight: 600; color: #c65a04; flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .approver-chip-x {
+    background: none; border: none; color: rgba(198, 90, 4, 0.6);
+    cursor: pointer; padding: 2px; line-height: 0;
+  }
+  .approver-chip-x:hover { color: #c65a04; }
+
+  .add-approver-btn {
+    background: none; border: 1px dashed #d0d0d0; color: #888;
+    padding: 6px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;
+    transition: all 0.15s; font-family: inherit;
+  }
+  .add-approver-btn:hover { border-color: #b0b0b0; color: #555; }
+
+  .threshold-pill {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #fafafa; border: 1px dashed #d0d0d0; border-radius: 6px;
+    padding: 6px 8px; cursor: pointer; transition: all 0.15s;
+    font-family: inherit;
+  }
+  .threshold-pill:hover { border-color: #b0b0b0; background: #f5f5f5; }
+  .threshold-pill.set { background: #fff; border-style: solid; border-color: #f7941d; }
+  .threshold-pill-label {
+    font-size: 9px; color: #999; text-transform: uppercase; letter-spacing: 0.6px;
+  }
+  .threshold-pill-value {
+    font-size: 12px; font-weight: 600; color: #444;
+    font-family: 'SF Mono', Menlo, monospace;
+  }
+  .threshold-pill.set .threshold-pill-value { color: #1a1a2e; }
+
+  .threshold-editor {
+    background: #fafafa; border: 1px solid #e0e0e0; border-radius: 6px;
+    padding: 8px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .threshold-editor-head {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 9px; color: #888; text-transform: uppercase; letter-spacing: 0.6px;
+  }
+  .threshold-editor-done {
+    background: none; border: none; color: #f7941d;
+    font-size: 10px; font-weight: 700; cursor: pointer; font-family: inherit;
+  }
+  .threshold-editor select.form-select { min-width: 0; width: 100%; padding: 6px 28px 6px 8px; font-size: 12px; }
+  .threshold-editor .amt-row {
+    display: flex; align-items: center; gap: 4px; padding: 0 8px;
+    background: #fff; border: 1px solid #d0d0d0; border-radius: 6px;
+  }
+  .threshold-editor .amt-row span { color: #999; font-size: 12px; }
+  .threshold-editor .amt-row input {
+    border: none; outline: none; padding: 6px 0; font-size: 12px;
+    font-family: 'SF Mono', Menlo, monospace; width: 100%; background: transparent;
+  }
+
+  .stage-arrow {
+    display: flex; align-items: center; color: #ccc;
+    font-size: 16px; font-weight: 300;
+  }
+
+  .stage-helper {
+    font-size: 11px; color: #888; margin-top: 8px;
+  }
+  .stage-helper strong { color: #555; }
+
+  /* ============== Footer ============== */
+  .wizard-footer {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 10000;
+    background: #fff; border-top: 1px solid #e0e0e0;
+  }
+  .wizard-footer-progress {
+    height: 2px; width: 100%; background: #f0f0f0;
+  }
+  .wizard-footer-progress-fill {
+    height: 100%; background: #f7941d; transition: width 0.5s ease-out;
+  }
+  .wizard-footer-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 32px;
+  }
+  .btn {
+    font-family: inherit; cursor: pointer; border-radius: 6px;
+    font-size: 14px; font-weight: 600; padding: 9px 18px;
+    transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-ghost { background: none; border: none; color: #666; }
+  .btn-ghost:hover { background: #f5f5f5; color: #333; }
+  .btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: #f7941d; color: #fff; border: none; padding: 10px 22px; }
+  .btn-primary:hover { background: #e8850f; }
+  .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+  .footer-shortcut {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: #999;
+  }
+
+  /* ============== Helper styles ============== */
+  .toggles-group {
+    margin-top: 8px; border: 1px solid #e0e0e0; border-radius: 8px;
+    background: #fafafa; overflow: hidden;
+  }
+  .toggle-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding: 12px 14px; gap: 12px; border-bottom: 1px solid #ececec;
+  }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-row-text label { font-size: 13px; font-weight: 600; color: #333; display: flex; align-items: center; gap: 4px; }
+  .toggle-row-text p { font-size: 12px; color: #777; line-height: 1.4; margin-top: 2px; }
+
+  /* Form section helper */
+  .form-section { padding: 16px 0; border-bottom: 1px solid #f0f0f0; }
+  .form-section:first-child { padding-top: 0; }
+  .form-section:last-child { border-bottom: none; padding-bottom: 0; }
+  .form-section-title { font-size: 13px; font-weight: 700; color: #444; margin-bottom: 4px; }
+  .form-section-desc { font-size: 12px; color: #888; line-height: 1.4; margin-bottom: 12px; }
+
+  /* ============== Locked summary preview ============== */
+  .locked-preview {
+    margin: 0 20px 0 56px;
+    padding: 0 16px;
+    background: #fafafa;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.3s ease,
+                padding 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+                margin 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 0.3s ease;
+  }
+  .sect.locked .locked-preview {
+    margin: 0 20px 16px 56px;
+    padding: 12px 16px;
+    border-color: #ececec;
+    max-height: 280px;
+    opacity: 1;
+  }
+
+  /* ============== Badge pop on completion ============== */
+  @keyframes badge-pop {
+    0% { transform: scale(1); }
+    40% { transform: scale(1.18); }
+    70% { transform: scale(0.96); }
+    100% { transform: scale(1); }
+  }
+  .sect-badge.complete { animation: badge-pop 0.42s cubic-bezier(0.22, 1, 0.36, 1); }
+
+  /* ============== Section card itself — soft transition between states ============== */
+  .sect {
+    transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease,
+                max-height 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.3s ease, margin 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    max-height: 5000px;
+  }
+  .sect.hidden {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0;
+    border-color: transparent;
+    pointer-events: none;
+  }
+  .locked-preview-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; margin-bottom: 6px;
+  }
+  .locked-preview-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.6px;
+    text-transform: uppercase; color: #888;
+  }
+  .locked-preview-meta {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.4px;
+    text-transform: uppercase; color: #aaa;
+  }
+  .locked-preview-body {
+    font-size: 12.5px; color: #666; line-height: 1.5;
+  }
+  .locked-preview-body strong { color: #333; font-weight: 600; }
+  .locked-preview-stages {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    margin-top: 8px;
+  }
+  .locked-preview-stage {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; background: #fff; border: 1px solid #e0e0e0;
+    border-radius: 4px; font-size: 11px; color: #555;
+  }
+  .locked-preview-stage-num {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #f0f0f0; color: #888; font-size: 9px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .locked-preview-arrow { color: #ccc; font-size: 11px; }
+
+  /* Workflow summary (compact) */
+  .wf-summary-line {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    font-size: 12px; color: #555;
+  }
+  .wf-summary-line .pill-amount {
+    background: #f0f0f0; padding: 2px 7px; border-radius: 3px;
+    font-size: 11px; font-weight: 600; color: #444;
+    font-family: 'SF Mono', Menlo, monospace;
+  }
+  .wf-summary-line .pill-amount.set {
+    background: #fff8f0; color: #c65a04;
+  }
+  .wf-summary-line strong { color: #1a1a2e; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="wizard-overlay">
+  <!-- ============== Topbar ============== -->
+  <div class="wizard-topbar">
+    <div class="wizard-topbar-left">
+      <div class="v-icon">V</div>
+      <h1>Varicon Setup</h1>
+    </div>
+    <div class="step-indicator">Step 3 of 8</div>
+  </div>
+
+  <!-- ============== Stepper ============== -->
+  <div class="wizard-stepper">
+    <div class="wiz-step"><div class="wiz-step-circle done">✓</div><div class="wiz-step-label done">Project</div></div>
+    <div class="wiz-step-line done"></div>
+    <div class="wiz-step"><div class="wiz-step-circle done">✓</div><div class="wiz-step-label done">Accounting</div></div>
+    <div class="wiz-step-line done"></div>
+    <div class="wiz-step"><div class="wiz-step-circle active">3</div><div class="wiz-step-label active">PO Settings</div></div>
+    <div class="wiz-step-line"></div>
+    <div class="wiz-step"><div class="wiz-step-circle">4</div><div class="wiz-step-label">Bills</div></div>
+    <div class="wiz-step-line"></div>
+    <div class="wiz-step"><div class="wiz-step-circle">5</div><div class="wiz-step-label">Acc. Codes</div></div>
+    <div class="wiz-step-line"></div>
+    <div class="wiz-step"><div class="wiz-step-circle">6</div><div class="wiz-step-label">Resources</div></div>
+    <div class="wiz-step-line"></div>
+    <div class="wiz-step"><div class="wiz-step-circle">7</div><div class="wiz-step-label">Suppliers</div></div>
+    <div class="wiz-step-line"></div>
+    <div class="wiz-step"><div class="wiz-step-circle">8</div><div class="wiz-step-label">Tracking</div></div>
+  </div>
+
+  <!-- ============== Body ============== -->
+  <div class="wizard-body">
+    <div class="wizard-content">
+      <h2>Set up purchase orders</h2>
+      <p class="subtitle">A couple of decisions about how POs work on this project — numbering, where supplier invoices land, and who signs off.</p>
+
+      <!-- ============== Section 1: General Settings ============== -->
+      <section class="sect active" id="sect1">
+        <div class="sect-header">
+          <div class="sect-header-left">
+            <div class="sect-badge active" id="sect1-badge">1</div>
+            <div>
+              <div class="sect-title">How POs are numbered &amp; sent</div>
+            </div>
+          </div>
+          <div class="sect-action" id="sect1-action"></div>
+        </div>
+
+        <!-- Summary (when complete) -->
+        <div class="sect-summary" id="sect1-summary"></div>
+
+        <!-- Body -->
+        <div class="sect-body">
+          <div class="form-section">
+            <div class="form-section-title">PO Number Format</div>
+            <div class="form-section-desc">Configure the prefix and starting number for purchase orders.</div>
+
+            <div class="form-row">
+              <div class="form-label">
+                Prefix
+                <span class="info-tip">?<span class="tooltip">Tokens resolve per project. Job Number = [JobNumber], Project Name = [ProjectName].</span></span>
+              </div>
+              <select class="form-select" id="poPrefix" onchange="updatePOPreview()">
+                <option value="PO-[JobNumber]-" selected>PO-[JobNumber]-</option>
+                <option value="PO-[ProjectName]-">PO-[ProjectName]-</option>
+                <option value="[ProjectName]-">[ProjectName]-</option>
+                <option value="PO-">PO-</option>
+              </select>
+            </div>
+
+            <div class="token-legend">
+              <strong>Tokens:</strong>
+              <code>[JobNumber]</code> project's job code ·
+              <code>[ProjectName]</code> slugified name
+            </div>
+
+            <div class="form-row">
+              <div class="form-label">
+                Suffix
+                <span class="info-tip">?<span class="tooltip">Number padding for the auto-incrementing portion.</span></span>
+              </div>
+              <select class="form-select" id="poSuffix" onchange="updatePOPreview()">
+                <option value="0001" selected>0001 (4 digits)</option>
+                <option value="001">001 (3 digits)</option>
+                <option value="01">01 (2 digits)</option>
+                <option value="1">1 (no padding)</option>
+              </select>
+            </div>
+
+            <div class="po-preview-card">
+              <div>
+                <div class="po-preview-card-label">Your first PO will be</div>
+                <div class="po-preview-card-value" id="poPreview">PO-VAR-001-0001</div>
+              </div>
+              <span class="po-preview-card-tag">preview</span>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-row">
+              <div class="form-label">
+                Default GST Treatment
+                <span class="info-tip">?<span class="tooltip">Applies to new POs. Existing POs are not affected.</span></span>
+              </div>
+              <select class="form-select" id="poGst">
+                <option value="exclusive" selected>GST Exclusive</option>
+                <option value="inclusive">GST Inclusive</option>
+                <option value="none">No GST</option>
+              </select>
+            </div>
+
+            <div class="form-row" style="border-bottom:none;">
+              <div class="form-label">
+                Invoice Email Address<span class="required-marker">*</span>
+                <span class="info-tip">?<span class="tooltip">Suppliers email invoices to this address. We'll match them to POs automatically.</span></span>
+              </div>
+              <input type="email" class="form-input" id="invoiceEmail" value="kusum.chhetri@varicon.com.au" placeholder="invoices@yourdomain.com" oninput="checkSect1()">
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="toggles-group">
+              <div class="toggle-row">
+                <div class="toggle-row-text">
+                  <label>
+                    <span class="warn-tip" id="reqApprovalWarn">!<span class="tooltip">This is not the Varicon recommended setting. Refer to the Varicon Knowledge Base for more information.</span></span>
+                    Require approval before sending
+                  </label>
+                  <p>POs route through Submit → Approve → Close. Turn off to send directly to the supplier.</p>
+                </div>
+                <div class="toggle on" id="reqApproval" onclick="toggleApproval(this)"></div>
+              </div>
+              <div class="toggle-row">
+                <div class="toggle-row-text">
+                  <label>
+                    <span class="warn-tip on" id="trackDeliveryWarn">!<span class="tooltip">This is not the Varicon recommended setting. Refer to the Varicon Knowledge Base for more information.</span></span>
+                    Track delivery status
+                  </label>
+                  <p>Mark each PO as ordered, in transit, or received. Closes automatically once everything's in.</p>
+                </div>
+                <div class="toggle" id="trackDelivery" onclick="toggleTrackDelivery(this)"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sect-footer">
+          <span class="sect-footer-hint">
+            <kbd>⌘</kbd><kbd>↵</kbd> to continue
+          </span>
+          <button class="btn btn-primary" id="sect1-advance" onclick="completeSect1()">Looks good →</button>
+        </div>
+      </section>
+
+      <!-- ============== Section 2: Approval Workflow ============== -->
+      <section class="sect locked" id="sect2">
+        <div class="sect-header">
+          <div class="sect-header-left">
+            <div class="sect-badge locked" id="sect2-badge">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            </div>
+            <div>
+              <div class="sect-title">Who approves a purchase order</div>
+              <div class="sect-hint" id="sect2-hint">We'll set the approval flow once numbering is done</div>
+            </div>
+          </div>
+          <div class="sect-action" id="sect2-action"></div>
+        </div>
+
+        <div class="sect-summary" id="sect2-summary"></div>
+        <div class="locked-preview" id="sect2-locked-preview">
+          <div class="locked-preview-head">
+            <span class="locked-preview-label">Current setup</span>
+            <span class="locked-preview-meta">1 role · Any amount</span>
+          </div>
+          <div class="locked-preview-body">
+            <strong>Senior Manager — Executive</strong> handles every stage, on POs of any amount. Simple and safe — every PO has a clear path through.
+          </div>
+          <div class="locked-preview-stages">
+            <span class="locked-preview-stage"><span class="locked-preview-stage-num">1</span>Submit</span>
+            <span class="locked-preview-arrow">→</span>
+            <span class="locked-preview-stage"><span class="locked-preview-stage-num">2</span>Approve</span>
+            <span class="locked-preview-arrow">→</span>
+            <span class="locked-preview-stage"><span class="locked-preview-stage-num">3</span>Close</span>
+          </div>
+        </div>
+
+        <div class="sect-body">
+          <!-- Readme -->
+          <div class="readme">
+            <div class="readme-head">
+              <div class="readme-head-title">How approvals work</div>
+              <div class="readme-head-meta">3 stages</div>
+            </div>
+            <div class="readme-stages">
+              <div class="readme-stage">
+                <div class="readme-stage-head">
+                  <span class="readme-stage-num">1</span>
+                  <span class="readme-stage-label">Submit</span>
+                </div>
+                <div class="readme-stage-what">Creates and sends the PO for review</div>
+              </div>
+              <div class="readme-arrow">›</div>
+              <div class="readme-stage">
+                <div class="readme-stage-head">
+                  <span class="readme-stage-num">2</span>
+                  <span class="readme-stage-label">Approve</span>
+                </div>
+                <div class="readme-stage-what">Signs off that the spend is authorised</div>
+              </div>
+              <div class="readme-arrow">›</div>
+              <div class="readme-stage">
+                <div class="readme-stage-head">
+                  <span class="readme-stage-num">3</span>
+                  <span class="readme-stage-label">Close</span>
+                </div>
+                <div class="readme-stage-what">Confirms goods or services were received</div>
+              </div>
+            </div>
+
+            <div class="readme-default">
+              <div class="readme-default-head">
+                <div class="readme-default-title">Your default setup</div>
+                <div class="readme-default-meta">1 role · any amount</div>
+              </div>
+              <p><strong>Senior Manager — Executive</strong> handles all three stages, on POs of any amount. Simple and safe — every PO has a clear path through.</p>
+            </div>
+
+            <details class="readme-disclosure">
+              <summary>When you outgrow this →</summary>
+              <ul>
+                <li><strong>Add more approvers per stage —</strong> anyone with that role can action a PO; only one needs to.</li>
+                <li><strong>Split by amount —</strong> e.g. PMs handle POs under $5k, Senior Manager above. The system picks the matching approver automatically.</li>
+                <li><strong>Combine —</strong> multiple approvers can each have their own amount band on the same stage.</li>
+              </ul>
+            </details>
+          </div>
+
+          <!-- Workflow stage cards -->
+          <div class="stages-row" id="stagesRow">
+            <!-- Built by JS -->
+          </div>
+
+          <p class="stage-helper">
+            Prefilled with what most projects use — tweak any tile, or hit
+            <strong>Looks good</strong> to accept.
+          </p>
+        </div>
+
+        <div class="sect-footer" id="sect2-footer">
+          <span class="sect-footer-hint">
+            <kbd>⌘</kbd><kbd>↵</kbd> to continue
+          </span>
+          <button class="btn btn-primary" onclick="completeSect2()">Looks good →</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ============== Footer ============== -->
+  <div class="wizard-footer">
+    <div class="wizard-footer-progress">
+      <div class="wizard-footer-progress-fill" id="progressFill" style="width: 37.5%;"></div>
+    </div>
+    <div class="wizard-footer-row">
+      <button class="btn btn-ghost">← Back</button>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span class="footer-shortcut" id="footerShortcut" style="display:none;">
+          <kbd style="background:#f0f0f0;border:1px solid #d0d0d0;border-radius:3px;padding:1px 4px;font-size:10px;color:#555;">⌘</kbd>
+          <kbd style="background:#f0f0f0;border:1px solid #d0d0d0;border-radius:3px;padding:1px 4px;font-size:10px;color:#555;">↵</kbd>
+        </span>
+        <button class="btn btn-ghost">Skip for now</button>
+        <button class="btn btn-primary" id="continueBtn" disabled>Continue →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== State =====
+  const state = {
+    requireApproval: true,
+    sect1Done: false,
+    sect2Done: false,
+    submit: { approvers: ['Senior Manager — Executive'], threshold: { kind: 'any' } },
+    approve: { approvers: ['Senior Manager — Executive'], threshold: { kind: 'any' } },
+    close: { approvers: ['Senior Manager — Executive'], threshold: { kind: 'any' } },
+  };
+
+  // ===== Numbering preview =====
+  function updatePOPreview() {
+    const prefix = document.getElementById('poPrefix').value;
+    const suffix = document.getElementById('poSuffix').value;
+    const sample = prefix.replace('[JobNumber]', 'VAR-001').replace('[ProjectName]', 'Acme');
+    document.getElementById('poPreview').textContent = sample + suffix;
+  }
+  updatePOPreview();
+
+  // ===== Validation =====
+  function checkSect1() {
+    const email = document.getElementById('invoiceEmail').value.trim();
+    document.getElementById('sect1-advance').disabled = !email;
+  }
+  checkSect1();
+
+  // ===== Toggle approval =====
+  function toggleApproval(el) {
+    el.classList.toggle('on');
+    state.requireApproval = el.classList.contains('on');
+    const sect2 = document.getElementById('sect2');
+    if (state.requireApproval) {
+      sect2.classList.remove('hidden');
+    } else {
+      sect2.classList.add('hidden');
+    }
+    document.getElementById('reqApprovalWarn').classList.toggle('on', !state.requireApproval);
+    refreshContinue();
+  }
+
+  function toggleTrackDelivery(el) {
+    el.classList.toggle('on');
+    const on = el.classList.contains('on');
+    // Recommended is ON — surface warning when turned off
+    document.getElementById('trackDeliveryWarn').classList.toggle('on', !on);
+  }
+
+  // ===== Section 1 advance =====
+  function completeSect1() {
+    state.sect1Done = true;
+    const sect1 = document.getElementById('sect1');
+    sect1.classList.remove('active');
+    sect1.classList.add('complete');
+    const badge = sect1.querySelector('#sect1-badge');
+    badge.className = 'sect-badge complete';
+    badge.innerHTML = '✓';
+
+    // Build summary
+    const summary = document.getElementById('sect1-summary');
+    const prefix = document.getElementById('poPrefix').value;
+    const suffix = document.getElementById('poSuffix').value;
+    const sample = prefix.replace('[JobNumber]', 'VAR-001').replace('[ProjectName]', 'Acme') + suffix;
+    const email = document.getElementById('invoiceEmail').value;
+    const gst = document.getElementById('poGst').value;
+    const gstLabel = gst === 'exclusive' ? 'GST Exclusive' : gst === 'inclusive' ? 'GST Inclusive' : 'No GST';
+    const trackDelivery = document.getElementById('trackDelivery').classList.contains('on');
+    summary.innerHTML = `
+      <div style="display:grid; grid-template-columns: 80px 1fr; gap: 4px 12px; font-size:12px;">
+        <span style="color:#999;">Format</span>
+        <span style="font-family:'SF Mono',monospace; color:#1a1a2e;">${sample}</span>
+        <span style="color:#999;">Inbox</span>
+        <span style="color:#444;">${email}</span>
+        <span style="color:#999;">GST</span>
+        <span style="color:#444;">${gstLabel}</span>
+        <span style="color:#999;">Options</span>
+        <span style="display:flex; flex-wrap:wrap; gap:4px;">
+          ${state.requireApproval ? '<span style="background:#fff8f0;color:#c65a04;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600;">Approval required</span>' : ''}
+          ${trackDelivery ? '<span style="background:#f0f0f0;color:#444;padding:2px 6px;border-radius:3px;font-size:10px;font-weight:600;">Delivery tracking</span>' : ''}
+          ${!state.requireApproval && !trackDelivery ? '<span style="color:#aaa;">None</span>' : ''}
+        </span>
+      </div>
+    `;
+
+    // Add edit pencil
+    const action = document.getElementById('sect1-action');
+    action.innerHTML = '<button class="sect-pencil" onclick="editSect1()" aria-label="Edit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>';
+
+    // Unlock section 2 if needed — wait for the collapse to play first so the
+    // viewport doesn't jump
+    if (state.requireApproval) {
+      // Stagger: section 1 collapse begins immediately, section 2 unlock kicks
+      // in mid-collapse so the two motions overlap and feel continuous.
+      setTimeout(() => unlockSect2(), 180);
+    } else {
+      refreshContinue();
+    }
+  }
+
+  function editSect1() {
+    state.sect1Done = false;
+    const sect1 = document.getElementById('sect1');
+    sect1.classList.remove('complete');
+    sect1.classList.add('active');
+    const badge = sect1.querySelector('#sect1-badge');
+    badge.className = 'sect-badge active';
+    badge.textContent = '1';
+    document.getElementById('sect1-action').innerHTML = '';
+    relockSect2();
+    refreshContinue();
+    // Smoothly bring section 1 back into view
+    setTimeout(() => {
+      sect1.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  }
+
+  function relockSect2() {
+    const sect2 = document.getElementById('sect2');
+    sect2.classList.remove('active', 'complete');
+    sect2.classList.add('locked');
+    if (!state.requireApproval) sect2.classList.add('hidden');
+    const badge = sect2.querySelector('#sect2-badge');
+    if (badge) {
+      badge.className = 'sect-badge locked';
+      badge.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>';
+    }
+    const action = document.getElementById('sect2-action');
+    if (action) action.innerHTML = '';
+    state.sect2Done = false;
+  }
+
+  // ===== Section 2 unlock =====
+  function unlockSect2() {
+    const sect2 = document.getElementById('sect2');
+    if (state.sect2Done) {
+      refreshContinue();
+      return;
+    }
+    sect2.classList.remove('locked', 'complete');
+    sect2.classList.add('active');
+    const badge = sect2.querySelector('#sect2-badge');
+    badge.className = 'sect-badge active';
+    badge.innerHTML = '2';
+    document.getElementById('sect2-action').innerHTML = '';
+
+    renderStages();
+    refreshContinue();
+
+    // Glide the newly opened section into the upper part of the viewport once
+    // the expand animation has had a moment to start.
+    setTimeout(() => {
+      sect2.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 220);
+  }
+
+  // ===== Stage cards =====
+  const STAGE_CONFIG = [
+    { key: 'submit', label: 'Submit' },
+    { key: 'approve', label: 'Approve' },
+    { key: 'close', label: 'Close' },
+  ];
+
+  function renderStages() {
+    const row = document.getElementById('stagesRow');
+    row.innerHTML = '';
+    STAGE_CONFIG.forEach((cfg, i) => {
+      const stage = state[cfg.key];
+      const card = document.createElement('div');
+      card.className = 'stage-card';
+      card.innerHTML = `
+        <div class="stage-card-head">
+          <span class="stage-card-label">${cfg.label}</span>
+          <span class="stage-card-count">${stage.approvers.length}</span>
+        </div>
+        <div class="stage-card-body" id="stage-${cfg.key}-approvers"></div>
+        <button class="add-approver-btn" onclick="addApprover('${cfg.key}')">+ Add approver</button>
+        <div id="stage-${cfg.key}-threshold"></div>
+      `;
+      row.appendChild(card);
+
+      // Render approvers
+      renderApprovers(cfg.key);
+      renderThreshold(cfg.key);
+
+      // Add arrow between cards
+      if (i < STAGE_CONFIG.length - 1) {
+        const arr = document.createElement('div');
+        arr.className = 'stage-arrow';
+        arr.textContent = '›';
+        row.appendChild(arr);
+      }
+    });
+  }
+
+  function renderApprovers(key) {
+    const stage = state[key];
+    const container = document.getElementById(`stage-${key}-approvers`);
+    container.innerHTML = '';
+    stage.approvers.forEach((name, idx) => {
+      const chip = document.createElement('div');
+      chip.className = 'approver-chip';
+      chip.innerHTML = `
+        <span class="approver-chip-name" title="${name}">${name}</span>
+        ${stage.approvers.length > 1 ?
+          `<button class="approver-chip-x" onclick="removeApprover('${key}',${idx})" aria-label="Remove ${name}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}
+      `;
+      container.appendChild(chip);
+    });
+  }
+
+  function renderThreshold(key) {
+    const t = state[key].threshold;
+    const container = document.getElementById(`stage-${key}-threshold`);
+    const label = t.kind === 'any' ? 'Any amount'
+      : t.kind === 'under' ? `Under $${t.amount.toLocaleString()}`
+      : `Over $${t.amount.toLocaleString()}`;
+    const isAny = t.kind === 'any';
+    container.innerHTML = `
+      <button class="threshold-pill ${!isAny ? 'set' : ''}" onclick="openThresholdEditor('${key}')">
+        <span class="threshold-pill-label">Limit</span>
+        <span class="threshold-pill-value">${label} ▾</span>
+      </button>
+    `;
+  }
+
+  function openThresholdEditor(key) {
+    const t = state[key].threshold;
+    const container = document.getElementById(`stage-${key}-threshold`);
+    container.innerHTML = `
+      <div class="threshold-editor">
+        <div class="threshold-editor-head">
+          <span>Limit</span>
+          <button class="threshold-editor-done" onclick="renderThreshold('${key}')">Done</button>
+        </div>
+        <select class="form-select" onchange="setThresholdKind('${key}', this.value)">
+          <option value="any" ${t.kind === 'any' ? 'selected' : ''}>Any amount</option>
+          <option value="under" ${t.kind === 'under' ? 'selected' : ''}>Under amount</option>
+          <option value="over" ${t.kind === 'over' ? 'selected' : ''}>Over amount</option>
+        </select>
+        ${t.kind !== 'any' ? `
+          <div class="amt-row">
+            <span>$</span>
+            <input type="number" min="0" value="${t.amount}" oninput="setThresholdAmount('${key}', this.value)" placeholder="0">
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  function setThresholdKind(key, kind) {
+    if (kind === 'any') {
+      state[key].threshold = { kind: 'any' };
+    } else {
+      const amount = state[key].threshold.kind === 'any' ? 5000 : state[key].threshold.amount;
+      state[key].threshold = { kind, amount };
+    }
+    openThresholdEditor(key);
+  }
+  function setThresholdAmount(key, value) {
+    if (state[key].threshold.kind === 'any') return;
+    state[key].threshold.amount = Number(value) || 0;
+  }
+
+  function addApprover(key) {
+    // Cycle through some defaults for the prototype
+    const choices = ['Project Manager', 'Site Supervisor', 'Finance Manager', 'Director', 'Office Administrator'];
+    const taken = state[key].approvers;
+    const next = choices.find(c => !taken.includes(c)) || `Approver ${taken.length + 1}`;
+    state[key].approvers.push(next);
+    renderApprovers(key);
+    document.querySelector(`#stagesRow .stage-card:nth-of-type(${STAGE_CONFIG.findIndex(c => c.key === key) * 2 + 1}) .stage-card-count`);
+    renderStages();
+  }
+
+  function removeApprover(key, idx) {
+    state[key].approvers = state[key].approvers.filter((_, i) => i !== idx);
+    renderStages();
+  }
+
+  function completeSect2() {
+    state.sect2Done = true;
+    const sect2 = document.getElementById('sect2');
+    sect2.classList.remove('active', 'locked');
+    sect2.classList.add('complete');
+    const badge = sect2.querySelector('#sect2-badge');
+    badge.className = 'sect-badge complete';
+    badge.innerHTML = '✓';
+
+    const summary = document.getElementById('sect2-summary');
+    summary.innerHTML = renderWorkflowSummary();
+
+    document.getElementById('sect2-action').innerHTML =
+      '<button class="sect-pencil" onclick="editSect2()" aria-label="Edit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>';
+
+    refreshContinue();
+
+    // Glide the page so the now-active footer Continue button is visible
+    setTimeout(() => {
+      document.querySelector('.wizard-content').scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 280);
+  }
+
+  function editSect2() {
+    state.sect2Done = false;
+    const sect2 = document.getElementById('sect2');
+    sect2.classList.remove('complete');
+    sect2.classList.add('active');
+    const badge = sect2.querySelector('#sect2-badge');
+    badge.className = 'sect-badge active';
+    badge.textContent = '2';
+    document.getElementById('sect2-action').innerHTML = '';
+    refreshContinue();
+    setTimeout(() => {
+      sect2.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+  }
+
+  function renderWorkflowSummary() {
+    const stages = [
+      { k: 'Submit', s: state.submit },
+      { k: 'Approve', s: state.approve },
+      { k: 'Close', s: state.close },
+    ];
+    const allAny = stages.every(s => s.s.threshold.kind === 'any');
+    const uniq = Array.from(new Set(stages.flatMap(s => s.s.approvers)));
+    if (allAny && uniq.length === 1) {
+      return `
+        <div class="wf-summary-line">
+          <span class="pill-amount">Any amount</span>
+          <span style="color:#bbb;">→</span>
+          <strong>${uniq[0]}</strong>
+          <span style="color:#999;">· all 3 stages</span>
+        </div>
+      `;
+    }
+    return `
+      <div style="display:grid; grid-template-columns: 70px 130px 1fr; gap:4px 10px; font-size:12px;">
+        ${stages.map(s => {
+          const t = s.s.threshold;
+          const tLabel = t.kind === 'any' ? 'Any amount'
+            : t.kind === 'under' ? `< $${t.amount.toLocaleString()}`
+            : `> $${t.amount.toLocaleString()}`;
+          const tCls = t.kind === 'any' ? '' : 'set';
+          const main = s.s.approvers[0] || '—';
+          const extra = s.s.approvers.length - 1;
+          return `
+            <span style="font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:0.5px;align-self:center;">${s.k}</span>
+            <span class="pill-amount ${tCls}" style="justify-self:start;">${tLabel}</span>
+            <span style="color:#444;align-self:center;">${main}${extra > 0 ? ` <span style="color:#aaa;">+${extra}</span>` : ''}</span>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  function refreshContinue() {
+    const ok = state.requireApproval ? (state.sect1Done && state.sect2Done) : state.sect1Done;
+    document.getElementById('continueBtn').disabled = !ok;
+    document.getElementById('footerShortcut').style.display = ok ? 'flex' : 'none';
+  }
+
+  // ===== Cmd+Enter shortcut =====
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      const sect1 = document.getElementById('sect1');
+      const sect2 = document.getElementById('sect2');
+      if (sect1.classList.contains('active') && !document.getElementById('sect1-advance').disabled) {
+        completeSect1();
+      } else if (sect2.classList.contains('active')) {
+        completeSect2();
+      } else if (!document.getElementById('continueBtn').disabled) {
+        document.getElementById('continueBtn').click();
+      }
+    }
+  });
+</script>
+</body>
+</html>
