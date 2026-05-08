@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Varicon — MYOB Acumatica Integration Settings (08 May 2026)</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; font-size: 14px; }
+
+  /* ── Prototype header ── */
+  .proto-header { background: #1a2336; color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+  .proto-header .logo { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 16px; flex-shrink: 0; }
+  .proto-header h1 { font-size: 14px; font-weight: 700; }
+  .proto-header p { font-size: 11px; color: rgba(255,255,255,.45); margin-top: 1px; }
+  .proto-back { margin-left: auto; font-size: 11px; color: rgba(255,255,255,.5); text-decoration: none; }
+  .proto-back:hover { color: #f7941d; }
+
+  /* ── Layout ── */
+  .app { display: flex; height: calc(100vh - 48px); overflow: hidden; }
+  .sidebar { width: 220px; background: #1a1a2e; color: #ccc; flex-shrink: 0; display: flex; flex-direction: column; }
+  .sidebar-logo { padding: 20px 16px; border-bottom: 1px solid #333; }
+  .sidebar-logo span { color: #fff; font-size: 18px; font-weight: 700; }
+  .sidebar-logo small { color: #9b59b6; font-size: 11px; display: block; }
+  .sidebar nav a { display: flex; align-items: center; gap: 10px; padding: 12px 16px; color: #aaa; text-decoration: none; font-size: 13px; transition: all .2s; }
+  .sidebar nav a:hover, .sidebar nav a.active { background: rgba(155,89,182,.2); color: #fff; border-left: 3px solid #9b59b6; }
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { height: 56px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; padding: 0 24px; justify-content: space-between; flex-shrink: 0; }
+  .topbar-title { font-weight: 600; font-size: 16px; color: #4a148c; }
+  .content { flex: 1; overflow-y: auto; padding: 24px; }
+
+  /* ── Cards ── */
+  .section-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+  .section-sub { color: #777; font-size: 12px; margin-bottom: 20px; }
+  .cards-row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .int-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; width: 220px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  .int-card-header { height: 90px; background: #fafafa; display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #eee; }
+  .int-logo { width: 80px; height: 40px; display: flex; align-items: center; justify-content: center; background: #eee; border-radius: 4px; font-weight: 700; font-size: 10px; color: #555; text-align: center; line-height: 1.2; }
+  .int-logo.myob-ac { background: #6a0dad; color: #fff; font-size: 9px; }
+  .int-logo.xero { background: #13b5ea; color: #fff; }
+  .int-logo.myob { background: #5c2d91; color: #fff; font-size: 10px; }
+  .badge { font-size: 10px; padding: 2px 8px; border-radius: 3px; font-weight: 500; }
+  .badge.connected { background: #2e7d32; color: #fff; }
+  .badge.not-connected { background: #e0e0e0; color: #555; }
+  .int-card-body { padding: 10px 14px; font-size: 11px; color: #666; min-height: 40px; }
+  .int-card-footer { height: 52px; display: flex; align-items: center; justify-content: flex-end; padding: 0 12px; border-top: 1px solid #eee; }
+
+  /* ── Buttons ── */
+  .btn { padding: 7px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; letter-spacing: .5px; transition: all .15s; }
+  .btn-primary { background: #6a0dad; color: #fff; }
+  .btn-primary:hover { background: #7b1fa2; }
+  .btn-outline { background: transparent; border: 1px solid #6a0dad; color: #6a0dad; }
+  .btn-outline:hover { background: #f3e5f5; }
+  .btn-sm { padding: 5px 12px; font-size: 11px; }
+  .btn-secondary { background: #f5f5f5; border: 1px solid #ddd; color: #555; }
+  .btn-secondary:hover { background: #eeeeee; }
+  .btn-success { background: #2e7d32; color: #fff; }
+  .btn-danger { background: #c62828; color: #fff; }
+  .btn-icon { background: transparent; border: none; cursor: pointer; color: #6a0dad; font-size: 18px; padding: 4px; }
+
+  /* ── Overlay / Modal ── */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 100; align-items: center; justify-content: center; }
+  .overlay.show { display: flex; }
+  .modal { background: #fff; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,.18); width: 560px; max-height: 90vh; overflow-y: auto; animation: fadeIn .15s ease; }
+  .modal.wide { width: 680px; }
+  .modal.xl { width: 780px; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(-12px); } to { opacity:1; transform:translateY(0); } }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid #e0e0e0; }
+  .modal-title { font-size: 15px; font-weight: 600; color: #4a148c; }
+  .modal-body { padding: 20px; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid #e0e0e0; }
+
+  /* ── Form ── */
+  .form-group { margin-bottom: 16px; }
+  .form-label { display: block; font-size: 12px; font-weight: 600; color: #444; margin-bottom: 5px; }
+  .form-label span { color: #c00; }
+  .form-input { width: 100%; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; outline: none; transition: border .15s; }
+  .form-input:focus { border-color: #6a0dad; box-shadow: 0 0 0 2px rgba(106,13,173,.1); }
+  .form-hint { font-size: 11px; color: #888; margin-top: 4px; }
+  .form-select { width: 100%; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; background: #fff; }
+  .form-row { display: flex; gap: 12px; }
+  .form-row .form-group { flex: 1; }
+
+  /* ── Divider ── */
+  .divider { border: none; border-top: 1px solid #e0e0e0; margin: 16px 0; }
+  .section-label { font-size: 12px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 12px; }
+
+  /* ── Connected Organization Card ── */
+  .org-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 0; overflow: hidden; margin-bottom: 16px; }
+  .org-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; background: #f9f4fe; border-bottom: 1px solid #e0e0e0; }
+  .org-info { display: flex; align-items: center; gap: 12px; }
+  .org-avatar { width: 40px; height: 40px; border-radius: 50%; background: #6a0dad; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
+  .org-name { font-weight: 600; font-size: 14px; }
+  .org-meta { font-size: 11px; color: #777; }
+  .org-actions { display: flex; gap: 8px; align-items: center; }
+  .org-card-body { padding: 16px 20px; }
+  .sync-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .sync-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; border: 1px solid #e0e0e0; border-radius: 6px; cursor: pointer; background: #fff; transition: all .15s; font-size: 11px; color: #444; font-weight: 500; text-align: center; }
+  .sync-btn:hover { border-color: #6a0dad; background: #f9f4fe; color: #6a0dad; }
+  .sync-btn .icon { font-size: 22px; }
+  .sync-btn.loading { opacity: .6; cursor: wait; }
+
+  /* ── Settings Dialog ── */
+  .settings-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
+  .settings-label { font-size: 13px; color: #333; display: flex; align-items: center; gap: 6px; }
+  .tooltip-icon { color: #aaa; cursor: help; font-size: 14px; }
+  .settings-control { width: 240px; }
+  .switch { position: relative; display: inline-block; width: 38px; height: 20px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; inset: 0; background: #ccc; border-radius: 20px; transition: .3s; }
+  .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .3s; }
+  input:checked + .slider { background: #6a0dad; }
+  input:checked + .slider:before { transform: translateX(18px); }
+  .checkbox-label { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: #444; cursor: pointer; padding: 4px 0; }
+  .checkbox-label input { margin-top: 2px; accent-color: #6a0dad; }
+  .collapse-content { padding-left: 24px; padding-top: 8px; }
+
+  /* ── Tax Mapping (Acumatica specific) ── */
+  .map-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; margin-bottom: 2px; }
+  .map-col-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #777; letter-spacing: .5px; }
+
+  /* ── Alert ── */
+  .alert { background: #fff8e1; border: 1px solid #ffe082; border-radius: 4px; padding: 10px 14px; font-size: 12px; color: #555; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-start; }
+  .alert strong { color: #e65100; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; border-bottom: 2px solid #e0e0e0; margin-bottom: 20px; }
+  .tab { padding: 10px 20px; cursor: pointer; font-size: 13px; font-weight: 500; color: #777; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all .15s; }
+  .tab.active { color: #6a0dad; border-bottom-color: #6a0dad; }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* ── Sync status chip ── */
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+  .chip.success { background: #e8f5e9; color: #2e7d32; }
+  .chip.warning { background: #fff8e1; color: #e65100; }
+  .chip.info { background: #e3f2fd; color: #1565c0; }
+
+  /* ── Step indicator ── */
+  .steps { display: flex; align-items: center; margin-bottom: 20px; }
+  .step { display: flex; align-items: center; gap: 8px; }
+  .step-num { width: 24px; height: 24px; border-radius: 50%; background: #e0e0e0; color: #777; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+  .step-num.active { background: #6a0dad; color: #fff; }
+  .step-num.done { background: #2e7d32; color: #fff; }
+  .step-label { font-size: 12px; color: #777; font-weight: 500; }
+  .step-label.active { color: #6a0dad; }
+  .step-divider { flex: 1; height: 1px; background: #e0e0e0; margin: 0 8px; min-width: 30px; }
+  .step-divider.done { background: #2e7d32; }
+</style>
+</head>
+<body>
+
+<!-- Prototype banner -->
+<div class="proto-header">
+  <div class="logo">V</div>
+  <div>
+    <h1>MYOB Acumatica Integration Settings</h1>
+    <p>Prototype · 08 May 2026 · Connect flow, sync buttons, tax category mapping</p>
+  </div>
+  <a class="proto-back" href="../">← All Prototypes</a>
+</div>
+
+<div class="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <span>Varicon</span>
+      <small>Construction Management</small>
+    </div>
+    <nav>
+      <a href="#">📊 Dashboard</a>
+      <a href="#">📋 Bills</a>
+      <a href="#">🛒 Purchase Orders</a>
+      <a href="#">👥 Employees</a>
+      <a href="#" class="active">⚙️ Settings</a>
+    </nav>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title">Account Integration</span>
+      <span style="font-size:12px;color:#777;">Settings → Other Settings → Account Integration</span>
+    </div>
+
+    <div class="content">
+
+      <!-- ── View 1: Integration List ── -->
+      <div id="view-list">
+        <div class="section-title">Connected Apps</div>
+        <div class="section-sub">Improve your workflow by connecting applications below.</div>
+
+        <div class="cards-row">
+          <!-- Xero card (connected) -->
+          <div class="int-card">
+            <div class="int-card-header">
+              <div class="int-logo xero">XERO</div>
+              <span class="badge connected">Connected</span>
+            </div>
+            <div class="int-card-body">Sync bills and purchase orders with Xero accounting.</div>
+            <div class="int-card-footer">
+              <button class="btn btn-outline btn-sm">VIEW</button>
+            </div>
+          </div>
+
+          <!-- MYOB AccountRight card -->
+          <div class="int-card">
+            <div class="int-card-header">
+              <div class="int-logo myob">MYOB</div>
+              <span class="badge not-connected">Not Connected</span>
+            </div>
+            <div class="int-card-body">Sync bills and purchase orders with MYOB AccountRight.</div>
+            <div class="int-card-footer">
+              <button class="btn btn-outline btn-sm">CONNECT</button>
+            </div>
+          </div>
+
+          <!-- MYOB Acumatica card (our focus) -->
+          <div class="int-card">
+            <div class="int-card-header">
+              <div class="int-logo myob-ac">MYOB<br>Acumatica</div>
+              <span class="badge not-connected" id="acumatica-badge">Not Connected</span>
+            </div>
+            <div class="int-card-body">Sync bills and POs with MYOB Acumatica (Advanced).</div>
+            <div class="int-card-footer">
+              <button class="btn btn-outline btn-sm" id="acumatica-card-btn" onclick="openConnectModal()">CONNECT</button>
+            </div>
+          </div>
+
+          <!-- QuickBooks card -->
+          <div class="int-card">
+            <div class="int-card-header">
+              <div class="int-logo" style="background:#2ca01c;color:#fff;">QB</div>
+              <span class="badge not-connected">Not Connected</span>
+            </div>
+            <div class="int-card-body">Sync bills and purchase orders with QuickBooks Online.</div>
+            <div class="int-card-footer">
+              <button class="btn btn-outline btn-sm">CONNECT</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connected Organization (shown after connect) -->
+        <div id="org-section" style="display:none; margin-top:28px;">
+          <div class="section-title" style="margin-bottom:12px;">MYOB Acumatica — Connected Organisation</div>
+          <div class="org-card">
+            <div class="org-card-header">
+              <div class="org-info">
+                <div class="org-avatar">M</div>
+                <div>
+                  <div class="org-name">MGC Civil Pty Ltd</div>
+                  <div class="org-meta">
+                    Tenant: <strong>MGCCivil</strong> &nbsp;|&nbsp;
+                    Branch: <strong>HEAD_OFFICE</strong> &nbsp;|&nbsp;
+                    <span class="chip success">● Active</span>
+                  </div>
+                </div>
+              </div>
+              <div class="org-actions">
+                <button class="btn btn-outline btn-sm" onclick="openSettingsModal()">⚙ SETTINGS</button>
+                <button class="btn btn-secondary btn-sm" onclick="openDisconnectModal()">DISCONNECT</button>
+              </div>
+            </div>
+            <div class="org-card-body">
+              <div style="font-size:12px;color:#777;margin-bottom:12px;">Sync data between Varicon and MYOB Acumatica</div>
+              <div class="sync-grid">
+                <button class="sync-btn" onclick="triggerSync('Tax')">
+                  <span class="icon">🏷️</span>Tax
+                </button>
+                <button class="sync-btn" onclick="triggerSync('Suppliers')">
+                  <span class="icon">🏢</span>Suppliers
+                </button>
+                <button class="sync-btn" onclick="triggerSync('Accounting Codes')">
+                  <span class="icon">📂</span>Accounting Codes
+                </button>
+                <button class="sync-btn" onclick="triggerSync('Subaccounts')">
+                  <span class="icon">🔢</span>Subaccounts
+                </button>
+                <button class="sync-btn" onclick="triggerSync('Financial Calendar')">
+                  <span class="icon">📅</span>Financial Calendar
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bills & PO cards -->
+          <div class="cards-row" style="margin-top:16px;">
+            <div class="org-card" style="flex:1;min-width:280px;">
+              <div class="org-card-header" style="padding:12px 16px;">
+                <span style="font-weight:600;font-size:13px;">📄 Bills Sync</span>
+                <span class="chip info">Auto Sync ON</span>
+              </div>
+              <div class="org-card-body" style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-size:12px;color:#666;">Last synced: Today at 09:32 AM</div>
+                <button class="btn btn-primary btn-sm" onclick="openSyncModal('Bills')">SYNC NOW</button>
+              </div>
+            </div>
+            <div class="org-card" style="flex:1;min-width:280px;">
+              <div class="org-card-header" style="padding:12px 16px;">
+                <span style="font-weight:600;font-size:13px;">🛒 Purchase Orders Sync</span>
+                <span class="chip warning">Auto Sync OFF</span>
+              </div>
+              <div class="org-card-body" style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-size:12px;color:#666;">Last synced: Yesterday at 04:15 PM</div>
+                <button class="btn btn-primary btn-sm" onclick="openSyncModal('Purchase Orders')">SYNC NOW</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!--  MODAL 1: Connect MYOB Acumatica          -->
+<!-- ══════════════════════════════════════════ -->
+<div class="overlay" id="connect-overlay">
+  <div class="modal wide">
+    <div class="modal-header">
+      <span class="modal-title">🔌 Connect MYOB Acumatica</span>
+      <button class="btn-icon" onclick="closeModal('connect-overlay')">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Step indicator -->
+      <div class="steps" style="margin-bottom:24px;">
+        <div class="step">
+          <div class="step-num active" id="step1-num">1</div>
+          <span class="step-label active" id="step1-label">Credentials</span>
+        </div>
+        <div class="step-divider" id="div1"></div>
+        <div class="step">
+          <div class="step-num" id="step2-num">2</div>
+          <span class="step-label" id="step2-label">Authorise</span>
+        </div>
+        <div class="step-divider" id="div2"></div>
+        <div class="step">
+          <div class="step-num" id="step3-num">3</div>
+          <span class="step-label" id="step3-label">Select Branch</span>
+        </div>
+        <div class="step-divider" id="div3"></div>
+        <div class="step">
+          <div class="step-num" id="step4-num">4</div>
+          <span class="step-label" id="step4-label">Done</span>
+        </div>
+      </div>
+
+      <!-- Step 1: Credentials -->
+      <div id="connect-step1">
+        <div class="alert">
+          <div><strong>Note:</strong> Ask your MYOB Acumatica administrator to create a Connected Application in your instance and provide the credentials below.</div>
+          <button class="btn-icon" style="font-size:12px;" onclick="this.parentElement.style.display='none'">✕</button>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Instance URL <span>*</span></label>
+          <input class="form-input" id="instance-url" placeholder="e.g. mgccivil.myobadvanced.com" value="varicon-demo.myobadvanced.com" />
+          <div class="form-hint">Your MYOB Acumatica instance domain (without https://)</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Tenant Name <span>*</span></label>
+          <input class="form-input" id="tenant-name" placeholder="e.g. MGCCivil" value="Company" />
+          <div class="form-hint">Found on your MYOB Acumatica login screen dropdown</div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Client ID <span>*</span></label>
+            <input class="form-input" id="client-id" placeholder="UUID@TenantName" value="E4675EE8@Company" />
+            <div class="form-hint">From Connected Applications in MYOB</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Client Secret <span>*</span></label>
+            <input class="form-input" type="password" id="client-secret" placeholder="Client Secret" value="Htm6-G1YsZNag" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Authorise (hidden) -->
+      <div id="connect-step2" style="display:none;">
+        <div style="text-align:center;padding:30px 0;">
+          <div style="font-size:48px;margin-bottom:12px;">🔐</div>
+          <div style="font-weight:600;font-size:15px;margin-bottom:8px;">Redirecting to MYOB Acumatica</div>
+          <div style="color:#777;font-size:13px;margin-bottom:20px;">
+            You will be redirected to:<br>
+            <code style="background:#f5f5f5;padding:4px 8px;border-radius:4px;font-size:12px;">https://varicon-demo.myobadvanced.com/t/Company/identity/connect/authorize</code>
+          </div>
+          <div style="color:#555;font-size:12px;">Log in and grant Varicon access, then you'll be redirected back.</div>
+          <div style="margin-top:20px;">
+            <div style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:#f9f4fe;border:1px solid #ce93d8;border-radius:6px;">
+              <span style="animation:spin 1s linear infinite;display:inline-block;">⏳</span>
+              <span style="font-size:13px;color:#6a0dad;">Waiting for authorization...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Select Branch (hidden) -->
+      <div id="connect-step3" style="display:none;">
+        <div style="margin-bottom:16px;">
+          <div style="font-weight:600;margin-bottom:4px;">✅ Connected successfully to <span style="color:#6a0dad;">Company</span> tenant</div>
+          <div style="font-size:12px;color:#777;">Now select the branch you want to sync data with.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Company <span>*</span></label>
+          <select class="form-select" id="company-select" onchange="loadBranches()">
+            <option value="">Select Company</option>
+            <option value="Company" selected>Company</option>
+          </select>
+          <div class="form-hint">Companies available in your MYOB Acumatica instance</div>
+        </div>
+        <div class="form-group" id="branch-group">
+          <label class="form-label">Branch <span>*</span></label>
+          <select class="form-select" id="branch-select">
+            <option value="">Select Branch</option>
+            <option value="MAIN">MAIN – Main Branch</option>
+            <option value="GRK">GRK – GRK Branch</option>
+            <option value="TESTBRANCH">TESTBRANCH – Test Branch</option>
+          </select>
+          <div class="form-hint">Bills will be synced to this branch in MYOB Acumatica</div>
+        </div>
+      </div>
+
+      <!-- Step 4: Done (hidden) -->
+      <div id="connect-step4" style="display:none;">
+        <div style="text-align:center;padding:30px 0;">
+          <div style="font-size:56px;margin-bottom:12px;">🎉</div>
+          <div style="font-weight:700;font-size:16px;color:#2e7d32;margin-bottom:8px;">Successfully Connected!</div>
+          <div style="color:#555;font-size:13px;margin-bottom:20px;">
+            MYOB Acumatica is now connected to Varicon.<br>
+            Tenant: <strong>Company</strong> &nbsp;|&nbsp; Branch: <strong id="selected-branch-display">MAIN</strong>
+          </div>
+          <div style="background:#f9f4fe;border:1px solid #ce93d8;border-radius:6px;padding:14px;text-align:left;max-width:380px;margin:0 auto;">
+            <div style="font-size:12px;font-weight:600;color:#4a148c;margin-bottom:8px;">Recommended next steps:</div>
+            <div style="font-size:12px;color:#555;display:flex;flex-direction:column;gap:6px;">
+              <div>▸ Sync Tax Categories to map tax types</div>
+              <div>▸ Sync Suppliers to map your vendors</div>
+              <div>▸ Sync Accounting Codes (Chart of Accounts)</div>
+              <div>▸ Configure Integration Settings for bills</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer" id="connect-footer">
+      <button class="btn btn-secondary" onclick="closeModal('connect-overlay')">Cancel</button>
+      <button class="btn btn-primary" id="connect-next-btn" onclick="connectNext()">NEXT →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!--  MODAL 2: Integration Settings            -->
+<!-- ══════════════════════════════════════════ -->
+<div class="overlay" id="settings-overlay">
+  <div class="modal xl">
+    <div class="modal-header">
+      <span class="modal-title">⚙️ MYOB Acumatica — Integration Settings</span>
+      <button class="btn-icon" onclick="closeModal('settings-overlay')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <!-- Tabs -->
+      <div class="tabs" style="padding: 0 20px; margin-bottom:0;">
+        <div class="tab active" onclick="switchTab('bills', event)">Bills</div>
+        <div class="tab" onclick="switchTab('po', event)">Purchase Orders</div>
+      </div>
+
+      <!-- Bills Tab -->
+      <div class="tab-pane active" id="tab-bills" style="padding:20px;max-height:68vh;overflow-y:auto;">
+
+        <div class="section-label">General Settings</div>
+
+        <div class="settings-row">
+          <span class="settings-label">Integration Start Date <span class="tooltip-icon" title="Only Bills after this date sync">ℹ️</span></span>
+          <div class="settings-control"><input class="form-input" type="date" value="2024-01-01" /></div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Sync Bills in State</span>
+          <div class="settings-control">
+            <select class="form-select">
+              <option>Approved</option>
+              <option>Pending Approval</option>
+              <option>All</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Export Bills to Acumatica as</span>
+          <div class="settings-control">
+            <select class="form-select">
+              <option>Open</option>
+              <option>Balanced</option>
+              <option>On Hold</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Post Period Format</span>
+          <div class="settings-control">
+            <select class="form-select">
+              <option>MM-YYYY (e.g. 05-2026)</option>
+              <option>MMYYYY (e.g. 052026)</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Default Branch</span>
+          <div class="settings-control">
+            <select class="form-select">
+              <option>MAIN – Main Branch</option>
+              <option>GRK – GRK Branch</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Enable Auto Sync</span>
+          <div class="settings-control">
+            <label class="switch"><input type="checkbox" checked /><span class="slider"></span></label>
+          </div>
+        </div>
+        <div style="padding-left:16px;margin-bottom:8px;">
+          <label class="checkbox-label"><input type="checkbox" checked /> Re-sync Bills if updated in MYOB Acumatica</label>
+        </div>
+
+        <div class="settings-row">
+          <span class="settings-label">Allow Credit Note Sync <span class="tooltip-icon" title="Sync credit notes as AP Debit Adjustments">ℹ️</span></span>
+          <div class="settings-control">
+            <label class="switch"><input type="checkbox" checked /><span class="slider"></span></label>
+          </div>
+        </div>
+
+        <hr class="divider" />
+        <div class="section-label">Tax Settings</div>
+
+        <div class="alert">
+          <div><strong>Note:</strong> You might need to check the Tax percentage configured in MYOB Acumatica and Varicon, otherwise the bills amount calculation might vary.</div>
+          <button class="btn-icon" style="font-size:12px;" onclick="this.parentElement.style.display='none'">✕</button>
+        </div>
+
+        <!-- Single Tax Category picker -->
+        <div class="settings-row">
+          <span class="settings-label">
+            Tax Category
+            <span class="tooltip-icon" title="Select the MYOB Acumatica Tax Category whose individual taxes will be mapped to Varicon tax types.">ℹ️</span>
+          </span>
+          <div class="settings-control">
+            <select class="form-select" style="width:250px;" id="tax-category-picker" onchange="onTaxCategoryChange(this.value)">
+              <option value="">-- Select Tax Category --</option>
+              <option value="GST" selected>GST</option>
+              <option value="INPUT">INPUT</option>
+              <option value="EXEMPT">EXEMPT</option>
+              <option value="CAP">CAP</option>
+              <option value="LUXURY">LUXURY</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tax type mapping header -->
+        <div class="map-header" style="margin-top:8px;">
+          <span class="map-col-label" style="flex:1;">VARICON TAX TYPE</span>
+          <span style="width:20px;"></span>
+          <span class="map-col-label" style="width:250px;text-align:right;">MYOB ACUMATICA TAX</span>
+        </div>
+
+        <!-- Varicon → Acumatica tax rows -->
+        <div class="settings-row">
+          <span class="settings-label">GST on expense</span>
+          <div class="settings-control">
+            <select class="form-select" style="width:250px;" id="map-gst-on-expense">
+              <option value="">-- Select Tax --</option>
+              <option value="GST" selected>GST on Expenses (GST, 10%)</option>
+              <option value="GSTCAP">GST on Capital (GSTCAP, 10%)</option>
+              <option value="RGST">Reduced GST (RGST, 5%)</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">GST free expense</span>
+          <div class="settings-control">
+            <select class="form-select" style="width:250px;" id="map-gst-free">
+              <option value="">-- Select Tax --</option>
+              <option value="GST">GST on Expenses (GST, 10%)</option>
+              <option value="GSTCAP">GST on Capital (GSTCAP, 10%)</option>
+              <option value="RGST">Reduced GST (RGST, 5%)</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">BAS excluded</span>
+          <div class="settings-control">
+            <select class="form-select" style="width:250px;" id="map-bas-excluded">
+              <option value="">-- Select Tax --</option>
+              <option value="GST">GST on Expenses (GST, 10%)</option>
+              <option value="GSTCAP">GST on Capital (GSTCAP, 10%)</option>
+              <option value="RGST">Reduced GST (RGST, 5%)</option>
+            </select>
+          </div>
+        </div>
+
+        <hr class="divider" />
+        <div class="section-label">Advanced Options</div>
+
+        <label class="checkbox-label">
+          <input type="checkbox" checked />
+          Allow to create new Supplier in MYOB Acumatica if not present
+        </label>
+        <div style="padding-left:24px;margin-top:6px;margin-bottom:10px;">
+          <div class="settings-row" style="padding:4px 0;">
+            <span class="settings-label" style="font-size:12px;">Default Supplier Tax Category</span>
+            <div style="width:200px;"><select class="form-select" style="font-size:12px;padding:5px 8px;"><option>GST</option><option>INPUT</option></select></div>
+          </div>
+        </div>
+
+        <label class="checkbox-label">
+          <input type="checkbox" checked />
+          Allow to create new Accounting Code (GL Account) in MYOB Acumatica if not present
+        </label>
+        <div style="padding-left:24px;margin-top:6px;margin-bottom:10px;">
+          <div class="settings-row" style="padding:4px 0;">
+            <span class="settings-label" style="font-size:12px;">Parent Account</span>
+            <div style="width:200px;"><select class="form-select" style="font-size:12px;padding:5px 8px;"><option>6-0000 Expenses</option><option>2-0000 Liabilities</option></select></div>
+          </div>
+          <div class="settings-row" style="padding:4px 0;">
+            <span class="settings-label" style="font-size:12px;">Default Tax Category</span>
+            <div style="width:200px;"><select class="form-select" style="font-size:12px;padding:5px 8px;"><option>GST</option><option>INPUT</option></select></div>
+          </div>
+        </div>
+
+        <label class="checkbox-label">
+          <input type="checkbox" />
+          Allow to create new Resource Code (Inventory Item) in MYOB Acumatica if not present
+        </label>
+        <label class="checkbox-label" style="margin-top:6px;">
+          <input type="checkbox" checked />
+          Allow to send Bill attachments to MYOB Acumatica
+        </label>
+        <label class="checkbox-label" style="margin-top:6px;">
+          <input type="checkbox" />
+          Use Subaccounts for line item cost allocation
+        </label>
+      </div>
+
+      <!-- PO Tab -->
+      <div class="tab-pane" id="tab-po" style="padding:20px;max-height:68vh;overflow-y:auto;">
+        <div class="section-label">Purchase Order Settings</div>
+        <div class="settings-row">
+          <span class="settings-label">Integration Start Date</span>
+          <div class="settings-control"><input class="form-input" type="date" value="2024-01-01" /></div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Sync POs in State</span>
+          <div class="settings-control">
+            <select class="form-select"><option>Approved</option><option>All</option></select>
+          </div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Enable Auto Sync</span>
+          <div class="settings-control">
+            <label class="switch"><input type="checkbox" /><span class="slider"></span></label>
+          </div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Export as Service (vs Inventory)</span>
+          <div class="settings-control">
+            <label class="switch"><input type="checkbox" checked /><span class="slider"></span></label>
+          </div>
+        </div>
+        <hr class="divider" />
+        <label class="checkbox-label"><input type="checkbox" /> Allow to create absent Accounting Code</label>
+        <label class="checkbox-label" style="margin-top:6px;"><input type="checkbox" /> Allow to create absent Supplier</label>
+        <label class="checkbox-label" style="margin-top:6px;"><input type="checkbox" checked /> Allow to send PO attachments</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('settings-overlay')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSettings()">SAVE SETTINGS</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!--  MODAL 3: Sync Confirmation               -->
+<!-- ══════════════════════════════════════════ -->
+<div class="overlay" id="sync-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="sync-modal-title">🔄 Sync Bills</span>
+      <button class="btn-icon" onclick="closeModal('sync-overlay')">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;gap:16px;align-items:center;padding:24px;">
+      <div style="font-size:48px;">🔄</div>
+      <div>
+        <div style="font-weight:600;font-size:14px;margin-bottom:6px;" id="sync-question">Do you want to sync Bills now?</div>
+        <button class="btn btn-outline btn-sm" onclick="openSettingsModal();closeModal('sync-overlay')">⚙ CHECK INTEGRATION SETTINGS</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('sync-overlay')">SYNC LATER</button>
+      <button class="btn btn-primary" onclick="doSync()">SYNC NOW</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════ -->
+<!--  MODAL 4: Disconnect Confirmation         -->
+<!-- ══════════════════════════════════════════ -->
+<div class="overlay" id="disconnect-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" style="color:#c62828;">⚠️ Disconnect MYOB Acumatica</span>
+      <button class="btn-icon" onclick="closeModal('disconnect-overlay')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#555;">Are you sure you want to disconnect MYOB Acumatica? All sync settings and intermediate mappings will be lost.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('disconnect-overlay')">Cancel</button>
+      <button class="btn btn-danger" onclick="doDisconnect()">DISCONNECT</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div id="toast" style="display:none;position:fixed;bottom:24px;right:24px;background:#323232;color:#fff;padding:12px 20px;border-radius:6px;font-size:13px;box-shadow:0 4px 12px rgba(0,0,0,.3);z-index:999;max-width:320px;"></div>
+
+<script>
+  let connectStep = 1;
+  let isConnected = false;
+
+  /* ── Modals ── */
+  function openModal(id) { document.getElementById(id).classList.add('show'); }
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('show');
+    if (id === 'connect-overlay') resetConnectFlow();
+  }
+  function openConnectModal() { connectStep = 1; showStep(1); openModal('connect-overlay'); }
+  function openSettingsModal() { openModal('settings-overlay'); }
+  function openSyncModal(type) {
+    document.getElementById('sync-modal-title').textContent = '🔄 Sync ' + type;
+    document.getElementById('sync-question').textContent = 'Do you want to sync ' + type + ' now?';
+    openModal('sync-overlay');
+  }
+  function openDisconnectModal() { openModal('disconnect-overlay'); }
+
+  /* ── Connect flow ── */
+  function showStep(n) {
+    [1,2,3,4].forEach(i => {
+      document.getElementById('connect-step'+i).style.display = i === n ? 'block' : 'none';
+      const num = document.getElementById('step'+i+'-num');
+      const lbl = document.getElementById('step'+i+'-label');
+      if (i < n) { num.classList.add('done'); num.classList.remove('active'); num.textContent='✓'; }
+      else if (i === n) { num.classList.add('active'); num.classList.remove('done'); num.textContent=i; lbl.classList.add('active'); }
+      else { num.classList.remove('active','done'); num.textContent=i; lbl.classList.remove('active'); }
+      if (i < 4) {
+        const div = document.getElementById('div'+i);
+        if (div) div.classList.toggle('done', i < n);
+      }
+    });
+    const btn = document.getElementById('connect-next-btn');
+    if (n === 4) { btn.textContent = 'DONE ✓'; btn.className = 'btn btn-success'; }
+    else if (n === 2) { btn.style.display = 'none'; }
+    else { btn.style.display = ''; btn.textContent = 'NEXT →'; btn.className = 'btn btn-primary'; }
+  }
+
+  function connectNext() {
+    if (connectStep === 1) {
+      const url = document.getElementById('instance-url').value.trim();
+      const tenant = document.getElementById('tenant-name').value.trim();
+      const cid = document.getElementById('client-id').value.trim();
+      const csec = document.getElementById('client-secret').value.trim();
+      if (!url || !tenant || !cid || !csec) { showToast('Please fill all required fields', '#c62828'); return; }
+      connectStep = 2; showStep(2);
+      setTimeout(() => { connectStep = 3; showStep(3); }, 2000);
+    } else if (connectStep === 3) {
+      const branch = document.getElementById('branch-select').value;
+      if (!branch) { showToast('Please select a branch', '#c62828'); return; }
+      document.getElementById('selected-branch-display').textContent = branch;
+      connectStep = 4; showStep(4);
+    } else if (connectStep === 4) {
+      completeConnection();
+    }
+  }
+
+  function completeConnection() {
+    closeModal('connect-overlay');
+    isConnected = true;
+    document.getElementById('acumatica-badge').textContent = 'Connected';
+    document.getElementById('acumatica-badge').className = 'badge connected';
+    document.getElementById('acumatica-card-btn').textContent = 'VIEW';
+    document.getElementById('acumatica-card-btn').onclick = function() { document.getElementById('org-section').scrollIntoView({behavior:'smooth'}); };
+    document.getElementById('org-section').style.display = 'block';
+    showToast('🎉 MYOB Acumatica connected successfully!', '#2e7d32');
+    resetConnectFlow();
+  }
+
+  function resetConnectFlow() { connectStep = 1; }
+
+  /* ── Tax category mapping ── */
+  const TAX_CATEGORY_TAXES = {
+    GST:    [{ label:'GST on Expenses (GST, 10%)',         value:'GST'    },
+             { label:'GST on Capital (GSTCAP, 10%)',       value:'GSTCAP' },
+             { label:'Reduced GST (RGST, 5%)',             value:'RGST'   }],
+    INPUT:  [{ label:'Input Taxed Purchases (INP, 0%)',    value:'INP'    },
+             { label:'Input Taxed Financial (INPFIN, 0%)', value:'INPFIN' }],
+    EXEMPT: [{ label:'GST Free (FRE, 0%)',                 value:'FRE'    },
+             { label:'BAS Excluded (EXC, 0%)',             value:'EXC'    }],
+    CAP:    [{ label:'Capital Acquisitions (CAP, 10%)',    value:'CAP'    }],
+    LUXURY: [{ label:'Luxury Car Tax (LCT, 33%)',          value:'LCT'    }],
+  };
+
+  function onTaxCategoryChange(cat) {
+    const taxes = TAX_CATEGORY_TAXES[cat] || [];
+    const emptyOpt = '<option value="">-- Select Tax --</option>';
+    const opts = emptyOpt + taxes.map(t => `<option value="${t.value}">${t.label}</option>`).join('');
+    ['map-gst-on-expense', 'map-gst-free', 'map-bas-excluded'].forEach(id => {
+      document.getElementById(id).innerHTML = opts;
+    });
+  }
+
+  /* ── Tabs ── */
+  function switchTab(tab, e) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    e.target.classList.add('active');
+  }
+
+  /* ── Actions ── */
+  function triggerSync(type) { openSyncModal(type); }
+
+  function doSync() {
+    closeModal('sync-overlay');
+    showToast('⏳ Sync started...', '#1565c0');
+    setTimeout(() => showToast('✅ Sync completed successfully!', '#2e7d32'), 2000);
+  }
+
+  function saveSettings() {
+    closeModal('settings-overlay');
+    showToast('✅ Integration settings saved', '#2e7d32');
+  }
+
+  function doDisconnect() {
+    closeModal('disconnect-overlay');
+    isConnected = false;
+    document.getElementById('acumatica-badge').textContent = 'Not Connected';
+    document.getElementById('acumatica-badge').className = 'badge not-connected';
+    document.getElementById('acumatica-card-btn').textContent = 'CONNECT';
+    document.getElementById('acumatica-card-btn').onclick = openConnectModal;
+    document.getElementById('org-section').style.display = 'none';
+    showToast('MYOB Acumatica disconnected', '#333');
+  }
+
+  /* ── Toast ── */
+  function showToast(msg, bg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = bg || '#323232';
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 3500);
+  }
+</script>
+</body>
+</html>
