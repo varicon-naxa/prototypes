@@ -313,6 +313,27 @@
   .pd-input.pd-from-po { background-color: #f3e5f5; border-color: #b39ddb; }
   .pd-input.pd-from-po:focus { border-color: #f7941d; }
 
+  /* Cost centre splits */
+  .pd-cc-split-card { background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; padding: 12px; margin-bottom: 8px; }
+  .pd-cc-split-card .pd-split-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .pd-cc-split-card .pd-split-num { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; }
+  .pd-cc-split-card .pd-split-remove { background: transparent; border: none; color: #9aa1ad; cursor: pointer; padding: 4px 8px; font-size: 16px; border-radius: 4px; }
+  .pd-cc-split-card .pd-split-remove:hover { color: #c62828; background: rgba(0,0,0,.04); }
+  .pd-cc-split-card .pd-input { margin-bottom: 0; }
+  .pd-split-alloc { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .pd-split-alloc .lbl { font-size: 12px; color: #6b7280; font-weight: 600; }
+  .pd-split-percent { width: 80px; padding: 8px 10px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 15px; font-weight: 700; text-align: center; font-family: inherit; color: #1a1a2e; }
+  .pd-split-percent:focus { outline: none; border-color: #f7941d; }
+  .pd-split-alloc .unit { font-size: 13px; color: #6b7280; font-weight: 600; }
+  .pd-split-alloc .balance-link { margin-left: auto; font-size: 11px; color: #1565c0; cursor: pointer; font-weight: 700; }
+  .pd-split-alloc .balance-link:hover { text-decoration: underline; }
+  .pd-cc-total { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; margin-top: 4px; border-radius: 6px; background: #f5f5f7; font-size: 13px; font-weight: 600; border: 1px solid transparent; }
+  .pd-cc-total.ok { background: #f0faf0; color: #2e7d32; border-color: #c8e6c9; }
+  .pd-cc-total.invalid { background: #fde8e8; color: #c62828; border-color: #f5c6c6; }
+  .pd-cc-total .value { font-weight: 700; }
+  .pd-cc-add-btn { display: block; width: 100%; padding: 10px; margin-top: 10px; border: 1px dashed #f7941d; border-radius: 8px; background: #fff8f0; color: #f7941d; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .pd-cc-add-btn:active { background: #fff0e0; }
+
   /* ===== WEB APP SCREENS ===== */
   .web-screen { background: #fff; min-height: 100vh; padding-bottom: 0; color: #1a1a2e; }
   .web-screen .web-topnav { display: flex; align-items: center; padding: 14px 28px; background: #fff; border-bottom: 1px solid #e6e9ee; gap: 16px; }
@@ -993,22 +1014,7 @@
 
   <div class="pd-section pd-required" id="pd-sec-cc">
     <div class="pd-sec-head"><div class="pd-snum">3</div><h3>Cost Centre</h3></div>
-    <div class="pd-sec-body">
-      <div class="pd-label">Cost Centre</div>
-      <select class="pd-input" id="pd-cc" onchange="onPdCCChange()">
-        <option value="">Select cost centre…</option>
-        <option>CC-101 — Earthworks</option>
-        <option>CC-102 — Surfacing</option>
-        <option>CC-103 — Drainage</option>
-        <option>CC-104 — Concrete Works</option>
-        <option>CC-201 — Plant Hire</option>
-        <option>CC-301 — Materials</option>
-      </select>
-      <div class="pd-info-notice" id="pd-cc-notice">
-        <span class="pd-info-ico">✦</span>
-        <span>Auto-filled from <strong id="pd-cc-notice-po"></strong> — change if this delivery should go elsewhere.</span>
-      </div>
-    </div>
+    <div class="pd-sec-body" id="pd-cc-body"></div>
   </div>
 
   <div class="pd-section">
@@ -1792,6 +1798,12 @@
   // ===== Process docket screen =====
   let editingDocketId = null;
   let customItems = [];
+  let pdCCSplits = [{ cc: '', percent: 100 }];
+
+  const CC_LIST = ['CC-101 — Earthworks', 'CC-102 — Surfacing', 'CC-103 — Drainage', 'CC-104 — Concrete Works', 'CC-201 — Plant Hire', 'CC-301 — Materials'];
+  function ccOptionsForPd(selected) {
+    return ['<option value="">Select cost centre…</option>', ...CC_LIST.map(c => `<option ${c === selected ? 'selected' : ''}>${c}</option>`)].join('');
+  }
 
   function escAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
 
@@ -1843,7 +1855,10 @@
     document.getElementById('pd-supplier').value = d.supplier || '';
     document.getElementById('pd-supplier-docket').value = d.supplierDocket || '';
     document.getElementById('pd-delivery-date').value = d.deliveryDate || '';
-    document.getElementById('pd-cc').value = d.costCentre || '';
+    pdCCSplits = (d.costCentreSplits && d.costCentreSplits.length > 1)
+      ? JSON.parse(JSON.stringify(d.costCentreSplits))
+      : [{ cc: d.costCentre || '', percent: 100 }];
+    renderCCSplits();
     document.getElementById('pd-notes').value = d.notes || '';
     document.getElementById('pd-status-badge').textContent = d.completed ? 'Complete' : 'Incomplete';
     document.getElementById('pd-status-badge').style.background = d.completed ? '#4caf50' : '#e53935';
@@ -1976,25 +1991,32 @@
       ? JSON.parse(JSON.stringify(d.deliveredItems.customItems))
       : [];
     renderCustomItems();
-    // Auto-fill cost centre from PO if mapped
+    // Auto-fill cost centre from PO if mapped (only when in single-CC mode)
     const po = POS[poId];
-    if (po && po.costCentre) {
-      document.getElementById('pd-cc').value = po.costCentre;
+    if (po && po.costCentre && pdCCSplits.length === 1) {
+      pdCCSplits[0].cc = po.costCentre;
+      renderCCSplits();
     }
     updateCCNotice();
     refreshPdSectionStatus();
   }
   function onPdCCChange() {
+    if (pdCCSplits.length === 1) {
+      const el = document.getElementById('pd-cc');
+      if (el) pdCCSplits[0].cc = el.value;
+    }
     updateCCNotice();
     refreshPdSectionStatus();
   }
 
   function updateCCNotice() {
-    const poId = document.getElementById('pd-po').value;
-    const cc = document.getElementById('pd-cc').value;
+    if (pdCCSplits.length !== 1) return;
     const ccEl = document.getElementById('pd-cc');
     const noticeEl = document.getElementById('pd-cc-notice');
     const noticePo = document.getElementById('pd-cc-notice-po');
+    if (!ccEl || !noticeEl || !noticePo) return;
+    const poId = document.getElementById('pd-po').value;
+    const cc = pdCCSplits[0].cc;
     const po = POS[poId];
     const linkSelected = document.getElementById('pd-po-link').classList.contains('selected');
     if (linkSelected && po && po.costCentre && cc === po.costCentre) {
@@ -2007,6 +2029,100 @@
     }
   }
 
+  // ===== Cost-centre splits =====
+  function renderCCSplits() {
+    const body = document.getElementById('pd-cc-body');
+    if (!body) return;
+    if (pdCCSplits.length <= 1) {
+      const cc = pdCCSplits[0] ? pdCCSplits[0].cc : '';
+      body.innerHTML = `
+        <div class="pd-label">Cost Centre</div>
+        <select class="pd-input" id="pd-cc" onchange="onPdCCChange()">${ccOptionsForPd(cc)}</select>
+        <div class="pd-info-notice" id="pd-cc-notice">
+          <span class="pd-info-ico">✦</span>
+          <span>Auto-filled from <strong id="pd-cc-notice-po"></strong> — change if this delivery should go elsewhere.</span>
+        </div>
+        <button type="button" class="pd-cc-add-btn" onclick="enableCCSplit()">+ Split across multiple cost centres</button>
+      `;
+      updateCCNotice();
+    } else {
+      const total = pdCCSplits.reduce((s, sp) => s + (parseFloat(sp.percent) || 0), 0);
+      const isOK = Math.abs(total - 100) < 0.01;
+      body.innerHTML = `
+        <div class="pd-label">Cost Centres · split across ${pdCCSplits.length}</div>
+        ${pdCCSplits.map((sp, i) => `
+          <div class="pd-cc-split-card">
+            <div class="pd-split-head">
+              <span class="pd-split-num">Split ${i + 1}</span>
+              <button type="button" class="pd-split-remove" onclick="removeCCSplit(${i})" title="Remove">✕</button>
+            </div>
+            <select class="pd-input" onchange="syncCCSplit(${i}, 'cc', this.value)">${ccOptionsForPd(sp.cc)}</select>
+            <div class="pd-split-alloc">
+              <span class="lbl">Allocation</span>
+              <input type="number" min="0" max="100" step="1" class="pd-split-percent" value="${sp.percent}" oninput="syncCCSplit(${i}, 'percent', this.value)" />
+              <span class="unit">%</span>
+              <span class="balance-link" onclick="balanceCCSplit(${i})" title="Set this so total = 100%">↔ Balance</span>
+            </div>
+          </div>
+        `).join('')}
+        <div class="pd-cc-total ${isOK ? 'ok' : 'invalid'}">
+          <span>Total allocation</span>
+          <span class="value">${total}% ${isOK ? '✓' : (total > 100 ? '⚠ Over by ' + (total - 100) + '%' : '⚠ Under by ' + (100 - total) + '%')}</span>
+        </div>
+        <button type="button" class="pd-cc-add-btn" onclick="addCCSplit()">+ Add another cost centre</button>
+      `;
+    }
+  }
+
+  function enableCCSplit() {
+    // Currently single CC; add a 2nd split with the remaining 0% so user can redistribute
+    if (pdCCSplits.length === 0) pdCCSplits = [{ cc: '', percent: 100 }];
+    pdCCSplits.push({ cc: '', percent: 0 });
+    renderCCSplits();
+    refreshPdSectionStatus();
+  }
+
+  function addCCSplit() {
+    const total = pdCCSplits.reduce((s, sp) => s + (parseFloat(sp.percent) || 0), 0);
+    const remaining = Math.max(0, 100 - total);
+    pdCCSplits.push({ cc: '', percent: remaining });
+    renderCCSplits();
+    refreshPdSectionStatus();
+  }
+
+  function removeCCSplit(idx) {
+    pdCCSplits.splice(idx, 1);
+    if (pdCCSplits.length === 0) pdCCSplits = [{ cc: '', percent: 100 }];
+    if (pdCCSplits.length === 1) pdCCSplits[0].percent = 100;
+    renderCCSplits();
+    refreshPdSectionStatus();
+  }
+
+  function syncCCSplit(idx, field, value) {
+    if (!pdCCSplits[idx]) return;
+    if (field === 'percent') pdCCSplits[idx].percent = parseFloat(value) || 0;
+    else pdCCSplits[idx][field] = value;
+    if (field === 'percent') {
+      // Update only the total badge to avoid losing focus on the input
+      const total = pdCCSplits.reduce((s, sp) => s + (parseFloat(sp.percent) || 0), 0);
+      const isOK = Math.abs(total - 100) < 0.01;
+      const totalEl = document.querySelector('#pd-cc-body .pd-cc-total');
+      if (totalEl) {
+        totalEl.classList.toggle('ok', isOK);
+        totalEl.classList.toggle('invalid', !isOK);
+        totalEl.querySelector('.value').textContent = total + '% ' + (isOK ? '✓' : (total > 100 ? '⚠ Over by ' + (total - 100) + '%' : '⚠ Under by ' + (100 - total) + '%'));
+      }
+    }
+    refreshPdSectionStatus();
+  }
+
+  function balanceCCSplit(idx) {
+    const others = pdCCSplits.reduce((s, sp, i) => i === idx ? s : s + (parseFloat(sp.percent) || 0), 0);
+    pdCCSplits[idx].percent = Math.max(0, 100 - others);
+    renderCCSplits();
+    refreshPdSectionStatus();
+  }
+
   function refreshPdSectionStatus() {
     const supEl = document.getElementById('pd-sec-supplier');
     const poEl = document.getElementById('pd-sec-po');
@@ -2015,10 +2131,17 @@
     const po = document.getElementById('pd-po').value;
     const noneSel = document.getElementById('pd-po-none').classList.contains('selected');
     const linkSel = document.getElementById('pd-po-link').classList.contains('selected');
-    const cc = document.getElementById('pd-cc').value;
     setPdState(supEl, !!supplier);
     setPdState(poEl, noneSel || (linkSel && !!po));
-    setPdState(ccEl, !!cc);
+    setPdState(ccEl, ccSplitsAreValid());
+  }
+
+  function ccSplitsAreValid() {
+    if (!pdCCSplits.length) return false;
+    if (pdCCSplits.length === 1) return !!pdCCSplits[0].cc;
+    if (!pdCCSplits.every(s => s.cc)) return false;
+    const total = pdCCSplits.reduce((s, sp) => s + (parseFloat(sp.percent) || 0), 0);
+    return Math.abs(total - 100) < 0.01;
   }
   function setPdState(el, done) {
     el.classList.toggle('pd-done', done);
@@ -2039,7 +2162,13 @@
     d.supplierDocket = document.getElementById('pd-supplier-docket').value;
     d.deliveryDate = document.getElementById('pd-delivery-date').value;
     d.po = noneSel ? 'none' : (linkSel ? document.getElementById('pd-po').value : '');
-    d.costCentre = document.getElementById('pd-cc').value;
+    if (pdCCSplits.length > 1) {
+      d.costCentre = pdCCSplits[0].cc;
+      d.costCentreSplits = pdCCSplits.map(s => ({ cc: s.cc, percent: parseFloat(s.percent) || 0 }));
+    } else {
+      d.costCentre = pdCCSplits[0] ? pdCCSplits[0].cc : '';
+      d.costCentreSplits = null;
+    }
     d.notes = document.getElementById('pd-notes').value;
     if (linkSel && d.po && POS[d.po]) {
       const quantities = {};
@@ -2054,7 +2183,7 @@
     } else {
       d.deliveredItems = null;
     }
-    if (d.supplier && d.costCentre && (d.po === 'none' || d.po)) {
+    if (d.supplier && ccSplitsAreValid() && (d.po === 'none' || d.po)) {
       d.completed = true;
       d.paid = false;
     } else {
