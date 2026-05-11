@@ -290,6 +290,19 @@
   .pd-item-unit { font-size: 13px; color: #888; }
   .pd-item-row .pd-item-remaining { margin-left: auto; font-size: 11px; color: #888; }
 
+  /* Per-item CC split rendering */
+  .pd-item-cc-list { margin-top: 10px; }
+  .pd-item-cc-header { font-size: 11px; font-weight: 700; color: #1565c0; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+  .pd-item-cc-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #f0f4ff; border: 1px solid #d6e3ff; border-radius: 6px; margin-bottom: 6px; }
+  .pd-item-cc-row .cc-name-col { flex: 1; min-width: 0; }
+  .pd-item-cc-row .cc-name { font-size: 12px; font-weight: 700; color: #1a1a2e; }
+  .pd-item-cc-row .cc-alloc { font-size: 10px; color: #6b7280; margin-top: 1px; }
+  .pd-item-cc-row .cc-qty { width: 78px; padding: 7px 8px; border: 1px solid #b8c8e6; border-radius: 5px; font-size: 14px; font-weight: 700; text-align: center; font-family: inherit; background: #fff; color: #1a1a2e; }
+  .pd-item-cc-row .cc-qty:focus { outline: none; border-color: #f7941d; }
+  .pd-item-cc-row .cc-unit { font-size: 11px; color: #6b7280; font-weight: 600; min-width: 22px; }
+  .pd-item-cc-total { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; margin-top: 4px; font-size: 11px; font-weight: 600; color: #6b7280; }
+  .pd-item-cc-total .total-val { color: #1a1a2e; font-weight: 700; font-size: 13px; }
+
   .pd-custom-section { margin-top: 14px; padding-top: 14px; border-top: 1px dashed #e0e0e0; }
   .pd-custom-section .pd-custom-header { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px; }
   .pd-custom-section .pd-custom-sub { font-size: 11px; color: #888; margin-bottom: 10px; }
@@ -1013,8 +1026,24 @@
   </div>
 
   <div class="pd-section pd-required" id="pd-sec-cc">
-    <div class="pd-sec-head"><div class="pd-snum">3</div><h3>Cost Centre</h3></div>
-    <div class="pd-sec-body" id="pd-cc-body"></div>
+    <div class="pd-sec-head"><div class="pd-snum">3</div><h3>Cost Centre <span style="font-size:11px; color:#6b7280; font-weight:500;">· default for off-PO items</span></h3></div>
+    <div class="pd-sec-body">
+      <div class="pd-label">Default cost centre</div>
+      <select class="pd-input" id="pd-cc" onchange="onPdCCChange()">
+        <option value="">Select cost centre…</option>
+        <option>CC-101 — Earthworks</option>
+        <option>CC-102 — Surfacing</option>
+        <option>CC-103 — Drainage</option>
+        <option>CC-104 — Concrete Works</option>
+        <option>CC-201 — Plant Hire</option>
+        <option>CC-301 — Materials</option>
+      </select>
+      <div class="pd-info-notice" id="pd-cc-notice">
+        <span class="pd-info-ico">✦</span>
+        <span>Auto-filled from <strong id="pd-cc-notice-po"></strong> — applies to any off-PO charges on this docket.</span>
+      </div>
+      <p style="font-size:12px; color:#6b7280; margin-top:10px; line-height:1.5;">PO line items use the cost centres set on the PO. Split quantities across them in the Purchase Order section above.</p>
+    </div>
   </div>
 
   <div class="pd-section">
@@ -1697,35 +1726,70 @@
   // ===== Purchase orders =====
   const POS = {
     'PO-VAR12-0042': { label: 'PO-VAR12-0042 — Concrete Supply ($46,000)', title: 'Concrete Supply', supplier: 'BORAL Concrete', costCentre: 'CC-104 — Concrete Works', items: [
-      { id: 'a', desc: '32 MPa Concrete (N32-20-80)', ordered: 200, prev: 80, unit: 'm³', unitCost: 220, resource: 'Material' },
-      { id: 'b', desc: '40 MPa Concrete (N40-20-80)', ordered: 100, prev: 0, unit: 'm³', unitCost: 260, resource: 'Material' },
-      { id: 'c', desc: 'Concrete Pump Hire', ordered: 8, prev: 2, unit: 'days', unitCost: 850, resource: 'Plant & Equipment' }
+      { id: 'a', desc: '32 MPa Concrete (N32-20-80)', ordered: 200, prev: 80, unit: 'm³', unitCost: 220, resource: 'Material', costCentres: [
+        { cc: 'CC-104 — Concrete Works', allocation: 150 },
+        { cc: 'CC-101 — Earthworks', allocation: 50 }
+      ]},
+      { id: 'b', desc: '40 MPa Concrete (N40-20-80)', ordered: 100, prev: 0, unit: 'm³', unitCost: 260, resource: 'Material', costCentres: [
+        { cc: 'CC-104 — Concrete Works', allocation: 100 }
+      ]},
+      { id: 'c', desc: 'Concrete Pump Hire', ordered: 8, prev: 2, unit: 'days', unitCost: 850, resource: 'Plant & Equipment', costCentres: [
+        { cc: 'CC-104 — Concrete Works', allocation: 8 }
+      ]}
     ]},
     'PO-VAR12-0044': { label: 'PO-VAR12-0044 — Concrete Supply ($28,000)', title: 'Concrete Supply', supplier: 'Holcim Australia', costCentre: 'CC-104 — Concrete Works', items: [
-      { id: 'a', desc: '32 MPa Concrete (N32-20-80)', ordered: 150, prev: 30, unit: 'm³', unitCost: 215, resource: 'Material' },
-      { id: 'b', desc: '25 MPa Concrete (N25-20-80)', ordered: 80, prev: 0, unit: 'm³', unitCost: 195, resource: 'Material' }
+      { id: 'a', desc: '32 MPa Concrete (N32-20-80)', ordered: 150, prev: 30, unit: 'm³', unitCost: 215, resource: 'Material', costCentres: [{ cc: 'CC-104 — Concrete Works', allocation: 150 }] },
+      { id: 'b', desc: '25 MPa Concrete (N25-20-80)', ordered: 80, prev: 0, unit: 'm³', unitCost: 195, resource: 'Material', costCentres: [{ cc: 'CC-104 — Concrete Works', allocation: 80 }] }
     ]},
     'PO-VAR12-0033': { label: 'PO-VAR12-0033 — Asphalt & Bitumen ($55,000)', title: 'Asphalt & Bitumen', supplier: 'A1 Asphalting Pty. Ltd.', costCentre: 'CC-102 — Surfacing', items: [
-      { id: 'a', desc: 'Asphaltic Concrete AC14', ordered: 40, prev: 12, unit: 'tonnes', unitCost: 320, resource: 'Material' },
-      { id: 'b', desc: 'Asphaltic Concrete AC20 (base)', ordered: 60, prev: 0, unit: 'tonnes', unitCost: 280, resource: 'Material' },
-      { id: 'c', desc: 'Tack Coat Application', ordered: 500, prev: 200, unit: 'm²', unitCost: 4.5, resource: 'Subcontractor' }
+      { id: 'a', desc: 'Asphaltic Concrete AC14', ordered: 40, prev: 12, unit: 'tonnes', unitCost: 320, resource: 'Material', costCentres: [{ cc: 'CC-102 — Surfacing', allocation: 40 }] },
+      { id: 'b', desc: 'Asphaltic Concrete AC20 (base)', ordered: 60, prev: 0, unit: 'tonnes', unitCost: 280, resource: 'Material', costCentres: [
+        { cc: 'CC-102 — Surfacing', allocation: 40 },
+        { cc: 'CC-101 — Earthworks', allocation: 20 }
+      ]},
+      { id: 'c', desc: 'Tack Coat Application', ordered: 500, prev: 200, unit: 'm²', unitCost: 4.5, resource: 'Subcontractor', costCentres: [{ cc: 'CC-102 — Surfacing', allocation: 500 }] }
     ]},
     'PO-VAR12-0028': { label: 'PO-VAR12-0028 — Roadworks Stage 2 ($38,000)', title: 'Roadworks Stage 2', supplier: 'Hanson Construction Materials', costCentre: 'CC-101 — Earthworks', items: [
-      { id: 'a', desc: 'Road Base Material (Class 2)', ordered: 80, prev: 35, unit: 'tonnes', unitCost: 95, resource: 'Material' },
-      { id: 'b', desc: 'Crushed Rock 20mm', ordered: 100, prev: 50, unit: 'tonnes', unitCost: 78, resource: 'Material' }
+      { id: 'a', desc: 'Road Base Material (Class 2)', ordered: 80, prev: 35, unit: 'tonnes', unitCost: 95, resource: 'Material', costCentres: [{ cc: 'CC-101 — Earthworks', allocation: 80 }] },
+      { id: 'b', desc: 'Crushed Rock 20mm', ordered: 100, prev: 50, unit: 'tonnes', unitCost: 78, resource: 'Material', costCentres: [{ cc: 'CC-101 — Earthworks', allocation: 100 }] }
     ]},
     'PO-VAR12-0019': { label: 'PO-VAR12-0019 — Plant Hire ($22,000)', title: 'Plant Hire', supplier: 'Coates Hire', costCentre: 'CC-201 — Plant Hire', items: [
-      { id: 'a', desc: 'Excavator 5T', ordered: 14, prev: 6, unit: 'days', unitCost: 480, resource: 'Plant & Equipment' },
-      { id: 'b', desc: 'Plate Compactor', ordered: 7, prev: 0, unit: 'days', unitCost: 145, resource: 'Plant & Equipment' }
+      { id: 'a', desc: 'Excavator 5T', ordered: 14, prev: 6, unit: 'days', unitCost: 480, resource: 'Plant & Equipment', costCentres: [{ cc: 'CC-201 — Plant Hire', allocation: 14 }] },
+      { id: 'b', desc: 'Plate Compactor', ordered: 7, prev: 0, unit: 'days', unitCost: 145, resource: 'Plant & Equipment', costCentres: [{ cc: 'CC-201 — Plant Hire', allocation: 7 }] }
     ]},
     'PO-VAR12-0050': { label: 'PO-VAR12-0050 — Aggregates ($12,500)', title: 'Aggregates', supplier: 'Hy-Tec', costCentre: 'CC-301 — Materials', items: [
-      { id: 'a', desc: '20mm Aggregate', ordered: 60, prev: 20, unit: 'tonnes', unitCost: 65, resource: 'Material' },
-      { id: 'b', desc: '14mm Aggregate', ordered: 30, prev: 0, unit: 'tonnes', unitCost: 70, resource: 'Material' }
+      { id: 'a', desc: '20mm Aggregate', ordered: 60, prev: 20, unit: 'tonnes', unitCost: 65, resource: 'Material', costCentres: [{ cc: 'CC-301 — Materials', allocation: 60 }] },
+      { id: 'b', desc: '14mm Aggregate', ordered: 30, prev: 0, unit: 'tonnes', unitCost: 70, resource: 'Material', costCentres: [{ cc: 'CC-301 — Materials', allocation: 30 }] }
     ]},
     'PO-VAR12-0051': { label: 'PO-VAR12-0051 — Cement Supply ($9,800)', title: 'Cement Supply', supplier: 'Adbri Concrete', costCentre: 'CC-301 — Materials', items: [
-      { id: 'a', desc: 'General Purpose Cement', ordered: 200, prev: 50, unit: 'bags', unitCost: 14.5, resource: 'Material' }
+      { id: 'a', desc: 'General Purpose Cement', ordered: 200, prev: 50, unit: 'bags', unitCost: 14.5, resource: 'Material', costCentres: [{ cc: 'CC-301 — Materials', allocation: 200 }] }
     ]}
   };
+
+  // Helpers to read delivered quantities (supports legacy number values and the new [{cc, qty}] shape)
+  function getItemQty(deliveredItems, itemId) {
+    if (!deliveredItems || !deliveredItems.quantities) return 0;
+    const q = deliveredItems.quantities[itemId];
+    if (q == null) return 0;
+    if (typeof q === 'number') return q;
+    if (Array.isArray(q)) return q.reduce((s, x) => s + (parseFloat(x.qty) || 0), 0);
+    return 0;
+  }
+  function getItemQtyByCC(deliveredItems, itemId, cc) {
+    if (!deliveredItems || !deliveredItems.quantities) return 0;
+    const q = deliveredItems.quantities[itemId];
+    if (Array.isArray(q)) {
+      const m = q.find(x => x.cc === cc);
+      return m ? (parseFloat(m.qty) || 0) : 0;
+    }
+    return 0;
+  }
+  function getItemSplits(deliveredItems, itemId) {
+    if (!deliveredItems || !deliveredItems.quantities) return [];
+    const q = deliveredItems.quantities[itemId];
+    if (Array.isArray(q)) return q;
+    return [];
+  }
 
   function getPOsForSupplier(supplier) {
     if (!supplier) return [];
@@ -1798,12 +1862,6 @@
   // ===== Process docket screen =====
   let editingDocketId = null;
   let customItems = [];
-  let pdCCSplits = [{ cc: '', percent: 100 }];
-
-  const CC_LIST = ['CC-101 — Earthworks', 'CC-102 — Surfacing', 'CC-103 — Drainage', 'CC-104 — Concrete Works', 'CC-201 — Plant Hire', 'CC-301 — Materials'];
-  function ccOptionsForPd(selected) {
-    return ['<option value="">Select cost centre…</option>', ...CC_LIST.map(c => `<option ${c === selected ? 'selected' : ''}>${c}</option>`)].join('');
-  }
 
   function escAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
 
@@ -1855,10 +1913,7 @@
     document.getElementById('pd-supplier').value = d.supplier || '';
     document.getElementById('pd-supplier-docket').value = d.supplierDocket || '';
     document.getElementById('pd-delivery-date').value = d.deliveryDate || '';
-    pdCCSplits = (d.costCentreSplits && d.costCentreSplits.length > 1)
-      ? JSON.parse(JSON.stringify(d.costCentreSplits))
-      : [{ cc: d.costCentre || '', percent: 100 }];
-    renderCCSplits();
+    document.getElementById('pd-cc').value = d.costCentre || '';
     document.getElementById('pd-notes').value = d.notes || '';
     document.getElementById('pd-status-badge').textContent = d.completed ? 'Complete' : 'Incomplete';
     document.getElementById('pd-status-badge').style.background = d.completed ? '#4caf50' : '#e53935';
@@ -1928,27 +1983,87 @@
     const po = POS[poId];
     list.innerHTML = po.items.map(item => {
       const remaining = item.ordered - item.prev;
-      const saved = savedQuantities && savedQuantities[item.id] != null ? savedQuantities[item.id] : '';
+      const ccs = (item.costCentres && item.costCentres.length) ? item.costCentres : [{ cc: po.costCentre, allocation: remaining }];
+
+      // Look up saved qty per CC (supports legacy single-number and new array shape)
+      const saved = savedQuantities ? savedQuantities[item.id] : null;
+      const savedByCc = {};
+      let savedSingle = null;
+      if (Array.isArray(saved)) {
+        saved.forEach(s => { savedByCc[s.cc] = s.qty; });
+      } else if (typeof saved === 'number') {
+        savedSingle = saved;
+        if (ccs.length === 1) savedByCc[ccs[0].cc] = saved;
+      }
+
+      if (ccs.length === 1) {
+        const cc = ccs[0];
+        const sv = savedByCc[cc.cc] != null ? savedByCc[cc.cc] : (savedSingle != null ? savedSingle : '');
+        return `
+          <div class="pd-item">
+            <div class="pd-item-desc">${item.desc}</div>
+            <div class="pd-item-meta">Ordered: ${item.ordered}${item.unit} · Received: ${item.prev}${item.unit} · Remaining: ${remaining}${item.unit}</div>
+            <div class="pd-item-meta" style="color:#1565c0;">→ ${cc.cc}</div>
+            <div class="pd-item-row">
+              <label>Delivered:</label>
+              <input class="pd-item-qty" type="number" min="0" step="0.01" data-item-id="${item.id}" data-cc-idx="0" data-cc="${escAttr(cc.cc)}" value="${sv}" placeholder="0" oninput="onItemCCQtyChange('${item.id}')" />
+              <span class="pd-item-unit">${item.unit}</span>
+              <span class="pd-item-remaining">of ${remaining}${item.unit} remaining</span>
+            </div>
+          </div>`;
+      }
+
+      // Multi-CC: render qty per CC with running total
+      const total = ccs.reduce((s, cc) => s + (parseFloat(savedByCc[cc.cc]) || 0), 0);
       return `
         <div class="pd-item">
           <div class="pd-item-desc">${item.desc}</div>
-          <div class="pd-item-meta">Ordered: ${item.ordered}${item.unit} · Previously received: ${item.prev}${item.unit} · Remaining: ${remaining}${item.unit}</div>
-          <div class="pd-item-row">
-            <label>Delivered:</label>
-            <input class="pd-item-qty" type="number" min="0" data-item-id="${item.id}" value="${saved}" placeholder="0" />
-            <span class="pd-item-unit">${item.unit}</span>
-            <span class="pd-item-remaining">of ${remaining}${item.unit} remaining</span>
+          <div class="pd-item-meta">Ordered: ${item.ordered}${item.unit} · Received: ${item.prev}${item.unit} · Remaining: ${remaining}${item.unit}</div>
+          <div class="pd-item-cc-list">
+            <div class="pd-item-cc-header">Split across ${ccs.length} cost centres (from PO)</div>
+            ${ccs.map((cc, i) => `
+              <div class="pd-item-cc-row">
+                <div class="cc-name-col">
+                  <div class="cc-name">${cc.cc}</div>
+                  <div class="cc-alloc">Allocated: ${cc.allocation}${item.unit}</div>
+                </div>
+                <input class="pd-item-qty cc-qty" type="number" min="0" step="0.01" data-item-id="${item.id}" data-cc-idx="${i}" data-cc="${escAttr(cc.cc)}" value="${savedByCc[cc.cc] != null ? savedByCc[cc.cc] : ''}" placeholder="0" oninput="onItemCCQtyChange('${item.id}')" />
+                <span class="cc-unit">${item.unit}</span>
+              </div>`).join('')}
+            <div class="pd-item-cc-total">
+              <span>Total delivered for this item</span>
+              <span class="total-val" id="pd-item-total-${item.id}">${total} ${item.unit}</span>
+            </div>
           </div>
         </div>`;
     }).join('');
   }
 
+  function onItemCCQtyChange(itemId) {
+    const poId = document.getElementById('pd-po').value;
+    const po = POS[poId];
+    if (!po) return;
+    const item = po.items.find(i => i.id === itemId);
+    if (!item) return;
+    let total = 0;
+    document.querySelectorAll(`input.pd-item-qty[data-item-id="${itemId}"]`).forEach(input => {
+      const v = parseFloat(input.value);
+      if (!isNaN(v)) total += v;
+    });
+    const totalEl = document.getElementById('pd-item-total-' + itemId);
+    if (totalEl) totalEl.textContent = total + ' ' + item.unit;
+  }
+
   function fillAllRemaining() {
     const poId = document.getElementById('pd-po').value;
     if (!poId || !POS[poId]) return;
-    document.querySelectorAll('.pd-item-qty').forEach(input => {
-      const item = POS[poId].items.find(i => i.id === input.dataset.itemId);
-      if (item) input.value = item.ordered - item.prev;
+    POS[poId].items.forEach(item => {
+      const ccs = (item.costCentres && item.costCentres.length) ? item.costCentres : [{ cc: POS[poId].costCentre, allocation: item.ordered - item.prev }];
+      ccs.forEach((cc, i) => {
+        const input = document.querySelector(`input.pd-item-qty[data-item-id="${item.id}"][data-cc-idx="${i}"]`);
+        if (input) input.value = cc.allocation;
+      });
+      onItemCCQtyChange(item.id);
     });
   }
 
@@ -1991,32 +2106,26 @@
       ? JSON.parse(JSON.stringify(d.deliveredItems.customItems))
       : [];
     renderCustomItems();
-    // Auto-fill cost centre from PO if mapped (only when in single-CC mode)
+    // Auto-fill default cost centre (off-PO) from PO if mapped
     const po = POS[poId];
-    if (po && po.costCentre && pdCCSplits.length === 1) {
-      pdCCSplits[0].cc = po.costCentre;
-      renderCCSplits();
+    if (po && po.costCentre) {
+      document.getElementById('pd-cc').value = po.costCentre;
     }
     updateCCNotice();
     refreshPdSectionStatus();
   }
   function onPdCCChange() {
-    if (pdCCSplits.length === 1) {
-      const el = document.getElementById('pd-cc');
-      if (el) pdCCSplits[0].cc = el.value;
-    }
     updateCCNotice();
     refreshPdSectionStatus();
   }
 
   function updateCCNotice() {
-    if (pdCCSplits.length !== 1) return;
     const ccEl = document.getElementById('pd-cc');
     const noticeEl = document.getElementById('pd-cc-notice');
     const noticePo = document.getElementById('pd-cc-notice-po');
     if (!ccEl || !noticeEl || !noticePo) return;
     const poId = document.getElementById('pd-po').value;
-    const cc = pdCCSplits[0].cc;
+    const cc = ccEl.value;
     const po = POS[poId];
     const linkSelected = document.getElementById('pd-po-link').classList.contains('selected');
     if (linkSelected && po && po.costCentre && cc === po.costCentre) {
@@ -2029,100 +2138,6 @@
     }
   }
 
-  // ===== Cost-centre splits =====
-  function renderCCSplits() {
-    const body = document.getElementById('pd-cc-body');
-    if (!body) return;
-    if (pdCCSplits.length <= 1) {
-      const cc = pdCCSplits[0] ? pdCCSplits[0].cc : '';
-      body.innerHTML = `
-        <div class="pd-label">Cost Centre</div>
-        <select class="pd-input" id="pd-cc" onchange="onPdCCChange()">${ccOptionsForPd(cc)}</select>
-        <div class="pd-info-notice" id="pd-cc-notice">
-          <span class="pd-info-ico">✦</span>
-          <span>Auto-filled from <strong id="pd-cc-notice-po"></strong> — change if this delivery should go elsewhere.</span>
-        </div>
-        <button type="button" class="pd-cc-add-btn" onclick="enableCCSplit()">+ Split across multiple cost centres</button>
-      `;
-      updateCCNotice();
-    } else {
-      const total = pdCCSplits.reduce((s, sp) => s + (parseFloat(sp.percent) || 0), 0);
-      const isOK = Math.abs(total - 100) < 0.01;
-      body.innerHTML = `
-        <div class="pd-label">Cost Centres · split across ${pdCCSplits.length}</div>
-        ${pdCCSplits.map((sp, i) => `
-          <div class="pd-cc-split-card">
-            <div class="pd-split-head">
-              <span class="pd-split-num">Split ${i + 1}</span>
-              <button type="button" class="pd-split-remove" onclick="removeCCSplit(${i})" title="Remove">✕</button>
-            </div>
-            <select class="pd-input" onchange="syncCCSplit(${i}, 'cc', this.value)">${ccOptionsForPd(sp.cc)}</select>
-            <div class="pd-split-alloc">
-              <span class="lbl">Allocation</span>
-              <input type="number" min="0" max="100" step="1" class="pd-split-percent" value="${sp.percent}" oninput="syncCCSplit(${i}, 'percent', this.value)" />
-              <span class="unit">%</span>
-              <span class="balance-link" onclick="balanceCCSplit(${i})" title="Set this so total = 100%">↔ Balance</span>
-            </div>
-          </div>
-        `).join('')}
-        <div class="pd-cc-total ${isOK ? 'ok' : 'invalid'}">
-          <span>Total allocation</span>
-          <span class="value">${total}% ${isOK ? '✓' : (total > 100 ? '⚠ Over by ' + (total - 100) + '%' : '⚠ Under by ' + (100 - total) + '%')}</span>
-        </div>
-        <button type="button" class="pd-cc-add-btn" onclick="addCCSplit()">+ Add another cost centre</button>
-      `;
-    }
-  }
-
-  function enableCCSplit() {
-    // Currently single CC; add a 2nd split with the remaining 0% so user can redistribute
-    if (pdCCSplits.length === 0) pdCCSplits = [{ cc: '', percent: 100 }];
-    pdCCSplits.push({ cc: '', percent: 0 });
-    renderCCSplits();
-    refreshPdSectionStatus();
-  }
-
-  function addCCSplit() {
-    const total = pdCCSplits.reduce((s, sp) => s + (parseFloat(sp.percent) || 0), 0);
-    const remaining = Math.max(0, 100 - total);
-    pdCCSplits.push({ cc: '', percent: remaining });
-    renderCCSplits();
-    refreshPdSectionStatus();
-  }
-
-  function removeCCSplit(idx) {
-    pdCCSplits.splice(idx, 1);
-    if (pdCCSplits.length === 0) pdCCSplits = [{ cc: '', percent: 100 }];
-    if (pdCCSplits.length === 1) pdCCSplits[0].percent = 100;
-    renderCCSplits();
-    refreshPdSectionStatus();
-  }
-
-  function syncCCSplit(idx, field, value) {
-    if (!pdCCSplits[idx]) return;
-    if (field === 'percent') pdCCSplits[idx].percent = parseFloat(value) || 0;
-    else pdCCSplits[idx][field] = value;
-    if (field === 'percent') {
-      // Update only the total badge to avoid losing focus on the input
-      const total = pdCCSplits.reduce((s, sp) => s + (parseFloat(sp.percent) || 0), 0);
-      const isOK = Math.abs(total - 100) < 0.01;
-      const totalEl = document.querySelector('#pd-cc-body .pd-cc-total');
-      if (totalEl) {
-        totalEl.classList.toggle('ok', isOK);
-        totalEl.classList.toggle('invalid', !isOK);
-        totalEl.querySelector('.value').textContent = total + '% ' + (isOK ? '✓' : (total > 100 ? '⚠ Over by ' + (total - 100) + '%' : '⚠ Under by ' + (100 - total) + '%'));
-      }
-    }
-    refreshPdSectionStatus();
-  }
-
-  function balanceCCSplit(idx) {
-    const others = pdCCSplits.reduce((s, sp, i) => i === idx ? s : s + (parseFloat(sp.percent) || 0), 0);
-    pdCCSplits[idx].percent = Math.max(0, 100 - others);
-    renderCCSplits();
-    refreshPdSectionStatus();
-  }
-
   function refreshPdSectionStatus() {
     const supEl = document.getElementById('pd-sec-supplier');
     const poEl = document.getElementById('pd-sec-po');
@@ -2131,17 +2146,10 @@
     const po = document.getElementById('pd-po').value;
     const noneSel = document.getElementById('pd-po-none').classList.contains('selected');
     const linkSel = document.getElementById('pd-po-link').classList.contains('selected');
+    const cc = document.getElementById('pd-cc').value;
     setPdState(supEl, !!supplier);
     setPdState(poEl, noneSel || (linkSel && !!po));
-    setPdState(ccEl, ccSplitsAreValid());
-  }
-
-  function ccSplitsAreValid() {
-    if (!pdCCSplits.length) return false;
-    if (pdCCSplits.length === 1) return !!pdCCSplits[0].cc;
-    if (!pdCCSplits.every(s => s.cc)) return false;
-    const total = pdCCSplits.reduce((s, sp) => s + (parseFloat(sp.percent) || 0), 0);
-    return Math.abs(total - 100) < 0.01;
+    setPdState(ccEl, !!cc);
   }
   function setPdState(el, done) {
     el.classList.toggle('pd-done', done);
@@ -2162,19 +2170,20 @@
     d.supplierDocket = document.getElementById('pd-supplier-docket').value;
     d.deliveryDate = document.getElementById('pd-delivery-date').value;
     d.po = noneSel ? 'none' : (linkSel ? document.getElementById('pd-po').value : '');
-    if (pdCCSplits.length > 1) {
-      d.costCentre = pdCCSplits[0].cc;
-      d.costCentreSplits = pdCCSplits.map(s => ({ cc: s.cc, percent: parseFloat(s.percent) || 0 }));
-    } else {
-      d.costCentre = pdCCSplits[0] ? pdCCSplits[0].cc : '';
-      d.costCentreSplits = null;
-    }
+    d.costCentre = document.getElementById('pd-cc').value;
+    d.costCentreSplits = null; // splits live per-line-item now
     d.notes = document.getElementById('pd-notes').value;
     if (linkSel && d.po && POS[d.po]) {
       const quantities = {};
-      document.querySelectorAll('.pd-item-qty').forEach(input => {
-        const v = parseFloat(input.value);
-        if (!isNaN(v) && v > 0) quantities[input.dataset.itemId] = v;
+      POS[d.po].items.forEach(item => {
+        const inputs = document.querySelectorAll(`input.pd-item-qty[data-item-id="${item.id}"]`);
+        const splits = [];
+        inputs.forEach(input => {
+          const v = parseFloat(input.value);
+          const cc = input.dataset.cc || (item.costCentres && item.costCentres[0] ? item.costCentres[0].cc : POS[d.po].costCentre);
+          if (!isNaN(v) && v > 0) splits.push({ cc, qty: v });
+        });
+        if (splits.length > 0) quantities[item.id] = splits;
       });
       const validCustom = customItems
         .map(it => ({ desc: (it.desc || '').trim(), qty: it.qty, unit: (it.unit || '').trim() }))
@@ -2183,7 +2192,7 @@
     } else {
       d.deliveredItems = null;
     }
-    if (d.supplier && ccSplitsAreValid() && (d.po === 'none' || d.po)) {
+    if (d.supplier && d.costCentre && (d.po === 'none' || d.po)) {
       d.completed = true;
       d.paid = false;
     } else {
@@ -2234,8 +2243,7 @@
     if (!d.deliveredItems || !d.po || !POS[d.po]) return 0;
     let total = 0;
     POS[d.po].items.forEach(item => {
-      const q = parseFloat(d.deliveredItems.quantities[item.id]);
-      if (!isNaN(q)) total += q * item.unitCost;
+      total += getItemQty(d.deliveredItems, item.id) * item.unitCost;
     });
     return total;
   }
@@ -2287,24 +2295,49 @@
     if (d.po && POS[d.po] && d.deliveredItems && d.deliveredItems.poId === d.po) {
       const po = POS[d.po];
       po.items.forEach(item => {
-        const q = parseFloat(d.deliveredItems.quantities[item.id]);
-        if (!isNaN(q) && q > 0) {
-          const sub = q * item.unitCost;
-          total += sub;
-          rows.push(`
-            <tr>
-              <td>${sn++}</td>
-              <td>${item.desc}</td>
-              <td class="num">${item.ordered}</td>
-              <td class="num">${item.prev}</td>
-              <td class="num">${item.ordered - item.prev - q}</td>
-              <td><span class="web-items-cc-pill assigned">${d.costCentre || 'Default'}</span></td>
-              <td class="num">${q.toFixed(2)} of ${(item.ordered - item.prev).toFixed(2)}</td>
-              <td>${item.unit}</td>
-              <td class="num">${fmtMoney(item.unitCost)}</td>
-              <td class="num">${fmtMoney(sub)}</td>
-              <td>—</td>
-            </tr>`);
+        const splits = getItemSplits(d.deliveredItems, item.id);
+        if (splits.length === 0) {
+          // Legacy single number
+          const q = typeof d.deliveredItems.quantities[item.id] === 'number' ? d.deliveredItems.quantities[item.id] : 0;
+          if (q > 0) {
+            const sub = q * item.unitCost;
+            total += sub;
+            rows.push(`
+              <tr>
+                <td>${sn++}</td>
+                <td>${item.desc}</td>
+                <td class="num">${item.ordered}</td>
+                <td class="num">${item.prev}</td>
+                <td class="num">${item.ordered - item.prev - q}</td>
+                <td><span class="web-items-cc-pill assigned">${d.costCentre || 'Default'}</span></td>
+                <td class="num">${q.toFixed(2)}</td>
+                <td>${item.unit}</td>
+                <td class="num">${fmtMoney(item.unitCost)}</td>
+                <td class="num">${fmtMoney(sub)}</td>
+                <td>—</td>
+              </tr>`);
+          }
+        } else {
+          splits.forEach((sp, idx) => {
+            const q = parseFloat(sp.qty) || 0;
+            if (q <= 0) return;
+            const sub = q * item.unitCost;
+            total += sub;
+            rows.push(`
+              <tr>
+                <td>${sn++}</td>
+                <td>${item.desc}${splits.length > 1 ? ` <span class="web-tag-offpo" style="background:#1565c0;">Split ${idx + 1}/${splits.length}</span>` : ''}</td>
+                <td class="num">${idx === 0 ? item.ordered : ''}</td>
+                <td class="num">${idx === 0 ? item.prev : ''}</td>
+                <td class="num">${idx === 0 ? (item.ordered - item.prev - splits.reduce((s, x) => s + (parseFloat(x.qty) || 0), 0)) : ''}</td>
+                <td><span class="web-items-cc-pill assigned">${sp.cc}</span></td>
+                <td class="num">${q.toFixed(2)}</td>
+                <td>${item.unit}</td>
+                <td class="num">${fmtMoney(item.unitCost)}</td>
+                <td class="num">${fmtMoney(sub)}</td>
+                <td>—</td>
+              </tr>`);
+          });
         }
       });
       if (Array.isArray(d.deliveredItems.customItems)) {
@@ -2424,10 +2457,11 @@
     let sn = 1;
     if (poId && POS[poId]) {
       const po = POS[poId];
-      const savedQty = (d && d.deliveredItems && d.deliveredItems.poId === poId) ? d.deliveredItems.quantities : {};
       po.items.forEach(item => {
         const remaining = item.ordered - item.prev;
-        const saved = savedQty[item.id] != null ? savedQty[item.id] : '';
+        const saved = d && d.deliveredItems && d.deliveredItems.poId === poId
+          ? getItemQty(d.deliveredItems, item.id) || ''
+          : '';
         rows.push(`
           <tr>
             <td>${sn++}</td>
@@ -2546,7 +2580,10 @@
       if (!captured.deliveredItems || captured.deliveredItems.poId !== captured.po) {
         captured.deliveredItems = {
           poId: 'PO-VAR12-0042',
-          quantities: { a: 8 },
+          quantities: { a: [
+            { cc: 'CC-104 — Concrete Works', qty: 5 },
+            { cc: 'CC-101 — Earthworks', qty: 3 }
+          ]},
           customItems: [
             { desc: 'Wash-out fee', qty: 1, unit: 'ea' },
             { desc: 'Saturday surcharge', qty: 1, unit: 'ea' }
@@ -2633,31 +2670,72 @@
 
   function buildLineItemsFromMatch(bill, po, linkedDockets) {
     const lines = [];
-    // PO matched lines: prefer bill qty if present, else docket qty
+    // PO matched lines: aggregate docket CC splits, emit one bill row per CC
     po.items.forEach(item => {
       const billItem = bill.items.find(bi => bi.matchPoItem === item.id);
-      let deliveredQty = 0;
+      // Aggregate qty by CC across linked dockets (handling both array splits and legacy numbers)
+      const ccQty = {};
+      let totalDocketQty = 0;
       linkedDockets.forEach(d => {
-        const q = parseFloat(d.deliveredItems.quantities[item.id]);
-        if (!isNaN(q)) deliveredQty += q;
+        const splits = getItemSplits(d.deliveredItems, item.id);
+        if (splits.length) {
+          splits.forEach(s => {
+            const q = parseFloat(s.qty) || 0;
+            ccQty[s.cc] = (ccQty[s.cc] || 0) + q;
+            totalDocketQty += q;
+          });
+        } else if (d.deliveredItems && typeof d.deliveredItems.quantities[item.id] === 'number' && d.deliveredItems.quantities[item.id] > 0) {
+          const cc = (item.costCentres && item.costCentres[0] ? item.costCentres[0].cc : po.costCentre);
+          ccQty[cc] = (ccQty[cc] || 0) + d.deliveredItems.quantities[item.id];
+          totalDocketQty += d.deliveredItems.quantities[item.id];
+        }
       });
-      if (billItem || deliveredQty > 0) {
+      const ccList = Object.keys(ccQty);
+
+      if (!billItem && totalDocketQty === 0) return;
+
+      if (ccList.length === 0) {
+        const defaultCC = (item.costCentres && item.costCentres[0] ? item.costCentres[0].cc : po.costCentre);
         lines.push({
           id: 'po-' + item.id,
           desc: item.desc,
           project: 'Troughton Rd',
           resource: item.resource || '',
           acct: '',
-          cc: po.costCentre,
+          cc: defaultCC,
           unit: item.unit,
-          docketQty: deliveredQty,
-          qty: billItem ? billItem.qty : deliveredQty,
+          docketQty: 0,
+          qty: billItem ? billItem.qty : 0,
           poUnitCost: item.unitCost,
           unitCost: billItem ? billItem.rate : item.unitCost,
           tax: 'GST on expense',
-          tags: ['po', 'docket', billItem ? 'bill' : null].filter(Boolean),
+          tags: ['po', billItem ? 'bill' : null].filter(Boolean),
           requiresCC: false,
           poItemId: item.id
+        });
+      } else {
+        ccList.forEach((cc, idx) => {
+          const dQty = ccQty[cc];
+          const share = totalDocketQty > 0 ? (dQty / totalDocketQty) : (idx === 0 ? 1 : 0);
+          const billShareQty = billItem ? (billItem.qty * share) : 0;
+          lines.push({
+            id: `po-${item.id}-${idx}`,
+            desc: item.desc,
+            project: 'Troughton Rd',
+            resource: item.resource || '',
+            acct: '',
+            cc: cc,
+            unit: item.unit,
+            docketQty: dQty,
+            qty: billShareQty,
+            poUnitCost: item.unitCost,
+            unitCost: billItem ? billItem.rate : item.unitCost,
+            tax: 'GST on expense',
+            tags: ['po', 'docket', billItem ? 'bill' : null].filter(Boolean),
+            requiresCC: false,
+            poItemId: item.id,
+            splitInfo: ccList.length > 1 ? { idx: idx + 1, total: ccList.length } : null
+          });
         });
       }
     });
@@ -2755,7 +2833,7 @@
         <td>
           <div class="ab-desc">
             <input value="${escAttr(it.desc)}" oninput="abLineItems[${idx}].desc = this.value" />
-            <div class="ab-source-tags">${it.tags.map(tagBadgeHTML).join('')}</div>
+            <div class="ab-source-tags">${it.tags.map(tagBadgeHTML).join('')}${it.splitInfo ? `<span class="ab-source-tag po">CC split ${it.splitInfo.idx}/${it.splitInfo.total}</span>` : ''}</div>
           </div>
         </td>
         <td><select class="ab-cell-input"><option ${it.project === 'Troughton Rd' ? 'selected' : ''}>Troughton Rd</option></select></td>
@@ -2919,8 +2997,7 @@
       let deliveredQty = 0;
       group.dockets.forEach(d => {
         if (d.deliveredItems && d.deliveredItems.poId === poId) {
-          const q = parseFloat(d.deliveredItems.quantities[item.id]);
-          if (!isNaN(q)) deliveredQty += q;
+          deliveredQty += getItemQty(d.deliveredItems, item.id);
         }
       });
       deliveredTotal += deliveredQty * item.unitCost;
@@ -2954,8 +3031,7 @@
       let deliveredQty = 0;
       group.dockets.forEach(d => {
         if (d.deliveredItems && d.deliveredItems.poId === poId) {
-          const q = parseFloat(d.deliveredItems.quantities[item.id]);
-          if (!isNaN(q)) deliveredQty += q;
+          deliveredQty += getItemQty(d.deliveredItems, item.id);
         }
       });
       let billedQty = 0;
@@ -2983,10 +3059,7 @@
 
     const docketLinks = group.dockets.map(d => {
       const deliveredVal = d.deliveredItems && d.deliveredItems.poId === poId
-        ? po.items.reduce((sum, it) => {
-            const q = parseFloat(d.deliveredItems.quantities[it.id]);
-            return sum + (isNaN(q) ? 0 : q * it.unitCost);
-          }, 0)
+        ? po.items.reduce((sum, it) => sum + getItemQty(d.deliveredItems, it.id) * it.unitCost, 0)
         : 0;
       return `<div class="web-linked-item"><span>🚚</span><span class="ref">${d.ref.slice(-12)}</span><span class="meta">${d.deliveryDate || d.date} · ${fmtMoney(deliveredVal)}</span></div>`;
     }).join('') || '<div class="web-linked-empty">No dockets received yet.</div>';
