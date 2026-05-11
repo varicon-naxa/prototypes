@@ -7,6 +7,8 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', Roboto, sans-serif; background: #f5f5f5; color: #1a1a2e; max-width: 414px; margin: 0 auto; min-height: 100vh; overflow-x: hidden; }
+  body.web-mode { max-width: none; background: #fff; overflow-x: auto; }
+  body.web-mode .sys-nav { display: none; }
 
   .status-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px; background: #fff; font-size: 12px; font-weight: 600; }
   .status-bar .right { display: flex; gap: 6px; align-items: center; }
@@ -116,6 +118,16 @@
   .field-card input, .field-card select, .field-card textarea { width: 100%; border: none; font-size: 15px; font-family: inherit; color: #1a1a2e; background: transparent; padding: 0; outline: none; }
   .field-card textarea { resize: none; min-height: 60px; }
 
+  /* Scan status / fallback for supplier */
+  .scan-status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #6b7280; padding: 4px 0; }
+  .scan-status .spinner { width: 14px; height: 14px; border: 2px solid #e6e9ee; border-top-color: #f7941d; border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .scan-warn { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #e65100; background: #fff4e0; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; }
+  .supplier-select-wrap { position: relative; }
+  .supplier-select-wrap select { width: 100%; appearance: none; -webkit-appearance: none; padding: 10px 30px 10px 12px; border: 1px solid #d0d0d0; border-radius: 8px; font-size: 15px; background: #fff; color: #1a1a2e; cursor: pointer; }
+  .supplier-select-wrap::after { content: '▾'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #6b7280; pointer-events: none; font-size: 14px; }
+  #supplier-other { margin-top: 8px; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 8px; font-size: 15px; }
+
   .save-btn { display: block; width: calc(100% - 32px); margin: 18px 16px; padding: 16px; border: none; border-radius: 999px; font-size: 16px; font-weight: 700; cursor: pointer; background: #f7941d; color: #1a1a2e; }
 
   /* ===== DOCKETS LIST ===== */
@@ -135,6 +147,549 @@
   .empty-state .ico-big { font-size: 48px; margin-bottom: 12px; opacity: .4; }
   .empty-state .title { font-size: 16px; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
   .empty-state .sub { font-size: 13px; line-height: 1.5; }
+
+  /* Assign banner */
+  .assign-banner { display: flex; align-items: center; gap: 12px; margin: 12px 16px; padding: 14px 16px; background: linear-gradient(135deg, #fff4e0 0%, #ffe6c4 100%); border: 1px solid #f7c97a; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 12px rgba(247,148,29,.18); }
+  .assign-banner:active { transform: scale(.99); }
+  .assign-banner .banner-emoji { font-size: 24px; flex-shrink: 0; }
+  .assign-banner .banner-body { flex: 1; }
+  .assign-banner .banner-title { font-size: 14px; font-weight: 700; color: #1a1a2e; line-height: 1.3; }
+  .assign-banner .banner-sub { font-size: 12px; color: #7a4d10; margin-top: 2px; }
+  .assign-banner .banner-arrow { font-size: 20px; color: #1a1a2e; flex-shrink: 0; }
+
+  /* Bottom sheet modal for assign choice */
+  .sheet-overlay { position: fixed; inset: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 414px; height: 100vh; background: rgba(0,0,0,.45); display: none; align-items: flex-end; justify-content: center; z-index: 200; }
+  .sheet-overlay.show { display: flex; animation: fadeIn .2s ease; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .sheet { width: 100%; background: #fff; border-radius: 20px 20px 0 0; padding: 12px 16px 28px; animation: slideUp .25s ease; }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .sheet .grabber { width: 40px; height: 4px; background: #d0d0d0; border-radius: 2px; margin: 0 auto 14px; }
+  .sheet h3 { font-size: 18px; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
+  .sheet p { font-size: 13px; color: #6b7280; margin-bottom: 16px; }
+  .choice-btn { display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px; border: 2px solid #e6e9ee; border-radius: 12px; background: #fff; cursor: pointer; margin-bottom: 10px; text-align: left; }
+  .choice-btn:active { background: #fafafa; }
+  .choice-btn:hover { border-color: #f7941d; }
+  .choice-btn .choice-icon { width: 48px; height: 48px; background: #fff4e0; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+  .choice-btn .choice-info { flex: 1; }
+  .choice-btn .choice-title { font-size: 15px; font-weight: 700; color: #1a1a2e; }
+  .choice-btn .choice-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+  .choice-btn .choice-chev { color: #6b7280; font-size: 18px; }
+  .sheet-cancel { width: 100%; padding: 14px; border: none; background: transparent; color: #6b7280; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+
+  /* Placeholder screens for mobile/web flows */
+  .placeholder-screen { padding: 40px 32px; text-align: center; }
+  .placeholder-screen .pl-emoji { font-size: 64px; margin-bottom: 16px; }
+  .placeholder-screen .pl-title { font-size: 20px; font-weight: 700; color: #1a1a2e; margin-bottom: 8px; }
+  .placeholder-screen .pl-sub { font-size: 14px; color: #6b7280; line-height: 1.5; max-width: 280px; margin: 0 auto; }
+
+  /* ===== Delivery dockets list (mobile assign screen) ===== */
+  .dl-screen { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', Roboto, sans-serif; color: #333; }
+  .dl-screen .dl-nav { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #1a1a2e; color: #fff; }
+  .dl-screen .dl-nav .dl-back { font-size: 22px; cursor: pointer; padding: 4px 8px; color: #fff; }
+  .dl-screen .dl-nav h1 { font-size: 16px; font-weight: 600; flex: 1; text-align: center; color: #fff; }
+  .dl-screen .dl-nav .dl-actions { display: flex; gap: 12px; }
+  .dl-screen .dl-nav .dl-actions span { font-size: 18px; cursor: pointer; }
+
+  .dl-screen .dl-project { padding: 12px 16px; background: #fff; border-bottom: 1px solid #e0e0e0; }
+  .dl-screen .dl-project h2 { font-size: 16px; font-weight: 700; color: #1a1a2e; }
+  .dl-screen .dl-project .dl-range { font-size: 11px; color: #888; margin-top: 4px; }
+
+  .dl-screen .dl-banner { margin: 12px 16px; padding: 14px 16px; background: #e53935; border-radius: 12px; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+  .dl-screen .dl-banner:active { opacity: .9; }
+  .dl-screen .dl-banner .dl-pending-num { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.25); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; flex-shrink: 0; }
+  .dl-screen .dl-banner .dl-pb-text { color: #fff; flex: 1; }
+  .dl-screen .dl-banner .dl-pb-text h3 { font-size: 15px; font-weight: 700; }
+  .dl-screen .dl-banner .dl-pb-text p { font-size: 12px; opacity: .85; margin-top: 1px; }
+  .dl-screen .dl-banner .dl-pb-arrow { color: rgba(255,255,255,.7); font-size: 20px; }
+
+  .dl-screen .dl-tabs { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; }
+  .dl-screen .dl-tab { flex: 1; padding: 12px 8px; text-align: center; font-size: 12px; font-weight: 600; color: #888; cursor: pointer; border-bottom: 2px solid transparent; }
+  .dl-screen .dl-tab.active { color: #f7941d; border-bottom-color: #f7941d; }
+  .dl-screen .dl-tab .dl-tab-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; border-radius: 9px; font-size: 10px; font-weight: 700; margin-left: 4px; padding: 0 5px; }
+  .dl-screen .dl-tab-badge-red { background: #e53935; color: #fff; }
+  .dl-screen .dl-tab-badge-grey { background: #e0e0e0; color: #666; }
+  .dl-screen .dl-tab-badge-green { background: #4caf50; color: #fff; }
+
+  .dl-screen .dl-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: .5px; }
+
+  .dl-screen .dl-card { margin: 0 12px 8px; background: #fff; border-radius: 12px; border: 1px solid #e8e8e8; overflow: hidden; cursor: pointer; }
+  .dl-screen .dl-card:active { background: #fafafa; }
+  .dl-screen .dl-card.needs-action { border-left: 4px solid #e53935; background: #fff8f7; }
+  .dl-screen .dl-card.needs-action:active { background: #fef0ef; }
+  .dl-screen .dl-card.just-captured { box-shadow: 0 0 0 2px #f7941d; }
+
+  .dl-screen .dl-card-top { display: flex; align-items: center; padding: 12px 14px 8px; gap: 10px; }
+  .dl-screen .dl-thumb { width: 48px; height: 48px; border-radius: 8px; background: #e8e8e8; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; overflow: hidden; }
+  .dl-screen .dl-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .dl-screen .dl-thumb.photo { background: #d4e0d0; }
+  .dl-screen .dl-main { flex: 1; min-width: 0; }
+  .dl-screen .dl-main .dl-ref { font-size: 11px; color: #888; font-weight: 500; }
+  .dl-screen .dl-main .dl-supplier { font-size: 14px; font-weight: 600; margin-top: 1px; color: #1a1a2e; }
+  .dl-screen .dl-main .dl-date { font-size: 11px; color: #888; margin-top: 2px; }
+  .dl-screen .dl-status { padding: 3px 10px; border-radius: 10px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+  .dl-screen .dl-status.incomplete { background: #fde8e8; color: #c62828; }
+  .dl-screen .dl-status.complete { background: #e8f5e9; color: #2e7d32; }
+
+  .dl-screen .dl-card-bottom { display: flex; gap: 8px; padding: 0 14px 12px; flex-wrap: wrap; }
+  .dl-screen .dl-tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; }
+  .dl-screen .tag-missing { background: #fde8e8; color: #c62828; }
+  .dl-screen .tag-assigned { background: #e8f5e9; color: #2e7d32; }
+  .dl-screen .tag-topay { background: #fff3e0; color: #e65100; }
+  .dl-screen .tag-paid { background: #e3f2fd; color: #1565c0; }
+  .dl-screen .tag-new { background: #fff4e0; color: #e65100; }
+
+  .dl-screen .dl-fab { position: fixed; bottom: 78px; right: calc(50% - 195px); width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, #f7941d, #f15a24); color: #fff; border: none; display: flex; align-items: center; justify-content: center; font-size: 26px; box-shadow: 0 4px 16px rgba(247,148,29,.4); cursor: pointer; z-index: 9; }
+  .dl-screen .dl-fab:active { opacity: .9; }
+
+  /* Process docket screen */
+  #screen-process-docket { background: #f5f5f5; padding-bottom: 0; }
+  .pd-image { background: #2c2c2c; height: 200px; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer; }
+  .pd-image img { max-width: 80%; max-height: 90%; object-fit: contain; box-shadow: 0 4px 16px rgba(0,0,0,.4); border-radius: 4px; transform: rotate(-1deg); }
+  .pd-expand-hint { position: absolute; bottom: 8px; right: 12px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 6px; }
+  .pd-ocr-banner { margin: 12px 16px; padding: 10px 14px; background: #ede7f6; border: 1px solid #b39ddb; border-radius: 10px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4527a0; }
+  .pd-section { margin: 0 16px 12px; background: #fff; border-radius: 12px; border: 1px solid #e8e8e8; overflow: hidden; }
+  .pd-section.pd-required { border: 2px solid #f7941d; }
+  .pd-section.pd-done { border: 2px solid #4caf50; }
+  .pd-sec-head { padding: 14px 16px 0; display: flex; align-items: center; gap: 8px; }
+  .pd-snum { width: 22px; height: 22px; border-radius: 50%; background: #f7941d; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+  .pd-section.pd-done .pd-snum { background: #4caf50; }
+  .pd-sec-head h3 { font-size: 14px; font-weight: 700; color: #1a1a2e; }
+  .pd-sec-body { padding: 10px 16px 16px; }
+  .pd-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 4px; margin-top: 10px; }
+  .pd-label:first-child { margin-top: 0; }
+  .pd-input { width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 8px; font-size: 14px; background: #fff; font-family: inherit; appearance: none; -webkit-appearance: none; color: #1a1a2e; }
+  .pd-input:focus { outline: none; border-color: #f7941d; }
+  select.pd-input { background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 30px; }
+  textarea.pd-input { resize: vertical; min-height: 60px; }
+  .pd-ocr-tag { display: inline-block; font-size: 9px; font-weight: 700; color: #7c4dff; margin-left: 6px; vertical-align: middle; }
+  .pd-po-options { display: flex; gap: 8px; }
+  .pd-po-opt { flex: 1; padding: 12px 10px; border: 2px solid #e0e0e0; border-radius: 10px; text-align: center; cursor: pointer; font-size: 13px; font-weight: 600; color: #555; }
+  .pd-po-opt.selected { border-color: #f7941d; background: #fff8f0; color: #f7941d; }
+  .pd-po-opt.secondary { flex: 0 0 auto; padding: 12px 14px; font-size: 12px; opacity: .6; }
+  .pd-po-opt.secondary.selected { opacity: 1; border-color: #888; background: #f5f5f5; color: #555; }
+  .pd-po-icon { font-size: 20px; margin-bottom: 4px; }
+  .pd-bottom-bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 414px; padding: 12px 16px 22px; background: #fff; border-top: 1px solid #e0e0e0; display: flex; gap: 10px; z-index: 10; box-shadow: 0 -2px 8px rgba(0,0,0,.06); }
+  .pd-btn { flex: 1; padding: 14px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; border: 2px solid; }
+  .pd-btn-cancel { background: #fff; border-color: #d0d0d0; color: #555; }
+  .pd-btn-save { background: #f7941d; border-color: #f7941d; color: #fff; }
+  .pd-btn-save:active { background: #e8850f; }
+
+  .pd-po-helper { font-size: 12px; color: #888; margin-top: 8px; padding: 8px 12px; background: #f7f7f9; border: 1px dashed #d0d0d0; border-radius: 6px; }
+  .pd-items-wrap { margin-top: 14px; padding-top: 14px; border-top: 1px solid #f0f0f0; }
+  .pd-items-header { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
+  .pd-items-help { font-size: 11px; color: #888; margin-bottom: 10px; }
+  .pd-fill-all { display: block; width: 100%; padding: 10px; border: 1px solid #4caf50; border-radius: 8px; background: #f0faf0; color: #2e7d32; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 10px; font-family: inherit; }
+  .pd-fill-all:active { background: #e0f2e0; }
+  .pd-item { padding: 12px; background: #fafafa; border: 1px solid #e8e8e8; border-radius: 10px; margin-bottom: 8px; }
+  .pd-item-desc { font-size: 14px; font-weight: 600; color: #1a1a2e; }
+  .pd-item-meta { font-size: 11px; color: #888; margin-top: 4px; line-height: 1.4; }
+  .pd-item-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .pd-item-row label { font-size: 12px; font-weight: 600; color: #555; }
+  .pd-item-qty { width: 90px; padding: 9px 10px; border: 2px solid #d0d0d0; border-radius: 8px; font-size: 15px; font-weight: 700; text-align: center; font-family: inherit; }
+  .pd-item-qty:focus { outline: none; border-color: #f7941d; }
+  .pd-item-unit { font-size: 13px; color: #888; }
+  .pd-item-row .pd-item-remaining { margin-left: auto; font-size: 11px; color: #888; }
+
+  /* Per-item CC split rendering */
+  .pd-item-cc-list { margin-top: 10px; }
+  .pd-item-cc-header { font-size: 11px; font-weight: 700; color: #1565c0; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+  .pd-item-cc-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #f0f4ff; border: 1px solid #d6e3ff; border-radius: 6px; margin-bottom: 6px; }
+  .pd-item-cc-row .cc-name-col { flex: 1; min-width: 0; }
+  .pd-item-cc-row .cc-name { font-size: 12px; font-weight: 700; color: #1a1a2e; }
+  .pd-item-cc-row .cc-alloc { font-size: 10px; color: #6b7280; margin-top: 1px; }
+  .pd-item-cc-row .cc-qty { width: 78px; padding: 7px 8px; border: 1px solid #b8c8e6; border-radius: 5px; font-size: 14px; font-weight: 700; text-align: center; font-family: inherit; background: #fff; color: #1a1a2e; }
+  .pd-item-cc-row .cc-qty:focus { outline: none; border-color: #f7941d; }
+  .pd-item-cc-row .cc-unit { font-size: 11px; color: #6b7280; font-weight: 600; min-width: 22px; }
+  .pd-item-cc-total { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; margin-top: 4px; font-size: 11px; font-weight: 600; color: #6b7280; }
+  .pd-item-cc-total .total-val { color: #1a1a2e; font-weight: 700; font-size: 13px; }
+
+  .pd-custom-section { margin-top: 14px; padding-top: 14px; border-top: 1px dashed #e0e0e0; }
+  .pd-custom-section .pd-custom-header { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 4px; }
+  .pd-custom-section .pd-custom-sub { font-size: 11px; color: #888; margin-bottom: 10px; }
+  .pd-custom-item { position: relative; padding: 12px 36px 12px 12px; background: #fff8f0; border: 1px solid #f7c97a; border-radius: 10px; margin-bottom: 8px; }
+  .pd-custom-item .pd-custom-tag { display: inline-block; background: #f7941d; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: .04em; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; margin-bottom: 6px; }
+  .pd-custom-item .pd-custom-remove { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border: none; background: transparent; color: #999; font-size: 18px; cursor: pointer; padding: 0; line-height: 1; border-radius: 4px; }
+  .pd-custom-item .pd-custom-remove:hover { color: #e53935; background: rgba(0,0,0,.04); }
+  .pd-custom-desc { width: 100%; padding: 9px 10px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 14px; font-family: inherit; background: #fff; color: #1a1a2e; }
+  .pd-custom-desc:focus, .pd-custom-qty:focus, .pd-custom-unit:focus { outline: none; border-color: #f7941d; }
+  .pd-custom-row { display: flex; gap: 8px; margin-top: 8px; }
+  .pd-custom-qty { flex: 0 0 100px; padding: 9px 10px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 14px; font-weight: 700; text-align: center; font-family: inherit; background: #fff; color: #1a1a2e; }
+  .pd-custom-unit { flex: 1; min-width: 0; padding: 9px 10px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff; color: #1a1a2e; }
+  .pd-add-custom { display: block; width: 100%; padding: 11px; border: 1px dashed #f7941d; border-radius: 8px; background: #fff8f0; color: #f7941d; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 4px; font-family: inherit; }
+  .pd-add-custom:active { background: #fff0e0; }
+  .pd-custom-empty { font-size: 11px; color: #888; font-style: italic; padding: 8px 0; text-align: center; }
+
+  .pd-info-notice { display: none; margin-top: 8px; padding: 8px 12px; background: #ede7f6; border: 1px solid #b39ddb; border-radius: 6px; font-size: 12px; color: #4527a0; align-items: center; gap: 8px; line-height: 1.4; }
+  .pd-info-notice.show { display: flex; }
+  .pd-info-notice .pd-info-ico { font-size: 14px; color: #7c4dff; flex-shrink: 0; }
+  .pd-info-notice strong { font-weight: 700; }
+  .pd-input.pd-from-po { background-color: #f3e5f5; border-color: #b39ddb; }
+  .pd-input.pd-from-po:focus { border-color: #f7941d; }
+
+  /* Cost centre splits */
+  .pd-cc-split-card { background: #fff; border: 1px solid #e6e9ee; border-radius: 10px; padding: 12px; margin-bottom: 8px; }
+  .pd-cc-split-card .pd-split-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .pd-cc-split-card .pd-split-num { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; }
+  .pd-cc-split-card .pd-split-remove { background: transparent; border: none; color: #9aa1ad; cursor: pointer; padding: 4px 8px; font-size: 16px; border-radius: 4px; }
+  .pd-cc-split-card .pd-split-remove:hover { color: #c62828; background: rgba(0,0,0,.04); }
+  .pd-cc-split-card .pd-input { margin-bottom: 0; }
+  .pd-split-alloc { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .pd-split-alloc .lbl { font-size: 12px; color: #6b7280; font-weight: 600; }
+  .pd-split-percent { width: 80px; padding: 8px 10px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 15px; font-weight: 700; text-align: center; font-family: inherit; color: #1a1a2e; }
+  .pd-split-percent:focus { outline: none; border-color: #f7941d; }
+  .pd-split-alloc .unit { font-size: 13px; color: #6b7280; font-weight: 600; }
+  .pd-split-alloc .balance-link { margin-left: auto; font-size: 11px; color: #1565c0; cursor: pointer; font-weight: 700; }
+  .pd-split-alloc .balance-link:hover { text-decoration: underline; }
+  .pd-cc-total { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; margin-top: 4px; border-radius: 6px; background: #f5f5f7; font-size: 13px; font-weight: 600; border: 1px solid transparent; }
+  .pd-cc-total.ok { background: #f0faf0; color: #2e7d32; border-color: #c8e6c9; }
+  .pd-cc-total.invalid { background: #fde8e8; color: #c62828; border-color: #f5c6c6; }
+  .pd-cc-total .value { font-weight: 700; }
+  .pd-cc-add-btn { display: block; width: 100%; padding: 10px; margin-top: 10px; border: 1px dashed #f7941d; border-radius: 8px; background: #fff8f0; color: #f7941d; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .pd-cc-add-btn:active { background: #fff0e0; }
+
+  /* ===== WEB APP SCREENS ===== */
+  .web-screen { background: #fff; min-height: 100vh; padding-bottom: 0; color: #1a1a2e; }
+  .web-screen .web-topnav { display: flex; align-items: center; padding: 14px 28px; background: #fff; border-bottom: 1px solid #e6e9ee; gap: 16px; }
+  .web-screen .web-back { font-size: 22px; cursor: pointer; color: #1a1a2e; padding: 4px 8px; }
+  .web-screen .web-topnav h1 { font-size: 18px; font-weight: 700; flex: 1; }
+  .web-screen .web-actions { display: flex; align-items: center; gap: 10px; }
+  .web-screen .web-btn { padding: 9px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid; font-family: inherit; }
+  .web-screen .web-btn-secondary { background: #fff; border-color: #d6dbe2; color: #1a1a2e; }
+  .web-screen .web-btn-secondary:hover { background: #f5f7fa; }
+  .web-screen .web-btn-search { background: #f0fbfa; border-color: #c3eae6; color: #0a8b85; display: inline-flex; align-items: center; gap: 6px; }
+  .web-screen .web-btn-search:hover { background: #e6f7f5; }
+  .web-screen .web-btn-add { width: 36px; height: 36px; border-radius: 50%; background: #fff; border: 1px solid #d6dbe2; color: #1a1a2e; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .web-screen .web-btn-add:hover { background: #f5f7fa; }
+  .web-screen .web-user { display: flex; align-items: center; gap: 8px; padding-left: 8px; }
+  .web-screen .web-avatar { width: 32px; height: 32px; border-radius: 50%; background: #e8eef5; color: #1a1a2e; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 1px solid #d6dbe2; }
+  .web-screen .web-username { font-size: 14px; font-weight: 600; }
+
+  .web-screen .web-content { padding: 24px 28px 60px; max-width: 1400px; margin: 0 auto; }
+
+  /* Web list */
+  .web-screen .web-list-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; flex-wrap: wrap; gap: 12px; }
+  .web-screen .web-list-title { font-size: 22px; font-weight: 700; }
+  .web-screen .web-list-filters { display: flex; gap: 8px; align-items: center; }
+  .web-screen .web-filter-pill { padding: 6px 14px; border-radius: 999px; border: 1px solid #d6dbe2; font-size: 13px; font-weight: 600; cursor: pointer; background: #fff; color: #1a1a2e; }
+  .web-screen .web-filter-pill.active { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+  .web-screen .web-search-box { padding: 8px 12px; border: 1px solid #d6dbe2; border-radius: 8px; font-size: 13px; min-width: 220px; font-family: inherit; }
+
+  .web-screen table.web-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e6e9ee; border-radius: 8px; overflow: hidden; }
+  .web-screen table.web-table th { background: #f7f9fc; padding: 12px 16px; text-align: left; font-size: 12px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid #e6e9ee; }
+  .web-screen table.web-table td { padding: 14px 16px; font-size: 13px; border-bottom: 1px solid #f0f3f7; vertical-align: middle; color: #1a1a2e; }
+  .web-screen table.web-table tbody tr { cursor: pointer; }
+  .web-screen table.web-table tbody tr:hover { background: #fafbfd; }
+  .web-screen table.web-table tbody tr:last-child td { border-bottom: none; }
+  .web-screen .web-status { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+  .web-screen .web-status.incomplete { background: #fde8e8; color: #c62828; }
+  .web-screen .web-status.tobepaid { background: #fff4e0; color: #b25b00; }
+  .web-screen .web-status.paid { background: #e3f2fd; color: #1565c0; }
+  .web-screen .web-link { color: #1565c0; font-weight: 600; }
+  .web-screen .web-muted { color: #9aa1ad; }
+
+  /* Web detail / edit */
+  .web-screen .web-doc-title { font-size: 16px; font-weight: 700; margin-bottom: 24px; color: #1a1a2e; }
+  .web-screen .web-doc-title strong { font-weight: 700; }
+  .web-screen .web-section-title { font-size: 14px; font-weight: 700; margin-bottom: 16px; color: #1a1a2e; }
+  .web-screen .web-section { margin-bottom: 32px; }
+  .web-screen .web-info-grid { display: grid; grid-template-columns: 220px 1fr; row-gap: 14px; column-gap: 24px; max-width: 720px; }
+  .web-screen .web-info-label { font-size: 13px; color: #6b7280; }
+  .web-screen .web-info-val { font-size: 13px; color: #1a1a2e; font-weight: 500; }
+  .web-screen .web-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; max-width: 720px; }
+  .web-screen .web-two-col p { font-size: 13px; line-height: 1.6; color: #1a1a2e; }
+
+  .web-screen table.web-items-table { width: 100%; border-collapse: collapse; background: #fff; border-top: 1px solid #e6e9ee; border-bottom: 1px solid #e6e9ee; }
+  .web-screen table.web-items-table th { background: #ebeef3; padding: 12px; text-align: left; font-size: 12px; font-weight: 700; color: #1a1a2e; border-bottom: 1px solid #d6dbe2; }
+  .web-screen table.web-items-table td { padding: 14px 12px; font-size: 13px; border-bottom: 1px solid #f0f3f7; vertical-align: middle; }
+  .web-screen table.web-items-table .num { text-align: right; }
+  .web-screen .web-items-cc-pill { background: #fff4e0; color: #b25b00; padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; display: inline-block; }
+  .web-screen .web-items-cc-pill.assigned { background: #e8f5e9; color: #2e7d32; }
+  .web-screen .web-docket-total { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 12px; font-size: 14px; }
+  .web-screen .web-docket-total strong { font-weight: 700; }
+  .web-screen .web-bottom-actions { display: flex; justify-content: flex-end; gap: 12px; padding: 24px 0 60px; }
+  .web-screen .web-btn-ai { background: #fff; border: 1px solid #d6dbe2; color: #1a1a2e; padding: 11px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-family: inherit; }
+  .web-screen .web-btn-primary { background: #f7941d; color: #1a1a2e; padding: 11px 22px; border-radius: 999px; font-size: 13px; font-weight: 700; cursor: pointer; border: none; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
+  .web-screen .web-btn-primary:hover { background: #e8850f; }
+
+  /* Web edit form fields */
+  .web-screen .web-edit-input { padding: 9px 12px; border: 1px solid #d6dbe2; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff; color: #1a1a2e; width: 100%; }
+  .web-screen .web-edit-input:focus { outline: none; border-color: #f7941d; }
+  .web-screen select.web-edit-input { appearance: none; -webkit-appearance: none; padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+  .web-screen .web-edit-input.from-po { background-color: #f3e5f5; border-color: #b39ddb; }
+  .web-screen .web-edit-input.from-po:focus { border-color: #f7941d; }
+  .web-screen .web-edit-input[disabled] { background: #f5f7fa; color: #9aa1ad; cursor: not-allowed; }
+  .web-screen .web-helper { font-size: 12px; color: #6b7280; margin-top: 6px; }
+  .web-screen .web-info-notice { margin-top: 8px; padding: 8px 12px; background: #ede7f6; border: 1px solid #b39ddb; border-radius: 6px; font-size: 12px; color: #4527a0; display: none; align-items: center; gap: 6px; }
+  .web-screen .web-info-notice.show { display: inline-flex; }
+  .web-screen .web-info-notice strong { font-weight: 700; }
+  .web-screen .web-edit-grid input.web-edit-input,
+  .web-screen .web-edit-grid select.web-edit-input { max-width: 420px; }
+
+  .web-screen table.web-edit-items th { font-size: 11px; }
+  .web-screen table.web-edit-items td { padding: 10px 12px; }
+  .web-screen .web-qty-input { width: 90px; padding: 7px 10px; border: 1px solid #d6dbe2; border-radius: 6px; font-size: 13px; font-weight: 600; text-align: center; font-family: inherit; }
+  .web-screen .web-qty-input:focus { outline: none; border-color: #f7941d; }
+  .web-screen .web-cc-select { width: 200px; padding: 7px 28px 7px 10px; border: 1px solid #d6dbe2; border-radius: 6px; font-size: 12px; font-family: inherit; appearance: none; -webkit-appearance: none; background: #fff url("data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center; }
+  .web-screen .web-cc-select:focus { outline: none; border-color: #f7941d; }
+  .web-screen .web-cc-select.from-po { background-color: #f3e5f5; border-color: #b39ddb; }
+  .web-screen .web-add-row-btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; margin-top: 10px; border: 1px dashed #f7941d; border-radius: 8px; background: #fff8f0; color: #f7941d; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .web-screen .web-add-row-btn:active { background: #fff0e0; }
+  .web-screen .web-row-remove { background: transparent; border: none; color: #9aa1ad; cursor: pointer; font-size: 16px; padding: 4px 8px; border-radius: 4px; }
+  .web-screen .web-row-remove:hover { color: #c62828; background: #fde8e8; }
+  .web-screen .web-tag-offpo { display: inline-block; background: #f7941d; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: .04em; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; margin-left: 6px; vertical-align: middle; }
+  .web-screen .web-empty-state { padding: 60px 20px; text-align: center; color: #9aa1ad; font-size: 13px; }
+
+  /* Web matching CTA + screen */
+  .web-screen .web-match-cta { display: flex; align-items: center; gap: 16px; margin-top: 32px; padding: 22px 28px; background: linear-gradient(135deg, #fff4e0 0%, #ffe1bb 100%); border: 1px solid #f7c97a; border-radius: 16px; box-shadow: 0 6px 20px rgba(247,148,29,.15); cursor: pointer; transition: transform .15s, box-shadow .15s; }
+  .web-screen .web-match-cta:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(247,148,29,.22); }
+  .web-screen .web-match-cta-emoji { font-size: 32px; flex-shrink: 0; }
+  .web-screen .web-match-cta-body { flex: 1; }
+  .web-screen .web-match-cta-title { font-size: 18px; font-weight: 700; color: #1a1a2e; }
+  .web-screen .web-match-cta-sub { font-size: 13px; color: #7a4d10; margin-top: 4px; }
+  .web-screen .web-match-cta-arrow { font-size: 24px; color: #1a1a2e; flex-shrink: 0; }
+
+  .web-screen .web-stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+  .web-screen .web-stat-card { padding: 18px 20px; background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; }
+  .web-screen .web-stat-label { font-size: 11px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .web-screen .web-stat-value { font-size: 28px; font-weight: 700; color: #1a1a2e; margin-top: 6px; line-height: 1.1; }
+  .web-screen .web-stat-sub { font-size: 12px; color: #6b7280; margin-top: 4px; }
+  .web-screen .web-stat-card.highlight { background: #f0faf0; border-color: #c8e6c9; }
+  .web-screen .web-stat-card.highlight .web-stat-value { color: #2e7d32; }
+  .web-screen .web-stat-card.warn { background: #fff4e0; border-color: #f7c97a; }
+  .web-screen .web-stat-card.warn .web-stat-value { color: #b25b00; }
+
+  .web-screen .web-match-card { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+  .web-screen .web-match-card-head { display: flex; align-items: flex-start; gap: 16px; padding-bottom: 14px; border-bottom: 1px solid #f0f3f7; margin-bottom: 14px; flex-wrap: wrap; }
+  .web-screen .web-match-card-head .left { flex: 1; min-width: 220px; }
+  .web-screen .web-match-card-po { font-size: 14px; font-weight: 700; color: #1565c0; }
+  .web-screen .web-match-card-supplier { font-size: 16px; font-weight: 700; color: #1a1a2e; margin-top: 2px; }
+  .web-screen .web-match-card-meta { font-size: 12px; color: #6b7280; margin-top: 4px; }
+  .web-screen .web-match-card-totals { display: flex; gap: 18px; flex-wrap: wrap; }
+  .web-screen .web-match-total { display: flex; flex-direction: column; gap: 2px; }
+  .web-screen .web-match-total-label { font-size: 10px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .web-screen .web-match-total-value { font-size: 16px; font-weight: 700; color: #1a1a2e; }
+  .web-screen .web-match-total.delivered .web-match-total-value { color: #1565c0; }
+  .web-screen .web-match-total.billed .web-match-total-value { color: #6a1b9a; }
+  .web-screen .web-match-total.variance .web-match-total-value { color: #2e7d32; }
+  .web-screen .web-match-total.variance.has-variance .web-match-total-value { color: #c62828; }
+  .web-screen .web-match-status { padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; align-self: flex-start; }
+  .web-screen .web-match-status.matched { background: #e8f5e9; color: #2e7d32; }
+  .web-screen .web-match-status.partial { background: #fff4e0; color: #b25b00; }
+  .web-screen .web-match-status.unbilled { background: #e8eef5; color: #455a64; }
+  .web-screen .web-match-status.variance { background: #fde8e8; color: #c62828; }
+  .web-screen .web-match-status.open { background: #f5f5f5; color: #6b7280; }
+
+  .web-screen table.web-match-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .web-screen table.web-match-table th { background: #f7f9fc; padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid #e6e9ee; }
+  .web-screen table.web-match-table td { padding: 10px 12px; border-bottom: 1px solid #f0f3f7; vertical-align: middle; }
+  .web-screen table.web-match-table tr:last-child td { border-bottom: none; }
+  .web-screen table.web-match-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .web-screen table.web-match-table .var-pos { color: #c62828; font-weight: 700; }
+  .web-screen table.web-match-table .var-zero { color: #2e7d32; font-weight: 700; }
+
+  .web-screen .web-linked-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 16px; padding-top: 14px; border-top: 1px dashed #e6e9ee; }
+  .web-screen .web-linked-col h4 { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+  .web-screen .web-linked-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fafbfd; border: 1px solid #e6e9ee; border-radius: 6px; margin-bottom: 6px; font-size: 12px; }
+  .web-screen .web-linked-item .ref { color: #1565c0; font-weight: 600; }
+  .web-screen .web-linked-item .meta { color: #6b7280; margin-left: auto; }
+  .web-screen .web-linked-item.bill .ref { color: #6a1b9a; }
+  .web-screen .web-linked-empty { font-size: 12px; color: #9aa1ad; font-style: italic; padding: 8px 0; }
+
+  .web-screen .web-match-section-title { font-size: 14px; font-weight: 700; margin-top: 28px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .web-screen .web-match-section-title .count { background: #1a1a2e; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+  .web-screen .web-match-section-title.warn .count { background: #c62828; }
+
+  .web-screen .web-flow-diagram { display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: linear-gradient(135deg, #f0f4ff 0%, #e8ecf5 100%); border-radius: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .web-screen .web-flow-node { display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: #fff; border-radius: 999px; border: 1px solid #d6dbe2; font-size: 13px; font-weight: 600; box-shadow: 0 2px 6px rgba(0,0,0,.04); }
+  .web-screen .web-flow-node .ico { font-size: 18px; }
+  .web-screen .web-flow-arrow { font-size: 20px; color: #6b7280; }
+
+  /* Bill upload */
+  .web-screen .web-step-pill { display: inline-block; background: #1a1a2e; color: #fff; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 4px; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 10px; }
+  .web-screen .web-upload-zone { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 320px; padding: 60px 20px; background: #fff; border: 2px dashed #d6dbe2; border-radius: 16px; text-align: center; transition: border-color .15s, background .15s; cursor: pointer; }
+  .web-screen .web-upload-zone:hover { border-color: #f7941d; background: #fffaf2; }
+  .web-screen .web-upload-icon { font-size: 64px; margin-bottom: 14px; opacity: .85; }
+  .web-screen .web-upload-title { font-size: 20px; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
+  .web-screen .web-upload-sub { font-size: 13px; color: #6b7280; margin-bottom: 22px; }
+  .web-screen .web-upload-btn-primary { padding: 11px 22px; background: #f7941d; color: #1a1a2e; border: none; border-radius: 999px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .web-screen .web-upload-btn-primary:hover { background: #e8850f; }
+  .web-screen .web-upload-divider { font-size: 11px; color: #9aa1ad; margin: 18px 0 14px; letter-spacing: .04em; }
+  .web-screen .web-upload-secondary { padding: 9px 18px; background: #fff; color: #1a1a2e; border: 1px solid #d6dbe2; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .web-screen .web-upload-secondary:hover { background: #f5f7fa; }
+  .web-screen .web-upload-progress { display: none; flex-direction: column; align-items: center; gap: 16px; padding: 80px 20px; }
+  .web-screen .web-upload-progress.show { display: flex; }
+  .web-screen .web-upload-spinner { width: 56px; height: 56px; border: 4px solid #f0f3f7; border-top-color: #f7941d; border-radius: 50%; animation: spin .9s linear infinite; }
+  .web-screen .web-upload-step { font-size: 14px; color: #1a1a2e; font-weight: 600; }
+  .web-screen .web-upload-substep { font-size: 12px; color: #6b7280; }
+
+  /* 3-way bill reconciliation */
+  .web-screen .web-3way-row { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: stretch; gap: 8px; margin-bottom: 24px; }
+  .web-screen .web-3way-card { padding: 18px 20px; background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; display: flex; flex-direction: column; }
+  .web-screen .web-3way-card .label { font-size: 11px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .web-screen .web-3way-card.bill .label { color: #6a1b9a; }
+  .web-screen .web-3way-card.po .label { color: #1565c0; }
+  .web-screen .web-3way-card.docket .label { color: #2e7d32; }
+  .web-screen .web-3way-card .ref { font-size: 16px; font-weight: 700; color: #1a1a2e; }
+  .web-screen .web-3way-card .meta { font-size: 12px; color: #6b7280; margin-top: 4px; }
+  .web-screen .web-3way-card .total { font-size: 22px; font-weight: 700; color: #1a1a2e; margin-top: auto; padding-top: 10px; }
+  .web-screen .web-3way-card .badge-auto { display: inline-flex; align-items: center; gap: 4px; background: #e8f5e9; color: #2e7d32; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; margin-top: 8px; align-self: flex-start; }
+  .web-screen .web-3way-arrow { display: flex; align-items: center; justify-content: center; font-size: 22px; color: #b0b8c1; }
+
+  .web-screen .web-recon-section { background: #fff; border: 1px solid #e6e9ee; border-radius: 12px; padding: 22px 24px; margin-bottom: 16px; }
+  .web-screen .web-recon-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .web-screen .web-recon-help { font-size: 13px; color: #6b7280; margin-bottom: 16px; line-height: 1.55; }
+  .web-screen .web-recon-help strong { color: #1a1a2e; font-weight: 700; }
+
+  /* Off-PO cards */
+  .web-screen .web-offpo-card { padding: 16px 18px; background: #fff8f0; border: 1px solid #f7c97a; border-radius: 10px; margin-bottom: 10px; }
+  .web-screen .web-offpo-card .top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+  .web-screen .web-offpo-card .desc { font-size: 14px; font-weight: 700; color: #1a1a2e; }
+  .web-screen .web-offpo-card .source-badges { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .web-screen .web-offpo-source-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: .03em; }
+  .web-screen .web-offpo-source-badge.bill { background: #f3e5f5; color: #6a1b9a; }
+  .web-screen .web-offpo-source-badge.docket { background: #e8f5e9; color: #2e7d32; }
+  .web-screen .web-offpo-source-badge.both { background: #e8f5e9; color: #2e7d32; }
+  .web-screen .web-offpo-amount { font-size: 16px; font-weight: 700; color: #1a1a2e; flex-shrink: 0; text-align: right; }
+  .web-screen .web-offpo-amount .qty { font-size: 11px; font-weight: 600; color: #6b7280; display: block; }
+  .web-screen .web-offpo-action { display: flex; gap: 12px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+  .web-screen .web-offpo-action label { font-size: 12px; color: #6b7280; font-weight: 600; }
+  .web-screen .web-offpo-action select { flex: 1; min-width: 220px; max-width: 360px; padding: 8px 28px 8px 12px; border: 1px solid #d6dbe2; border-radius: 6px; font-size: 13px; background: #fff url("data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center; appearance: none; -webkit-appearance: none; font-family: inherit; cursor: pointer; }
+  .web-screen .web-offpo-action select.chosen { background-color: #f0faf0; border-color: #4caf50; color: #2e7d32; font-weight: 600; }
+
+  /* Sticky approve bar */
+  .web-screen .web-approve-bar { position: sticky; bottom: 0; padding: 14px 28px; background: #fff; border-top: 1px solid #e6e9ee; display: flex; justify-content: space-between; align-items: center; gap: 16px; box-shadow: 0 -4px 12px rgba(0,0,0,.06); margin: 16px -28px 0; flex-wrap: wrap; z-index: 5; }
+  .web-screen .web-approve-summary { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
+  .web-screen .web-approve-summary .item { display: flex; flex-direction: column; }
+  .web-screen .web-approve-summary .item .lbl { font-size: 11px; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .web-screen .web-approve-summary .item .val { font-size: 18px; font-weight: 700; color: #1a1a2e; }
+  .web-screen .web-approve-summary .item.match .val { color: #2e7d32; }
+  .web-screen .web-approve-summary .item.variance.has-var .val { color: #c62828; }
+  .web-screen .web-approve-actions { display: flex; gap: 10px; }
+  .web-screen .web-approve-btn { padding: 12px 24px; background: #4caf50; color: #fff; border: none; border-radius: 999px; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
+  .web-screen .web-approve-btn:hover { background: #43a047; }
+
+  /* ===== Add-bill page styling (matches Varicon layout) ===== */
+  .web-screen .ab-content { padding: 18px 28px 60px; max-width: 1500px; margin: 0 auto; }
+  .web-screen .ab-breadcrumb { display: flex; align-items: center; gap: 10px; padding: 12px 0 18px; font-size: 14px; }
+  .web-screen .ab-breadcrumb .back { font-size: 22px; color: #1a1a2e; cursor: pointer; }
+  .web-screen .ab-breadcrumb a { color: #f7941d; cursor: pointer; font-weight: 600; text-decoration: none; }
+  .web-screen .ab-breadcrumb a:hover { text-decoration: underline; }
+  .web-screen .ab-breadcrumb .sep { color: #6b7280; }
+  .web-screen .ab-breadcrumb .current { color: #1a1a2e; font-weight: 600; }
+
+  .web-screen .ab-attach-row { display: flex; align-items: center; gap: 16px; margin: 6px 0 24px; flex-wrap: wrap; }
+  .web-screen .ab-attach-btn { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; background: #fff; border: 1px solid #d6dbe2; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; color: #1a1a2e; font-family: inherit; }
+  .web-screen .ab-attach-btn:hover { background: #f5f7fa; }
+  .web-screen .ab-match-banner { display: inline-flex; align-items: center; gap: 10px; padding: 10px 16px; background: #f0faf0; border: 1px solid #c8e6c9; border-radius: 8px; font-size: 13px; color: #2e7d32; flex: 1; min-width: 320px; }
+  .web-screen .ab-match-banner .check { width: 22px; height: 22px; border-radius: 50%; background: #4caf50; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .web-screen .ab-match-banner strong { color: #1a1a2e; font-weight: 700; }
+  .web-screen .ab-match-banner a { color: #1565c0; cursor: pointer; font-weight: 600; margin-left: auto; text-decoration: none; }
+
+  .web-screen .ab-section-h { font-size: 14px; font-weight: 700; color: #1a1a2e; margin: 22px 0 12px; }
+  .web-screen .ab-summary-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+  .web-screen .ab-field { position: relative; padding-top: 0; }
+  .web-screen .ab-field .ab-label { position: absolute; top: -7px; left: 11px; padding: 0 4px; font-size: 10px; font-weight: 600; color: #6b7280; background: #fff; z-index: 1; letter-spacing: .02em; pointer-events: none; }
+  .web-screen .ab-field input.ab-input,
+  .web-screen .ab-field select.ab-input,
+  .web-screen .ab-field button.ab-input { width: 100%; padding: 11px 30px 11px 14px; border: 1px solid #d6dbe2; border-radius: 6px; font-size: 13px; font-family: inherit; color: #1a1a2e; background: #fff; box-sizing: border-box; height: 42px; text-align: left; }
+  .web-screen .ab-field select.ab-input { appearance: none; -webkit-appearance: none; cursor: pointer; background: #fff url("data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 12px center; }
+  .web-screen .ab-field input.ab-input.with-icon { padding-left: 36px; background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: 12px center; background-size: 14px; }
+  .web-screen .ab-field input.ab-input:focus,
+  .web-screen .ab-field select.ab-input:focus { outline: none; border-color: #f7941d; }
+  .web-screen .ab-field button.ab-input { cursor: not-allowed; background: #f5f7fa; color: #9aa1ad; }
+  .web-screen .ab-field button.ab-input.ab-linked { background: #f0faf0; border-color: #4caf50; color: #2e7d32; cursor: pointer; font-weight: 600; }
+  .web-screen .ab-field button.ab-input.ab-linked:hover { background: #e6f5e6; }
+
+  .web-screen .ab-tabs { display: flex; gap: 24px; border-bottom: 1px solid #e6e9ee; margin: 22px 0 14px; }
+  .web-screen .ab-tab { padding: 8px 0; font-size: 12px; font-weight: 700; color: #6b7280; cursor: pointer; border-bottom: 2px solid transparent; letter-spacing: .04em; }
+  .web-screen .ab-tab.active { color: #f7941d; border-bottom-color: #f7941d; }
+
+  .web-screen .ab-items-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .web-screen .ab-items-header .title { font-size: 14px; font-weight: 700; }
+  .web-screen .ab-items-header select.ab-input { width: 200px; height: 36px; padding: 8px 30px 8px 12px; }
+
+  .web-screen table.ab-items-table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; }
+  .web-screen table.ab-items-table th { background: #f7f9fc; padding: 10px 10px; text-align: left; font-size: 11px; font-weight: 700; color: #6b7280; text-transform: capitalize; letter-spacing: 0; border-bottom: 1px solid #e6e9ee; border-top: 1px solid #e6e9ee; vertical-align: middle; }
+  .web-screen table.ab-items-table th.num { text-align: right; }
+  .web-screen table.ab-items-table th:first-child { padding-left: 14px; width: 36px; }
+  .web-screen table.ab-items-table th:last-child { width: 36px; }
+  .web-screen table.ab-items-table td { padding: 10px 10px; font-size: 12px; vertical-align: middle; border-bottom: 1px solid #f0f3f7; }
+  .web-screen table.ab-items-table td:first-child { padding-left: 14px; }
+  .web-screen table.ab-items-table tr.offpo td { background: #fff8f0; }
+  .web-screen table.ab-items-table tr.offpo td:first-child { box-shadow: inset 3px 0 0 #f7941d; }
+  .web-screen table.ab-items-table .ab-cell-input { width: 100%; padding: 7px 22px 7px 10px; border: 1px solid #d6dbe2; border-radius: 6px; font-size: 12px; font-family: inherit; color: #1a1a2e; background: #fff; box-sizing: border-box; }
+  .web-screen table.ab-items-table select.ab-cell-input { appearance: none; -webkit-appearance: none; cursor: pointer; background: #fff url("data:image/svg+xml,%3Csvg width='9' height='9' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center; padding-right: 24px; }
+  .web-screen table.ab-items-table input.ab-cell-input.qty { text-align: right; padding-right: 10px; }
+  .web-screen table.ab-items-table input.ab-cell-input.cost { padding-left: 22px; background: #fff url("data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6'/%3E%3C/svg%3E") no-repeat 8px center; padding-right: 10px; text-align: right; }
+  .web-screen table.ab-items-table .ab-cell-input:focus { outline: none; border-color: #f7941d; }
+  .web-screen table.ab-items-table .ab-row-remove { background: transparent; border: none; cursor: pointer; color: #9aa1ad; font-size: 14px; padding: 4px 8px; border-radius: 4px; }
+  .web-screen table.ab-items-table .ab-row-remove:hover { color: #c62828; background: #fde8e8; }
+  .web-screen table.ab-items-table .ab-desc { display: flex; flex-direction: column; gap: 3px; min-width: 180px; }
+  .web-screen table.ab-items-table .ab-desc input { border: none; padding: 4px 6px; font-size: 13px; font-weight: 600; color: #1a1a2e; background: transparent; font-family: inherit; }
+  .web-screen table.ab-items-table .ab-desc input:focus { outline: 1px solid #f7941d; border-radius: 4px; background: #fff; }
+  .web-screen table.ab-items-table .ab-source-tags { display: flex; gap: 4px; padding-left: 6px; }
+  .web-screen table.ab-items-table .ab-source-tag { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 3px; letter-spacing: .03em; text-transform: uppercase; }
+  .web-screen table.ab-items-table .ab-source-tag.po { background: #e3f0fc; color: #1565c0; }
+  .web-screen table.ab-items-table .ab-source-tag.docket { background: #e8f5e9; color: #2e7d32; }
+  .web-screen table.ab-items-table .ab-source-tag.bill { background: #f3e5f5; color: #6a1b9a; }
+  .web-screen table.ab-items-table .ab-source-tag.offpo { background: #f7941d; color: #fff; }
+  .web-screen table.ab-items-table .ab-cell-input.required { border-color: #f7941d; background: #fffaf2; }
+  .web-screen table.ab-items-table .ab-cell-readonly { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 80px; padding: 7px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; color: #1a1a2e; background: #f3e5f5; border: 1px solid #d1c4e9; text-align: right; }
+  .web-screen table.ab-items-table .ab-cell-readonly.dash { color: #9aa1ad; background: #fafbfd; border-color: #e6e9ee; font-weight: 500; }
+  .web-screen table.ab-items-table .ab-cell-readonly .src { font-size: 9px; font-weight: 700; color: #6a1b9a; text-transform: uppercase; letter-spacing: .04em; margin-left: 4px; }
+  .web-screen table.ab-items-table .ab-cell-readonly.docket { background: #e8f5e9; border-color: #c8e6c9; }
+  .web-screen table.ab-items-table .ab-cell-readonly.docket .src { color: #2e7d32; }
+  .web-screen table.ab-items-table .ab-cell-readonly.po { background: #e3f0fc; border-color: #bbdefb; }
+  .web-screen table.ab-items-table .ab-cell-readonly.po .src { color: #1565c0; }
+
+  .web-screen .ab-actions-row { display: flex; align-items: flex-start; justify-content: space-between; margin-top: 16px; gap: 24px; flex-wrap: wrap; }
+  .web-screen .ab-add-line { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; background: #fff; border: 1px solid #d6dbe2; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; color: #1a1a2e; font-family: inherit; }
+  .web-screen .ab-add-line:hover { background: #fafbfd; border-color: #f7941d; color: #f7941d; }
+  .web-screen .ab-bulk-btn { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; padding: 9px 16px; background: #fff; border: 1px solid #d6dbe2; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: not-allowed; color: #9aa1ad; font-family: inherit; }
+  .web-screen .ab-totals { min-width: 280px; font-size: 13px; }
+  .web-screen .ab-totals .row { display: flex; justify-content: space-between; gap: 24px; padding: 6px 0; }
+  .web-screen .ab-totals .row.total { border-top: 1px solid #e6e9ee; padding-top: 10px; margin-top: 6px; font-weight: 700; }
+  .web-screen .ab-totals .lbl { color: #6b7280; }
+  .web-screen .ab-totals .row.total .lbl { color: #1a1a2e; font-weight: 700; }
+  .web-screen .ab-totals .val { font-weight: 600; color: #1a1a2e; }
+
+  /* Approval workflow */
+  .web-screen .ab-workflow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .web-screen .ab-workflow-step { position: relative; display: flex; align-items: center; gap: 8px; }
+  .web-screen .ab-workflow-step .ab-step-num { width: 22px; height: 22px; border-radius: 50%; background: #f7941d; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .web-screen .ab-workflow-step select.ab-input { width: 280px; height: 42px; }
+  .web-screen .ab-workflow-arrow { color: #6b7280; font-size: 18px; font-weight: 700; }
+  .web-screen .ab-workflow-step .ab-step-remove { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: 1px solid #d6dbe2; background: #fff; color: #6b7280; font-size: 12px; cursor: pointer; display: none; align-items: center; justify-content: center; padding: 0; line-height: 1; z-index: 2; }
+  .web-screen .ab-workflow-step:hover .ab-step-remove { display: flex; }
+  .web-screen .ab-workflow-step .ab-step-remove:hover { background: #fde8e8; border-color: #c62828; color: #c62828; }
+  .web-screen .ab-workflow-actions { display: flex; gap: 12px; align-items: center; margin-top: 6px; }
+  .web-screen .ab-add-approver { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; background: #fff; border: 1px dashed #d6dbe2; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer; color: #1a1a2e; font-family: inherit; }
+  .web-screen .ab-add-approver:hover { border-color: #f7941d; color: #f7941d; }
+  .web-screen .ab-edit-rules { font-size: 12px; color: #1565c0; cursor: pointer; font-weight: 600; }
+  .web-screen .ab-edit-rules:hover { text-decoration: underline; }
+
+  /* Attachments + comment */
+  .web-screen .ab-attachment-zone { border: 1px dashed #d6dbe2; border-radius: 8px; padding: 18px 22px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: #6b7280; background: #fafbfd; cursor: pointer; }
+  .web-screen .ab-attachment-zone.has-file { background: #f0faf0; border-color: #4caf50; color: #2e7d32; border-style: solid; }
+  .web-screen .ab-comment-tab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 0; border-bottom: 2px solid #f7941d; color: #f7941d; font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+  .web-screen .ab-comment-count { background: #f7941d; color: #fff; font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 700; }
+  .web-screen .ab-comment-row { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid #e6e9ee; }
+  .web-screen .ab-comment-row .ab-avatar { width: 32px; height: 32px; border-radius: 50%; background: #e8eef5; color: #1a1a2e; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 1px solid #d6dbe2; }
+  .web-screen .ab-comment-row input { flex: 1; border: none; font-size: 13px; padding: 8px 4px; font-family: inherit; outline: none; }
+  .web-screen .ab-comment-row button { background: transparent; border: none; cursor: pointer; color: #9aa1ad; font-size: 18px; padding: 4px 10px; }
+  .web-screen .ab-comment-row button:hover { color: #1a1a2e; }
+
+  /* Bottom bar */
+  .web-screen .ab-bottom-bar { position: sticky; bottom: 0; left: 0; right: 0; padding: 14px 28px; background: #fff; border-top: 1px solid #e6e9ee; display: flex; justify-content: flex-end; gap: 10px; box-shadow: 0 -4px 12px rgba(0,0,0,.06); margin: 24px -28px -60px; flex-wrap: wrap; z-index: 5; }
+  .web-screen .ab-btn { padding: 10px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; border: 1px solid; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+  .web-screen .ab-btn-cancel { background: #fff; border-color: #d6dbe2; color: #1a1a2e; }
+  .web-screen .ab-btn-cancel:hover { background: #f5f7fa; }
+  .web-screen .ab-btn-submit { background: #fff; border-color: #d6dbe2; color: #1a1a2e; }
+  .web-screen .ab-btn-submit:hover { background: #f5f7fa; }
+  .web-screen .ab-btn-back { background: #fff8f0; border-color: #f7941d; color: #b25b00; cursor: not-allowed; opacity: .7; }
+  .web-screen .ab-btn-approve { background: #f7941d; border-color: #f7941d; color: #1a1a2e; font-weight: 700; }
+  .web-screen .ab-btn-approve:hover { background: #e8850f; }
+  .web-screen .ab-btn .kbd { background: rgba(255,255,255,.55); padding: 2px 6px; border-radius: 3px; font-size: 11px; margin-left: 6px; font-family: ui-monospace, monospace; font-weight: 600; }
 
   /* Toast */
   .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: #1a1a2e; color: #fff; padding: 12px 20px; border-radius: 999px; font-size: 14px; font-weight: 600; z-index: 100; opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; }
@@ -271,7 +826,26 @@
     </div>
     <div class="row">
       <div class="label">Supplier</div>
-      <input placeholder="e.g. ACME Aggregates" />
+      <div class="scan-status" id="supplier-scanning">
+        <span class="spinner"></span>
+        <span>Scanning supplier from image…</span>
+      </div>
+      <div id="supplier-fallback" style="display:none;">
+        <div class="scan-warn">⚠ Couldn't auto-detect supplier — please select</div>
+        <div class="supplier-select-wrap">
+          <select id="supplier-select" onchange="onSupplierChange()">
+            <option value="">Select supplier…</option>
+            <option>BORAL Concrete</option>
+            <option>Hanson Australia</option>
+            <option>Holcim Australia</option>
+            <option>Hy-Tec</option>
+            <option>Adbri Concrete</option>
+            <option>Independent Concrete</option>
+            <option value="other">Other…</option>
+          </select>
+        </div>
+        <input id="supplier-other" type="text" placeholder="Enter supplier name" style="display:none;" />
+      </div>
     </div>
     <div class="row">
       <div class="label">Date</div>
@@ -301,6 +875,15 @@
     <div class="icons"><span onclick="goCamera()">＋</span></div>
   </div>
 
+  <div class="assign-banner" id="assign-banner" style="display:none;" onclick="openAssignSheet()">
+    <div class="banner-emoji">✨</div>
+    <div class="banner-body">
+      <div class="banner-title">Let's see how easy it is to assign this docket!</div>
+      <div class="banner-sub">Choose where you want to continue</div>
+    </div>
+    <div class="banner-arrow">→</div>
+  </div>
+
   <div class="docket-list" id="docket-list">
     <div class="empty-state" id="empty-state">
       <div class="ico-big">📷</div>
@@ -321,6 +904,636 @@
   </div>
 </div>
 
+<!-- ===== SCREEN 5: ASSIGN ON MOBILE — Delivery Dockets List ===== -->
+<div class="screen dl-screen" id="screen-assign-mobile">
+  <div class="status-bar">
+    <span>15:26</span>
+    <div class="right"><span>🔇</span><span>📶</span><span>🔋64</span></div>
+  </div>
+  <div class="dl-nav">
+    <span class="dl-back" onclick="goList()">‹</span>
+    <h1>Delivery Dockets</h1>
+    <div class="dl-actions"><span>🔍</span><span>▽</span></div>
+  </div>
+
+  <div class="dl-project">
+    <h2>Troughton Rd Roadworks</h2>
+    <div class="dl-range">30/04/2026 – 08/05/2026</div>
+  </div>
+
+  <div class="dl-banner">
+    <div class="dl-pending-num" id="dl-pending-num">5</div>
+    <div class="dl-pb-text">
+      <h3 id="dl-pending-title">5 dockets need processing</h3>
+      <p>PO or cost centre not assigned</p>
+    </div>
+    <div class="dl-pb-arrow">›</div>
+  </div>
+
+  <div class="dl-tabs">
+    <div class="dl-tab active">All <span class="dl-tab-badge dl-tab-badge-grey" id="dl-tab-all">8</span></div>
+    <div class="dl-tab">Needs Action <span class="dl-tab-badge dl-tab-badge-red" id="dl-tab-needs">5</span></div>
+    <div class="dl-tab">Complete <span class="dl-tab-badge dl-tab-badge-green" id="dl-tab-complete">3</span></div>
+  </div>
+
+  <div class="dl-section" style="color:#c62828;">Needs Processing</div>
+  <div id="dl-needs-action"></div>
+
+  <div class="dl-section">Completed</div>
+  <div id="dl-completed"></div>
+
+  <div style="height:80px;"></div>
+
+  <button class="dl-fab" onclick="goCamera()" title="Capture docket">📷</button>
+</div>
+
+<!-- ===== SCREEN 7: PROCESS DOCKET ===== -->
+<div class="screen dl-screen" id="screen-process-docket">
+  <div class="status-bar">
+    <span>15:27</span>
+    <div class="right"><span>🔇</span><span>📶</span><span>🔋64</span></div>
+  </div>
+  <div class="dl-nav">
+    <span class="dl-back" onclick="cancelProcessDocket()">‹</span>
+    <h1>Process Docket</h1>
+    <span class="dl-status incomplete" id="pd-status-badge" style="background:#e53935; color:#fff;">Incomplete</span>
+  </div>
+
+  <div class="pd-image" id="pd-image">
+    <img id="pd-image-img" alt="Docket photo" />
+    <div class="pd-expand-hint">Tap to expand</div>
+  </div>
+
+  <div class="pd-ocr-banner">
+    <span>✦</span>
+    <span>We've read this docket — check the details below and confirm.</span>
+  </div>
+
+  <div class="pd-section pd-required" id="pd-sec-supplier">
+    <div class="pd-sec-head"><div class="pd-snum">1</div><h3>Supplier</h3></div>
+    <div class="pd-sec-body">
+      <div class="pd-label">Supplier <span class="pd-ocr-tag">✦ OCR</span></div>
+      <select class="pd-input" id="pd-supplier" onchange="onPdSupplierChange()">
+        <option value="">Select supplier…</option>
+        <option>BORAL Concrete</option>
+        <option>Hanson Construction Materials</option>
+        <option>Holcim Australia</option>
+        <option>Hy-Tec</option>
+        <option>Adbri Concrete</option>
+        <option>Independent Concrete</option>
+        <option>A1 Asphalting Pty. Ltd.</option>
+        <option>Coates Hire</option>
+        <option value="new" style="color:#f7941d;">+ Add new supplier</option>
+      </select>
+      <div class="pd-label">Supplier Docket #</div>
+      <input class="pd-input" id="pd-supplier-docket" placeholder="e.g. RX-48201" />
+      <div class="pd-label">Delivery Date</div>
+      <input class="pd-input" id="pd-delivery-date" type="text" placeholder="dd/mm/yyyy" />
+    </div>
+  </div>
+
+  <div class="pd-section pd-required" id="pd-sec-po">
+    <div class="pd-sec-head"><div class="pd-snum">2</div><h3>Purchase Order</h3></div>
+    <div class="pd-sec-body">
+      <div class="pd-po-options">
+        <div class="pd-po-opt" id="pd-po-link" onclick="selectPdPO('link')">
+          <div class="pd-po-icon">🔗</div>
+          Link to PO
+        </div>
+        <div class="pd-po-opt secondary" id="pd-po-none" onclick="selectPdPO('none')">✕ No PO</div>
+      </div>
+      <div class="pd-po-select-wrap" id="pd-po-select-wrap" style="display:none;">
+        <div class="pd-label" style="margin-top:12px;">Select Purchase Order</div>
+        <select class="pd-input" id="pd-po" onchange="onPdPOChange()">
+          <option value="">Choose PO…</option>
+        </select>
+        <div class="pd-po-helper" id="pd-po-helper" style="display:none;"></div>
+        <div class="pd-items-wrap" id="pd-items-wrap" style="display:none;">
+          <div class="pd-items-header">Delivered on this docket</div>
+          <div class="pd-items-help">Enter how much of each line item was on this delivery.</div>
+          <button type="button" class="pd-fill-all" onclick="fillAllRemaining()">↓ Fill remaining for all</button>
+          <div id="pd-items-list"></div>
+
+          <div class="pd-custom-section">
+            <div class="pd-custom-header">Items not on this PO</div>
+            <div class="pd-custom-sub">Add anything on the docket that isn't covered by the line items above.</div>
+            <div id="pd-custom-list"></div>
+            <button type="button" class="pd-add-custom" onclick="addCustomItem()">+ Add line item not on PO</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pd-section pd-required" id="pd-sec-cc">
+    <div class="pd-sec-head"><div class="pd-snum">3</div><h3>Cost Centre <span style="font-size:11px; color:#6b7280; font-weight:500;">· default for off-PO items</span></h3></div>
+    <div class="pd-sec-body">
+      <div class="pd-label">Default cost centre</div>
+      <select class="pd-input" id="pd-cc" onchange="onPdCCChange()">
+        <option value="">Select cost centre…</option>
+        <option>CC-101 — Earthworks</option>
+        <option>CC-102 — Surfacing</option>
+        <option>CC-103 — Drainage</option>
+        <option>CC-104 — Concrete Works</option>
+        <option>CC-201 — Plant Hire</option>
+        <option>CC-301 — Materials</option>
+      </select>
+      <div class="pd-info-notice" id="pd-cc-notice">
+        <span class="pd-info-ico">✦</span>
+        <span>Auto-filled from <strong id="pd-cc-notice-po"></strong> — applies to any off-PO charges on this docket.</span>
+      </div>
+      <p style="font-size:12px; color:#6b7280; margin-top:10px; line-height:1.5;">PO line items use the cost centres set on the PO. Split quantities across them in the Purchase Order section above.</p>
+    </div>
+  </div>
+
+  <div class="pd-section">
+    <div class="pd-sec-head"><div class="pd-snum" style="background:#9aa1ad;">4</div><h3>Notes</h3></div>
+    <div class="pd-sec-body">
+      <textarea class="pd-input" id="pd-notes" rows="3" placeholder="Add notes about this docket…"></textarea>
+    </div>
+  </div>
+
+  <div style="height:90px;"></div>
+
+  <div class="pd-bottom-bar">
+    <button class="pd-btn pd-btn-cancel" onclick="cancelProcessDocket()">Cancel</button>
+    <button class="pd-btn pd-btn-save" onclick="saveProcessDocket()">Save</button>
+  </div>
+</div>
+
+<!-- ===== SCREEN 6: ASSIGN ON WEB — Dockets List ===== -->
+<div class="screen web-screen" id="screen-assign-web">
+  <div class="web-topnav">
+    <span class="web-back" onclick="goList()">←</span>
+    <h1>Delivery Dockets</h1>
+    <div class="web-actions">
+      <button class="web-btn web-btn-secondary">Initial Data Upload</button>
+      <button class="web-btn web-btn-search">⌕ Search</button>
+      <button class="web-btn-add" title="New docket">＋</button>
+      <div class="web-user">
+        <div class="web-avatar">AN</div>
+        <span class="web-username">Alec Neill</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="web-content">
+    <div class="web-list-header">
+      <div class="web-list-title">Dockets · Troughton Rd</div>
+      <div class="web-list-filters">
+        <input class="web-search-box" placeholder="Search dockets…" />
+        <span class="web-filter-pill active">All</span>
+        <span class="web-filter-pill">Needs Action</span>
+        <span class="web-filter-pill">Complete</span>
+      </div>
+    </div>
+
+    <table class="web-table">
+      <thead>
+        <tr>
+          <th>Docket #</th>
+          <th>Date</th>
+          <th>Project</th>
+          <th>Supplier</th>
+          <th>PO</th>
+          <th>Cost Centre</th>
+          <th>Status</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody id="web-list-tbody"></tbody>
+    </table>
+
+    <div class="web-match-cta" onclick="goBillUpload()">
+      <div class="web-match-cta-emoji">🔗</div>
+      <div class="web-match-cta-body">
+        <div class="web-match-cta-title">Now let's see how dockets, bills and POs will match</div>
+        <div class="web-match-cta-sub">Upload a bill — we'll auto-match it to the PO and pull quantities from the dockets your team captured on site.</div>
+      </div>
+      <div class="web-match-cta-arrow">→</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCREEN 11: WEB — Bill Upload ===== -->
+<div class="screen web-screen" id="screen-web-bill-upload">
+  <div class="web-topnav">
+    <span class="web-back" onclick="goWebList()">←</span>
+    <h1>Reconcile Supplier Bill</h1>
+    <div class="web-actions">
+      <button class="web-btn web-btn-secondary">Initial Data Upload</button>
+      <button class="web-btn web-btn-search">⌕ Search</button>
+      <div class="web-user">
+        <div class="web-avatar">AN</div>
+        <span class="web-username">Alec Neill</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="web-content" style="max-width: 880px;">
+    <div class="web-step-pill">Step 1 of 2 · Upload Bill</div>
+    <div class="web-doc-title">Drop the supplier's bill in to match it against the PO and dockets</div>
+    <p style="font-size:14px; color:#6b7280; margin-bottom:24px; line-height:1.55;">We'll OCR the bill, find the right PO, and pull the quantities your team has already recorded on delivery dockets. You'll only need to confirm — and tell us how to code anything that wasn't on the PO.</p>
+
+    <div class="web-upload-zone" id="bill-upload-zone" onclick="useSampleBill()">
+      <div class="web-upload-icon">📄</div>
+      <div class="web-upload-title">Drag &amp; drop a bill PDF or image</div>
+      <div class="web-upload-sub">PDF, PNG or JPG · we'll auto-match it to the right PO</div>
+      <button class="web-upload-btn-primary" onclick="event.stopPropagation(); useSampleBill();">Browse files</button>
+      <div class="web-upload-divider">— OR —</div>
+      <button class="web-upload-secondary" onclick="event.stopPropagation(); useSampleBill();">✦ Try the demo with a sample BORAL bill</button>
+    </div>
+
+    <div class="web-upload-progress" id="bill-upload-progress">
+      <div class="web-upload-spinner"></div>
+      <div class="web-upload-step" id="bill-upload-step">Reading bill PDF…</div>
+      <div class="web-upload-substep" id="bill-upload-substep">This usually takes a few seconds</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCREEN 12: WEB — Bill Reconciliation (Add Bill layout) ===== -->
+<div class="screen web-screen" id="screen-web-bill-match">
+  <div class="web-topnav">
+    <span class="web-back" onclick="goBillUpload()">←</span>
+    <h1></h1>
+    <div class="web-actions">
+      <button class="web-btn web-btn-secondary">Initial Data Upload</button>
+      <button class="web-btn web-btn-search">⌕ Search</button>
+      <div class="web-user">
+        <div class="web-avatar">AN</div>
+        <span class="web-username">Alec Neill</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ab-content">
+    <div class="ab-breadcrumb">
+      <span class="back" onclick="goWebList()">←</span>
+      <a onclick="goWebList()">Bills list</a>
+      <span class="sep">›</span>
+      <span class="current">Add bill</span>
+    </div>
+
+    <div class="ab-attach-row">
+      <button class="ab-attach-btn">📎 Attach bill</button>
+      <div class="ab-match-banner">
+        <span class="check">✓</span>
+        <span>Auto-matched <strong id="ab-banner-bill"></strong> to <strong id="ab-banner-po"></strong> · <strong id="ab-banner-dockets"></strong>. Line items pulled from PO rates × docket quantities.</span>
+        <a onclick="showToast('Match details: PO rates × Docket qty.')">View match details</a>
+      </div>
+    </div>
+
+    <div class="ab-section-h">Summary</div>
+    <div class="ab-summary-grid">
+      <div class="ab-field">
+        <span class="ab-label">Supplier</span>
+        <select class="ab-input" id="ab-supplier"></select>
+      </div>
+      <div class="ab-field">
+        <span class="ab-label">Link PO and Dockets</span>
+        <button class="ab-input ab-linked" id="ab-link-btn" onclick="showToast('Already linked — auto-detected from bill')">🔗 <span id="ab-link-text"></span></button>
+      </div>
+      <div class="ab-field">
+        <span class="ab-label">Project</span>
+        <select class="ab-input" id="ab-project"><option>Troughton Rd</option></select>
+      </div>
+      <div class="ab-field">
+        <span class="ab-label">Supplier invoice reference</span>
+        <input class="ab-input" id="ab-ref" />
+      </div>
+      <div class="ab-field">
+        <span class="ab-label">Transaction date</span>
+        <input class="ab-input with-icon" id="ab-tdate" />
+      </div>
+      <div class="ab-field">
+        <span class="ab-label">Due date</span>
+        <input class="ab-input with-icon" id="ab-ddate" />
+      </div>
+    </div>
+
+    <div class="ab-tabs">
+      <div class="ab-tab active">LINE ITEM</div>
+    </div>
+
+    <div class="ab-items-header">
+      <div class="title">Line items</div>
+      <select class="ab-input"><option>GST - Exclusive</option><option>GST - Inclusive</option><option>GST Free</option></select>
+    </div>
+
+    <table class="ab-items-table">
+      <thead>
+        <tr>
+          <th><input type="checkbox" /></th>
+          <th>Description</th>
+          <th>Project</th>
+          <th>Resource category</th>
+          <th>Accounting code</th>
+          <th>Cost centre</th>
+          <th>Unit</th>
+          <th class="num">Docket qty</th>
+          <th class="num">Bill Quantity</th>
+          <th class="num">PO unit cost</th>
+          <th class="num">Bill Unit</th>
+          <th>Tax</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="ab-line-items"></tbody>
+    </table>
+
+    <div class="ab-actions-row">
+      <div>
+        <button class="ab-add-line" onclick="addAbCustomLine()">+ Add new line</button>
+        <button class="ab-bulk-btn" disabled>Bulk assign project</button>
+      </div>
+      <div class="ab-totals">
+        <div class="row"><span class="lbl">Subtotal</span><span class="val" id="ab-subtotal">$0.00</span></div>
+        <div class="row"><span class="lbl">Plus GST - Exclusive 10%</span><span class="val" id="ab-gst">$0.00</span></div>
+        <div class="row total"><span class="lbl">Total Incl. GST</span><span class="val" id="ab-total">$0.00</span></div>
+      </div>
+    </div>
+
+    <div class="ab-section-h">Approval workflow</div>
+    <div class="ab-workflow" id="ab-workflow"></div>
+    <div class="ab-workflow-actions">
+      <button class="ab-add-approver" onclick="addAbApprover()">+ Add approver</button>
+      <span class="ab-edit-rules" onclick="showToast('Workflow rules editor — coming soon')">Edit workflow rules</span>
+    </div>
+
+    <div class="ab-section-h">Attachments</div>
+    <div class="ab-attachment-zone has-file">📄 <strong id="ab-attached-name"></strong> attached · <a style="color:#1565c0; cursor:pointer;" onclick="showToast('Preview opening')">Preview</a></div>
+
+    <div class="ab-section-h" style="margin-bottom:0;">
+      <span class="ab-comment-tab">COMMENT <span class="ab-comment-count">0</span></span>
+    </div>
+    <div class="ab-comment-row">
+      <div class="ab-avatar">AN</div>
+      <input placeholder="Add a comment" />
+      <button onclick="showToast('Comment added')">›</button>
+    </div>
+
+    <div class="ab-bottom-bar">
+      <button class="ab-btn ab-btn-cancel" onclick="goWebList()">Cancel</button>
+      <button class="ab-btn ab-btn-submit" onclick="showToast('Submitted for approval')">Submit for approval ▾</button>
+      <button class="ab-btn ab-btn-back" disabled>Approve &amp; Back to List <span class="kbd">Ctrl+L</span></button>
+      <button class="ab-btn ab-btn-approve" onclick="approveBill()">Approve &amp; next bill <span class="kbd">Ctrl+Enter</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCREEN 10: WEB — Matching (3-way reconciliation) ===== -->
+<div class="screen web-screen" id="screen-web-matching">
+  <div class="web-topnav">
+    <span class="web-back" onclick="goWebList()">←</span>
+    <h1>PO · Docket · Bill Matching</h1>
+    <div class="web-actions">
+      <button class="web-btn web-btn-secondary">Initial Data Upload</button>
+      <button class="web-btn web-btn-search">⌕ Search</button>
+      <div class="web-user">
+        <div class="web-avatar">AN</div>
+        <span class="web-username">Alec Neill</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="web-content">
+    <div class="web-flow-diagram">
+      <div class="web-flow-node"><span class="ico">📋</span> Purchase Order</div>
+      <div class="web-flow-arrow">→</div>
+      <div class="web-flow-node"><span class="ico">🚚</span> Delivery Docket</div>
+      <div class="web-flow-arrow">→</div>
+      <div class="web-flow-node"><span class="ico">🧾</span> Supplier Bill</div>
+      <div class="web-flow-arrow">→</div>
+      <div class="web-flow-node" style="background:#e8f5e9; border-color:#c8e6c9; color:#2e7d32;"><span class="ico">✓</span> Auto-matched</div>
+    </div>
+
+    <div class="web-stats-row" id="web-match-stats"></div>
+
+    <div class="web-match-section-title">
+      <span>Matched POs</span>
+      <span class="count" id="web-matched-count">0</span>
+    </div>
+    <div id="web-match-list"></div>
+
+    <div class="web-match-section-title warn" id="web-unmatched-title" style="display:none;">
+      <span>Bills with no matching docket</span>
+      <span class="count" id="web-unmatched-count">0</span>
+    </div>
+    <div id="web-unmatched-list"></div>
+  </div>
+</div>
+
+<!-- ===== SCREEN 8: WEB — Docket Detail ===== -->
+<div class="screen web-screen" id="screen-web-detail">
+  <div class="web-topnav">
+    <span class="web-back" onclick="goWebList()">←</span>
+    <h1>Delivery Docket</h1>
+    <div class="web-actions">
+      <button class="web-btn web-btn-secondary">Initial Data Upload</button>
+      <button class="web-btn web-btn-search">⌕ Search</button>
+      <button class="web-btn-add" title="New docket">＋</button>
+      <div class="web-user">
+        <div class="web-avatar">AN</div>
+        <span class="web-username">Alec Neill</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="web-content">
+    <div class="web-doc-title">Delivery Docket Number: <strong id="wd-title-num"></strong></div>
+
+    <div class="web-section">
+      <div class="web-section-title">Information</div>
+      <div class="web-info-grid">
+        <div class="web-info-label">Status</div>
+        <div class="web-info-val"><span class="web-status" id="wd-status">TO BE PAID</span></div>
+        <div class="web-info-label">Delivery Docket Number:</div>
+        <div class="web-info-val" id="wd-num">—</div>
+        <div class="web-info-label">Delivery Date:</div>
+        <div class="web-info-val" id="wd-date">—</div>
+        <div class="web-info-label">Project:</div>
+        <div class="web-info-val">Troughton Rd</div>
+        <div class="web-info-label">Supplier:</div>
+        <div class="web-info-val" id="wd-supplier">—</div>
+        <div class="web-info-label">Purchase Order Number:</div>
+        <div class="web-info-val" id="wd-po">—</div>
+        <div class="web-info-label">Purchase Order Title:</div>
+        <div class="web-info-val" id="wd-po-title">—</div>
+        <div class="web-info-label">Submitted By:</div>
+        <div class="web-info-val">Alec Neill</div>
+      </div>
+    </div>
+
+    <div class="web-section web-two-col">
+      <div>
+        <div class="web-section-title">Delivery Address</div>
+        <p>322 Troughton Road<br>Coopers Plains Queensland 4109<br>Australia</p>
+      </div>
+      <div>
+        <div class="web-section-title">Note</div>
+        <p id="wd-note">—</p>
+      </div>
+    </div>
+
+    <div class="web-section">
+      <div class="web-section-title">Linked Bills</div>
+      <p class="web-muted">—</p>
+    </div>
+
+    <div class="web-section">
+      <div class="web-section-title">Delivery Items</div>
+      <table class="web-items-table">
+        <thead>
+          <tr>
+            <th>S.N</th>
+            <th>Resource</th>
+            <th class="num">Qty Ordered</th>
+            <th class="num">Qty Received</th>
+            <th class="num">Qty Remaining</th>
+            <th>Cost Centre</th>
+            <th class="num">Qty Assigned</th>
+            <th>Unit</th>
+            <th class="num">Unit Cost</th>
+            <th class="num">Subtotal</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody id="wd-items-tbody"></tbody>
+      </table>
+      <div class="web-docket-total">
+        Delivery Docket Total: <strong id="wd-total">$0.00</strong>
+      </div>
+    </div>
+
+    <div class="web-bottom-actions">
+      <button class="web-btn-ai">✦ AI Summary</button>
+      <button class="web-btn-primary" onclick="openWebEdit()">✎ Edit Delivery Docket</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SCREEN 9: WEB — Edit Docket ===== -->
+<div class="screen web-screen" id="screen-web-edit">
+  <div class="web-topnav">
+    <span class="web-back" onclick="cancelWebEdit()">←</span>
+    <h1>Edit Delivery Docket</h1>
+    <div class="web-actions">
+      <button class="web-btn web-btn-secondary" onclick="cancelWebEdit()">Cancel</button>
+      <button class="web-btn-primary" onclick="saveWebEdit()">Save Changes</button>
+      <div class="web-user">
+        <div class="web-avatar">AN</div>
+        <span class="web-username">Alec Neill</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="web-content">
+    <div class="web-doc-title">Delivery Docket Number: <strong id="we-title-num"></strong></div>
+
+    <div class="web-section">
+      <div class="web-section-title">Information</div>
+      <div class="web-info-grid web-edit-grid">
+        <div class="web-info-label">Delivery Docket Number</div>
+        <div><input class="web-edit-input" id="we-num" /></div>
+        <div class="web-info-label">Delivery Date</div>
+        <div><input class="web-edit-input" id="we-date" placeholder="dd/mm/yyyy" /></div>
+        <div class="web-info-label">Supplier</div>
+        <div>
+          <select class="web-edit-input" id="we-supplier" onchange="onWeSupplierChange()">
+            <option value="">Select supplier…</option>
+            <option>BORAL Concrete</option>
+            <option>Hanson Construction Materials</option>
+            <option>Holcim Australia</option>
+            <option>Hy-Tec</option>
+            <option>Adbri Concrete</option>
+            <option>Independent Concrete</option>
+            <option>A1 Asphalting Pty. Ltd.</option>
+            <option>Coates Hire</option>
+          </select>
+        </div>
+        <div class="web-info-label">Purchase Order</div>
+        <div>
+          <select class="web-edit-input" id="we-po" onchange="onWePOChange()">
+            <option value="">Choose PO…</option>
+          </select>
+          <div class="web-helper" id="we-po-helper"></div>
+        </div>
+        <div class="web-info-label">Default Cost Centre</div>
+        <div>
+          <select class="web-edit-input" id="we-cc" onchange="onWeCCChange()">
+            <option value="">Select cost centre…</option>
+            <option>CC-101 — Earthworks</option>
+            <option>CC-102 — Surfacing</option>
+            <option>CC-103 — Drainage</option>
+            <option>CC-104 — Concrete Works</option>
+            <option>CC-201 — Plant Hire</option>
+            <option>CC-301 — Materials</option>
+          </select>
+          <div class="web-info-notice" id="we-cc-notice">
+            <span>✦</span><span>Auto-filled from <strong id="we-cc-notice-po"></strong></span>
+          </div>
+        </div>
+        <div class="web-info-label">Note</div>
+        <div><textarea class="web-edit-input" id="we-note" rows="2" placeholder="Add a note…"></textarea></div>
+      </div>
+    </div>
+
+    <div class="web-section">
+      <div class="web-section-title">Delivery Items</div>
+      <table class="web-items-table web-edit-items">
+        <thead>
+          <tr>
+            <th>S.N</th>
+            <th>Resource</th>
+            <th class="num">Qty Ordered</th>
+            <th class="num">Qty Remaining</th>
+            <th class="num">Qty Received (this docket)</th>
+            <th>Cost Centre</th>
+            <th>Unit</th>
+            <th class="num">Unit Cost</th>
+            <th class="num">Subtotal</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="we-items-tbody"></tbody>
+      </table>
+      <button type="button" class="web-add-row-btn" onclick="addWebCustomItem()">+ Add line item not on PO</button>
+    </div>
+
+    <div class="web-bottom-actions">
+      <button class="web-btn web-btn-secondary" onclick="cancelWebEdit()">Cancel</button>
+      <button class="web-btn-primary" onclick="saveWebEdit()">✓ Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ASSIGN CHOICE BOTTOM SHEET ===== -->
+<div class="sheet-overlay" id="assign-sheet" onclick="closeAssignSheetIfBackdrop(event)">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <div class="grabber"></div>
+    <h3>Where do you want to assign?</h3>
+    <p>Pick the experience you want to try.</p>
+    <button class="choice-btn" onclick="goAssignMobile()">
+      <span class="choice-icon">📱</span>
+      <div class="choice-info">
+        <div class="choice-title">Mobile App</div>
+        <div class="choice-sub">Quick assignment on the go</div>
+      </div>
+      <span class="choice-chev">›</span>
+    </button>
+    <button class="choice-btn" onclick="goAssignWeb()">
+      <span class="choice-icon">💻</span>
+      <div class="choice-info">
+        <div class="choice-title">Web App</div>
+        <div class="choice-sub">Full workspace experience</div>
+      </div>
+      <span class="choice-chev">›</span>
+    </button>
+    <button class="sheet-cancel" onclick="closeAssignSheet()">Cancel</button>
+  </div>
+</div>
+
 <div class="toast" id="toast">Saved</div>
 <div class="sys-nav"></div>
 
@@ -328,9 +1541,55 @@
   const dockets = [];
   let currentPhoto = null;
 
+  const SAMPLE_DOCKET_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 540'>
+    <rect width='400' height='540' fill='#fdfdfb'/>
+    <rect width='400' height='62' fill='#1e3a5f'/>
+    <text x='200' y='30' font-family='Arial, sans-serif' font-size='20' font-weight='bold' fill='white' text-anchor='middle'>READYMIX CONCRETE</text>
+    <text x='200' y='50' font-family='Arial, sans-serif' font-size='11' fill='#cdd9e8' text-anchor='middle'>CONCRETE DELIVERY DOCKET</text>
+    <text x='20' y='90' font-family='Arial, sans-serif' font-size='10' fill='#666'>DOCKET No.</text>
+    <text x='20' y='110' font-family='Arial, sans-serif' font-size='20' font-weight='bold' fill='#000'>RX-48201</text>
+    <text x='380' y='90' font-family='Arial, sans-serif' font-size='10' fill='#666' text-anchor='end'>DATE</text>
+    <text x='380' y='110' font-family='Arial, sans-serif' font-size='14' font-weight='bold' fill='#000' text-anchor='end'>07/05/2026</text>
+    <line x1='20' y1='128' x2='380' y2='128' stroke='#d8d8d8'/>
+    <text x='20' y='150' font-family='Arial, sans-serif' font-size='10' fill='#666'>CUSTOMER</text>
+    <text x='20' y='170' font-family='Arial, sans-serif' font-size='13' fill='#000'>VARICON CONSTRUCTION</text>
+    <text x='20' y='195' font-family='Arial, sans-serif' font-size='10' fill='#666'>SITE / PROJECT</text>
+    <text x='20' y='215' font-family='Arial, sans-serif' font-size='13' fill='#000'>Troughton Rd Roadworks</text>
+    <line x1='20' y1='232' x2='380' y2='232' stroke='#d8d8d8'/>
+    <text x='20' y='254' font-family='Arial, sans-serif' font-size='10' fill='#666'>MIX CODE</text>
+    <text x='20' y='272' font-family='Arial, sans-serif' font-size='14' font-weight='bold' fill='#000'>N32-20-80</text>
+    <text x='210' y='254' font-family='Arial, sans-serif' font-size='10' fill='#666'>STRENGTH</text>
+    <text x='210' y='272' font-family='Arial, sans-serif' font-size='14' font-weight='bold' fill='#000'>32 MPa</text>
+    <text x='20' y='298' font-family='Arial, sans-serif' font-size='10' fill='#666'>QUANTITY</text>
+    <text x='20' y='316' font-family='Arial, sans-serif' font-size='14' font-weight='bold' fill='#000'>8.0 m³</text>
+    <text x='210' y='298' font-family='Arial, sans-serif' font-size='10' fill='#666'>SLUMP</text>
+    <text x='210' y='316' font-family='Arial, sans-serif' font-size='14' font-weight='bold' fill='#000'>80 mm</text>
+    <text x='20' y='344' font-family='Arial, sans-serif' font-size='10' fill='#666'>AGGREGATE</text>
+    <text x='20' y='362' font-family='Arial, sans-serif' font-size='13' fill='#000'>20 mm</text>
+    <text x='210' y='344' font-family='Arial, sans-serif' font-size='10' fill='#666'>TRUCK No.</text>
+    <text x='210' y='362' font-family='Arial, sans-serif' font-size='13' fill='#000'>RM-247</text>
+    <line x1='20' y1='378' x2='380' y2='378' stroke='#d8d8d8'/>
+    <text x='20' y='400' font-family='Arial, sans-serif' font-size='10' fill='#666'>LOADED</text>
+    <text x='20' y='416' font-family='Arial, sans-serif' font-size='13' fill='#000'>14:32</text>
+    <text x='150' y='400' font-family='Arial, sans-serif' font-size='10' fill='#666'>DEPART</text>
+    <text x='150' y='416' font-family='Arial, sans-serif' font-size='13' fill='#000'>14:38</text>
+    <text x='280' y='400' font-family='Arial, sans-serif' font-size='10' fill='#666'>ARRIVE</text>
+    <text x='280' y='416' font-family='Arial, sans-serif' font-size='13' fill='#000'>15:05</text>
+    <line x1='20' y1='436' x2='380' y2='436' stroke='#d8d8d8'/>
+    <text x='20' y='458' font-family='Arial, sans-serif' font-size='10' fill='#666'>DRIVER</text>
+    <text x='22' y='486' font-family='cursive, serif' font-size='16' font-style='italic' fill='#1a3050'>M. Patel</text>
+    <line x1='20' y1='494' x2='180' y2='494' stroke='#000' stroke-width='0.5'/>
+    <text x='220' y='458' font-family='Arial, sans-serif' font-size='10' fill='#666'>RECEIVED BY</text>
+    <line x1='220' y1='494' x2='380' y2='494' stroke='#000' stroke-width='0.5'/>
+    <text x='200' y='520' font-family='Arial, sans-serif' font-size='9' fill='#999' text-anchor='middle'>Goods received in good order — please check before signing</text>
+  </svg>`;
+  const SAMPLE_DOCKET_URL = 'data:image/svg+xml;utf8,' + encodeURIComponent(SAMPLE_DOCKET_SVG);
+
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(id).classList.add('active');
+    const isWeb = id.startsWith('screen-assign-web') || id.startsWith('screen-web-');
+    document.body.classList.toggle('web-mode', isWeb);
     window.scrollTo(0, 0);
   }
 
@@ -338,10 +1597,12 @@
 
   function goCamera() {
     showScreen('screen-camera');
-    setTimeout(() => document.getElementById('file-input').click(), 250);
   }
 
-  function goReview() { showScreen('screen-review'); }
+  function goReview() {
+    showScreen('screen-review');
+    runSupplierScan();
+  }
 
   function goList() {
     renderList();
@@ -349,7 +1610,10 @@
   }
 
   function capture() {
-    document.getElementById('file-input').click();
+    currentPhoto = SAMPLE_DOCKET_URL;
+    document.getElementById('review-photo-wrap').innerHTML = '<img src="' + currentPhoto + '" alt="Docket photo" />';
+    document.getElementById('docket-num').value = 'RX-48201';
+    goReview();
   }
 
   function onFileSelected(e) {
@@ -358,13 +1622,33 @@
     const reader = new FileReader();
     reader.onload = (ev) => {
       currentPhoto = ev.target.result;
-      const wrap = document.getElementById('review-photo-wrap');
-      wrap.innerHTML = '<img src="' + currentPhoto + '" alt="Docket photo" />';
-      const num = 'DK-' + String(Math.floor(Math.random() * 90000) + 10000);
-      document.getElementById('docket-num').value = num;
+      document.getElementById('review-photo-wrap').innerHTML = '<img src="' + currentPhoto + '" alt="Docket photo" />';
+      document.getElementById('docket-num').value = 'DK-' + String(Math.floor(Math.random() * 90000) + 10000);
       goReview();
     };
     reader.readAsDataURL(file);
+  }
+
+  function runSupplierScan() {
+    const scanning = document.getElementById('supplier-scanning');
+    const fallback = document.getElementById('supplier-fallback');
+    const select = document.getElementById('supplier-select');
+    const other = document.getElementById('supplier-other');
+    scanning.style.display = 'flex';
+    fallback.style.display = 'none';
+    if (select) select.value = '';
+    if (other) { other.style.display = 'none'; other.value = ''; }
+    setTimeout(() => {
+      scanning.style.display = 'none';
+      fallback.style.display = 'block';
+    }, 1400);
+  }
+
+  function onSupplierChange() {
+    const select = document.getElementById('supplier-select');
+    const other = document.getElementById('supplier-other');
+    other.style.display = select.value === 'other' ? 'block' : 'none';
+    if (select.value !== 'other') other.value = '';
   }
 
   function toggleFlash() {
@@ -374,8 +1658,12 @@
 
   function saveDocket() {
     const num = document.getElementById('docket-num').value || 'DK-00000';
+    const sel = document.getElementById('supplier-select');
+    const other = document.getElementById('supplier-other');
+    const supplier = sel.value === 'other' ? (other.value || 'Other') : (sel.value || '—');
     dockets.unshift({
       num,
+      supplier,
       photo: currentPhoto,
       date: 'Thu, 07 May 2026',
       project: '(123456) Troughton Rd',
@@ -387,6 +1675,8 @@
 
   function renderList() {
     const list = document.getElementById('docket-list');
+    const banner = document.getElementById('assign-banner');
+    banner.style.display = dockets.length > 0 ? 'flex' : 'none';
     if (dockets.length === 0) {
       list.innerHTML = '<div class="empty-state"><div class="ico-big">📷</div><div class="title">No site dockets yet</div><div class="sub">Tap the camera button below to capture a docket photo.</div></div>';
       return;
@@ -396,7 +1686,7 @@
         <div class="thumb">${d.photo ? `<img src="${d.photo}" />` : '📄'}</div>
         <div class="info">
           <div class="num">${d.num}</div>
-          <div class="proj">${d.project}</div>
+          <div class="proj">${d.supplier ? d.supplier + ' · ' : ''}${d.project}</div>
           <div class="meta">${d.date}</div>
         </div>
         <div class="pill ${d.status === 'pending' ? 'pill-pending' : 'pill-synced'}">${d.status === 'pending' ? 'Pending' : 'Synced'}</div>
@@ -409,6 +1699,1449 @@
     t.textContent = msg;
     t.classList.add('show');
     setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  function openAssignSheet() {
+    document.getElementById('assign-sheet').classList.add('show');
+  }
+  function closeAssignSheet() {
+    document.getElementById('assign-sheet').classList.remove('show');
+  }
+  function closeAssignSheetIfBackdrop(e) {
+    if (e.target.id === 'assign-sheet') closeAssignSheet();
+  }
+  function goAssignMobile() {
+    closeAssignSheet();
+    const latest = dockets[0];
+    const captured = deliveryDockets.find(d => d.id === 'just-captured');
+    if (latest && captured) {
+      captured.supplier = latest.supplier && latest.supplier !== '—' ? latest.supplier : '';
+      captured.photo = latest.photo;
+      captured.supplierDocket = latest.num || '';
+    }
+    renderDeliveryDockets();
+    showScreen('screen-assign-mobile');
+  }
+
+  // ===== Purchase orders =====
+  const POS = {
+    'PO-VAR12-0042': { label: 'PO-VAR12-0042 — Concrete Supply ($46,000)', title: 'Concrete Supply', supplier: 'BORAL Concrete', costCentre: 'CC-104 — Concrete Works', items: [
+      { id: 'a', desc: '32 MPa Concrete (N32-20-80)', ordered: 200, prev: 80, unit: 'm³', unitCost: 220, resource: 'Material', costCentres: [
+        { cc: 'CC-104 — Concrete Works', allocation: 150 },
+        { cc: 'CC-101 — Earthworks', allocation: 50 }
+      ]},
+      { id: 'b', desc: '40 MPa Concrete (N40-20-80)', ordered: 100, prev: 0, unit: 'm³', unitCost: 260, resource: 'Material', costCentres: [
+        { cc: 'CC-104 — Concrete Works', allocation: 100 }
+      ]},
+      { id: 'c', desc: 'Concrete Pump Hire', ordered: 8, prev: 2, unit: 'days', unitCost: 850, resource: 'Plant & Equipment', costCentres: [
+        { cc: 'CC-104 — Concrete Works', allocation: 8 }
+      ]}
+    ]},
+    'PO-VAR12-0044': { label: 'PO-VAR12-0044 — Concrete Supply ($28,000)', title: 'Concrete Supply', supplier: 'Holcim Australia', costCentre: 'CC-104 — Concrete Works', items: [
+      { id: 'a', desc: '32 MPa Concrete (N32-20-80)', ordered: 150, prev: 30, unit: 'm³', unitCost: 215, resource: 'Material', costCentres: [{ cc: 'CC-104 — Concrete Works', allocation: 150 }] },
+      { id: 'b', desc: '25 MPa Concrete (N25-20-80)', ordered: 80, prev: 0, unit: 'm³', unitCost: 195, resource: 'Material', costCentres: [{ cc: 'CC-104 — Concrete Works', allocation: 80 }] }
+    ]},
+    'PO-VAR12-0033': { label: 'PO-VAR12-0033 — Asphalt & Bitumen ($55,000)', title: 'Asphalt & Bitumen', supplier: 'A1 Asphalting Pty. Ltd.', costCentre: 'CC-102 — Surfacing', items: [
+      { id: 'a', desc: 'Asphaltic Concrete AC14', ordered: 40, prev: 12, unit: 'tonnes', unitCost: 320, resource: 'Material', costCentres: [{ cc: 'CC-102 — Surfacing', allocation: 40 }] },
+      { id: 'b', desc: 'Asphaltic Concrete AC20 (base)', ordered: 60, prev: 0, unit: 'tonnes', unitCost: 280, resource: 'Material', costCentres: [
+        { cc: 'CC-102 — Surfacing', allocation: 40 },
+        { cc: 'CC-101 — Earthworks', allocation: 20 }
+      ]},
+      { id: 'c', desc: 'Tack Coat Application', ordered: 500, prev: 200, unit: 'm²', unitCost: 4.5, resource: 'Subcontractor', costCentres: [{ cc: 'CC-102 — Surfacing', allocation: 500 }] }
+    ]},
+    'PO-VAR12-0028': { label: 'PO-VAR12-0028 — Roadworks Stage 2 ($38,000)', title: 'Roadworks Stage 2', supplier: 'Hanson Construction Materials', costCentre: 'CC-101 — Earthworks', items: [
+      { id: 'a', desc: 'Road Base Material (Class 2)', ordered: 80, prev: 35, unit: 'tonnes', unitCost: 95, resource: 'Material', costCentres: [{ cc: 'CC-101 — Earthworks', allocation: 80 }] },
+      { id: 'b', desc: 'Crushed Rock 20mm', ordered: 100, prev: 50, unit: 'tonnes', unitCost: 78, resource: 'Material', costCentres: [{ cc: 'CC-101 — Earthworks', allocation: 100 }] }
+    ]},
+    'PO-VAR12-0019': { label: 'PO-VAR12-0019 — Plant Hire ($22,000)', title: 'Plant Hire', supplier: 'Coates Hire', costCentre: 'CC-201 — Plant Hire', items: [
+      { id: 'a', desc: 'Excavator 5T', ordered: 14, prev: 6, unit: 'days', unitCost: 480, resource: 'Plant & Equipment', costCentres: [{ cc: 'CC-201 — Plant Hire', allocation: 14 }] },
+      { id: 'b', desc: 'Plate Compactor', ordered: 7, prev: 0, unit: 'days', unitCost: 145, resource: 'Plant & Equipment', costCentres: [{ cc: 'CC-201 — Plant Hire', allocation: 7 }] }
+    ]},
+    'PO-VAR12-0050': { label: 'PO-VAR12-0050 — Aggregates ($12,500)', title: 'Aggregates', supplier: 'Hy-Tec', costCentre: 'CC-301 — Materials', items: [
+      { id: 'a', desc: '20mm Aggregate', ordered: 60, prev: 20, unit: 'tonnes', unitCost: 65, resource: 'Material', costCentres: [{ cc: 'CC-301 — Materials', allocation: 60 }] },
+      { id: 'b', desc: '14mm Aggregate', ordered: 30, prev: 0, unit: 'tonnes', unitCost: 70, resource: 'Material', costCentres: [{ cc: 'CC-301 — Materials', allocation: 30 }] }
+    ]},
+    'PO-VAR12-0051': { label: 'PO-VAR12-0051 — Cement Supply ($9,800)', title: 'Cement Supply', supplier: 'Adbri Concrete', costCentre: 'CC-301 — Materials', items: [
+      { id: 'a', desc: 'General Purpose Cement', ordered: 200, prev: 50, unit: 'bags', unitCost: 14.5, resource: 'Material', costCentres: [{ cc: 'CC-301 — Materials', allocation: 200 }] }
+    ]}
+  };
+
+  // Helpers to read delivered quantities (supports legacy number values and the new [{cc, qty}] shape)
+  function getItemQty(deliveredItems, itemId) {
+    if (!deliveredItems || !deliveredItems.quantities) return 0;
+    const q = deliveredItems.quantities[itemId];
+    if (q == null) return 0;
+    if (typeof q === 'number') return q;
+    if (Array.isArray(q)) return q.reduce((s, x) => s + (parseFloat(x.qty) || 0), 0);
+    return 0;
+  }
+  function getItemQtyByCC(deliveredItems, itemId, cc) {
+    if (!deliveredItems || !deliveredItems.quantities) return 0;
+    const q = deliveredItems.quantities[itemId];
+    if (Array.isArray(q)) {
+      const m = q.find(x => x.cc === cc);
+      return m ? (parseFloat(m.qty) || 0) : 0;
+    }
+    return 0;
+  }
+  function getItemSplits(deliveredItems, itemId) {
+    if (!deliveredItems || !deliveredItems.quantities) return [];
+    const q = deliveredItems.quantities[itemId];
+    if (Array.isArray(q)) return q;
+    return [];
+  }
+
+  function getPOsForSupplier(supplier) {
+    if (!supplier) return [];
+    const norm = supplier.toLowerCase().trim();
+    return Object.entries(POS).filter(([_, po]) => po.supplier.toLowerCase().trim() === norm);
+  }
+
+  // ===== Delivery dockets data + rendering =====
+  const deliveryDockets = [
+    { id: 'just-captured', ref: 'VAR12345620260507152400', supplier: 'BORAL Concrete', date: '7 May · Just captured', supplierDocket: 'RX-48201', deliveryDate: '07/05/2026', po: '', costCentre: '', notes: '', photo: null, justCaptured: true },
+    { id: 'd2', ref: 'VAR12345620260506102240', supplier: 'A1 Asphalting Pty. Ltd.', date: '6 May · Captured 10:22am', supplierDocket: 'A1-DD-4421', deliveryDate: '06/05/2026', po: '', costCentre: '', notes: '' },
+    { id: 'd3', ref: 'VAR12345620260505091500', supplier: 'BORAL Concrete', date: '5 May · Captured 9:15am', supplierDocket: 'BC-9912', deliveryDate: '05/05/2026', po: 'PO-VAR12-0042', costCentre: '', notes: '' },
+    { id: 'd4', ref: 'VAR12345620260504143000', supplier: 'Hanson Construction Materials', date: '4 May · Captured 2:30pm', supplierDocket: 'HCM-2204', deliveryDate: '04/05/2026', po: '', costCentre: '', notes: '' },
+    { id: 'd5', ref: 'VAR12345620260502133243', supplier: '', date: '2 May · Captured 1:32pm', supplierDocket: '', deliveryDate: '02/05/2026', po: '', costCentre: '', notes: '' },
+    { id: 'c1', ref: 'VAR12345620260501102700', supplier: 'A1 Asphalting Pty. Ltd.', date: '1 May', supplierDocket: 'A1-DD-4380', deliveryDate: '01/05/2026', po: 'PO-VAR12-0033', costCentre: 'CC-102 — Surfacing', notes: '', completed: true, paid: false, deliveredItems: { poId: 'PO-VAR12-0033', quantities: { a: 28, c: 200 }, customItems: [] } },
+    { id: 'c2', ref: 'VAR12345620260430084500', supplier: 'Coates Hire', date: '30 Apr', supplierDocket: 'CH-7732', deliveryDate: '30/04/2026', po: 'PO-VAR12-0019', costCentre: 'CC-201 — Plant Hire', notes: '', completed: true, paid: false, deliveredItems: { poId: 'PO-VAR12-0019', quantities: { a: 7 }, customItems: [] } },
+    { id: 'c3', ref: 'VAR12345620260428110000', supplier: 'Holcim Australia', date: '28 Apr', supplierDocket: 'HA-5511', deliveryDate: '28/04/2026', po: 'PO-VAR12-0044', costCentre: 'CC-104 — Concrete Works', notes: '', completed: true, paid: true, deliveredItems: { poId: 'PO-VAR12-0044', quantities: { a: 30 }, customItems: [] } }
+  ];
+
+  function isComplete(d) {
+    return !!(d.supplier && d.po !== undefined && d.costCentre && (d.po === 'none' || d.po));
+  }
+
+  function dlCardHTML(d) {
+    const incomplete = !d.completed && !isComplete(d);
+    const tags = [];
+    if (d.justCaptured) tags.push('<span class="dl-tag tag-new">★ New</span>');
+    if (!d.supplier) tags.push('<span class="dl-tag tag-missing">✕ Supplier Unknown</span>');
+    if (d.completed) {
+      tags.push('<span class="dl-tag tag-assigned">✓ PO Assigned</span>');
+      tags.push('<span class="dl-tag tag-assigned">✓ Cost Centre Assigned</span>');
+      tags.push(d.paid ? '<span class="dl-tag tag-paid">Paid ✓</span>' : '<span class="dl-tag tag-topay">To be paid</span>');
+    } else {
+      tags.push(d.po && d.po !== 'none' ? '<span class="dl-tag tag-assigned">✓ PO Assigned</span>' : (d.po === 'none' ? '<span class="dl-tag tag-assigned">✓ No PO</span>' : '<span class="dl-tag tag-missing">✕ PO Unassigned</span>'));
+      tags.push(d.costCentre ? '<span class="dl-tag tag-assigned">✓ Cost Centre Assigned</span>' : '<span class="dl-tag tag-missing">✕ Cost Centre Unassigned</span>');
+    }
+    const thumbBg = d.completed ? 'background:#c8e0c3;' : '';
+    const thumbContent = d.photo ? `<img src="${d.photo}" />` : '📋';
+    const status = d.completed ? '<span class="dl-status complete">Complete</span>' : '<span class="dl-status incomplete">Incomplete</span>';
+    const cardClass = ['dl-card'];
+    if (incomplete) cardClass.push('needs-action');
+    if (d.justCaptured) cardClass.push('just-captured');
+    return `
+      <div class="${cardClass.join(' ')}" onclick="openProcessDocket('${d.id}')">
+        <div class="dl-card-top">
+          <div class="dl-thumb photo" style="${thumbBg}">${thumbContent}</div>
+          <div class="dl-main">
+            <div class="dl-ref">${d.ref}</div>
+            <div class="dl-supplier">${d.supplier || 'Unknown supplier'}</div>
+            <div class="dl-date">${d.date}</div>
+          </div>
+          ${status}
+        </div>
+        <div class="dl-card-bottom">${tags.join('')}</div>
+      </div>`;
+  }
+
+  function renderDeliveryDockets() {
+    const needs = deliveryDockets.filter(d => !d.completed);
+    const completed = deliveryDockets.filter(d => d.completed);
+    document.getElementById('dl-needs-action').innerHTML = needs.map(dlCardHTML).join('');
+    document.getElementById('dl-completed').innerHTML = completed.map(dlCardHTML).join('');
+    document.getElementById('dl-pending-num').textContent = needs.length;
+    document.getElementById('dl-pending-title').textContent = needs.length + ' docket' + (needs.length === 1 ? '' : 's') + ' need processing';
+    document.getElementById('dl-tab-all').textContent = deliveryDockets.length;
+    document.getElementById('dl-tab-needs').textContent = needs.length;
+    document.getElementById('dl-tab-complete').textContent = completed.length;
+  }
+
+  // ===== Process docket screen =====
+  let editingDocketId = null;
+  let customItems = [];
+
+  function escAttr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
+
+  function customItemHTML(idx, it) {
+    return `
+      <div class="pd-custom-item" data-idx="${idx}">
+        <button type="button" class="pd-custom-remove" onclick="removeCustomItem(${idx})" title="Remove">✕</button>
+        <span class="pd-custom-tag">Off-PO</span>
+        <input class="pd-custom-desc" placeholder="Item description (e.g. Surcharge, Wash-out fee)" value="${escAttr(it.desc)}" oninput="syncCustomItem(${idx}, 'desc', this.value)" />
+        <div class="pd-custom-row">
+          <input class="pd-custom-qty" type="number" min="0" step="0.01" placeholder="Qty" value="${escAttr(it.qty)}" oninput="syncCustomItem(${idx}, 'qty', this.value)" />
+          <input class="pd-custom-unit" placeholder="Unit (e.g. m³, tonnes, hr, ea)" value="${escAttr(it.unit)}" oninput="syncCustomItem(${idx}, 'unit', this.value)" />
+        </div>
+      </div>`;
+  }
+
+  function renderCustomItems() {
+    const list = document.getElementById('pd-custom-list');
+    if (!list) return;
+    if (!customItems.length) {
+      list.innerHTML = '<div class="pd-custom-empty">No off-PO items added yet.</div>';
+      return;
+    }
+    list.innerHTML = customItems.map((it, i) => customItemHTML(i, it)).join('');
+  }
+
+  function syncCustomItem(idx, field, value) {
+    if (!customItems[idx]) return;
+    customItems[idx][field] = value;
+  }
+
+  function addCustomItem() {
+    customItems.push({ desc: '', qty: '', unit: '' });
+    renderCustomItems();
+    const inputs = document.querySelectorAll('.pd-custom-item .pd-custom-desc');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  }
+
+  function removeCustomItem(idx) {
+    customItems.splice(idx, 1);
+    renderCustomItems();
+  }
+
+  function openProcessDocket(id) {
+    const d = deliveryDockets.find(x => x.id === id);
+    if (!d) return;
+    editingDocketId = id;
+    document.getElementById('pd-image-img').src = d.photo || SAMPLE_DOCKET_URL;
+    document.getElementById('pd-supplier').value = d.supplier || '';
+    document.getElementById('pd-supplier-docket').value = d.supplierDocket || '';
+    document.getElementById('pd-delivery-date').value = d.deliveryDate || '';
+    document.getElementById('pd-cc').value = d.costCentre || '';
+    document.getElementById('pd-notes').value = d.notes || '';
+    document.getElementById('pd-status-badge').textContent = d.completed ? 'Complete' : 'Incomplete';
+    document.getElementById('pd-status-badge').style.background = d.completed ? '#4caf50' : '#e53935';
+    // PO state
+    const linkBtn = document.getElementById('pd-po-link');
+    const noneBtn = document.getElementById('pd-po-none');
+    const wrap = document.getElementById('pd-po-select-wrap');
+    linkBtn.classList.remove('selected');
+    noneBtn.classList.remove('selected');
+    populatePOSelect(d.supplier);
+    if (d.po === 'none') {
+      noneBtn.classList.add('selected');
+      wrap.style.display = 'none';
+      renderPOItems(null);
+    } else if (d.po) {
+      linkBtn.classList.add('selected');
+      wrap.style.display = 'block';
+      document.getElementById('pd-po').value = d.po;
+      const saved = d.deliveredItems && d.deliveredItems.poId === d.po ? d.deliveredItems.quantities : {};
+      renderPOItems(d.po, saved);
+      customItems = (d.deliveredItems && d.deliveredItems.poId === d.po && Array.isArray(d.deliveredItems.customItems))
+        ? JSON.parse(JSON.stringify(d.deliveredItems.customItems))
+        : [];
+    } else {
+      wrap.style.display = 'none';
+      renderPOItems(null);
+      customItems = [];
+    }
+    renderCustomItems();
+    updateCCNotice();
+    refreshPdSectionStatus();
+    showScreen('screen-process-docket');
+    window.scrollTo(0, 0);
+  }
+
+  function populatePOSelect(supplier) {
+    const sel = document.getElementById('pd-po');
+    const helper = document.getElementById('pd-po-helper');
+    const matched = getPOsForSupplier(supplier);
+    const opts = ['<option value="">Choose PO…</option>'];
+    matched.forEach(([id, po]) => opts.push(`<option value="${id}">${po.label}</option>`));
+    sel.innerHTML = opts.join('');
+    if (!supplier) {
+      helper.textContent = 'Select a supplier first to see linked POs';
+      helper.style.display = 'block';
+      sel.disabled = true;
+    } else if (matched.length === 0) {
+      helper.textContent = `No purchase orders found for ${supplier}`;
+      helper.style.display = 'block';
+      sel.disabled = true;
+    } else {
+      helper.textContent = `${matched.length} PO${matched.length === 1 ? '' : 's'} linked to ${supplier}`;
+      helper.style.display = 'block';
+      sel.disabled = false;
+    }
+  }
+
+  function renderPOItems(poId, savedQuantities) {
+    const wrap = document.getElementById('pd-items-wrap');
+    const list = document.getElementById('pd-items-list');
+    if (!poId || !POS[poId]) {
+      wrap.style.display = 'none';
+      list.innerHTML = '';
+      return;
+    }
+    wrap.style.display = 'block';
+    const po = POS[poId];
+    list.innerHTML = po.items.map(item => {
+      const remaining = item.ordered - item.prev;
+      const ccs = (item.costCentres && item.costCentres.length) ? item.costCentres : [{ cc: po.costCentre, allocation: remaining }];
+
+      // Look up saved qty per CC (supports legacy single-number and new array shape)
+      const saved = savedQuantities ? savedQuantities[item.id] : null;
+      const savedByCc = {};
+      let savedSingle = null;
+      if (Array.isArray(saved)) {
+        saved.forEach(s => { savedByCc[s.cc] = s.qty; });
+      } else if (typeof saved === 'number') {
+        savedSingle = saved;
+        if (ccs.length === 1) savedByCc[ccs[0].cc] = saved;
+      }
+
+      if (ccs.length === 1) {
+        const cc = ccs[0];
+        const sv = savedByCc[cc.cc] != null ? savedByCc[cc.cc] : (savedSingle != null ? savedSingle : '');
+        return `
+          <div class="pd-item">
+            <div class="pd-item-desc">${item.desc}</div>
+            <div class="pd-item-meta">Ordered: ${item.ordered}${item.unit} · Received: ${item.prev}${item.unit} · Remaining: ${remaining}${item.unit}</div>
+            <div class="pd-item-meta" style="color:#1565c0;">→ ${cc.cc}</div>
+            <div class="pd-item-row">
+              <label>Delivered:</label>
+              <input class="pd-item-qty" type="number" min="0" step="0.01" data-item-id="${item.id}" data-cc-idx="0" data-cc="${escAttr(cc.cc)}" value="${sv}" placeholder="0" oninput="onItemCCQtyChange('${item.id}')" />
+              <span class="pd-item-unit">${item.unit}</span>
+              <span class="pd-item-remaining">of ${remaining}${item.unit} remaining</span>
+            </div>
+          </div>`;
+      }
+
+      // Multi-CC: render qty per CC with running total
+      const total = ccs.reduce((s, cc) => s + (parseFloat(savedByCc[cc.cc]) || 0), 0);
+      return `
+        <div class="pd-item">
+          <div class="pd-item-desc">${item.desc}</div>
+          <div class="pd-item-meta">Ordered: ${item.ordered}${item.unit} · Received: ${item.prev}${item.unit} · Remaining: ${remaining}${item.unit}</div>
+          <div class="pd-item-cc-list">
+            <div class="pd-item-cc-header">Split across ${ccs.length} cost centres (from PO)</div>
+            ${ccs.map((cc, i) => `
+              <div class="pd-item-cc-row">
+                <div class="cc-name-col">
+                  <div class="cc-name">${cc.cc}</div>
+                  <div class="cc-alloc">Allocated: ${cc.allocation}${item.unit}</div>
+                </div>
+                <input class="pd-item-qty cc-qty" type="number" min="0" step="0.01" data-item-id="${item.id}" data-cc-idx="${i}" data-cc="${escAttr(cc.cc)}" value="${savedByCc[cc.cc] != null ? savedByCc[cc.cc] : ''}" placeholder="0" oninput="onItemCCQtyChange('${item.id}')" />
+                <span class="cc-unit">${item.unit}</span>
+              </div>`).join('')}
+            <div class="pd-item-cc-total">
+              <span>Total delivered for this item</span>
+              <span class="total-val" id="pd-item-total-${item.id}">${total} ${item.unit}</span>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function onItemCCQtyChange(itemId) {
+    const poId = document.getElementById('pd-po').value;
+    const po = POS[poId];
+    if (!po) return;
+    const item = po.items.find(i => i.id === itemId);
+    if (!item) return;
+    let total = 0;
+    document.querySelectorAll(`input.pd-item-qty[data-item-id="${itemId}"]`).forEach(input => {
+      const v = parseFloat(input.value);
+      if (!isNaN(v)) total += v;
+    });
+    const totalEl = document.getElementById('pd-item-total-' + itemId);
+    if (totalEl) totalEl.textContent = total + ' ' + item.unit;
+  }
+
+  function fillAllRemaining() {
+    const poId = document.getElementById('pd-po').value;
+    if (!poId || !POS[poId]) return;
+    POS[poId].items.forEach(item => {
+      const ccs = (item.costCentres && item.costCentres.length) ? item.costCentres : [{ cc: POS[poId].costCentre, allocation: item.ordered - item.prev }];
+      ccs.forEach((cc, i) => {
+        const input = document.querySelector(`input.pd-item-qty[data-item-id="${item.id}"][data-cc-idx="${i}"]`);
+        if (input) input.value = cc.allocation;
+      });
+      onItemCCQtyChange(item.id);
+    });
+  }
+
+  function selectPdPO(type) {
+    const linkBtn = document.getElementById('pd-po-link');
+    const noneBtn = document.getElementById('pd-po-none');
+    const wrap = document.getElementById('pd-po-select-wrap');
+    linkBtn.classList.toggle('selected', type === 'link');
+    noneBtn.classList.toggle('selected', type === 'none');
+    wrap.style.display = type === 'link' ? 'block' : 'none';
+    if (type === 'none') {
+      document.getElementById('pd-po').value = '';
+      renderPOItems(null);
+      customItems = [];
+      renderCustomItems();
+    } else if (type === 'link') {
+      const supplier = document.getElementById('pd-supplier').value;
+      populatePOSelect(supplier);
+    }
+    refreshPdSectionStatus();
+  }
+
+  function onPdSupplierChange() {
+    const supplier = document.getElementById('pd-supplier').value;
+    populatePOSelect(supplier);
+    document.getElementById('pd-po').value = '';
+    renderPOItems(null);
+    customItems = [];
+    renderCustomItems();
+    updateCCNotice();
+    refreshPdSectionStatus();
+  }
+  function onPdPOChange() {
+    const poId = document.getElementById('pd-po').value;
+    const d = deliveryDockets.find(x => x.id === editingDocketId);
+    const matchSaved = d && d.deliveredItems && d.deliveredItems.poId === poId;
+    const savedQty = matchSaved ? d.deliveredItems.quantities : {};
+    renderPOItems(poId, savedQty);
+    customItems = (matchSaved && Array.isArray(d.deliveredItems.customItems))
+      ? JSON.parse(JSON.stringify(d.deliveredItems.customItems))
+      : [];
+    renderCustomItems();
+    // Auto-fill default cost centre (off-PO) from PO if mapped
+    const po = POS[poId];
+    if (po && po.costCentre) {
+      document.getElementById('pd-cc').value = po.costCentre;
+    }
+    updateCCNotice();
+    refreshPdSectionStatus();
+  }
+  function onPdCCChange() {
+    updateCCNotice();
+    refreshPdSectionStatus();
+  }
+
+  function updateCCNotice() {
+    const ccEl = document.getElementById('pd-cc');
+    const noticeEl = document.getElementById('pd-cc-notice');
+    const noticePo = document.getElementById('pd-cc-notice-po');
+    if (!ccEl || !noticeEl || !noticePo) return;
+    const poId = document.getElementById('pd-po').value;
+    const cc = ccEl.value;
+    const po = POS[poId];
+    const linkSelected = document.getElementById('pd-po-link').classList.contains('selected');
+    if (linkSelected && po && po.costCentre && cc === po.costCentre) {
+      noticePo.textContent = poId;
+      noticeEl.classList.add('show');
+      ccEl.classList.add('pd-from-po');
+    } else {
+      noticeEl.classList.remove('show');
+      ccEl.classList.remove('pd-from-po');
+    }
+  }
+
+  function refreshPdSectionStatus() {
+    const supEl = document.getElementById('pd-sec-supplier');
+    const poEl = document.getElementById('pd-sec-po');
+    const ccEl = document.getElementById('pd-sec-cc');
+    const supplier = document.getElementById('pd-supplier').value;
+    const po = document.getElementById('pd-po').value;
+    const noneSel = document.getElementById('pd-po-none').classList.contains('selected');
+    const linkSel = document.getElementById('pd-po-link').classList.contains('selected');
+    const cc = document.getElementById('pd-cc').value;
+    setPdState(supEl, !!supplier);
+    setPdState(poEl, noneSel || (linkSel && !!po));
+    setPdState(ccEl, !!cc);
+  }
+  function setPdState(el, done) {
+    el.classList.toggle('pd-done', done);
+    el.classList.toggle('pd-required', !done);
+  }
+
+  function cancelProcessDocket() {
+    editingDocketId = null;
+    showScreen('screen-assign-mobile');
+  }
+
+  function saveProcessDocket() {
+    const d = deliveryDockets.find(x => x.id === editingDocketId);
+    if (!d) return;
+    const noneSel = document.getElementById('pd-po-none').classList.contains('selected');
+    const linkSel = document.getElementById('pd-po-link').classList.contains('selected');
+    d.supplier = document.getElementById('pd-supplier').value;
+    d.supplierDocket = document.getElementById('pd-supplier-docket').value;
+    d.deliveryDate = document.getElementById('pd-delivery-date').value;
+    d.po = noneSel ? 'none' : (linkSel ? document.getElementById('pd-po').value : '');
+    d.costCentre = document.getElementById('pd-cc').value;
+    d.costCentreSplits = null; // splits live per-line-item now
+    d.notes = document.getElementById('pd-notes').value;
+    if (linkSel && d.po && POS[d.po]) {
+      const quantities = {};
+      POS[d.po].items.forEach(item => {
+        const inputs = document.querySelectorAll(`input.pd-item-qty[data-item-id="${item.id}"]`);
+        const splits = [];
+        inputs.forEach(input => {
+          const v = parseFloat(input.value);
+          const cc = input.dataset.cc || (item.costCentres && item.costCentres[0] ? item.costCentres[0].cc : POS[d.po].costCentre);
+          if (!isNaN(v) && v > 0) splits.push({ cc, qty: v });
+        });
+        if (splits.length > 0) quantities[item.id] = splits;
+      });
+      const validCustom = customItems
+        .map(it => ({ desc: (it.desc || '').trim(), qty: it.qty, unit: (it.unit || '').trim() }))
+        .filter(it => it.desc && it.qty !== '' && it.qty !== null && !isNaN(parseFloat(it.qty)));
+      d.deliveredItems = { poId: d.po, quantities, customItems: validCustom };
+    } else {
+      d.deliveredItems = null;
+    }
+    if (d.supplier && d.costCentre && (d.po === 'none' || d.po)) {
+      d.completed = true;
+      d.paid = false;
+    } else {
+      d.completed = false;
+    }
+    if (d.justCaptured) d.justCaptured = false;
+    editingDocketId = null;
+    renderDeliveryDockets();
+    showScreen('screen-assign-mobile');
+    showToast('Docket saved');
+  }
+  function goAssignWeb() {
+    closeAssignSheet();
+    const latest = dockets[0];
+    const captured = deliveryDockets.find(d => d.id === 'just-captured');
+    if (latest && captured) {
+      captured.supplier = latest.supplier && latest.supplier !== '—' ? latest.supplier : '';
+      captured.photo = latest.photo;
+      captured.supplierDocket = latest.num || '';
+    }
+    renderWebList();
+    showScreen('screen-assign-web');
+  }
+  function goWebList() {
+    renderWebList();
+    showScreen('screen-assign-web');
+  }
+
+  // ===== Web app rendering =====
+  let editingWebDocketId = null;
+
+  function fmtMoney(n) {
+    if (n == null || isNaN(n)) return '—';
+    return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function docketStatusInfo(d) {
+    const hasSupplier = !!d.supplier;
+    const hasPO = d.po === 'none' || (d.po && POS[d.po]);
+    const hasCC = !!d.costCentre;
+    if (d.completed && d.paid) return { label: 'PAID', cls: 'paid' };
+    if (d.completed) return { label: 'TO BE PAID', cls: 'tobepaid' };
+    if (hasSupplier && hasPO && hasCC) return { label: 'TO BE PAID', cls: 'tobepaid' };
+    return { label: 'INCOMPLETE', cls: 'incomplete' };
+  }
+
+  function docketTotal(d) {
+    if (!d.deliveredItems || !d.po || !POS[d.po]) return 0;
+    let total = 0;
+    POS[d.po].items.forEach(item => {
+      total += getItemQty(d.deliveredItems, item.id) * item.unitCost;
+    });
+    return total;
+  }
+
+  function renderWebList() {
+    const tbody = document.getElementById('web-list-tbody');
+    tbody.innerHTML = deliveryDockets.map(d => {
+      const status = docketStatusInfo(d);
+      const total = docketTotal(d);
+      const poLabel = d.po && d.po !== 'none' ? d.po : (d.po === 'none' ? 'No PO' : '—');
+      return `
+        <tr onclick="openWebDetail('${d.id}')">
+          <td><span class="web-link">${d.ref}</span></td>
+          <td>${d.deliveryDate || d.date}</td>
+          <td>Troughton Rd</td>
+          <td>${d.supplier || '<span class="web-muted">Unknown</span>'}</td>
+          <td>${poLabel}</td>
+          <td>${d.costCentre || '<span class="web-muted">—</span>'}</td>
+          <td><span class="web-status ${status.cls}">${status.label}</span></td>
+          <td>${total > 0 ? fmtMoney(total) : '<span class="web-muted">—</span>'}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  function openWebDetail(id) {
+    const d = deliveryDockets.find(x => x.id === id);
+    if (!d) return;
+    editingWebDocketId = id;
+    document.getElementById('wd-title-num').textContent = d.ref;
+    document.getElementById('wd-num').textContent = d.ref;
+    document.getElementById('wd-date').textContent = d.deliveryDate || d.date;
+    document.getElementById('wd-supplier').textContent = d.supplier || '—';
+    document.getElementById('wd-po').textContent = (d.po && d.po !== 'none') ? d.po : (d.po === 'none' ? 'No PO' : '—');
+    document.getElementById('wd-po-title').textContent = (d.po && POS[d.po]) ? POS[d.po].title : '—';
+    document.getElementById('wd-note').textContent = d.notes || '—';
+    const status = docketStatusInfo(d);
+    const statusEl = document.getElementById('wd-status');
+    statusEl.textContent = status.label;
+    statusEl.className = 'web-status ' + status.cls;
+    renderWebDetailItems(d);
+    showScreen('screen-web-detail');
+  }
+
+  function renderWebDetailItems(d) {
+    const tbody = document.getElementById('wd-items-tbody');
+    const rows = [];
+    let total = 0;
+    let sn = 1;
+    if (d.po && POS[d.po] && d.deliveredItems && d.deliveredItems.poId === d.po) {
+      const po = POS[d.po];
+      po.items.forEach(item => {
+        const splits = getItemSplits(d.deliveredItems, item.id);
+        if (splits.length === 0) {
+          // Legacy single number
+          const q = typeof d.deliveredItems.quantities[item.id] === 'number' ? d.deliveredItems.quantities[item.id] : 0;
+          if (q > 0) {
+            const sub = q * item.unitCost;
+            total += sub;
+            rows.push(`
+              <tr>
+                <td>${sn++}</td>
+                <td>${item.desc}</td>
+                <td class="num">${item.ordered}</td>
+                <td class="num">${item.prev}</td>
+                <td class="num">${item.ordered - item.prev - q}</td>
+                <td><span class="web-items-cc-pill assigned">${d.costCentre || 'Default'}</span></td>
+                <td class="num">${q.toFixed(2)}</td>
+                <td>${item.unit}</td>
+                <td class="num">${fmtMoney(item.unitCost)}</td>
+                <td class="num">${fmtMoney(sub)}</td>
+                <td>—</td>
+              </tr>`);
+          }
+        } else {
+          splits.forEach((sp, idx) => {
+            const q = parseFloat(sp.qty) || 0;
+            if (q <= 0) return;
+            const sub = q * item.unitCost;
+            total += sub;
+            rows.push(`
+              <tr>
+                <td>${sn++}</td>
+                <td>${item.desc}${splits.length > 1 ? ` <span class="web-tag-offpo" style="background:#1565c0;">Split ${idx + 1}/${splits.length}</span>` : ''}</td>
+                <td class="num">${idx === 0 ? item.ordered : ''}</td>
+                <td class="num">${idx === 0 ? item.prev : ''}</td>
+                <td class="num">${idx === 0 ? (item.ordered - item.prev - splits.reduce((s, x) => s + (parseFloat(x.qty) || 0), 0)) : ''}</td>
+                <td><span class="web-items-cc-pill assigned">${sp.cc}</span></td>
+                <td class="num">${q.toFixed(2)}</td>
+                <td>${item.unit}</td>
+                <td class="num">${fmtMoney(item.unitCost)}</td>
+                <td class="num">${fmtMoney(sub)}</td>
+                <td>—</td>
+              </tr>`);
+          });
+        }
+      });
+      if (Array.isArray(d.deliveredItems.customItems)) {
+        d.deliveredItems.customItems.forEach(it => {
+          const q = parseFloat(it.qty) || 0;
+          rows.push(`
+            <tr>
+              <td>${sn++}</td>
+              <td>${it.desc} <span class="web-tag-offpo">Off-PO</span></td>
+              <td class="num">—</td>
+              <td class="num">—</td>
+              <td class="num">—</td>
+              <td><span class="web-items-cc-pill">Unassigned</span></td>
+              <td class="num">${q.toFixed(2)}</td>
+              <td>${it.unit || '—'}</td>
+              <td class="num">—</td>
+              <td class="num">—</td>
+              <td>—</td>
+            </tr>`);
+        });
+      }
+    }
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="11" class="web-empty-state">No delivery items recorded yet. Click <strong>Edit Delivery Docket</strong> to add items.</td></tr>';
+    } else {
+      tbody.innerHTML = rows.join('');
+    }
+    document.getElementById('wd-total').textContent = fmtMoney(total);
+  }
+
+  // ===== Web edit =====
+  let webCustomItems = [];
+
+  function openWebEdit() {
+    const d = deliveryDockets.find(x => x.id === editingWebDocketId);
+    if (!d) return;
+    document.getElementById('we-title-num').textContent = d.ref;
+    document.getElementById('we-num').value = d.supplierDocket || d.ref;
+    document.getElementById('we-date').value = d.deliveryDate || '';
+    document.getElementById('we-supplier').value = d.supplier || '';
+    document.getElementById('we-note').value = d.notes || '';
+    populateWebPOSelect(d.supplier);
+    document.getElementById('we-po').value = (d.po && d.po !== 'none') ? d.po : '';
+    document.getElementById('we-cc').value = d.costCentre || '';
+    webCustomItems = (d.deliveredItems && d.deliveredItems.poId === d.po && Array.isArray(d.deliveredItems.customItems))
+      ? JSON.parse(JSON.stringify(d.deliveredItems.customItems))
+      : [];
+    renderWebEditItems(d);
+    updateWeCCNotice();
+    showScreen('screen-web-edit');
+  }
+
+  function populateWebPOSelect(supplier) {
+    const sel = document.getElementById('we-po');
+    const helper = document.getElementById('we-po-helper');
+    const matched = getPOsForSupplier(supplier);
+    const opts = ['<option value="">Choose PO…</option>'];
+    matched.forEach(([id, po]) => opts.push(`<option value="${id}">${po.label}</option>`));
+    sel.innerHTML = opts.join('');
+    if (!supplier) {
+      helper.textContent = 'Select a supplier first to see linked POs';
+      sel.disabled = true;
+    } else if (matched.length === 0) {
+      helper.textContent = `No purchase orders found for ${supplier}`;
+      sel.disabled = true;
+    } else {
+      helper.textContent = `${matched.length} PO${matched.length === 1 ? '' : 's'} linked to ${supplier}`;
+      sel.disabled = false;
+    }
+  }
+
+  function onWeSupplierChange() {
+    populateWebPOSelect(document.getElementById('we-supplier').value);
+    document.getElementById('we-po').value = '';
+    webCustomItems = [];
+    renderWebEditItems();
+    updateWeCCNotice();
+  }
+  function onWePOChange() {
+    const poId = document.getElementById('we-po').value;
+    const d = deliveryDockets.find(x => x.id === editingWebDocketId);
+    const matchSaved = d && d.deliveredItems && d.deliveredItems.poId === poId;
+    webCustomItems = (matchSaved && Array.isArray(d.deliveredItems.customItems))
+      ? JSON.parse(JSON.stringify(d.deliveredItems.customItems))
+      : [];
+    const po = POS[poId];
+    if (po && po.costCentre) {
+      document.getElementById('we-cc').value = po.costCentre;
+    }
+    renderWebEditItems(matchSaved ? d : null);
+    updateWeCCNotice();
+  }
+  function onWeCCChange() { updateWeCCNotice(); }
+
+  function updateWeCCNotice() {
+    const poId = document.getElementById('we-po').value;
+    const cc = document.getElementById('we-cc').value;
+    const ccEl = document.getElementById('we-cc');
+    const noticeEl = document.getElementById('we-cc-notice');
+    const noticePo = document.getElementById('we-cc-notice-po');
+    const po = POS[poId];
+    if (po && po.costCentre && cc === po.costCentre) {
+      noticePo.textContent = poId;
+      noticeEl.classList.add('show');
+      ccEl.classList.add('from-po');
+    } else {
+      noticeEl.classList.remove('show');
+      ccEl.classList.remove('from-po');
+    }
+  }
+
+  function renderWebEditItems(d) {
+    const tbody = document.getElementById('we-items-tbody');
+    const poId = document.getElementById('we-po').value;
+    const ccDefault = document.getElementById('we-cc').value;
+    const rows = [];
+    let sn = 1;
+    if (poId && POS[poId]) {
+      const po = POS[poId];
+      po.items.forEach(item => {
+        const remaining = item.ordered - item.prev;
+        const saved = d && d.deliveredItems && d.deliveredItems.poId === poId
+          ? getItemQty(d.deliveredItems, item.id) || ''
+          : '';
+        rows.push(`
+          <tr>
+            <td>${sn++}</td>
+            <td>${item.desc}</td>
+            <td class="num">${item.ordered}</td>
+            <td class="num">${remaining}</td>
+            <td class="num"><input class="web-qty-input" type="number" min="0" step="0.01" data-item-id="${item.id}" value="${saved}" placeholder="0" /></td>
+            <td>
+              <select class="web-cc-select ${po.costCentre === ccDefault ? 'from-po' : ''}" data-item-id="${item.id}">
+                <option value="">— Default —</option>
+                <option ${ccDefault === 'CC-101 — Earthworks' ? 'selected' : ''}>CC-101 — Earthworks</option>
+                <option ${ccDefault === 'CC-102 — Surfacing' ? 'selected' : ''}>CC-102 — Surfacing</option>
+                <option ${ccDefault === 'CC-103 — Drainage' ? 'selected' : ''}>CC-103 — Drainage</option>
+                <option ${ccDefault === 'CC-104 — Concrete Works' ? 'selected' : ''}>CC-104 — Concrete Works</option>
+                <option ${ccDefault === 'CC-201 — Plant Hire' ? 'selected' : ''}>CC-201 — Plant Hire</option>
+                <option ${ccDefault === 'CC-301 — Materials' ? 'selected' : ''}>CC-301 — Materials</option>
+              </select>
+            </td>
+            <td>${item.unit}</td>
+            <td class="num">${fmtMoney(item.unitCost)}</td>
+            <td class="num" data-subtotal="${item.id}">${saved ? fmtMoney(saved * item.unitCost) : '—'}</td>
+            <td></td>
+          </tr>`);
+      });
+    }
+    // Custom items
+    webCustomItems.forEach((it, idx) => {
+      rows.push(`
+        <tr data-custom-idx="${idx}">
+          <td>${sn++}</td>
+          <td><input class="web-edit-input" style="max-width:280px" placeholder="Item description" value="${escAttr(it.desc)}" oninput="syncWebCustom(${idx}, 'desc', this.value)" /> <span class="web-tag-offpo">Off-PO</span></td>
+          <td class="num web-muted">—</td>
+          <td class="num web-muted">—</td>
+          <td class="num"><input class="web-qty-input" type="number" min="0" step="0.01" placeholder="0" value="${escAttr(it.qty)}" oninput="syncWebCustom(${idx}, 'qty', this.value)" /></td>
+          <td>
+            <select class="web-cc-select" oninput="syncWebCustom(${idx}, 'cc', this.value)" onchange="syncWebCustom(${idx}, 'cc', this.value)">
+              <option value="">— Cost centre —</option>
+              <option ${it.cc === 'CC-101 — Earthworks' ? 'selected' : ''}>CC-101 — Earthworks</option>
+              <option ${it.cc === 'CC-102 — Surfacing' ? 'selected' : ''}>CC-102 — Surfacing</option>
+              <option ${it.cc === 'CC-103 — Drainage' ? 'selected' : ''}>CC-103 — Drainage</option>
+              <option ${it.cc === 'CC-104 — Concrete Works' ? 'selected' : ''}>CC-104 — Concrete Works</option>
+              <option ${it.cc === 'CC-201 — Plant Hire' ? 'selected' : ''}>CC-201 — Plant Hire</option>
+              <option ${it.cc === 'CC-301 — Materials' ? 'selected' : ''}>CC-301 — Materials</option>
+            </select>
+          </td>
+          <td><input class="web-edit-input" style="max-width:90px" placeholder="Unit" value="${escAttr(it.unit)}" oninput="syncWebCustom(${idx}, 'unit', this.value)" /></td>
+          <td class="num"><input class="web-qty-input" type="number" min="0" step="0.01" placeholder="0.00" value="${escAttr(it.unitCost)}" oninput="syncWebCustom(${idx}, 'unitCost', this.value)" /></td>
+          <td class="num web-muted">—</td>
+          <td><button type="button" class="web-row-remove" onclick="removeWebCustomItem(${idx})" title="Remove">✕</button></td>
+        </tr>`);
+    });
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="10" class="web-empty-state">Choose a supplier and PO to load delivery items, or add a custom line item below.</td></tr>';
+    } else {
+      tbody.innerHTML = rows.join('');
+    }
+    // Wire qty inputs to recalc subtotals on the fly
+    tbody.querySelectorAll('input.web-qty-input[data-item-id]').forEach(input => {
+      input.addEventListener('input', () => {
+        const itemId = input.dataset.itemId;
+        const item = POS[poId].items.find(i => i.id === itemId);
+        const cell = tbody.querySelector(`[data-subtotal="${itemId}"]`);
+        const v = parseFloat(input.value);
+        cell.textContent = !isNaN(v) ? fmtMoney(v * item.unitCost) : '—';
+      });
+    });
+  }
+
+  function addWebCustomItem() {
+    webCustomItems.push({ desc: '', qty: '', unit: '', cc: '', unitCost: '' });
+    renderWebEditItems(deliveryDockets.find(x => x.id === editingWebDocketId));
+  }
+  function removeWebCustomItem(idx) {
+    webCustomItems.splice(idx, 1);
+    renderWebEditItems(deliveryDockets.find(x => x.id === editingWebDocketId));
+  }
+  function syncWebCustom(idx, field, value) {
+    if (!webCustomItems[idx]) return;
+    webCustomItems[idx][field] = value;
+  }
+
+  function cancelWebEdit() {
+    showScreen('screen-web-detail');
+  }
+
+  // ===== Bills + matching =====
+  const bills = [
+    { id: 'b-c1', ref: 'INV-A1-4380', supplier: 'A1 Asphalting Pty. Ltd.', date: '02/05/2026', poId: 'PO-VAR12-0033', linkedDocketId: 'c1', amount: 28 * 320 + 200 * 4.5, items: [{ poItemId: 'a', qty: 28, unitCost: 320 }, { poItemId: 'c', qty: 200, unitCost: 4.5 }], status: 'pending' },
+    { id: 'b-c2', ref: 'INV-COATES-7732', supplier: 'Coates Hire', date: '01/05/2026', poId: 'PO-VAR12-0019', linkedDocketId: 'c2', amount: 7 * 480, items: [{ poItemId: 'a', qty: 7, unitCost: 480 }], status: 'pending' },
+    { id: 'b-c3', ref: 'INV-HOLCIM-5511', supplier: 'Holcim Australia', date: '29/04/2026', poId: 'PO-VAR12-0044', linkedDocketId: 'c3', amount: 30 * 215, items: [{ poItemId: 'a', qty: 30, unitCost: 215 }], status: 'paid' },
+    { id: 'b-orphan', ref: 'INV-HANSON-2204', supplier: 'Hanson Construction Materials', date: '06/05/2026', poId: 'PO-VAR12-0028', linkedDocketId: null, amount: 50 * 95, items: [{ poItemId: 'a', qty: 50, unitCost: 95 }], status: 'pending' }
+  ];
+
+  // ===== Bill upload + 3-way reconciliation =====
+  const SAMPLE_BILL = {
+    ref: 'INV-BORAL-9912',
+    supplier: 'BORAL Concrete',
+    date: '08/05/2026',
+    poRef: 'PO-VAR12-0042',
+    items: [
+      { id: 'l1', desc: '32 MPa Concrete (N32-20-80)', qty: 8, unit: 'm³', rate: 220, amount: 1760, matchPoItem: 'a' },
+      { id: 'l2', desc: 'Wash-out service', qty: 1, unit: 'ea', rate: 80, amount: 80, matchPoItem: null, matchKeywords: ['wash-out', 'washout', 'wash out'] },
+      { id: 'l3', desc: 'Saturday surcharge', qty: 1, unit: 'ea', rate: 50, amount: 50, matchPoItem: null, matchKeywords: ['saturday', 'surcharge', 'overtime'] }
+    ],
+    total: 1890
+  };
+  let currentBill = null;
+
+  function goBillUpload() {
+    // Make sure the just-captured docket carries clean demo data so the match works
+    const captured = deliveryDockets.find(d => d.id === 'just-captured');
+    if (captured) {
+      if (!captured.supplier) captured.supplier = 'BORAL Concrete';
+      if (!captured.po || captured.po === 'none' || captured.po === '') captured.po = 'PO-VAR12-0042';
+      if (!captured.costCentre) captured.costCentre = 'CC-104 — Concrete Works';
+      if (!captured.deliveredItems || captured.deliveredItems.poId !== captured.po) {
+        captured.deliveredItems = {
+          poId: 'PO-VAR12-0042',
+          quantities: { a: [
+            { cc: 'CC-104 — Concrete Works', qty: 5 },
+            { cc: 'CC-101 — Earthworks', qty: 3 }
+          ]},
+          customItems: [
+            { desc: 'Wash-out fee', qty: 1, unit: 'ea' },
+            { desc: 'Saturday surcharge', qty: 1, unit: 'ea' }
+          ]
+        };
+      }
+      captured.completed = true;
+    }
+    document.getElementById('bill-upload-zone').style.display = 'flex';
+    document.getElementById('bill-upload-progress').classList.remove('show');
+    showScreen('screen-web-bill-upload');
+  }
+
+  function useSampleBill() {
+    document.getElementById('bill-upload-zone').style.display = 'none';
+    const progress = document.getElementById('bill-upload-progress');
+    progress.classList.add('show');
+    const stepEl = document.getElementById('bill-upload-step');
+    const subEl = document.getElementById('bill-upload-substep');
+    const steps = [
+      { main: 'Reading bill PDF…', sub: 'Extracting supplier, date and amounts' },
+      { main: 'Auto-matching to a Purchase Order…', sub: `Found ${SAMPLE_BILL.poRef} from supplier reference` },
+      { main: 'Pulling quantities from dockets…', sub: 'Looking up delivery dockets linked to the PO' },
+      { main: 'Reconciliation ready', sub: 'Opening 3-way match…' }
+    ];
+    let i = 0;
+    const tick = () => {
+      stepEl.textContent = steps[i].main;
+      subEl.textContent = steps[i].sub;
+      i++;
+      if (i < steps.length) setTimeout(tick, 600);
+      else setTimeout(() => {
+        currentBill = SAMPLE_BILL;
+        renderBillMatch();
+        showScreen('screen-web-bill-match');
+      }, 600);
+    };
+    tick();
+  }
+
+  // Approver list + workflow state
+  const APPROVERS = [
+    { id: 'sj', name: 'Sarah Johnson', role: 'Project Manager' },
+    { id: 'mc', name: 'Mike Chen', role: 'Site Manager' },
+    { id: 'pr', name: 'Pat Reilly', role: 'Finance Manager' },
+    { id: 'ak', name: 'Alex Khan', role: 'Operations Director' },
+    { id: 'el', name: 'Emma Lee', role: 'General Manager' },
+    { id: 'an', name: 'Alec Neill', role: 'Estimator' }
+  ];
+  let abWorkflow = ['sj', 'mc', 'pr'];
+  let abLineItems = [];
+
+  function suppliersList() {
+    return ['BORAL Concrete', 'Hanson Construction Materials', 'Holcim Australia', 'Hy-Tec', 'Adbri Concrete', 'Independent Concrete', 'A1 Asphalting Pty. Ltd.', 'Coates Hire'];
+  }
+
+  function renderBillMatch() {
+    const bill = currentBill;
+    const po = POS[bill.poRef];
+    const linkedDockets = deliveryDockets.filter(d => d.po === bill.poRef && d.deliveredItems && d.deliveredItems.poId === bill.poRef);
+
+    // Banner
+    document.getElementById('ab-banner-bill').textContent = bill.ref;
+    document.getElementById('ab-banner-po').textContent = bill.poRef;
+    document.getElementById('ab-banner-dockets').textContent = `${linkedDockets.length} docket${linkedDockets.length === 1 ? '' : 's'} linked`;
+
+    // Summary fields
+    const supSel = document.getElementById('ab-supplier');
+    supSel.innerHTML = suppliersList().map(s => `<option ${s === bill.supplier ? 'selected' : ''}>${s}</option>`).join('');
+    document.getElementById('ab-link-text').textContent = `${bill.poRef} · ${linkedDockets.length} docket${linkedDockets.length === 1 ? '' : 's'}`;
+    document.getElementById('ab-ref').value = bill.ref;
+    document.getElementById('ab-tdate').value = 'Fri ' + bill.date;
+    // Due date = transaction date + 14 days (mock)
+    document.getElementById('ab-ddate').value = 'Fri 22/05/2026';
+
+    // Build line items from match logic
+    abLineItems = buildLineItemsFromMatch(bill, po, linkedDockets);
+    renderAbLineItems();
+    renderAbWorkflow();
+
+    // Attached file name
+    document.getElementById('ab-attached-name').textContent = bill.ref + '.pdf';
+  }
+
+  function buildLineItemsFromMatch(bill, po, linkedDockets) {
+    const lines = [];
+    // PO matched lines: aggregate docket CC splits, emit one bill row per CC
+    po.items.forEach(item => {
+      const billItem = bill.items.find(bi => bi.matchPoItem === item.id);
+      // Aggregate qty by CC across linked dockets (handling both array splits and legacy numbers)
+      const ccQty = {};
+      let totalDocketQty = 0;
+      linkedDockets.forEach(d => {
+        const splits = getItemSplits(d.deliveredItems, item.id);
+        if (splits.length) {
+          splits.forEach(s => {
+            const q = parseFloat(s.qty) || 0;
+            ccQty[s.cc] = (ccQty[s.cc] || 0) + q;
+            totalDocketQty += q;
+          });
+        } else if (d.deliveredItems && typeof d.deliveredItems.quantities[item.id] === 'number' && d.deliveredItems.quantities[item.id] > 0) {
+          const cc = (item.costCentres && item.costCentres[0] ? item.costCentres[0].cc : po.costCentre);
+          ccQty[cc] = (ccQty[cc] || 0) + d.deliveredItems.quantities[item.id];
+          totalDocketQty += d.deliveredItems.quantities[item.id];
+        }
+      });
+      const ccList = Object.keys(ccQty);
+
+      if (!billItem && totalDocketQty === 0) return;
+
+      if (ccList.length === 0) {
+        const defaultCC = (item.costCentres && item.costCentres[0] ? item.costCentres[0].cc : po.costCentre);
+        lines.push({
+          id: 'po-' + item.id,
+          desc: item.desc,
+          project: 'Troughton Rd',
+          resource: item.resource || '',
+          acct: '',
+          cc: defaultCC,
+          unit: item.unit,
+          docketQty: 0,
+          qty: billItem ? billItem.qty : 0,
+          poUnitCost: item.unitCost,
+          unitCost: billItem ? billItem.rate : item.unitCost,
+          tax: 'GST on expense',
+          tags: ['po', billItem ? 'bill' : null].filter(Boolean),
+          requiresCC: false,
+          poItemId: item.id
+        });
+      } else {
+        ccList.forEach((cc, idx) => {
+          const dQty = ccQty[cc];
+          const share = totalDocketQty > 0 ? (dQty / totalDocketQty) : (idx === 0 ? 1 : 0);
+          const billShareQty = billItem ? (billItem.qty * share) : 0;
+          lines.push({
+            id: `po-${item.id}-${idx}`,
+            desc: item.desc,
+            project: 'Troughton Rd',
+            resource: item.resource || '',
+            acct: '',
+            cc: cc,
+            unit: item.unit,
+            docketQty: dQty,
+            qty: billShareQty,
+            poUnitCost: item.unitCost,
+            unitCost: billItem ? billItem.rate : item.unitCost,
+            tax: 'GST on expense',
+            tags: ['po', 'docket', billItem ? 'bill' : null].filter(Boolean),
+            requiresCC: false,
+            poItemId: item.id,
+            splitInfo: ccList.length > 1 ? { idx: idx + 1, total: ccList.length } : null
+          });
+        });
+      }
+    });
+    // Off-PO bill items
+    const docketCustom = [];
+    linkedDockets.forEach(d => {
+      if (Array.isArray(d.deliveredItems.customItems)) {
+        d.deliveredItems.customItems.forEach(it => docketCustom.push({ desc: it.desc, qty: parseFloat(it.qty) || 0, unit: it.unit, fromDocket: '…' + d.ref.slice(-8) }));
+      }
+    });
+    function fuzzyMatch(billDesc, docDesc, kws) {
+      const a = (billDesc || '').toLowerCase();
+      const b = (docDesc || '').toLowerCase();
+      if (a && b && (a.includes(b.split(' ')[0]) || b.includes(a.split(' ')[0]))) return true;
+      if (kws && kws.some(k => b.includes(k))) return true;
+      return false;
+    }
+    const usedDocIdx = new Set();
+    bill.items.filter(bi => !bi.matchPoItem).forEach(bi => {
+      const idx = docketCustom.findIndex((d, i) => !usedDocIdx.has(i) && fuzzyMatch(bi.desc, d.desc, bi.matchKeywords));
+      if (idx >= 0) usedDocIdx.add(idx);
+      const tags = ['offpo', 'bill'];
+      if (idx >= 0) tags.push('docket');
+      lines.push({
+        id: 'off-' + bi.id,
+        desc: bi.desc,
+        project: 'Troughton Rd',
+        resource: '',
+        acct: '',
+        cc: '',
+        unit: bi.unit,
+        docketQty: idx >= 0 ? docketCustom[idx].qty : null,
+        qty: bi.qty,
+        poUnitCost: null,
+        unitCost: bi.rate,
+        tax: 'GST on expense',
+        tags: tags,
+        requiresCC: true,
+        offPo: true
+      });
+    });
+    docketCustom.forEach((d, i) => {
+      if (!usedDocIdx.has(i)) {
+        lines.push({
+          id: 'off-doc-' + i,
+          desc: d.desc,
+          project: 'Troughton Rd',
+          resource: '',
+          acct: '',
+          cc: '',
+          unit: d.unit,
+          docketQty: d.qty,
+          qty: d.qty,
+          poUnitCost: null,
+          unitCost: 0,
+          tax: 'GST on expense',
+          tags: ['offpo', 'docket'],
+          requiresCC: true,
+          offPo: true
+        });
+      }
+    });
+    return lines;
+  }
+
+  function tagBadgeHTML(t) {
+    const labels = { po: 'PO', docket: 'Docket', bill: 'Bill', offpo: 'Off-PO' };
+    return `<span class="ab-source-tag ${t}">${labels[t] || t}</span>`;
+  }
+
+  function ccOptions(selected) {
+    const list = ['CC-101 — Earthworks','CC-102 — Surfacing','CC-103 — Drainage','CC-104 — Concrete Works','CC-201 — Plant Hire','CC-301 — Materials','CC-901 — Project Overheads','CC-999 — Miscellaneous Site Charges'];
+    return ['<option value="">Cost centre…</option>', ...list.map(c => `<option ${c === selected ? 'selected' : ''}>${c}</option>`)].join('');
+  }
+
+  function resourceOptions(selected) {
+    const list = ['Labour', 'Plant & Equipment', 'Material', 'Miscellaneous', 'Subcontractor'];
+    return ['<option value="">Select category…</option>', ...list.map(c => `<option ${c === selected ? 'selected' : ''}>${c}</option>`)].join('');
+  }
+
+  function renderAbLineItems() {
+    const tbody = document.getElementById('ab-line-items');
+    tbody.innerHTML = abLineItems.map((it, idx) => {
+      const docketCell = it.docketQty == null
+        ? '<span class="ab-cell-readonly dash">—</span>'
+        : `<span class="ab-cell-readonly docket" title="From delivery docket">${it.docketQty} ${it.unit || ''}<span class="src">Docket</span></span>`;
+      const poCostCell = it.poUnitCost == null
+        ? '<span class="ab-cell-readonly dash">—</span>'
+        : `<span class="ab-cell-readonly po" title="From PO rates">${fmtMoney(it.poUnitCost)}<span class="src">PO</span></span>`;
+      const qtyMatchesDocket = it.docketQty != null && Math.abs(it.qty - it.docketQty) < 0.01;
+      const costMatchesPO = it.poUnitCost != null && Math.abs(it.unitCost - it.poUnitCost) < 0.01;
+      return `
+      <tr class="${it.offPo ? 'offpo' : ''}">
+        <td><input type="checkbox" /></td>
+        <td>
+          <div class="ab-desc">
+            <input value="${escAttr(it.desc)}" oninput="abLineItems[${idx}].desc = this.value" />
+            <div class="ab-source-tags">${it.tags.map(tagBadgeHTML).join('')}${it.splitInfo ? `<span class="ab-source-tag po">CC split ${it.splitInfo.idx}/${it.splitInfo.total}</span>` : ''}</div>
+          </div>
+        </td>
+        <td><select class="ab-cell-input"><option ${it.project === 'Troughton Rd' ? 'selected' : ''}>Troughton Rd</option></select></td>
+        <td><select class="ab-cell-input ${it.requiresCC && !it.resource ? 'required' : ''}" onchange="abLineItems[${idx}].resource = this.value; renderAbLineItems()">${resourceOptions(it.resource)}</select></td>
+        <td><select class="ab-cell-input"><option value="">Code…</option><option ${it.offPo ? '' : 'selected'}>5400 — Materials</option><option ${it.offPo ? 'selected' : ''}>5450 — Site charges</option></select></td>
+        <td><select class="ab-cell-input ${it.requiresCC && !it.cc ? 'required' : ''}" onchange="abLineItems[${idx}].cc = this.value; recomputeAbTotals()">${ccOptions(it.cc)}</select></td>
+        <td><input class="ab-cell-input" value="${escAttr(it.unit)}" oninput="abLineItems[${idx}].unit = this.value; renderAbLineItems()" style="width:60px;" /></td>
+        <td class="num">${docketCell}</td>
+        <td class="num"><input class="ab-cell-input qty ${qtyMatchesDocket ? '' : (it.docketQty != null ? 'required' : '')}" type="number" min="0" step="0.01" value="${escAttr(it.qty)}" oninput="abLineItems[${idx}].qty = parseFloat(this.value) || 0; recomputeAbTotals()" style="width:90px;" /></td>
+        <td class="num">${poCostCell}</td>
+        <td class="num"><input class="ab-cell-input cost ${costMatchesPO ? '' : (it.poUnitCost != null ? 'required' : '')}" type="number" min="0" step="0.01" value="${escAttr(it.unitCost)}" oninput="abLineItems[${idx}].unitCost = parseFloat(this.value) || 0; recomputeAbTotals()" style="width:100px;" /></td>
+        <td><select class="ab-cell-input" style="width:140px;"><option ${it.tax === 'GST on expense' ? 'selected' : ''}>GST on expense</option><option>GST Free</option><option>GST on income</option></select></td>
+        <td><button class="ab-row-remove" title="Remove" onclick="removeAbLine(${idx})">✕</button></td>
+      </tr>`;
+    }).join('');
+    recomputeAbTotals();
+  }
+
+  function recomputeAbTotals() {
+    const subtotal = abLineItems.reduce((s, it) => s + (it.qty * it.unitCost), 0);
+    const gst = subtotal * 0.10;
+    document.getElementById('ab-subtotal').textContent = fmtMoney(subtotal);
+    document.getElementById('ab-gst').textContent = fmtMoney(gst);
+    document.getElementById('ab-total').textContent = fmtMoney(subtotal + gst);
+  }
+
+  function addAbCustomLine() {
+    abLineItems.push({ id: 'manual-' + Date.now(), desc: '', project: 'Troughton Rd', resource: '', acct: '', cc: '', unit: 'ea', docketQty: null, qty: 1, poUnitCost: null, unitCost: 0, tax: 'GST on expense', tags: ['offpo'], requiresCC: true, offPo: true });
+    renderAbLineItems();
+  }
+
+  function removeAbLine(idx) {
+    abLineItems.splice(idx, 1);
+    renderAbLineItems();
+  }
+
+  function renderAbWorkflow() {
+    const wrap = document.getElementById('ab-workflow');
+    wrap.innerHTML = abWorkflow.map((appId, idx) => {
+      const opts = ['<option value="">Select approver…</option>', ...APPROVERS.map(a => `<option value="${a.id}" ${a.id === appId ? 'selected' : ''}>${a.name} — ${a.role}</option>`)].join('');
+      return `
+        <div class="ab-workflow-step">
+          <div class="ab-step-num">${idx + 1}</div>
+          <select class="ab-input" onchange="abWorkflow[${idx}] = this.value">${opts}</select>
+          ${abWorkflow.length > 1 ? `<button class="ab-step-remove" onclick="removeAbApprover(${idx})" title="Remove">✕</button>` : ''}
+        </div>
+        ${idx < abWorkflow.length - 1 ? '<span class="ab-workflow-arrow">›</span>' : ''}
+      `;
+    }).join('');
+  }
+
+  function addAbApprover() {
+    const usedIds = new Set(abWorkflow);
+    const next = APPROVERS.find(a => !usedIds.has(a.id));
+    abWorkflow.push(next ? next.id : '');
+    renderAbWorkflow();
+  }
+
+  function removeAbApprover(idx) {
+    if (abWorkflow.length <= 1) return;
+    abWorkflow.splice(idx, 1);
+    renderAbWorkflow();
+  }
+
+  function onOffPoCodingChange(sel) {
+    if (sel.value) sel.classList.add('chosen');
+    else sel.classList.remove('chosen');
+  }
+
+  function approveBill() {
+    showToast('Bill approved for payment ✓');
+    setTimeout(() => goWebList(), 900);
+  }
+
+  // Old all-POs matching screen (kept for completeness)
+  function goWebMatching() {
+    renderWebMatching();
+    showScreen('screen-web-matching');
+  }
+
+  function renderWebMatching() {
+    // Group dockets and bills by PO
+    const poGroups = {};
+    Object.keys(POS).forEach(poId => { poGroups[poId] = { dockets: [], bills: [] }; });
+    deliveryDockets.forEach(d => {
+      if (d.po && d.po !== 'none' && poGroups[d.po]) poGroups[d.po].dockets.push(d);
+    });
+    bills.forEach(b => {
+      if (b.poId && poGroups[b.poId]) poGroups[b.poId].bills.push(b);
+    });
+
+    // Compute totals + per-line aggregates per PO
+    const activePOs = Object.entries(poGroups).filter(([_, g]) => g.dockets.length || g.bills.length);
+
+    // Stats
+    const totalDockets = deliveryDockets.length;
+    const totalBills = bills.length;
+    const fullyMatched = activePOs.filter(([poId, g]) => {
+      const stats = computePOStats(poId, g);
+      return stats.status === 'matched';
+    }).length;
+    const matchPct = activePOs.length ? Math.round((fullyMatched / activePOs.length) * 100) : 0;
+
+    document.getElementById('web-match-stats').innerHTML = `
+      <div class="web-stat-card">
+        <div class="web-stat-label">Active POs</div>
+        <div class="web-stat-value">${activePOs.length}</div>
+        <div class="web-stat-sub">of ${Object.keys(POS).length} total</div>
+      </div>
+      <div class="web-stat-card">
+        <div class="web-stat-label">Delivery Dockets</div>
+        <div class="web-stat-value">${totalDockets}</div>
+        <div class="web-stat-sub">linked to POs</div>
+      </div>
+      <div class="web-stat-card">
+        <div class="web-stat-label">Supplier Bills</div>
+        <div class="web-stat-value">${totalBills}</div>
+        <div class="web-stat-sub">awaiting reconciliation</div>
+      </div>
+      <div class="web-stat-card highlight">
+        <div class="web-stat-label">Auto-matched</div>
+        <div class="web-stat-value">${matchPct}%</div>
+        <div class="web-stat-sub">${fullyMatched} of ${activePOs.length} POs</div>
+      </div>`;
+
+    // PO matching cards
+    const matchListEl = document.getElementById('web-match-list');
+    matchListEl.innerHTML = activePOs.map(([poId, g]) => poMatchCardHTML(poId, g)).join('') || '<div class="web-empty-state">No active POs to reconcile yet.</div>';
+    document.getElementById('web-matched-count').textContent = activePOs.length;
+
+    // Unmatched bills (no docket)
+    const orphanBills = bills.filter(b => !b.linkedDocketId);
+    const unmatchedTitle = document.getElementById('web-unmatched-title');
+    const unmatchedListEl = document.getElementById('web-unmatched-list');
+    if (orphanBills.length) {
+      unmatchedTitle.style.display = 'flex';
+      document.getElementById('web-unmatched-count').textContent = orphanBills.length;
+      unmatchedListEl.innerHTML = orphanBills.map(b => `
+        <div class="web-match-card" style="border-color:#f7c97a; background:#fff8f0;">
+          <div class="web-match-card-head">
+            <div class="left">
+              <div class="web-match-card-po">${b.ref}</div>
+              <div class="web-match-card-supplier">${b.supplier}</div>
+              <div class="web-match-card-meta">${b.date} · ${b.poId} · ${fmtMoney(b.amount)}</div>
+            </div>
+            <span class="web-match-status variance">⚠ No docket received</span>
+          </div>
+          <div style="font-size:13px; color:#6b7280;">Bill arrived for items that haven't been confirmed delivered. Check with the site team or reach out to the supplier before paying.</div>
+        </div>`).join('');
+    } else {
+      unmatchedTitle.style.display = 'none';
+      unmatchedListEl.innerHTML = '';
+    }
+  }
+
+  function computePOStats(poId, group) {
+    const po = POS[poId];
+    let orderedTotal = 0, deliveredTotal = 0, billedTotal = 0;
+    po.items.forEach(item => {
+      orderedTotal += item.ordered * item.unitCost;
+      let deliveredQty = 0;
+      group.dockets.forEach(d => {
+        if (d.deliveredItems && d.deliveredItems.poId === poId) {
+          deliveredQty += getItemQty(d.deliveredItems, item.id);
+        }
+      });
+      deliveredTotal += deliveredQty * item.unitCost;
+      let billedQty = 0;
+      group.bills.forEach(b => {
+        b.items.forEach(bi => { if (bi.poItemId === item.id) billedQty += bi.qty; });
+      });
+      billedTotal += billedQty * item.unitCost;
+    });
+    const variance = deliveredTotal - billedTotal;
+    let status;
+    if (deliveredTotal === 0 && billedTotal === 0) status = 'open';
+    else if (Math.abs(variance) < 0.01 && billedTotal > 0) status = 'matched';
+    else if (deliveredTotal > 0 && billedTotal === 0) status = 'unbilled';
+    else if (Math.abs(variance) > 0.01) status = 'variance';
+    else status = 'partial';
+    return { orderedTotal, deliveredTotal, billedTotal, variance, status };
+  }
+
+  function poMatchCardHTML(poId, group) {
+    const po = POS[poId];
+    const stats = computePOStats(poId, group);
+    const statusLabels = {
+      matched: '✓ Fully Matched',
+      partial: '◐ Partially Matched',
+      unbilled: '◷ Awaiting Bill',
+      variance: '⚠ Variance',
+      open: '— Open'
+    };
+    const lines = po.items.map(item => {
+      let deliveredQty = 0;
+      group.dockets.forEach(d => {
+        if (d.deliveredItems && d.deliveredItems.poId === poId) {
+          deliveredQty += getItemQty(d.deliveredItems, item.id);
+        }
+      });
+      let billedQty = 0;
+      group.bills.forEach(b => {
+        b.items.forEach(bi => { if (bi.poItemId === item.id) billedQty += bi.qty; });
+      });
+      const variance = deliveredQty - billedQty;
+      let lineStatus, lineCls;
+      if (deliveredQty === 0 && billedQty === 0) { lineStatus = '— Open'; lineCls = 'open'; }
+      else if (Math.abs(variance) < 0.01 && billedQty > 0) { lineStatus = '✓ Matched'; lineCls = 'matched'; }
+      else if (deliveredQty > 0 && billedQty === 0) { lineStatus = '◷ Unbilled'; lineCls = 'unbilled'; }
+      else if (Math.abs(variance) > 0.01) { lineStatus = '⚠ Variance'; lineCls = 'variance'; }
+      else { lineStatus = 'Partial'; lineCls = 'partial'; }
+      const varCls = variance === 0 ? 'var-zero' : 'var-pos';
+      return `
+        <tr>
+          <td>${item.desc}</td>
+          <td class="num">${item.ordered} ${item.unit}</td>
+          <td class="num">${deliveredQty} ${item.unit}</td>
+          <td class="num">${billedQty} ${item.unit}</td>
+          <td class="num ${varCls}">${variance === 0 ? '0' : (variance > 0 ? '+' + variance : variance) + ' ' + item.unit}</td>
+          <td><span class="web-match-status ${lineCls}" style="font-size:10px; padding:3px 8px;">${lineStatus}</span></td>
+        </tr>`;
+    }).join('');
+
+    const docketLinks = group.dockets.map(d => {
+      const deliveredVal = d.deliveredItems && d.deliveredItems.poId === poId
+        ? po.items.reduce((sum, it) => sum + getItemQty(d.deliveredItems, it.id) * it.unitCost, 0)
+        : 0;
+      return `<div class="web-linked-item"><span>🚚</span><span class="ref">${d.ref.slice(-12)}</span><span class="meta">${d.deliveryDate || d.date} · ${fmtMoney(deliveredVal)}</span></div>`;
+    }).join('') || '<div class="web-linked-empty">No dockets received yet.</div>';
+
+    const billLinks = group.bills.map(b => `<div class="web-linked-item bill"><span>🧾</span><span class="ref">${b.ref}</span><span class="meta">${b.date} · ${fmtMoney(b.amount)}</span></div>`).join('') || '<div class="web-linked-empty">No bills received yet.</div>';
+
+    const varianceClass = Math.abs(stats.variance) > 0.01 ? 'has-variance' : '';
+
+    return `
+      <div class="web-match-card">
+        <div class="web-match-card-head">
+          <div class="left">
+            <div class="web-match-card-po">${poId}</div>
+            <div class="web-match-card-supplier">${po.supplier} · ${po.title}</div>
+            <div class="web-match-card-meta">${group.dockets.length} docket${group.dockets.length === 1 ? '' : 's'} · ${group.bills.length} bill${group.bills.length === 1 ? '' : 's'}</div>
+          </div>
+          <div class="web-match-card-totals">
+            <div class="web-match-total"><span class="web-match-total-label">Ordered</span><span class="web-match-total-value">${fmtMoney(stats.orderedTotal)}</span></div>
+            <div class="web-match-total delivered"><span class="web-match-total-label">Delivered</span><span class="web-match-total-value">${fmtMoney(stats.deliveredTotal)}</span></div>
+            <div class="web-match-total billed"><span class="web-match-total-label">Billed</span><span class="web-match-total-value">${fmtMoney(stats.billedTotal)}</span></div>
+            <div class="web-match-total variance ${varianceClass}"><span class="web-match-total-label">Variance</span><span class="web-match-total-value">${fmtMoney(stats.variance)}</span></div>
+          </div>
+          <span class="web-match-status ${stats.status}">${statusLabels[stats.status]}</span>
+        </div>
+        <table class="web-match-table">
+          <thead>
+            <tr>
+              <th>Line Item</th>
+              <th class="num">Ordered</th>
+              <th class="num">Delivered</th>
+              <th class="num">Billed</th>
+              <th class="num">Variance</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>${lines}</tbody>
+        </table>
+        <div class="web-linked-row">
+          <div class="web-linked-col">
+            <h4>Dockets</h4>
+            ${docketLinks}
+          </div>
+          <div class="web-linked-col">
+            <h4>Bills</h4>
+            ${billLinks}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function saveWebEdit() {
+    const d = deliveryDockets.find(x => x.id === editingWebDocketId);
+    if (!d) return;
+    d.supplierDocket = document.getElementById('we-num').value;
+    d.deliveryDate = document.getElementById('we-date').value;
+    d.supplier = document.getElementById('we-supplier').value;
+    d.notes = document.getElementById('we-note').value;
+    const poId = document.getElementById('we-po').value;
+    d.po = poId || (document.getElementById('we-po').disabled ? '' : '');
+    d.costCentre = document.getElementById('we-cc').value;
+    if (poId && POS[poId]) {
+      const quantities = {};
+      document.querySelectorAll('#we-items-tbody input.web-qty-input[data-item-id]').forEach(input => {
+        const v = parseFloat(input.value);
+        if (!isNaN(v) && v > 0) quantities[input.dataset.itemId] = v;
+      });
+      const validCustom = webCustomItems
+        .filter(it => it.desc && it.qty !== '' && !isNaN(parseFloat(it.qty)))
+        .map(it => ({ desc: it.desc, qty: parseFloat(it.qty), unit: it.unit, cc: it.cc, unitCost: parseFloat(it.unitCost) || 0 }));
+      d.deliveredItems = { poId, quantities, customItems: validCustom };
+    } else {
+      d.deliveredItems = null;
+    }
+    if (d.supplier && (d.po === 'none' || d.po) && d.costCentre) {
+      d.completed = true;
+    } else {
+      d.completed = false;
+    }
+    if (d.justCaptured) d.justCaptured = false;
+    renderDeliveryDockets();
+    openWebDetail(d.id);
+    showToast('Docket saved');
   }
 </script>
 
