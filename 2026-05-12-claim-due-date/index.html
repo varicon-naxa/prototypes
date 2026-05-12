@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Claim · Set Claim Date</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; font-size: 13px; }
+
+  /* Top project bar */
+  .proj-bar { display: flex; align-items: center; padding: 10px 20px; background: #fff; border-bottom: 1px solid #e5e5e5; gap: 12px; }
+  .proj-bar .back { color: #888; font-size: 16px; cursor: pointer; }
+  .proj-bar .title { font-weight: 600; font-size: 14px; }
+  .proj-bar .caret { color: #888; cursor: pointer; }
+  .proj-bar .spacer { flex: 1; }
+  .top-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid #d0d0d0; background: #fff; color: #333; }
+  .top-btn.search { color: #2196f3; border-color: #b3e0fc; background: #f1faff; }
+  .plus-btn { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #d0d0d0; background: #fff; cursor: pointer; color: #555; }
+  .avatar { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+  .avatar .circle { width: 30px; height: 30px; border-radius: 50%; background: #d0d0d0; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+  .avatar .name { font-size: 12px; }
+
+  /* Tabs row */
+  .tabs-row { display: flex; align-items: center; background: #fff; border-bottom: 1px solid #e5e5e5; }
+  .tabs-row .arrow { padding: 10px 8px; color: #888; cursor: pointer; }
+  .tabs { display: flex; flex: 1; }
+  .tab { flex: 1; padding: 12px 8px; text-align: center; font-size: 12px; font-weight: 600; color: #444; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tab.active { background: #1f3a5f; color: #fff; }
+
+  /* Summary band */
+  .summary { display: flex; gap: 20px; padding: 16px 20px; align-items: stretch; background: #fff; border-bottom: 1px solid #e5e5e5; flex-wrap: wrap; }
+  .ring-card { display: flex; align-items: center; gap: 14px; padding: 10px 18px 10px 8px; }
+  .ring { width: 36px; height: 36px; border-radius: 50%; background: conic-gradient(#3aa55c 0% 2.39%, #e5e5e5 2.39% 100%); display: flex; align-items: center; justify-content: center; }
+  .ring::after { content: ''; width: 26px; height: 26px; border-radius: 50%; background: #fff; }
+  .stat { display: flex; flex-direction: column; gap: 2px; min-width: 110px; }
+  .stat-label { font-size: 10px; color: #888; font-weight: 500; }
+  .stat-value { font-size: 13px; font-weight: 700; color: #222; }
+  .group { display: flex; gap: 18px; padding: 6px 14px; border-left: 1px solid #ececec; }
+  .group:first-of-type { border-left: 0; }
+
+  .right-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  .help-btn { display: inline-flex; align-items: center; gap: 6px; color: #f7941d; font-size: 13px; font-weight: 600; cursor: pointer; background: none; border: none; }
+  .help-btn .q { width: 18px; height: 18px; border-radius: 50%; background: #f7941d; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; }
+  .new-claim {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; background: #f7941d; color: #fff;
+    border: none; border-radius: 4px; font-size: 13px; font-weight: 700;
+    cursor: pointer;
+  }
+  .new-claim:hover { background: #ef8211; }
+  .kebab { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: #888; font-size: 18px; }
+
+  /* NEW: Claim date banner */
+  .due-banner {
+    display: flex; align-items: center; gap: 14px;
+    margin: 14px 20px 0;
+    padding: 12px 18px;
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-left: 4px solid #f7941d;
+    border-radius: 6px;
+  }
+  .due-banner .icon { width: 32px; height: 32px; border-radius: 8px; background: #fff8ec; color: #f7941d; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .due-banner .due-text { flex: 1; }
+  .due-banner .due-title { font-size: 13px; font-weight: 700; color: #222; }
+  .due-banner .due-sub { font-size: 12px; color: #666; margin-top: 1px; }
+  .due-banner .countdown { font-size: 12px; padding: 4px 10px; background: #fff8ec; color: #b66a00; border-radius: 12px; font-weight: 600; }
+  .due-banner .due-action { padding: 7px 14px; background: #fff; color: #f7941d; border: 1px solid #f7941d; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .due-banner .due-action:hover { background: #fff8ec; }
+  .due-banner.empty { border-left-color: #2196f3; }
+  .due-banner.empty .icon { background: #f1faff; color: #2196f3; }
+  .due-banner.empty .due-action { color: #2196f3; border-color: #2196f3; }
+  .due-banner.empty .due-action:hover { background: #f1faff; }
+
+  /* Main content */
+  .content { padding: 14px 20px 24px; }
+
+  .detail-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e5e5e5; font-size: 12px; }
+  .detail-table thead { background: #ececec; }
+  .detail-table th { padding: 10px 14px; text-align: left; font-size: 12px; font-weight: 700; color: #333; }
+  .detail-table th.amt, .detail-table td.amt { text-align: right; }
+  .detail-table tbody tr:nth-child(odd) td { background: #fff; }
+  .detail-table tbody tr:nth-child(even) td { background: #f6f8fc; }
+  .detail-table td { padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
+  .detail-table tr.total td { font-weight: 700; background: #fff !important; border-top: 1px solid #d0d0d0; }
+
+  .section-title { margin-top: 22px; margin-bottom: 10px; font-weight: 700; font-size: 14px; color: #222; }
+  .claims-table { width: 100%; border-collapse: collapse; background: #fff; font-size: 12px; border: 1px solid #e5e5e5; }
+  .claims-table thead { background: #ececec; }
+  .claims-table th { padding: 10px 14px; text-align: left; font-size: 12px; font-weight: 700; color: #333; }
+  .claims-table th.amt, .claims-table td.amt { text-align: right; }
+  .claims-table td { padding: 12px 14px; border-bottom: 1px solid #f0f0f0; }
+  .claims-table tr:last-child td { border-bottom: none; }
+  .claims-table .num { color: #2196f3; font-weight: 600; }
+  .claims-table tr:hover td { background: #fafafa; }
+  .row-kebab { background: none; border: none; cursor: pointer; color: #999; font-size: 16px; }
+
+  .table-footer { display:flex; align-items:center; justify-content:space-between; padding: 12px 14px; font-size: 12px; color: #666; }
+  .pager { display: flex; align-items: center; gap: 8px; }
+  .pager .pbtn { padding: 4px 10px; border: 1px solid #d0d0d0; background: #fff; border-radius: 3px; cursor: pointer; font-size: 12px; }
+  .pager .pbtn.active { background: #f7941d; color: #fff; border-color: #f7941d; }
+
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: flex-start; justify-content: center; padding-top: 60px; z-index: 100; }
+  .modal-overlay.show { display: flex; }
+  .modal { background: #fff; border-radius: 10px; width: 90%; max-width: 540px; overflow: hidden; }
+  .modal-header { padding: 16px 20px; border-bottom: 1px solid #e5e5e5; display: flex; justify-content: space-between; align-items: center; }
+  .modal-header h3 { font-size: 15px; font-weight: 700; }
+  .modal-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #888; }
+  .modal-body { padding: 18px 20px; }
+  .modal-footer { padding: 12px 20px; border-top: 1px solid #e5e5e5; display: flex; justify-content: flex-end; gap: 10px; }
+  .mbtn { padding: 8px 18px; border-radius: 4px; font-weight: 600; font-size: 13px; cursor: pointer; border: none; }
+  .mbtn-cancel { background: #fff; border: 1px solid #d0d0d0; color: #555; }
+  .mbtn-save { background: #f7941d; color: #fff; }
+
+  .form-label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 6px; color: #333; }
+  .form-help { font-size: 11px; color: #888; margin-top: 4px; line-height: 1.4; }
+
+  /* Option cards */
+  .opt-list { display: flex; flex-direction: column; gap: 10px; }
+  .opt {
+    border: 1px solid #d8d8d8; border-radius: 8px; padding: 12px 14px;
+    cursor: pointer; display: flex; gap: 12px; align-items: flex-start;
+    transition: all .15s;
+  }
+  .opt:hover { border-color: #f7941d; }
+  .opt.selected { border-color: #f7941d; background: #fff8ec; box-shadow: 0 0 0 2px rgba(247,148,29,.15); }
+  .opt .radio {
+    width: 16px; height: 16px; border-radius: 50%; border: 2px solid #c0c0c0;
+    flex-shrink: 0; margin-top: 2px; position: relative;
+  }
+  .opt.selected .radio { border-color: #f7941d; }
+  .opt.selected .radio::after { content: ''; position: absolute; inset: 2px; border-radius: 50%; background: #f7941d; }
+  .opt .opt-body { flex: 1; }
+  .opt .opt-title { font-size: 13px; font-weight: 700; color: #222; margin-bottom: 2px; }
+  .opt .opt-desc { font-size: 12px; color: #666; }
+  .opt .opt-input { margin-top: 8px; display: none; }
+  .opt.selected .opt-input { display: flex; gap: 8px; align-items: center; }
+  .opt-input select, .opt-input input { padding: 6px 10px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 12px; }
+  .opt-input .lbl { font-size: 12px; color: #555; }
+
+  .reminder-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 10px 12px; background: #f8f8f8; border-radius: 6px; }
+  .reminder-row input[type="checkbox"] { accent-color: #f7941d; width: 16px; height: 16px; }
+  .reminder-row label { font-size: 12px; color: #333; }
+  .reminder-row select { padding: 4px 8px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 12px; }
+
+  .preview { margin-top: 14px; padding: 10px 12px; background: #f0f8ff; border: 1px dashed #b3d6ff; border-radius: 6px; font-size: 12px; color: #1a4480; }
+  .preview strong { color: #0b3a73; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 10px 18px; border-radius: 6px; font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 200; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- Project bar -->
+<div class="proj-bar">
+  <span class="back">←</span>
+  <span class="title">(VAR011) Residential House Foundation</span>
+  <span class="caret">▾</span>
+  <span class="spacer"></span>
+  <button class="top-btn">Initial Data Upload</button>
+  <button class="top-btn search">✦ Search</button>
+  <button class="plus-btn">+</button>
+  <div class="avatar"><span class="circle">AN</span><span class="name">Alec Neill</span><span class="caret">▾</span></div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs-row">
+  <span class="arrow">‹</span>
+  <div class="tabs">
+    <div class="tab">Dashboard</div>
+    <div class="tab">Budget Overview</div>
+    <div class="tab">Daily Cost Tracking</div>
+    <div class="tab active">Claim</div>
+    <div class="tab">Variation Register</div>
+    <div class="tab">Report</div>
+    <div class="tab">File Manager</div>
+    <div class="tab">Site Diary</div>
+    <div class="tab">Daywork Record</div>
+  </div>
+  <span class="arrow">›</span>
+</div>
+
+<!-- Summary band -->
+<div class="summary">
+  <div class="ring-card">
+    <div class="ring"></div>
+    <div class="stat"><span class="stat-label">Completion</span><span class="stat-value">2.39 %</span></div>
+  </div>
+  <div class="group">
+    <div class="stat"><span class="stat-label">Grand Total</span><span class="stat-value">$ 337,600.00</span></div>
+    <div class="stat"><span class="stat-label">Claim To Date</span><span class="stat-value">$ 8,080.00</span></div>
+  </div>
+  <div class="group">
+    <div class="stat"><span class="stat-label">Total Original Contract Value</span><span class="stat-value">$ 335,750.00</span></div>
+    <div class="stat"><span class="stat-label">Claimed</span><span class="stat-value">$ 6,600.00</span></div>
+    <div class="stat"><span class="stat-label">Remaining</span><span class="stat-value">$ 329,150.00</span></div>
+  </div>
+  <div class="group">
+    <div class="stat"><span class="stat-label">Variation Total</span><span class="stat-value">$ 1,850.00</span></div>
+    <div class="stat"><span class="stat-label">Claimed</span><span class="stat-value">$ 1,480.00</span></div>
+    <div class="stat"><span class="stat-label">Remaining</span><span class="stat-value">$ 370.00</span></div>
+  </div>
+  <div class="right-actions">
+    <button class="help-btn"><span class="q">?</span> Need Help?</button>
+    <button class="new-claim">+ Make New Claim</button>
+    <span class="kebab">⋮</span>
+  </div>
+</div>
+
+<!-- Claim due banner (active state) -->
+<div class="due-banner" id="dueBanner" style="display:none;">
+  <div class="icon">📅</div>
+  <div class="due-text">
+    <div class="due-title">Next claim due: <span id="dueDateText">Mon, 01/06/2026</span></div>
+    <div class="due-sub" id="dueSubText">End of month · Submissions are reminded 3 days before the due date</div>
+  </div>
+  <span class="countdown" id="countdown">in 20 days</span>
+  <button class="due-action" onclick="openClaimDateModal()">Edit Schedule</button>
+</div>
+
+<!-- Empty state banner (shown initially - no schedule set up yet) -->
+<div class="due-banner empty" id="emptyDueBanner">
+  <div class="icon">📅</div>
+  <div class="due-text">
+    <div class="due-title">No claim schedule set yet</div>
+    <div class="due-sub">Set a recurring claim date so you don't miss a submission. We'll remind you in advance and pre-fill the date on every new claim.</div>
+  </div>
+  <button class="due-action" onclick="openClaimDateModal()">+ Set Claim Date</button>
+</div>
+
+<!-- Content -->
+<div class="content">
+
+  <!-- Contract details -->
+  <table class="detail-table">
+    <thead>
+      <tr>
+        <th>Contract Details</th>
+        <th class="amt">Contract Sum</th>
+        <th class="amt">Claim To Date</th>
+        <th class="amt">Remaining Claim</th>
+        <th class="amt">Retention Withheld</th>
+        <th class="amt">Retention Released</th>
+        <th class="amt">Remaining Retention</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Contract Works</td><td class="amt">$ 335,750.00</td><td class="amt">$ 6,600.00</td><td class="amt">$ 329,150.00</td><td class="amt">$ 560.00</td><td class="amt">-</td><td class="amt">-</td></tr>
+      <tr><td>Variations</td><td class="amt">$ 1,850.00</td><td class="amt">$ 1,480.00</td><td class="amt">$ 370.00</td><td class="amt">$ 0.00</td><td class="amt">-</td><td class="amt">$ 0.00</td></tr>
+      <tr class="total"><td><strong>Total</strong></td><td class="amt">$ 337,600.00</td><td class="amt">$ 8,080.00</td><td class="amt">$ 329,520.00</td><td class="amt">$ 560.00</td><td class="amt">$ 0.00</td><td class="amt">$ 0.00</td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">Claims</div>
+
+  <table class="claims-table">
+    <thead>
+      <tr><th>Claim Number</th><th>Date Submitted</th><th>Date Approved</th><th>Invoice Ref</th><th>Claim Period</th><th class="amt">Claim Amount</th><th></th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="num">3</td><td>Mon, 24/11/2025</td><td>Fri, 30/01/2026</td><td></td><td>Thu, 02/10/2025 - Sat, 18/10/2025</td><td class="amt">$ 2,480.00</td><td><button class="row-kebab">⋮</button></td></tr>
+      <tr><td class="num">2</td><td>Mon, 18/08/2025</td><td>Mon, 18/08/2025</td><td></td><td>Fri, 25/07/2025 - Tue, 26/08/2025</td><td class="amt">$ 3,800.00</td><td><button class="row-kebab">⋮</button></td></tr>
+      <tr><td class="num">1</td><td>Thu, 07/08/2025</td><td>Thu, 07/08/2025</td><td></td><td>Mon, 26/05/2025 - Wed, 25/06/2025</td><td class="amt">$ 1,800.00</td><td><button class="row-kebab">⋮</button></td></tr>
+    </tbody>
+  </table>
+  <div class="table-footer">
+    <span>Rows Per Page 15 ▴</span>
+    <div class="pager">
+      <button class="pbtn">First</button><button class="pbtn">‹</button>
+      <button class="pbtn active">1</button>
+      <button class="pbtn">›</button><button class="pbtn">Last</button>
+    </div>
+    <span>1 to 3 of 3</span>
+  </div>
+</div>
+
+<!-- ===== Modal: Set Claim Date ===== -->
+<div class="modal-overlay" id="claimDateModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Set Claim Date</h3>
+      <button class="modal-close" onclick="closeModal('claimDateModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12px; color:#666; margin-bottom:14px;">Choose when claims need to be submitted each month. We'll remind you in advance and pre-fill this date when you make a new claim.</p>
+
+      <div class="opt-list">
+        <!-- Option 1: Specific day of month -->
+        <div class="opt" data-type="day" onclick="selectOpt(this)">
+          <div class="radio"></div>
+          <div class="opt-body">
+            <div class="opt-title">Specific day of the month</div>
+            <div class="opt-desc">A fixed calendar day (e.g. the 25th).</div>
+            <div class="opt-input">
+              <span class="lbl">Day of the month:</span>
+              <select id="optDay" onchange="updatePreview()">
+                <!-- populated by JS -->
+              </select>
+              <span class="lbl" id="optDayHint" style="color:#888;">(If month is shorter, falls to last day)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Option 2: Working days from end of month -->
+        <div class="opt" data-type="working" onclick="selectOpt(this)">
+          <div class="radio"></div>
+          <div class="opt-body">
+            <div class="opt-title">Working days from end of month</div>
+            <div class="opt-desc">E.g. 10 working days from the end of each month.</div>
+            <div class="opt-input">
+              <input type="number" id="optWorking" min="1" max="20" value="10" style="width:60px;" oninput="updatePreview()">
+              <span class="lbl">working days</span>
+              <select id="optWorkingDir" onchange="updatePreview()">
+                <option value="from-end">from end of month</option>
+                <option value="after-end">after end of month</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Option 3: End of month -->
+        <div class="opt" data-type="eom" onclick="selectOpt(this)">
+          <div class="radio"></div>
+          <div class="opt-body">
+            <div class="opt-title">End of month</div>
+            <div class="opt-desc">The last calendar day of every month.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="reminder-row">
+        <input type="checkbox" id="remindToggle" checked onchange="updatePreview()">
+        <label for="remindToggle">Remind me</label>
+        <select id="remindDays" onchange="updatePreview()">
+          <option value="1">1 day</option>
+          <option value="2">2 days</option>
+          <option value="3" selected>3 days</option>
+          <option value="5">5 days</option>
+          <option value="7">7 days</option>
+        </select>
+        <label for="remindDays">before the due date</label>
+      </div>
+
+      <div class="preview" id="preview">
+        Pick an option above to see a preview.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="mbtn mbtn-cancel" onclick="closeModal('claimDateModal')">Cancel</button>
+      <button class="mbtn mbtn-save" onclick="saveClaimDate()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Claim schedule saved</div>
+
+<script>
+  // Populate day-of-month dropdown
+  const daySel = document.getElementById('optDay');
+  for (let i = 1; i <= 31; i++) {
+    const o = document.createElement('option');
+    o.value = i; o.textContent = ordinal(i);
+    if (i === 25) o.selected = true;
+    daySel.appendChild(o);
+  }
+
+  function ordinal(n) {
+    const s = ['th','st','nd','rd'], v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+
+  function openClaimDateModal() {
+    document.getElementById('claimDateModal').classList.add('show');
+    updatePreview();
+  }
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('show');
+  }
+
+  function selectOpt(el) {
+    document.querySelectorAll('.opt').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    updatePreview();
+  }
+
+  // Compute the next due date based on selection
+  function computeNextDue() {
+    const sel = document.querySelector('.opt.selected');
+    if (!sel) return null;
+    const type = sel.dataset.type;
+    const today = new Date('2026-05-12'); // demo "today"
+
+    if (type === 'day') {
+      const d = parseInt(document.getElementById('optDay').value, 10);
+      let target = new Date(today.getFullYear(), today.getMonth(), d);
+      if (target <= today) target = new Date(today.getFullYear(), today.getMonth() + 1, d);
+      // Clamp to last day of that month
+      const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+      if (d > lastDay) target = new Date(target.getFullYear(), target.getMonth() + 1, 0);
+      return { date: target, label: 'Day ' + d + ' of each month' };
+    }
+    if (type === 'eom') {
+      let target = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      if (target <= today) target = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+      return { date: target, label: 'Last day of each month' };
+    }
+    if (type === 'working') {
+      const n = parseInt(document.getElementById('optWorking').value, 10) || 1;
+      const dir = document.getElementById('optWorkingDir').value;
+      // Reference: end of current month
+      let monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      let target = countWorkingDays(monthEnd, n, dir === 'after-end' ? 1 : -1);
+      if (target <= today) {
+        monthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+        target = countWorkingDays(monthEnd, n, dir === 'after-end' ? 1 : -1);
+      }
+      return { date: target, label: n + ' working days ' + (dir === 'from-end' ? 'before' : 'after') + ' end of month' };
+    }
+    return null;
+  }
+
+  function countWorkingDays(start, n, dirSign) {
+    const d = new Date(start);
+    let counted = 0;
+    while (counted < n) {
+      d.setDate(d.getDate() + dirSign);
+      const dow = d.getDay();
+      if (dow !== 0 && dow !== 6) counted++;
+    }
+    return d;
+  }
+
+  function fmt(d) {
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    return days[d.getDay()] + ', ' + dd + '/' + mm + '/' + d.getFullYear();
+  }
+
+  function daysBetween(a, b) {
+    return Math.round((b - a) / (1000*60*60*24));
+  }
+
+  function updatePreview() {
+    const info = computeNextDue();
+    const preview = document.getElementById('preview');
+    if (!info) {
+      preview.innerHTML = 'Pick an option above to see a preview.';
+      return;
+    }
+    const today = new Date('2026-05-12');
+    const days = daysBetween(today, info.date);
+    const remind = document.getElementById('remindToggle').checked
+      ? ' · Reminder ' + document.getElementById('remindDays').value + ' day(s) before'
+      : ' · No reminder';
+    preview.innerHTML = '<strong>Next claim due:</strong> ' + fmt(info.date) +
+      ' <span style="color:#555;">(in ' + days + ' day' + (days === 1 ? '' : 's') + ')</span><br>' +
+      '<span style="color:#555;">Rule: ' + info.label + remind + '</span>';
+  }
+
+  function saveClaimDate() {
+    const info = computeNextDue();
+    if (!info) { closeModal('claimDateModal'); return; }
+    document.getElementById('emptyDueBanner').style.display = 'none';
+    const banner = document.getElementById('dueBanner');
+    banner.style.display = 'flex';
+    document.getElementById('dueDateText').textContent = fmt(info.date);
+    const remind = document.getElementById('remindToggle').checked
+      ? 'Submissions are reminded ' + document.getElementById('remindDays').value + ' days before the due date'
+      : 'No reminder set';
+    document.getElementById('dueSubText').textContent = info.label + ' · ' + remind;
+    const today = new Date('2026-05-12');
+    const days = daysBetween(today, info.date);
+    document.getElementById('countdown').textContent = 'in ' + days + ' day' + (days === 1 ? '' : 's');
+    closeModal('claimDateModal');
+    showToast('Claim schedule saved');
+  }
+
+  function showToast(text) {
+    const t = document.getElementById('toast');
+    t.textContent = text;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  // Toggle empty state via URL hash for demo: ?empty or #empty
+  if (location.hash === '#empty' || location.search.includes('empty')) {
+    document.getElementById('dueBanner').style.display = 'none';
+    document.getElementById('emptyDueBanner').style.display = 'flex';
+  }
+
+  // Default: pre-select EOM to reflect current schedule
+  selectOpt(document.querySelector('.opt[data-type="eom"]'));
+</script>
+</body>
+</html>
