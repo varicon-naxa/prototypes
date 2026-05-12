@@ -606,6 +606,84 @@
     document.getElementById('dueBanner').style.display = 'flex';
   }
 
+  // ===== PC Date logic =====
+  function openPcDateModal() {
+    document.getElementById('pcDateModal').classList.add('show');
+    updatePcPreview();
+  }
+
+  function selectDlp(el) {
+    document.querySelectorAll('#pcDateModal .opt').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    updatePcPreview();
+  }
+
+  function getDlpMonths() {
+    const sel = document.querySelector('#pcDateModal .opt.selected');
+    if (!sel) return 6;
+    if (sel.dataset.dlp === 'custom') {
+      return parseInt(document.getElementById('dlpCustom').value, 10) || 1;
+    }
+    return parseInt(sel.dataset.dlp, 10);
+  }
+
+  function computePcDates() {
+    const raw = document.getElementById('pcDateInput').value;
+    if (!raw) return null;
+    const pc = new Date(raw + 'T00:00:00');
+    const months = getDlpMonths();
+    const release = new Date(pc);
+    release.setMonth(release.getMonth() + months);
+    let reminder = null;
+    if (document.getElementById('pcRemindToggle').checked) {
+      const days = parseInt(document.getElementById('pcRemindDays').value, 10);
+      reminder = new Date(release);
+      reminder.setDate(reminder.getDate() - days);
+    }
+    return { pc, release, reminder, months };
+  }
+
+  function updatePcPreview() {
+    const info = computePcDates();
+    const preview = document.getElementById('pcPreview');
+    if (!info) {
+      preview.innerHTML = 'Set a PC date to see release and reminder dates.';
+      return;
+    }
+    const today = new Date('2026-05-12');
+    const daysToRelease = daysBetween(today, info.release);
+    let html = '<strong>PC date:</strong> ' + fmt(info.pc) + '<br>' +
+               '<strong>Final retention release:</strong> ' + fmt(info.release) +
+               ' <span style="color:#555;">(in ' + daysToRelease + ' days · ' + info.months + ' month' + (info.months === 1 ? '' : 's') + ' from PC)</span>';
+    if (info.reminder) {
+      html += '<br><strong>Reminder sent:</strong> ' + fmt(info.reminder) +
+              ' <span style="color:#555;">(' + document.getElementById('pcRemindDays').value + ' days before release)</span>';
+    } else {
+      html += '<br><span style="color:#555;">No reminder set.</span>';
+    }
+    preview.innerHTML = html;
+  }
+
+  function savePcDate() {
+    const info = computePcDates();
+    if (!info) { closeModal('pcDateModal'); return; }
+    document.getElementById('emptyPcBanner').style.display = 'none';
+    const banner = document.getElementById('pcBanner');
+    banner.style.display = 'flex';
+    document.getElementById('pcDateText').textContent = fmt(info.pc);
+    const reminderText = info.reminder
+      ? 'Reminder ' + fmt(info.reminder)
+      : 'No reminder';
+    document.getElementById('pcSubText').textContent =
+      'Final retention release: ' + fmt(info.release) + ' · ' + reminderText;
+    const today = new Date('2026-05-12');
+    const daysToRelease = daysBetween(today, info.release);
+    document.getElementById('pcCountdown').textContent =
+      daysToRelease > 0 ? 'release in ' + daysToRelease + ' days' : 'release overdue';
+    closeModal('pcDateModal');
+    showToast('PC date saved · Retention will be added to your next claim');
+  }
+
   // No option pre-selected for first-time setup — user makes a deliberate choice
 </script>
 </body>
