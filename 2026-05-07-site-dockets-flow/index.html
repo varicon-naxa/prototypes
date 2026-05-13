@@ -3024,9 +3024,41 @@
   function buildLineItemsFromMatch(bill, po, linkedDockets) {
     const lines = [];
 
-    // No-PO scenario: every bill item is treated as an off-PO row needing manual coding.
+    // No-PO scenario: look for dockets from this supplier (no PO linked) and match by description.
     if (!po) {
+      const supplierDockets = bill.supplier
+        ? deliveryDockets.filter(d => d.supplier === bill.supplier && (!d.po || d.po === 'none') && d.deliveredItems)
+        : [];
+      const supplierCustom = [];
+      supplierDockets.forEach(d => {
+        if (Array.isArray(d.deliveredItems.customItems)) {
+          d.deliveredItems.customItems.forEach(it => supplierCustom.push({
+            desc: it.desc, qty: parseFloat(it.qty) || 0, unit: it.unit, fromDocket: '…' + d.ref.slice(-8)
+          }));
+        }
+      });
+      function fuzzyMatch(billDesc, docDesc, kws) {
+        const a = (billDesc || '').toLowerCase();
+        const b = (docDesc || '').toLowerCase();
+        if (a && b && (a.includes(b.split(' ')[0]) || b.includes(a.split(' ')[0]))) return true;
+        if (kws && kws.some(k => b.includes(k))) return true;
+        return false;
+      }
+      const usedDoc = new Set();
       bill.items.forEach(bi => {
+        let docketQty = 0;
+        const fromDockets = [];
+        supplierCustom.forEach((d, i) => {
+          if (!usedDoc.has(i) && fuzzyMatch(bi.desc, d.desc, bi.matchKeywords)) {
+            usedDoc.add(i);
+            docketQty += d.qty;
+            fromDockets.push(d.fromDocket);
+          }
+        });
+        const hasDocket = docketQty > 0;
+        const tags = ['bill'];
+        if (hasDocket) tags.push('docket');
+        else tags.push('offpo');
         lines.push({
           id: 'no-po-' + bi.id,
           desc: bi.desc,
@@ -3035,15 +3067,17 @@
           acct: '',
           cc: '',
           unit: bi.unit,
-          docketQty: null,
+          docketQty: hasDocket ? docketQty : null,
           qty: bi.qty,
           poUnitCost: null,
           unitCost: bi.rate,
           tax: 'GST on expense',
-          tags: ['offpo', 'bill'],
+          tags: tags,
           requiresCC: true,
           offPo: true,
-          noPoNoDocket: true
+          noPoNoDocket: !hasDocket,
+          noPoHasDocket: hasDocket,
+          fromDockets: fromDockets
         });
       });
       return lines;
