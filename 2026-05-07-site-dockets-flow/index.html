@@ -2859,6 +2859,14 @@
       if (item) item.unitCost = ov.restoreUnitCost;
       originalPoRate = null;
     }
+    // Remove any dockets that a previous scenario seeded in
+    if (scenarioAddedDockets.length) {
+      scenarioAddedDockets.forEach(id => {
+        const idx = deliveryDockets.findIndex(d => d.id === id);
+        if (idx >= 0) deliveryDockets.splice(idx, 1);
+      });
+      scenarioAddedDockets = [];
+    }
     const scenario = BILL_SCENARIOS[key];
     if (!scenario) return null;
 
@@ -2871,7 +2879,11 @@
       captured.deliveredItems = null;
       captured.completed = false;
     }
-    if (typeof scenario.seed === 'function') scenario.seed(captured);
+    function addDocket(docket) {
+      scenarioAddedDockets.push(docket.id);
+      deliveryDockets.push(docket);
+    }
+    if (typeof scenario.seed === 'function') scenario.seed(captured, addDocket);
 
     if (scenario.poRateOverride) {
       const ov = scenario.poRateOverride;
