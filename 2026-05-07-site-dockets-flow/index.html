@@ -2620,28 +2620,30 @@
   ];
 
   // ===== Bill upload + 3-way reconciliation =====
-  const SAMPLE_BILL = {
-    ref: 'INV-BORAL-9912',
-    supplier: 'BORAL Concrete',
-    date: '08/05/2026',
-    poRef: 'PO-VAR12-0042',
-    items: [
-      { id: 'l1', desc: '32 MPa Concrete (N32-20-80)', qty: 8, unit: 'm³', rate: 220, amount: 1760, matchPoItem: 'a' },
-      { id: 'l2', desc: 'Wash-out service', qty: 1, unit: 'ea', rate: 80, amount: 80, matchPoItem: null, matchKeywords: ['wash-out', 'washout', 'wash out'] },
-      { id: 'l3', desc: 'Saturday surcharge', qty: 1, unit: 'ea', rate: 50, amount: 50, matchPoItem: null, matchKeywords: ['saturday', 'surcharge', 'overtime'] }
-    ],
-    total: 1890
-  };
-  let currentBill = null;
-
-  function goBillUpload() {
-    // Make sure the just-captured docket carries clean demo data so the match works
-    const captured = deliveryDockets.find(d => d.id === 'just-captured');
-    if (captured) {
-      if (!captured.supplier) captured.supplier = 'BORAL Concrete';
-      if (!captured.po || captured.po === 'none' || captured.po === '') captured.po = 'PO-VAR12-0042';
-      if (!captured.costCentre) captured.costCentre = 'CC-104 — Concrete Works';
-      if (!captured.deliveredItems || captured.deliveredItems.poId !== captured.po) {
+  // Five reconciliation scenarios users can step through on the matching page.
+  const BILL_SCENARIOS = {
+    happy: {
+      key: 'happy',
+      name: 'Clean match',
+      level: 'success',
+      emoji: '✓',
+      tabIcon: '✓',
+      description: 'Bill auto-matches to PO + dockets. The happy path.',
+      bannerTitle: '✓ Clean 3-way match',
+      bannerDesc: 'The bill ties cleanly to the linked PO and dockets. Rates come from the PO, quantities from the dockets, and any off-PO charges have been auto-matched against custom docket items. Confirm coding and approve.',
+      bill: {
+        ref: 'INV-BORAL-9912', supplier: 'BORAL Concrete', date: '08/05/2026', poRef: 'PO-VAR12-0042', total: 1890,
+        items: [
+          { id: 'l1', desc: '32 MPa Concrete (N32-20-80)', qty: 8, unit: 'm³', rate: 220, amount: 1760, matchPoItem: 'a' },
+          { id: 'l2', desc: 'Wash-out service', qty: 1, unit: 'ea', rate: 80, amount: 80, matchPoItem: null, matchKeywords: ['wash-out', 'washout', 'wash out'] },
+          { id: 'l3', desc: 'Saturday surcharge', qty: 1, unit: 'ea', rate: 50, amount: 50, matchPoItem: null, matchKeywords: ['saturday', 'surcharge', 'overtime'] }
+        ]
+      },
+      seed(captured) {
+        if (!captured) return;
+        captured.supplier = 'BORAL Concrete';
+        captured.po = 'PO-VAR12-0042';
+        captured.costCentre = 'CC-104 — Concrete Works';
         captured.deliveredItems = {
           poId: 'PO-VAR12-0042',
           quantities: { a: [
@@ -2653,23 +2655,206 @@
             { desc: 'Saturday surcharge', qty: 1, unit: 'ea' }
           ]
         };
+        captured.completed = true;
       }
-      captured.completed = true;
+    },
+
+    noPoNoDocket: {
+      key: 'noPoNoDocket',
+      name: 'No PO, no dockets',
+      level: 'danger',
+      emoji: '⚠',
+      tabIcon: '⚠',
+      description: 'Bill arrives from a supplier with no PO and no dockets on file.',
+      bannerTitle: '⚠ No PO and no dockets for this bill',
+      bannerDesc: 'There is no Purchase Order on file for this supplier and no delivery dockets recorded. Without a 3-way reference, every line needs to be coded manually before payment can be approved.',
+      bannerExtras: [
+        'Pick a charge code for each line so the cost still lands on the right cost centre',
+        'Convert to a retrospective PO if this is going to be an ongoing supply',
+        'Confirm receipt with the site team before approval — no docket means delivery is unverified'
+      ],
+      bill: {
+        ref: 'INV-NUSITE-2206', supplier: 'NuSite Trade Hire', date: '13/05/2026', poRef: null, total: 2440,
+        items: [
+          { id: 'l1', desc: 'Site fencing weekly hire', qty: 4, unit: 'weeks', rate: 450, amount: 1800, matchPoItem: null },
+          { id: 'l2', desc: 'Mobile light tower hire', qty: 2, unit: 'weeks', rate: 320, amount: 640, matchPoItem: null }
+        ]
+      },
+      seed: null,
+      hideMatchBanner: true
+    },
+
+    poNoDocket: {
+      key: 'poNoDocket',
+      name: 'PO raised, no dockets',
+      level: 'warn',
+      emoji: '⚠',
+      tabIcon: '⚠',
+      description: 'Bill matches a PO, but no delivery dockets have been recorded yet.',
+      bannerTitle: '⚠ PO matched but no dockets recorded',
+      bannerDesc: 'The bill references PO-VAR12-0050 but the site team hasn\'t recorded any delivery dockets for it. The PO rates are usable but delivery is unverified.',
+      bannerExtras: [
+        'Chase the site team to capture the docket photo and qty before paying',
+        'Approve with a manual receipt confirmation only if you trust the supplier-recorded qty',
+        'If goods clearly never arrived, reject the bill back to the supplier'
+      ],
+      bill: {
+        ref: 'INV-HYTEC-7788', supplier: 'Hy-Tec', date: '13/05/2026', poRef: 'PO-VAR12-0050', total: 1625,
+        items: [
+          { id: 'l1', desc: '20mm Aggregate', qty: 25, unit: 'tonnes', rate: 65, amount: 1625, matchPoItem: 'a' }
+        ]
+      },
+      seed: null
+    },
+
+    offPo: {
+      key: 'offPo',
+      name: 'Items on bill not on PO/Docket',
+      level: 'warn',
+      emoji: '⚠',
+      tabIcon: '⚠',
+      description: 'Bill includes line items not on the PO and not on any docket.',
+      bannerTitle: '⚠ Some bill items are not on the PO or any docket',
+      bannerDesc: 'Three line items appeared on the bill that don\'t exist on the PO or on the linked dockets. These are typically supplier surcharges, levies, admin fees. They need to be coded before approval.',
+      bannerExtras: [
+        'Pick a charge code (cost centre + account) for each line',
+        'Promote recurring charges onto the PO as a variation so they\'re budgeted next time',
+        'If the supplier billed an item that wasn\'t requested or delivered, reject the line'
+      ],
+      bill: {
+        ref: 'INV-BORAL-9914', supplier: 'BORAL Concrete', date: '13/05/2026', poRef: 'PO-VAR12-0042', total: 2061,
+        items: [
+          { id: 'l1', desc: '32 MPa Concrete (N32-20-80)', qty: 8, unit: 'm³', rate: 220, amount: 1760, matchPoItem: 'a' },
+          { id: 'l2', desc: 'Out-of-hours delivery surcharge', qty: 1, unit: 'ea', rate: 250, amount: 250, matchPoItem: null },
+          { id: 'l3', desc: 'Environmental levy', qty: 8, unit: 'm³', rate: 4.5, amount: 36, matchPoItem: null },
+          { id: 'l4', desc: 'Account admin fee', qty: 1, unit: 'ea', rate: 15, amount: 15, matchPoItem: null }
+        ]
+      },
+      seed(captured) {
+        if (!captured) return;
+        captured.supplier = 'BORAL Concrete';
+        captured.po = 'PO-VAR12-0042';
+        captured.costCentre = 'CC-104 — Concrete Works';
+        captured.deliveredItems = {
+          poId: 'PO-VAR12-0042',
+          quantities: { a: [{ cc: 'CC-104 — Concrete Works', qty: 8 }] },
+          customItems: []
+        };
+        captured.completed = true;
+      }
+    },
+
+    rateConflict: {
+      key: 'rateConflict',
+      name: 'Rate conflicts',
+      level: 'warn',
+      emoji: '⚠',
+      tabIcon: '⚠',
+      description: 'Bill rate differs from PO rate, or multiple PO lines share the same rate.',
+      bannerTitle: '⚠ Rate variance + rate ambiguity',
+      bannerDesc: 'Matching is normally done by rate (PO rate × docket qty = expected bill). On this bill, one line has a rate that doesn\'t match the PO and another line could match two PO lines that share the same rate.',
+      bannerExtras: [
+        '<strong>Rate variance</strong>: Bill rate is higher than PO rate — accept variance once, update PO rate going forward, or reject the line.',
+        '<strong>Rate ambiguity</strong>: When multiple PO lines share a rate, pick which PO line this bill row should match (or treat as off-PO).',
+        'Rates are typically locked at PO creation; tolerate small rounding differences but flag anything material.'
+      ],
+      bill: {
+        ref: 'INV-BORAL-9915', supplier: 'BORAL Concrete', date: '13/05/2026', poRef: 'PO-VAR12-0042', total: 2055,
+        items: [
+          { id: 'l1', desc: '32 MPa Concrete (N32-20-80)', qty: 5, unit: 'm³', rate: 235, amount: 1175, matchPoItem: 'a', variance: { poRate: 220, billRate: 235 } },
+          { id: 'l2', desc: 'Concrete supply (unspecified mix)', qty: 4, unit: 'm³', rate: 220, amount: 880, matchPoItem: null, ambiguous: { rate: 220, candidates: ['a', 'b'] } }
+        ]
+      },
+      seed(captured) {
+        if (!captured) return;
+        captured.supplier = 'BORAL Concrete';
+        captured.po = 'PO-VAR12-0042';
+        captured.costCentre = 'CC-104 — Concrete Works';
+        captured.deliveredItems = {
+          poId: 'PO-VAR12-0042',
+          quantities: { a: [{ cc: 'CC-104 — Concrete Works', qty: 5 }] },
+          customItems: []
+        };
+        captured.completed = true;
+      },
+      // For the demo, temporarily set 40 MPa rate equal to 32 MPa so two PO lines share a rate
+      poRateOverride: { itemId: 'b', newUnitCost: 220, restoreUnitCost: 260 }
     }
+  };
+
+  let currentScenarioKey = 'happy';
+  let currentBill = null;
+  let originalPoRate = null; // store + restore for rateConflict scenario
+
+  function goBillUpload() {
     document.getElementById('bill-upload-zone').style.display = 'flex';
     document.getElementById('bill-upload-progress').classList.remove('show');
+    renderScenarioPicker();
     showScreen('screen-web-bill-upload');
   }
 
-  function useSampleBill() {
+  function renderScenarioPicker() {
+    const grid = document.getElementById('scenario-grid');
+    if (!grid) return;
+    grid.innerHTML = Object.values(BILL_SCENARIOS).map(s => `
+      <div class="web-scenario-card ${s.level === 'success' ? 'happy' : (s.level === 'danger' ? 'danger' : 'warn')}" onclick="useSampleBill('${s.key}')">
+        <div class="sc-emoji">${s.emoji}</div>
+        <div class="sc-title">${s.name}</div>
+        <div class="sc-desc">${s.description}</div>
+        <div class="sc-cta">Try this scenario →</div>
+      </div>
+    `).join('');
+  }
+
+  function applyScenarioState(key) {
+    // Restore previous PO rate if a prior scenario overrode it
+    if (originalPoRate) {
+      const ov = originalPoRate;
+      const po = POS[ov.poRef];
+      const item = po && po.items.find(i => i.id === ov.itemId);
+      if (item) item.unitCost = ov.restoreUnitCost;
+      originalPoRate = null;
+    }
+    const scenario = BILL_SCENARIOS[key];
+    if (!scenario) return null;
+
+    const captured = deliveryDockets.find(d => d.id === 'just-captured');
+    // Reset captured docket to neutral before applying scenario seed
+    if (captured) {
+      captured.supplier = '';
+      captured.po = '';
+      captured.costCentre = '';
+      captured.deliveredItems = null;
+      captured.completed = false;
+    }
+    if (typeof scenario.seed === 'function') scenario.seed(captured);
+
+    if (scenario.poRateOverride) {
+      const ov = scenario.poRateOverride;
+      const poRef = scenario.bill.poRef;
+      const po = POS[poRef];
+      const item = po && po.items.find(i => i.id === ov.itemId);
+      if (item) {
+        item.unitCost = ov.newUnitCost;
+        originalPoRate = { poRef, itemId: ov.itemId, restoreUnitCost: ov.restoreUnitCost };
+      }
+    }
+    return scenario;
+  }
+
+  function useSampleBill(scenarioKey) {
+    const key = scenarioKey || 'happy';
     document.getElementById('bill-upload-zone').style.display = 'none';
+    document.getElementById('scenario-picker').style.display = 'none';
     const progress = document.getElementById('bill-upload-progress');
     progress.classList.add('show');
     const stepEl = document.getElementById('bill-upload-step');
     const subEl = document.getElementById('bill-upload-substep');
+    const scenario = BILL_SCENARIOS[key];
+    const poBit = scenario.bill.poRef ? `Found ${scenario.bill.poRef} from supplier reference` : 'No PO found for this supplier';
     const steps = [
       { main: 'Reading bill PDF…', sub: 'Extracting supplier, date and amounts' },
-      { main: 'Auto-matching to a Purchase Order…', sub: `Found ${SAMPLE_BILL.poRef} from supplier reference` },
+      { main: 'Auto-matching to a Purchase Order…', sub: poBit },
       { main: 'Pulling quantities from dockets…', sub: 'Looking up delivery dockets linked to the PO' },
       { main: 'Reconciliation ready', sub: 'Opening 3-way match…' }
     ];
@@ -2678,14 +2863,43 @@
       stepEl.textContent = steps[i].main;
       subEl.textContent = steps[i].sub;
       i++;
-      if (i < steps.length) setTimeout(tick, 600);
+      if (i < steps.length) setTimeout(tick, 500);
       else setTimeout(() => {
-        currentBill = SAMPLE_BILL;
-        renderBillMatch();
-        showScreen('screen-web-bill-match');
-      }, 600);
+        switchScenario(key);
+        document.getElementById('scenario-picker').style.display = '';
+      }, 500);
     };
     tick();
+  }
+
+  function switchScenario(key) {
+    const scenario = applyScenarioState(key);
+    if (!scenario) return;
+    currentScenarioKey = key;
+    currentBill = scenario.bill;
+    renderBillMatch();
+    showScreen('screen-web-bill-match');
+  }
+
+  function renderScenarioTabs() {
+    const wrap = document.getElementById('ab-scenario-tabs');
+    if (!wrap) return;
+    wrap.innerHTML = Object.values(BILL_SCENARIOS).map(s => `
+      <span class="web-scenario-tab ${s.key === currentScenarioKey ? 'active' : ''}" onclick="switchScenario('${s.key}')">${s.tabIcon} ${s.name}</span>
+    `).join('');
+  }
+
+  function renderScenarioBanner() {
+    const banner = document.getElementById('ab-scenario-banner');
+    if (!banner) return;
+    const scenario = BILL_SCENARIOS[currentScenarioKey];
+    const lvl = scenario.level;
+    banner.className = 'web-scenario-banner ' + lvl;
+    document.getElementById('ab-scenario-icon').textContent = scenario.emoji;
+    document.getElementById('ab-scenario-title').textContent = scenario.bannerTitle;
+    const desc = document.getElementById('ab-scenario-desc');
+    const extras = (scenario.bannerExtras || []).map(e => `<li>${e}</li>`).join('');
+    desc.innerHTML = scenario.bannerDesc + (extras ? `<ul>${extras}</ul>` : '');
   }
 
   // Approver list + workflow state
