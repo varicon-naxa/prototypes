@@ -2920,21 +2920,41 @@
 
   function renderBillMatch() {
     const bill = currentBill;
-    const po = POS[bill.poRef];
-    const linkedDockets = deliveryDockets.filter(d => d.po === bill.poRef && d.deliveredItems && d.deliveredItems.poId === bill.poRef);
+    const scenario = BILL_SCENARIOS[currentScenarioKey];
+    const po = bill.poRef ? POS[bill.poRef] : null;
+    const linkedDockets = bill.poRef
+      ? deliveryDockets.filter(d => d.po === bill.poRef && d.deliveredItems && d.deliveredItems.poId === bill.poRef)
+      : [];
 
-    // Banner
-    document.getElementById('ab-banner-bill').textContent = bill.ref;
-    document.getElementById('ab-banner-po').textContent = bill.poRef;
-    document.getElementById('ab-banner-dockets').textContent = `${linkedDockets.length} docket${linkedDockets.length === 1 ? '' : 's'} linked`;
+    renderScenarioTabs();
+    renderScenarioBanner();
+
+    // Match banner (different style per scenario)
+    const matchBannerEl = document.getElementById('ab-match-banner');
+    if (scenario.hideMatchBanner || !po) {
+      matchBannerEl.style.display = 'none';
+    } else {
+      matchBannerEl.style.display = '';
+      document.getElementById('ab-banner-bill').textContent = bill.ref;
+      document.getElementById('ab-banner-po').textContent = bill.poRef;
+      document.getElementById('ab-banner-dockets').textContent = `${linkedDockets.length} docket${linkedDockets.length === 1 ? '' : 's'} linked`;
+    }
 
     // Summary fields
     const supSel = document.getElementById('ab-supplier');
-    supSel.innerHTML = suppliersList().map(s => `<option ${s === bill.supplier ? 'selected' : ''}>${s}</option>`).join('');
-    document.getElementById('ab-link-text').textContent = `${bill.poRef} · ${linkedDockets.length} docket${linkedDockets.length === 1 ? '' : 's'}`;
+    const suppliers = suppliersList();
+    if (suppliers.indexOf(bill.supplier) === -1) suppliers.push(bill.supplier); // include unknown suppliers
+    supSel.innerHTML = suppliers.map(s => `<option ${s === bill.supplier ? 'selected' : ''}>${s}</option>`).join('');
+    const linkBtn = document.getElementById('ab-link-btn');
+    if (po) {
+      document.getElementById('ab-link-text').textContent = `${bill.poRef} · ${linkedDockets.length} docket${linkedDockets.length === 1 ? '' : 's'}`;
+      linkBtn.classList.add('ab-linked');
+    } else {
+      document.getElementById('ab-link-text').textContent = 'No matching PO — click to link manually';
+      linkBtn.classList.remove('ab-linked');
+    }
     document.getElementById('ab-ref').value = bill.ref;
     document.getElementById('ab-tdate').value = 'Fri ' + bill.date;
-    // Due date = transaction date + 14 days (mock)
     document.getElementById('ab-ddate').value = 'Fri 22/05/2026';
 
     // Build line items from match logic
@@ -2942,7 +2962,6 @@
     renderAbLineItems();
     renderAbWorkflow();
 
-    // Attached file name
     document.getElementById('ab-attached-name').textContent = bill.ref + '.pdf';
   }
 
