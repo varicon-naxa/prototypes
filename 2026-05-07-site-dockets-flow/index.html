@@ -3176,13 +3176,69 @@
         : `<span class="ab-cell-readonly po" title="From PO rates">${fmtMoney(it.poUnitCost)}<span class="src">PO</span></span>`;
       const qtyMatchesDocket = it.docketQty != null && Math.abs(it.qty - it.docketQty) < 0.01;
       const costMatchesPO = it.poUnitCost != null && Math.abs(it.unitCost - it.poUnitCost) < 0.01;
+      const rowCls = [];
+      if (it.offPo) rowCls.push('offpo');
+      if (it.variance) rowCls.push('row-variance');
+      if (it.ambiguous) rowCls.push('row-ambiguous');
+      const extraTags = [];
+      if (it.splitInfo) extraTags.push(`<span class="ab-source-tag po">CC split ${it.splitInfo.idx}/${it.splitInfo.total}</span>`);
+      if (it.variance) extraTags.push('<span class="ab-variance-chip variance">⚠ Rate variance</span>');
+      if (it.ambiguous) extraTags.push('<span class="ab-variance-chip ambiguous">⚠ Multiple PO matches</span>');
+
+      let suggestRow = '';
+      if (it.variance) {
+        const diff = it.variance.billRate - it.variance.poRate;
+        const totalDiff = diff * it.qty;
+        suggestRow = `
+          <tr class="row-variance">
+            <td></td>
+            <td colspan="11" style="padding-top:0;">
+              <div class="ab-suggest-detail">
+                <strong>Rate variance — bill ${fmtMoney(it.variance.billRate)} / PO ${fmtMoney(it.variance.poRate)} (${diff > 0 ? '+' : ''}${fmtMoney(diff)} per ${it.unit}, total ${diff > 0 ? '+' : ''}${fmtMoney(totalDiff)})</strong>
+                <ul>
+                  <li><a onclick="abAcceptVariance(${idx})">Accept variance once</a> — match to PO line, code the difference as ‘Rate variance’.</li>
+                  <li><a onclick="abUpdatePORate(${idx})">Update PO rate to ${fmtMoney(it.variance.billRate)}</a> — locks in the new rate for future bills.</li>
+                  <li><a onclick="abRejectLine(${idx})">Reject this line</a> — flag back to the supplier.</li>
+                </ul>
+              </div>
+            </td>
+          </tr>`;
+      } else if (it.ambiguous) {
+        const opts = it.ambiguous.candidates.map(c => `<li><a onclick="abPickAmbiguous(${idx}, '${c.id}')">${c.desc}</a> — ${c.ordered}${c.unit} ordered, ${c.prev}${c.unit} previously received, remaining ${c.ordered - c.prev}${c.unit}</li>`).join('');
+        suggestRow = `
+          <tr class="row-ambiguous">
+            <td></td>
+            <td colspan="11" style="padding-top:0;">
+              <div class="ab-suggest-detail">
+                <strong>Multiple PO lines share rate ${fmtMoney(it.ambiguous.rate)} — pick which line this bill row should match:</strong>
+                <ul>${opts}<li><a onclick="abTreatAsOffPO(${idx})">Treat as an off-PO line</a> — code it manually instead.</li></ul>
+              </div>
+            </td>
+          </tr>`;
+      } else if (it.noPoNoDocket) {
+        suggestRow = `
+          <tr class="offpo">
+            <td></td>
+            <td colspan="11" style="padding-top:0;">
+              <div class="ab-suggest-detail">
+                <strong>No PO or docket on file for this charge.</strong>
+                <ul>
+                  <li><a onclick="abLinkToPO(${idx})">Link to an existing PO</a> if one was raised after the fact.</li>
+                  <li><a onclick="abCreatePOFromBill(${idx})">Create a retrospective PO from this bill</a> for ongoing supply.</li>
+                  <li><a onclick="abConfirmReceipt(${idx})">Confirm receipt manually</a> — site team verifies delivery before payment.</li>
+                </ul>
+              </div>
+            </td>
+          </tr>`;
+      }
+
       return `
-      <tr class="${it.offPo ? 'offpo' : ''}">
+      <tr class="${rowCls.join(' ')}">
         <td><input type="checkbox" /></td>
         <td>
           <div class="ab-desc">
             <input value="${escAttr(it.desc)}" oninput="abLineItems[${idx}].desc = this.value" />
-            <div class="ab-source-tags">${it.tags.map(tagBadgeHTML).join('')}${it.splitInfo ? `<span class="ab-source-tag po">CC split ${it.splitInfo.idx}/${it.splitInfo.total}</span>` : ''}</div>
+            <div class="ab-source-tags">${it.tags.map(tagBadgeHTML).join('')}${extraTags.join('')}</div>
           </div>
         </td>
         <td><select class="ab-cell-input"><option ${it.project === 'Troughton Rd' ? 'selected' : ''}>Troughton Rd</option></select></td>
@@ -3196,9 +3252,66 @@
         <td class="num"><input class="ab-cell-input cost ${costMatchesPO ? '' : (it.poUnitCost != null ? 'required' : '')}" type="number" min="0" step="0.01" value="${escAttr(it.unitCost)}" oninput="abLineItems[${idx}].unitCost = parseFloat(this.value) || 0; recomputeAbTotals()" style="width:100px;" /></td>
         <td><select class="ab-cell-input" style="width:140px;"><option ${it.tax === 'GST on expense' ? 'selected' : ''}>GST on expense</option><option>GST Free</option><option>GST on income</option></select></td>
         <td><button class="ab-row-remove" title="Remove" onclick="removeAbLine(${idx})">✕</button></td>
-      </tr>`;
+      </tr>
+      ${suggestRow}`;
     }).join('');
     recomputeAbTotals();
+  }
+
+  // Suggestion actions — they update the working line and re-render
+  function abAcceptVariance(idx) {
+    const it = abLineItems[idx];
+    if (!it || !it.variance) return;
+    it.variance = null;
+    it.tags = it.tags.filter(t => t !== 'variance');
+    showToast('Variance accepted — will be coded once');
+    renderAbLineItems();
+  }
+  function abUpdatePORate(idx) {
+    const it = abLineItems[idx];
+    if (!it || !it.variance) return;
+    it.poUnitCost = it.variance.billRate;
+    it.variance = null;
+    showToast('PO rate updated for future bills');
+    renderAbLineItems();
+  }
+  function abRejectLine(idx) {
+    abLineItems.splice(idx, 1);
+    showToast('Line rejected and removed');
+    renderAbLineItems();
+  }
+  function abPickAmbiguous(idx, poItemId) {
+    const it = abLineItems[idx];
+    if (!it || !it.ambiguous) return;
+    const cand = it.ambiguous.candidates.find(c => c.id === poItemId);
+    if (cand) {
+      it.desc = cand.desc;
+      it.ambiguous = null;
+      it.tags = ['po', 'bill'];
+      it.requiresCC = false;
+      showToast('Matched to ' + cand.desc);
+    }
+    renderAbLineItems();
+  }
+  function abTreatAsOffPO(idx) {
+    const it = abLineItems[idx];
+    if (!it || !it.ambiguous) return;
+    it.ambiguous = null;
+    it.poUnitCost = null;
+    it.offPo = true;
+    it.tags = ['offpo', 'bill'];
+    showToast('Set as off-PO — pick a charge code');
+    renderAbLineItems();
+  }
+  function abLinkToPO(idx) { showToast('Link to existing PO — picker not built yet'); }
+  function abCreatePOFromBill(idx) { showToast('Retrospective PO created from this bill'); }
+  function abConfirmReceipt(idx) {
+    const it = abLineItems[idx];
+    if (!it) return;
+    it.noPoNoDocket = false;
+    it.tags = it.tags.filter(t => t !== 'offpo');
+    showToast('Receipt confirmed manually');
+    renderAbLineItems();
   }
 
   function recomputeAbTotals() {
