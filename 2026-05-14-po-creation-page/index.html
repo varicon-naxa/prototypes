@@ -1,0 +1,536 @@
+<!--
+  PO Creation Page prototype — based on Varicon "Add Purchase Order" screenshot.
+  Starting point to iterate on. Faithful reproduction of current layout:
+  - Top bar with back, title, help icon, Initial Data Upload, Search pill, +, user
+  - Header fields row: Project | Supplier | Order Date | Delivery Date | PO Number
+  - PO Title row
+  - Delivery Items table (horizontally scrollable) with GST mode dropdown
+  - Totals block (Subtotal, GST, Total)
+  - Attachments dropzone
+  - Address Line 1 / Attention | Address Line 2 / Phone
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Varicon — Add Purchase Order</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #ffffff;
+    color: #1a2336;
+    font-size: 13px;
+  }
+
+  /* ---------- Top bar ---------- */
+  .top-bar {
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .top-bar-left { display: flex; align-items: center; gap: 12px; }
+  .back-btn {
+    background: none; border: none; cursor: pointer;
+    font-size: 18px; color: #4a5568; padding: 4px 6px;
+    text-decoration: none; line-height: 1;
+  }
+  .top-bar h1 {
+    font-size: 16px; font-weight: 700;
+    color: #1a2336; letter-spacing: 0.2px;
+  }
+  .help-icon {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #f7941d; color: #fff;
+    font-size: 11px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: help;
+  }
+  .top-bar-right { display: flex; align-items: center; gap: 10px; }
+  .btn-light {
+    padding: 8px 16px; border: 1px solid #d1d5db; border-radius: 6px;
+    background: #fff; font-size: 12.5px; font-weight: 600;
+    color: #374151; cursor: pointer;
+  }
+  .btn-search {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border: 1px solid #cfe7f5; border-radius: 20px;
+    background: #eaf6fb; font-size: 12.5px; font-weight: 600;
+    color: #1a2336; cursor: pointer;
+  }
+  .btn-search .star { color: #3aa9d6; font-size: 13px; }
+  .btn-icon-plus {
+    width: 32px; height: 32px; border: 1px solid #d1d5db; border-radius: 6px;
+    background: #fff; font-size: 18px; color: #4a5568; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; line-height: 1;
+  }
+  .user-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 4px 8px 4px 4px; border-radius: 6px; cursor: pointer;
+  }
+  .user-pill .avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #1f2a44; color: #fff;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .user-pill .name { font-size: 12.5px; font-weight: 600; color: #1a2336; }
+  .user-pill .chev { font-size: 10px; color: #9ca3af; }
+
+  /* ---------- Page content ---------- */
+  .page { padding: 24px 28px 80px; }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 20px;
+    margin-bottom: 22px;
+  }
+  .field { display: flex; flex-direction: column; }
+  .field label {
+    display: block; font-size: 12px; font-weight: 700;
+    color: #1a2336; margin-bottom: 6px;
+  }
+  .field label .req { color: #dc2626; margin-left: 2px; }
+
+  .input,
+  .select,
+  .field input,
+  .field select {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #1a2336;
+    background: #fff;
+    height: 38px;
+  }
+  .input::placeholder { color: #9ca3af; }
+  .input:focus, .select:focus { outline: none; border-color: #f7941d; }
+
+  /* select with caret */
+  .select-wrap { position: relative; }
+  .select-wrap select {
+    appearance: none; -webkit-appearance: none;
+    padding-right: 30px; cursor: pointer;
+    color: #9ca3af;
+  }
+  .select-wrap::after {
+    content: '▾';
+    position: absolute; right: 10px; top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af; font-size: 10px; pointer-events: none;
+  }
+
+  /* date inputs with calendar icon */
+  .date-wrap { position: relative; }
+  .date-wrap input {
+    padding-left: 34px;
+  }
+  .date-wrap::before {
+    content: '📅';
+    position: absolute; left: 10px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px; opacity: 0.6;
+    pointer-events: none;
+  }
+  .date-wrap::after {
+    content: '▾';
+    position: absolute; right: 10px; top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af; font-size: 10px; pointer-events: none;
+  }
+
+  .po-title-row {
+    margin-bottom: 28px;
+    max-width: calc((100% - 80px) / 5);
+  }
+
+  /* ---------- Delivery items ---------- */
+  .delivery-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .delivery-header h2 {
+    font-size: 15px; font-weight: 700; color: #1a2336;
+  }
+  .gst-select {
+    width: 180px;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 4px;
+  }
+  table.lines {
+    width: 100%;
+    min-width: 1200px;
+    border-collapse: collapse;
+  }
+  table.lines thead th {
+    background: #f3f4f6;
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #1a2336;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+  }
+  table.lines thead th .req { color: #dc2626; }
+  table.lines thead th.col-num { width: 40px; text-align: center; }
+  table.lines tbody td {
+    padding: 12px 10px;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+  }
+  table.lines tbody td.col-num {
+    text-align: center; color: #6b7280; font-size: 13px;
+  }
+  table.lines td input,
+  table.lines td select {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 12.5px;
+    height: 34px;
+    background: #fff;
+  }
+  table.lines td input:disabled,
+  table.lines td select:disabled {
+    background: #f9fafb; color: #9ca3af;
+  }
+  table.lines td .sel-wrap { position: relative; }
+  table.lines td .sel-wrap select {
+    appearance: none; -webkit-appearance: none;
+    padding-right: 24px; color: #9ca3af; cursor: pointer;
+  }
+  table.lines td .sel-wrap::after {
+    content: '▾';
+    position: absolute; right: 8px; top: 50%;
+    transform: translateY(-50%);
+    color: #9ca3af; font-size: 9px; pointer-events: none;
+  }
+  /* underlined inputs for numeric cells */
+  table.lines td.underline-cell input {
+    border: none;
+    border-bottom: 1px solid #d1d5db;
+    border-radius: 0;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  table.lines td.underline-cell.with-prefix input {
+    padding-left: 16px;
+  }
+  table.lines td .prefix {
+    position: absolute; left: 4px; top: 50%;
+    transform: translateY(-50%); color: #6b7280;
+    font-size: 12.5px; pointer-events: none;
+  }
+  table.lines td.underline-cell { position: relative; min-width: 90px; }
+  table.lines td.col-total { text-align: right; font-size: 13px; color: #1a2336; }
+
+  .add-line-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #f9fafb;
+    font-size: 12.5px;
+    color: #9ca3af;
+    cursor: pointer;
+    margin-top: 12px;
+    margin-bottom: 24px;
+  }
+  .add-line-btn:hover { background: #f3f4f6; }
+  .info-tooltip {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #d1d5db; color: #fff;
+    font-size: 10px; font-weight: 700;
+    margin-left: 8px; cursor: help;
+  }
+
+  /* ---------- Totals ---------- */
+  .totals {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 36px;
+  }
+  .totals-inner {
+    min-width: 320px;
+  }
+  .totals .row {
+    display: flex; justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+  }
+  .totals .row .label { color: #6b7280; }
+  .totals .row .value { color: #1a2336; font-weight: 500; }
+  .totals .row.subtotal { border-bottom: 1px solid #e5e7eb; }
+  .totals .row.total {
+    border-top: 1px solid #1a2336;
+    padding-top: 10px;
+    margin-top: 6px;
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .totals .row.total .label { color: #1a2336; font-weight: 700; }
+
+  /* ---------- Attachments ---------- */
+  .section-label {
+    font-size: 13px; font-weight: 700;
+    color: #9ca3af; margin-bottom: 10px;
+  }
+  .dropzone {
+    display: flex; align-items: center; justify-content: center;
+    width: 100%;
+    max-width: 480px;
+    padding: 22px 16px;
+    border: 1px dashed #d1d5db;
+    border-radius: 8px;
+    background: #f9fafb;
+    color: #6b7280;
+    font-size: 13px;
+    cursor: pointer;
+    margin-bottom: 28px;
+  }
+  .dropzone:hover { background: #f3f4f6; border-color: #f7941d; color: #f7941d; }
+
+  /* ---------- Address rows ---------- */
+  .addr-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    margin-bottom: 18px;
+  }
+
+  /* ---------- Floating chat bubble ---------- */
+  .chat-bubble {
+    position: fixed; right: 0; top: 50%;
+    transform: translateY(-50%);
+    width: 14px; height: 36px;
+    background: #f7941d;
+    border-radius: 4px 0 0 4px;
+    cursor: pointer;
+    box-shadow: -1px 0 4px rgba(0,0,0,0.08);
+  }
+</style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <a class="back-btn" href="#" title="Back">←</a>
+      <h1>Add Purchase Order</h1>
+      <span class="help-icon" title="Help">?</span>
+    </div>
+    <div class="top-bar-right">
+      <button class="btn-light">Initial Data Upload</button>
+      <button class="btn-search"><span class="star">✦</span> Search</button>
+      <button class="btn-icon-plus">+</button>
+      <div class="user-pill">
+        <div class="avatar">AN</div>
+        <span class="name">Alec Neill</span>
+        <span class="chev">▾</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page content -->
+  <div class="page">
+
+    <!-- Header field row -->
+    <div class="field-row">
+      <div class="field">
+        <label>Project <span class="req">*</span></label>
+        <div class="select-wrap">
+          <select class="select">
+            <option value="">Project</option>
+            <option>Tottenham Slab Pour</option>
+            <option>Eastgate Civil Stage 2</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Supplier <span class="req">*</span></label>
+        <div class="select-wrap">
+          <select class="select">
+            <option value="">Supplier</option>
+            <option>Concrete Co.</option>
+            <option>Steelworks Pty Ltd</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Order Date</label>
+        <div class="date-wrap">
+          <input type="text" class="input" value="Thu 14/05/2026" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Delivery Date</label>
+        <div class="date-wrap">
+          <input type="text" class="input" placeholder="Select Date" />
+        </div>
+      </div>
+      <div class="field">
+        <label>PO Number <span class="req">*</span></label>
+        <input type="text" class="input" value="ATC--0001" />
+      </div>
+    </div>
+
+    <!-- PO Title -->
+    <div class="field po-title-row">
+      <label>PO Title <span class="req">*</span></label>
+      <input type="text" class="input" placeholder="Input Purchase Order Title" />
+    </div>
+
+    <!-- Delivery Items -->
+    <div class="delivery-header">
+      <h2>Delivery Items</h2>
+      <div class="select-wrap gst-select">
+        <select class="select">
+          <option>GST - Exclusive</option>
+          <option>GST - Inclusive</option>
+          <option>GST - Free</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="lines">
+        <thead>
+          <tr>
+            <th class="col-num"></th>
+            <th>Resource <span class="req">*</span></th>
+            <th>Description</th>
+            <th>Accounting Code</th>
+            <th>Task</th>
+            <th>Cost Centre</th>
+            <th>Unit <span class="req">*</span></th>
+            <th>Unit Cost <span class="req">*</span></th>
+            <th>Order Qty <span class="req">*</span></th>
+            <th>Tax</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="col-num">1</td>
+            <td>
+              <div class="sel-wrap">
+                <select disabled>
+                  <option>Search And Select Resource...</option>
+                </select>
+              </div>
+            </td>
+            <td><input type="text" placeholder="Add Description" /></td>
+            <td>
+              <div class="sel-wrap">
+                <select>
+                  <option>Select Acc. Code</option>
+                </select>
+              </div>
+            </td>
+            <td>
+              <div class="sel-wrap">
+                <select disabled>
+                  <option>Select task</option>
+                </select>
+              </div>
+            </td>
+            <td>
+              <div class="sel-wrap">
+                <select>
+                  <option>Select Cost Centre</option>
+                </select>
+              </div>
+            </td>
+            <td class="underline-cell"><input type="text" /></td>
+            <td class="underline-cell with-prefix">
+              <span class="prefix">$</span>
+              <input type="text" />
+            </td>
+            <td class="underline-cell"><input type="text" /></td>
+            <td>
+              <div class="sel-wrap">
+                <select>
+                  <option>GST on expense</option>
+                  <option>GST free</option>
+                </select>
+              </div>
+            </td>
+            <td class="col-total">$0.00</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <button class="add-line-btn">
+      <span>+</span> Add Delivery Item
+      <span class="info-tooltip" title="Adds a new line item">i</span>
+    </button>
+
+    <!-- Totals -->
+    <div class="totals">
+      <div class="totals-inner">
+        <div class="row subtotal">
+          <span class="label">Subtotal</span>
+          <span class="value">$ 0.00</span>
+        </div>
+        <div class="row">
+          <span class="label">Total GST 10%</span>
+          <span class="value">$ 0.00</span>
+        </div>
+        <div class="row total">
+          <span class="label">Total</span>
+          <span class="value">$ 0.00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Attachments -->
+    <div class="section-label">Attachments</div>
+    <div class="dropzone">+ Browse or drop file</div>
+
+    <!-- Address rows -->
+    <div class="addr-row">
+      <div class="field">
+        <label>Address Line 1 <span class="req">*</span></label>
+        <input type="text" class="input" placeholder="Address Line 1" />
+      </div>
+      <div class="field">
+        <label>Attention</label>
+        <input type="text" class="input" />
+      </div>
+    </div>
+    <div class="addr-row">
+      <div class="field">
+        <label>Address Line 2</label>
+        <input type="text" class="input" placeholder="Address Line 2" />
+      </div>
+      <div class="field">
+        <label>Phone</label>
+        <input type="text" class="input" />
+      </div>
+    </div>
+
+  </div>
+
+  <div class="chat-bubble" title="Help"></div>
+
+</body>
+</html>
