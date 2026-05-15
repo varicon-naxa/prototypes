@@ -3894,24 +3894,10 @@
     // ── Build render order: Weekdays, split days, then fixed non-primary ──
     const renderOrder = [];
 
-    // 1. Weekdays block
+    // 1. Weekdays block (Alec Edition — Split Days removed)
     (function() {
       const state = daySectionStates['Weekdays'];
-      const takenByGroups = splitGroups.reduce(function(acc, g) { return acc.concat(g); }, []);
-      const remainingDays = WEEKDAY_NAMES.filter(function(d) { return takenByGroups.indexOf(d) === -1; });
-      const subtitle = remainingDays.length > 0 ? 'Pay rules for ' + remainingDays.join(', ') : 'All weekdays assigned to split blocks';
-      const ddIsOpen = splitDdOpen === 'weekdays';
-      const availForSplit = WEEKDAY_NAMES.filter(function(d) { return takenByGroups.indexOf(d) === -1; });
-
-      const splitDdHtml = buildSplitDropdown('weekdays', availForSplit, []);
       const headRight =
-        '<div class="split-days-wrap">' +
-          '<button class="split-days-btn' + (ddIsOpen ? ' active' : '') + '" type="button" onclick="openSplitDropdown(\'weekdays\')">' +
-            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3"/><rect x="8" y="2" width="8" height="6" rx="1"/></svg>' +
-            ' Split Days' +
-          '</button>' +
-          splitDdHtml +
-        '</div>' +
         '<button class="day-accordion-btn" type="button" onclick="toggleDayExpanded(\'Weekdays\')">' + chevronSvg(state.expanded) + '</button>';
 
       renderOrder.push(
@@ -3919,7 +3905,7 @@
           '<div class="day-section-head">' +
             '<div class="day-section-head-left">' +
               '<div class="day-section-title">Weekdays</div>' +
-              '<div class="day-section-subtitle">' + subtitle + '</div>' +
+              '<div class="day-section-subtitle">Pay rules for Monday, Tuesday, Wednesday, Thursday, Friday</div>' +
             '</div>' +
             '<div class="day-section-head-right">' + headRight + '</div>' +
           '</div>' +
@@ -3927,48 +3913,6 @@
         '</div>'
       );
     })();
-
-    // 2. Split group blocks (one block per group of days)
-    splitGroups.forEach(function(groupDays) {
-      const key = groupKey(groupDays);
-      const state = daySectionStates[key];
-      if (!state) return;
-
-      const groupLabel = groupDays.join(', ');
-      const ddIsOpen = splitDdOpen === key;
-      // For sub-split: only days in this group are available; they can split off a subset
-      const subDdHtml = buildSplitDropdown(key, groupDays, []);
-
-      // Only show Split button if there are 2+ days in the group
-      const splitBtnHtml = groupDays.length > 1
-        ? '<div class="split-days-wrap">' +
-            '<button class="split-days-btn' + (ddIsOpen ? ' active' : '') + '" type="button" onclick="openSplitDropdown(\'' + key.replace(/'/g,"\\'") + '\')">' +
-              '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3"/><rect x="8" y="2" width="8" height="6" rx="1"/></svg>' +
-              ' Split' +
-            '</button>' +
-            subDdHtml +
-          '</div>'
-        : '';
-      const headRight =
-        splitBtnHtml +
-        '<button class="day-accordion-btn" style="color:var(--warn-main);border-color:transparent;" type="button" title="Remove group" onclick="removeSplitGroup(\'' + key.replace(/'/g,"\\'") + '\')">' +
-          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
-        '</button>' +
-        '<button class="day-accordion-btn" type="button" onclick="toggleDayExpanded(\'' + key.replace(/'/g,"\\'") + '\')">' + chevronSvg(state.expanded) + '</button>';
-
-      renderOrder.push(
-        '<div class="day-section">' +
-          '<div class="day-section-head">' +
-            '<div class="day-section-head-left">' +
-              '<div class="day-section-title">' + groupLabel + ' <span class="split-day-label">Split</span></div>' +
-              '<div class="day-section-subtitle">Define pay rules for ' + groupLabel + '</div>' +
-            '</div>' +
-            '<div class="day-section-head-right">' + headRight + '</div>' +
-          '</div>' +
-          (state.expanded ? '<div class="day-section-body">' + renderPayItemBlock(key) + '</div>' : '') +
-        '</div>'
-      );
-    });
 
     // 3. Fixed non-primary day blocks — Alec Edition: "Clone from other day" removed; always render the day's own rules.
     FIXED_DAY_TYPES.forEach(function(dayType) {
