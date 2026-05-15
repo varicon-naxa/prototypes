@@ -3184,8 +3184,48 @@
     updateAdvancedOptionsState();
   }
 
+  /* ─── Wages preset (Alec Edition) ──────── */
+  const WAGES_PRESETS = {
+    'Weekdays': [
+      { payItem: 'Base Hour',      isAuto: false, ruleType: 'hours', from: '0',  to: '8',  fromTime: '09:00', toTime: '17:00', rate: '' },
+      { payItem: 'Overtime(1.5x)', isAuto: false, ruleType: 'hours', from: '8',  to: '10', fromTime: '09:00', toTime: '17:00', rate: '' },
+      { payItem: 'Overtime(2x)',   isAuto: false, ruleType: 'hours', from: '10', to: '24', fromTime: '09:00', toTime: '17:00', rate: '' }
+    ],
+    'Saturday': [
+      { payItem: 'Overtime(1.5x)', isAuto: false, ruleType: 'hours', from: '0', to: '2',  fromTime: '09:00', toTime: '17:00', rate: '' },
+      { payItem: 'Overtime(2x)',   isAuto: false, ruleType: 'hours', from: '2', to: '24', fromTime: '09:00', toTime: '17:00', rate: '' }
+    ],
+    'Sunday': [
+      { payItem: 'Overtime(2x)',   isAuto: false, ruleType: 'hours', from: '0', to: '24', fromTime: '09:00', toTime: '17:00', rate: '' }
+    ]
+  };
+  function applyWagesPreset() {
+    Object.keys(WAGES_PRESETS).forEach(function(day) {
+      daySectionStates[day] = {
+        differentRules: true,
+        copyFrom: 'Weekdays',
+        expanded: true,
+        payItems: WAGES_PRESETS[day].map(function(p) { return Object.assign({}, p); }),
+        condPayItems: []
+      };
+    });
+  }
+
+  /* ─── Form gate: nothing past Payment Type until one is selected (Alec Edition) ─── */
+  function updateFormGate() {
+    const gated = document.getElementById('post-emptype');
+    const saveBtn = document.getElementById('btn-save-rule');
+    const hasType = !!selectedEmpType;
+    if (gated) gated.style.display = hasType ? '' : 'none';
+    if (saveBtn) {
+      saveBtn.disabled = !hasType;
+      saveBtn.classList.toggle('btn-disabled', !hasType);
+    }
+  }
+
   /* ─── Payment Type single-select ──────── */
   function selectEmpType(val) {
+    const isFreshSelection = !selectedEmpType;
     selectedEmpType = val;
     document.getElementById('ms-emptype-label').textContent = val;
     document.getElementById('ms-emptype-trigger').classList.add('has-selection');
@@ -3193,6 +3233,8 @@
       el.classList.toggle('selected', el.textContent.trim() === val)
     );
     closeAllMsDropdowns();
+    // Apply Wages preset on first selection of Wages (Alec Edition)
+    if (val === 'Wages' && isFreshSelection) applyWagesPreset();
     // Check if any rules already exist for this payment type (skip modal when AI is populating)
     const hasExisting = !aiApplying && existingRules.some(function(r) { return r.empType === val && !r.isVariant; });
     if (hasExisting) {
@@ -3210,6 +3252,7 @@
       renderDaySections();
       updateAdvancedOptionsState();
     }
+    updateFormGate();
   }
 
   /* ─── Pay Category field ────────────────── */
