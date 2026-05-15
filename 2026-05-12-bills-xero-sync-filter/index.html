@@ -777,6 +777,136 @@
     }, 800);
   }
 
+  const APPROVER_DIRECTORY = {
+    'av-pm': { name: 'Paul Mason', role: 'Project Manager', email: 'paul.mason@varicon.example' },
+    'av-gc': { name: 'Greg Chen', role: 'Commercial Manager', email: 'greg.chen@varicon.example' },
+    'av-uj': { name: 'Uma Jones', role: 'Site Supervisor', email: 'uma.jones@varicon.example' },
+    'av-ms': { name: 'Maya Singh', role: 'Senior Estimator', email: 'maya.singh@varicon.example' },
+    'av-jb': { name: 'James Baker', role: 'Operations Manager', email: 'james.baker@varicon.example' },
+  };
+
+  (function setupApproverHover() {
+    const popup = document.getElementById('reminderPopup');
+    const arrow = document.getElementById('rpArrow');
+    const content = popup.querySelector('.rp-content');
+    let hideTimer = null;
+
+    function keyOf(avatar) {
+      return Array.from(avatar.classList).find(c => c.startsWith('av-')) || '';
+    }
+    function statusOf(avatar) {
+      if (avatar.classList.contains('approved')) return 'approved';
+      if (avatar.classList.contains('rejected')) return 'rejected';
+      return 'pending';
+    }
+    function pendingCountFor(key) {
+      return document.querySelectorAll('.approver-avatar.' + key + '.pending').length;
+    }
+
+    function render(avatar) {
+      const key = keyOf(avatar);
+      const status = statusOf(avatar);
+      const info = APPROVER_DIRECTORY[key] || { name: 'Unknown approver', role: '', email: '' };
+      const initials = avatar.textContent.trim() || '?';
+      const bg = getComputedStyle(avatar).backgroundColor;
+      const first = info.name.split(' ')[0];
+
+      let statusBlock = '';
+      let actionBlock = '';
+
+      if (status === 'pending') {
+        const count = pendingCountFor(key);
+        const others = Math.max(0, count - 1);
+        statusBlock = '<div class="rp-status">'
+          + '<strong class="rp-pending">Awaiting their approval</strong><br>'
+          + (others > 0
+              ? first + ' has <strong>' + count + '</strong> bills awaiting approval (this one + ' + others + ' others).'
+              : first + ' has <strong>1</strong> bill awaiting approval.')
+          + '</div>';
+        actionBlock = '<div class="rp-actions">'
+          + '<button class="rp-btn" data-action="send-single">'
+          + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>'
+          + 'Send reminder email'
+          + '</button>'
+          + '</div>'
+          + (others > 0 ? '<a class="rp-link" data-action="send-all">Remind about all ' + count + ' bills →</a>' : '');
+      } else if (status === 'approved') {
+        statusBlock = '<div class="rp-status" style="border-left-color:#4caf50;">'
+          + '✓ <strong style="color:#2e7d32;">Approved</strong> by ' + info.name + '. No reminder needed.'
+          + '</div>';
+      } else {
+        statusBlock = '<div class="rp-status" style="border-left-color:#e53935;">'
+          + '✕ <strong style="color:#c62828;">Rejected</strong> by ' + info.name + '. Reach out directly to discuss.'
+          + '</div>';
+      }
+
+      content.innerHTML =
+        '<div class="rp-header">'
+        + '<div class="rp-avatar" style="background:' + bg + '">' + initials + '</div>'
+        + '<div>'
+        + '<div class="rp-name">' + info.name + '</div>'
+        + '<div class="rp-role">' + info.role + (info.email ? ' · ' + info.email : '') + '</div>'
+        + '</div>'
+        + '</div>'
+        + statusBlock
+        + actionBlock;
+      content.dataset.approverName = info.name;
+    }
+
+    function show(avatar) {
+      clearTimeout(hideTimer);
+      render(avatar);
+      popup.classList.add('visible');
+      const rect = avatar.getBoundingClientRect();
+      const pop = popup.getBoundingClientRect();
+      const scrollX = window.scrollX || window.pageXOffset;
+      const scrollY = window.scrollY || window.pageYOffset;
+      const viewportW = document.documentElement.clientWidth;
+      let left = rect.left + scrollX + rect.width / 2 - pop.width / 2;
+      const minLeft = scrollX + 8;
+      const maxLeft = scrollX + viewportW - pop.width - 8;
+      if (left < minLeft) left = minLeft;
+      if (left > maxLeft) left = maxLeft;
+      const top = rect.bottom + scrollY + 10;
+      popup.style.left = left + 'px';
+      popup.style.top = top + 'px';
+      const arrowLeft = rect.left + scrollX + rect.width / 2 - left - 5;
+      arrow.style.left = Math.max(10, Math.min(pop.width - 20, arrowLeft)) + 'px';
+    }
+
+    function hideSoon() {
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => popup.classList.remove('visible'), 180);
+    }
+
+    document.addEventListener('mouseover', e => {
+      const avatar = e.target.closest && e.target.closest('.approver-avatar');
+      if (avatar) show(avatar);
+    });
+    document.addEventListener('mouseout', e => {
+      const fromAvatar = e.target.closest && e.target.closest('.approver-avatar');
+      if (!fromAvatar) return;
+      const toEl = e.relatedTarget;
+      const intoPopup = toEl && toEl.closest && toEl.closest('#reminderPopup');
+      const intoAvatar = toEl && toEl.closest && toEl.closest('.approver-avatar');
+      if (!intoPopup && !intoAvatar) hideSoon();
+    });
+    popup.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+    popup.addEventListener('mouseleave', hideSoon);
+
+    popup.addEventListener('click', e => {
+      const action = e.target.closest('[data-action]');
+      if (!action) return;
+      const name = content.dataset.approverName || 'approver';
+      if (action.dataset.action === 'send-single') {
+        showToast('Reminder email sent to ' + name, 'They\'ll receive a nudge about this bill', true);
+      } else if (action.dataset.action === 'send-all') {
+        showToast('Reminder sent to ' + name, 'They\'ll be reminded about every bill awaiting their approval', true);
+      }
+      popup.classList.remove('visible');
+    });
+  })();
+
   function showToast(title, desc, success) {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
