@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Add Person (merged user + employee)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #fafafa; color: #1f2937; min-height: 100vh;
+  }
+
+  /* Top app bar */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 32px; background: #fff; border-bottom: 1px solid #eaecef;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 10px; }
+  .v-icon {
+    width: 28px; height: 28px; background: #F19100;
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 15px;
+  }
+  .v-brand { font-weight: 700; color: #143666; font-size: 15px; }
+  .topbar-right { display: flex; align-items: center; gap: 14px; }
+  .user-pill {
+    display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+    background: #f5f6f8; border-radius: 999px; font-size: 13px; color: #4b5563;
+  }
+  .user-avatar {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: #143666; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600;
+  }
+
+  /* Page header */
+  .page-header {
+    padding: 22px 32px 6px; display: flex; align-items: center; gap: 12px;
+  }
+  .back-btn {
+    background: none; border: none; color: #6b7280; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 6px;
+  }
+  .back-btn:hover { background: #f1f3f5; color: #143666; }
+  .page-title { font-size: 22px; font-weight: 700; color: #143666; }
+  .page-sub { font-size: 13px; color: #6b7280; margin-top: 2px; }
+
+  /* Main */
+  .main {
+    max-width: 880px; margin: 0 auto; padding: 18px 32px 96px;
+  }
+
+  /* Type selector */
+  .section-label {
+    font-size: 11px; font-weight: 700; color: #6b7280; letter-spacing: 1px;
+    text-transform: uppercase; margin: 22px 0 10px;
+  }
+  .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .type-card {
+    background: #fff; border: 2px solid #eaecef; border-radius: 12px;
+    padding: 18px 20px; cursor: pointer; transition: all .15s;
+    display: flex; gap: 14px; align-items: flex-start;
+  }
+  .type-card:hover { border-color: #F19100; background: #fffaf2; }
+  .type-card.selected { border-color: #F19100; background: #fff8ec; }
+  .type-icon {
+    flex: 0 0 auto; width: 40px; height: 40px; border-radius: 10px;
+    background: #f5f6f8; display: flex; align-items: center; justify-content: center;
+    color: #143666;
+  }
+  .type-card.selected .type-icon { background: #F19100; color: #fff; }
+  .type-icon svg { width: 22px; height: 22px; }
+  .type-body { flex: 1; }
+  .type-title { font-size: 15px; font-weight: 700; color: #143666; margin-bottom: 4px; }
+  .type-desc { font-size: 12.5px; color: #6b7280; line-height: 1.5; }
+  .type-examples { font-size: 12px; color: #9ca3af; margin-top: 6px; font-style: italic; }
+  .type-check {
+    flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%;
+    border: 2px solid #d1d5db; display: flex; align-items: center; justify-content: center;
+  }
+  .type-card.selected .type-check { border-color: #F19100; background: #F19100; }
+  .type-card.selected .type-check::after {
+    content: ''; width: 6px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0;
+    transform: rotate(45deg); margin-top: -2px;
+  }
+
+  /* Form card */
+  .form-card {
+    background: #fff; border: 1px solid #eaecef; border-radius: 12px;
+    padding: 22px 24px; margin-top: 16px;
+  }
+  .form-card + .form-card { margin-top: 14px; }
+  .form-card-title {
+    font-size: 14px; font-weight: 700; color: #143666; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .form-card-title .badge {
+    font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+    background: #fff8ec; color: #F19100; letter-spacing: 0.4px;
+  }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .row.row-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .row:last-child { margin-bottom: 0; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field.full { grid-column: 1 / -1; }
+  label { font-size: 13px; font-weight: 500; color: #374151; }
+  label .req { color: #d2281b; margin-left: 2px; }
+  input[type=text], input[type=email], input[type=tel], select {
+    border: 1px solid #d1d5db; border-radius: 8px; padding: 10px 12px;
+    font-size: 14px; color: #1f2937; background: #fff;
+    font-family: inherit; transition: border-color .15s;
+  }
+  input:focus, select:focus { outline: none; border-color: #F19100; }
+  input::placeholder { color: #9ca3af; }
+  .help { font-size: 12px; color: #6b7280; margin-top: 2px; }
+
+  /* Phone input */
+  .phone-input { display: flex; gap: 0; }
+  .phone-flag {
+    border: 1px solid #d1d5db; border-right: none; border-radius: 8px 0 0 8px;
+    padding: 0 10px; background: #f9fafb; display: flex; align-items: center; gap: 6px;
+    font-size: 13px; color: #6b7280;
+  }
+  .phone-flag .flag { font-size: 16px; }
+  .phone-input input { border-radius: 0 8px 8px 0; flex: 1; }
+
+  /* Toggle */
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0; border-top: 1px solid #f1f3f5;
+  }
+  .toggle-row:first-child { border-top: none; padding-top: 0; }
+  .toggle-row:last-child { padding-bottom: 0; }
+  .toggle-text { flex: 1; padding-right: 14px; }
+  .toggle-title { font-size: 14px; font-weight: 500; color: #1f2937; }
+  .toggle-desc { font-size: 12.5px; color: #6b7280; margin-top: 2px; line-height: 1.45; }
+  .toggle {
+    width: 38px; height: 22px; background: #d1d5db; border-radius: 999px;
+    position: relative; cursor: pointer; transition: background .15s;
+    flex: 0 0 auto;
+  }
+  .toggle::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 18px; height: 18px; background: #fff; border-radius: 50%;
+    transition: transform .15s; box-shadow: 0 1px 3px rgba(0,0,0,.15);
+  }
+  .toggle.on { background: #F19100; }
+  .toggle.on::after { transform: translateX(16px); }
+
+  /* Hidden sections */
+  .conditional { display: none; }
+  .conditional.show { display: block; }
+
+  /* Chips */
+  .chip-input {
+    border: 1px solid #d1d5db; border-radius: 8px; padding: 8px;
+    min-height: 42px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    background: #fff;
+  }
+  .chip {
+    background: #f1f3f5; color: #374151; font-size: 12.5px; padding: 4px 10px;
+    border-radius: 999px; display: flex; align-items: center; gap: 6px;
+  }
+  .chip-x { cursor: pointer; color: #9ca3af; font-size: 14px; line-height: 1; }
+  .chip-x:hover { color: #d2281b; }
+  .chip-placeholder { color: #9ca3af; font-size: 13px; padding: 0 4px; }
+
+  /* Footer bar */
+  .footer-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; background: #fff;
+    border-top: 1px solid #eaecef; padding: 14px 32px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    z-index: 20;
+  }
+  .footer-summary { font-size: 13px; color: #6b7280; }
+  .footer-summary strong { color: #143666; font-weight: 600; }
+  .footer-actions { display: flex; gap: 10px; }
+  .btn {
+    padding: 9px 18px; border-radius: 8px; font-size: 14px; font-weight: 600;
+    cursor: pointer; border: 1px solid transparent; font-family: inherit;
+    transition: all .15s;
+  }
+  .btn-ghost { background: #fff; border-color: #d1d5db; color: #374151; }
+  .btn-ghost:hover { background: #f9fafb; }
+  .btn-secondary { background: #fff; border-color: #F19100; color: #F19100; }
+  .btn-secondary:hover { background: #fff8ec; }
+  .btn-primary { background: #F19100; color: #fff; }
+  .btn-primary:hover { background: #d87f00; }
+  .btn-primary:disabled { background: #fcd9a3; cursor: not-allowed; }
+
+  /* Info banner */
+  .info-banner {
+    background: #f0f7ff; border: 1px solid #d6e6fa; color: #143666;
+    padding: 12px 14px; border-radius: 8px; font-size: 13px; line-height: 1.5;
+    display: flex; gap: 10px; margin-bottom: 16px;
+  }
+  .info-banner svg { flex: 0 0 auto; color: #2563eb; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="v-icon">V</div>
+    <div class="v-brand">Varicon</div>
+  </div>
+  <div class="topbar-right">
+    <div class="user-pill">
+      <div class="user-avatar">JB</div>
+      <span>James Baker</span>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<div class="page-header">
+  <button class="back-btn" title="Back to People">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+  <div>
+    <div class="page-title">Add person</div>
+    <div class="page-sub">Create a new employee, with optional access to the Varicon platform.</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Type selector -->
+  <div class="section-label">Person type</div>
+  <div class="type-grid">
+    <div class="type-card selected" data-type="employee" onclick="selectType('employee')">
+      <div class="type-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-4V5l-2-2h-4L8 5v2H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Z"/><path d="M12 12v4"/><path d="M10 14h4"/></svg>
+      </div>
+      <div class="type-body">
+        <div class="type-title">Employee only</div>
+        <div class="type-desc">On-site personnel tracked on timesheets, dockets and forms. Does not log in to Varicon.</div>
+        <div class="type-examples">e.g. labourers, operators, drivers</div>
+      </div>
+      <div class="type-check"></div>
+    </div>
+
+    <div class="type-card" data-type="both" onclick="selectType('both')">
+      <div class="type-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11h-6"/><path d="M19 8v6"/></svg>
+      </div>
+      <div class="type-body">
+        <div class="type-title">Employee + user</div>
+        <div class="type-desc">Tracked on site <em>and</em> given a login to manage projects, approve dockets, etc.</div>
+        <div class="type-examples">e.g. supervisors, engineers, managers</div>
+      </div>
+      <div class="type-check"></div>
+    </div>
+  </div>
+
+  <!-- Basic details -->
+  <div class="form-card">
+    <div class="form-card-title">Basic details</div>
+    <div class="row row-3">
+      <div class="field">
+        <label>Worker ID<span class="req">*</span></label>
+        <input type="text" placeholder="e.g. W-0421" />
+        <div class="help">Used on timesheets and dockets.</div>
+      </div>
+      <div class="field">
+        <label>First name<span class="req">*</span></label>
+        <input type="text" placeholder="Jane" />
+      </div>
+      <div class="field">
+        <label>Last name<span class="req">*</span></label>
+        <input type="text" placeholder="Citizen" />
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Phone</label>
+        <div class="phone-input">
+          <div class="phone-flag"><span class="flag">🇦🇺</span> +61</div>
+          <input type="tel" placeholder="412 345 678" />
+        </div>
+      </div>
+      <div class="field">
+        <label id="emailLabel">Email</label>
+        <input id="emailInput" type="email" placeholder="jane.citizen@company.com.au" />
+        <div class="help" id="emailHelp">Optional. Used for payroll comms and notifications.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Employment details -->
+  <div class="form-card">
+    <div class="form-card-title">Employment</div>
+    <div class="row">
+      <div class="field">
+        <label>Company<span class="req">*</span></label>
+        <select>
+          <option value="">Select company…</option>
+          <option selected>Varicon Info</option>
+          <option>Concrete Batching Solutions</option>
+          <option>Subcontractor A</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Worker resource<span class="req">*</span></label>
+        <select id="workerResource">
+          <option value="">Select role / resource…</option>
+          <optgroup label="On-site (employee only)">
+            <option>Labourer</option>
+            <option>Operator</option>
+            <option>Driver</option>
+            <option>Sub Employee</option>
+          </optgroup>
+          <optgroup label="Office / project (typically user)">
+            <option>Engineer</option>
+            <option>Supervisor</option>
+            <option>Project Manager</option>
+            <option>Senior Manager — Executive</option>
+            <option>Undergraduate</option>
+          </optgroup>
+        </select>
+        <div class="help">Drives unit cost and which forms they're assigned to.</div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Payment type</label>
+        <select>
+          <option value="">Select payment type…</option>
+          <option>Hourly</option>
+          <option>Day rate</option>
+          <option>Salary</option>
+        </select>
+        <div class="help">Required for payroll export.</div>
+      </div>
+      <div class="field">
+        <label>Pay category</label>
+        <select>
+          <option value="">Select pay category…</option>
+          <option>Standard</option>
+          <option>Civil Group 3</option>
+          <option>Civil Group 4</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field full">
+        <label>Assigned projects</label>
+        <div class="chip-input">
+          <span class="chip">Eastern Creek <span class="chip-x">×</span></span>
+          <span class="chip">Callan Park <span class="chip-x">×</span></span>
+          <span class="chip-placeholder">Search projects…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Platform access (conditional) -->
+  <div class="form-card conditional" id="accessSection">
+    <div class="form-card-title">
+      Platform access
+      <span class="badge">Employee + user</span>
+    </div>
+
+    <div class="info-banner">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <div>An invite email will be sent to the address above on save. Permissions are inherited from the user role you select.</div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label>User role<span class="req">*</span></label>
+        <select>
+          <option value="">Choose user role…</option>
+          <option>Project Manager</option>
+          <option>Engineer</option>
+          <option>Supervisor</option>
+          <option>Read-only</option>
+          <option>Custom…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Login email<span class="req">*</span></label>
+        <input type="email" placeholder="Inherits from email above" disabled />
+        <div class="help">Mirrors the contact email. Edit the field above to change.</div>
+      </div>
+    </div>
+
+    <div class="toggle-row" onclick="toggle('superAdmin')">
+      <div class="toggle-text">
+        <div class="toggle-title">Super admin</div>
+        <div class="toggle-desc">No permission restrictions. Can manage billing, integrations and other users.</div>
+      </div>
+      <div class="toggle" id="superAdmin"></div>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="form-card">
+    <div class="form-card-title">Status</div>
+    <div class="toggle-row" onclick="toggle('statusActive')">
+      <div class="toggle-text">
+        <div class="toggle-title">Active</div>
+        <div class="toggle-desc">Inactive people are hidden from pickers but their history is kept.</div>
+      </div>
+      <div class="toggle on" id="statusActive"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<div class="footer-bar">
+  <div class="footer-summary">
+    Creating: <strong id="summaryText">Employee only</strong>
+  </div>
+  <div class="footer-actions">
+    <button class="btn btn-ghost">Cancel</button>
+    <button class="btn btn-secondary">Save & add another</button>
+    <button class="btn btn-primary">Add person</button>
+  </div>
+</div>
+
+<script>
+  function selectType(type) {
+    document.querySelectorAll('.type-card').forEach(c => c.classList.remove('selected'));
+    document.querySelector('.type-card[data-type="' + type + '"]').classList.add('selected');
+
+    const accessSection = document.getElementById('accessSection');
+    const summary = document.getElementById('summaryText');
+    const emailLabel = document.getElementById('emailLabel');
+    const emailHelp = document.getElementById('emailHelp');
+
+    if (type === 'both') {
+      accessSection.classList.add('show');
+      summary.textContent = 'Employee + user';
+      emailLabel.innerHTML = 'Email<span class="req">*</span>';
+      emailHelp.textContent = 'Used as their Varicon login. Invite sent on save.';
+    } else {
+      accessSection.classList.remove('show');
+      summary.textContent = 'Employee only';
+      emailLabel.textContent = 'Email';
+      emailHelp.textContent = 'Optional. Used for payroll comms and notifications.';
+    }
+  }
+
+  function toggle(id) {
+    document.getElementById(id).classList.toggle('on');
+  }
+</script>
+
+</body>
+</html>
