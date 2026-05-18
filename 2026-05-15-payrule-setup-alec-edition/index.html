@@ -4199,8 +4199,47 @@
       if (!state) return;
 
       const esc = dayType.replace(/'/g,"\\'");
+
+      // Alec Edition — Night Shift section: gated by nightShiftEnabled
+      if (dayType === 'Night Shift') {
+        if (!nightShiftEnabled) {
+          renderOrder.push(
+            '<div class="day-section">' +
+              '<div class="day-section-head">' +
+                '<div class="day-section-head-left">' +
+                  '<div class="day-section-title">Night Shift</div>' +
+                  '<div class="day-section-subtitle">Night shift rules are off — turn on to configure pay items for night hours</div>' +
+                '</div>' +
+                '<div class="day-section-head-right">' +
+                  '<button class="big-add-payrule-btn" style="width:auto;margin:0;padding:8px 14px;font-size:13px;" type="button" onclick="enableNightShiftFromSection()">+ Enable Night Shift</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>'
+          );
+          return;
+        }
+        const subtitle = 'Hours between ' + (nightshiftTimes.from || '17:00') + ' and ' + (nightshiftTimes.to || '06:00');
+        renderOrder.push(
+          '<div class="day-section">' +
+            '<div class="day-section-head">' +
+              '<div class="day-section-head-left">' +
+                '<div class="day-section-title">Night Shift</div>' +
+                '<div class="day-section-subtitle">' + subtitle + '</div>' +
+              '</div>' +
+              '<div class="day-section-head-right">' +
+                '<button class="day-accordion-btn" type="button" onclick="toggleDayExpanded(\'Night Shift\')">' + chevronSvg(state.expanded) + '</button>' +
+              '</div>' +
+            '</div>' +
+            (state.expanded ? '<div class="day-section-body">' + renderPayItemBlock('Night Shift') + '</div>' : '') +
+          '</div>'
+        );
+        return;
+      }
+
       const headRight = '<button class="day-accordion-btn" type="button" onclick="toggleDayExpanded(\'' + esc + '\')">' + chevronSvg(state.expanded) + '</button>';
-      const bodyHtml = state.expanded ? '<div class="day-section-body">' + renderPayItemBlock(dayType) + '</div>' : '';
+      // Alec Edition — RDO Worked appends the inline RDO Reduction control inside its body
+      const extraBody = (dayType === 'RDO Worked') ? renderInlineRdoReduction() : '';
+      const bodyHtml = state.expanded ? '<div class="day-section-body">' + renderPayItemBlock(dayType) + extraBody + '</div>' : '';
 
       renderOrder.push(
         '<div class="day-section">' +
@@ -4214,6 +4253,9 @@
         '</div>'
       );
     });
+
+    // 4. Alec Edition — Allowances section (after the day sections)
+    renderOrder.push(renderAllowancesSection());
 
     container.innerHTML = renderOrder.join('');
 
