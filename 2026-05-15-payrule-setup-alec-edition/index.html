@@ -3854,7 +3854,140 @@
     nightShiftEnabled = val;
     if (!val) delete daySectionStates['Night Shift'];
     renderNightShiftCard();
+    renderDaySections();
     updateAdvancedOptionsState();
+  }
+  // Alec Edition — let users enable Night Shift directly from the new section
+  function enableNightShiftFromSection() {
+    toggleNightShiftEnabled(true);
+  }
+
+  /* ─── Inline RDO reduction (rendered inside RDO Worked body) (Alec Edition) ─── */
+  function renderInlineRdoReduction() {
+    if (!rdoSettings.enabled) {
+      return '<div class="inline-rdo-add">' +
+        '<button class="inline-rdo-add-btn" type="button" onclick="enableInlineRdo()">' +
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+          ' Add RDO reduction' +
+        '</button>' +
+      '</div>';
+    }
+    const modes = ['Bi-weekly', 'Monthly', 'Weekly Threshold', 'Percentage of Ordinary'];
+    const modeOpts = modes.map(function(m) { return '<option value="' + m + '"' + (rdoSettings.mode === m ? ' selected' : '') + '>' + m + '</option>'; }).join('');
+    const payOpts = '<option value="" disabled' + (!rdoSettings.applyTo ? ' selected' : '') + '>Select pay item</option>' +
+      PAY_ITEM_OPTIONS.map(function(o) { return '<option value="' + o + '"' + (rdoSettings.applyTo === o ? ' selected' : '') + '>' + o + '</option>'; }).join('');
+
+    let valueField = '';
+    if (rdoSettings.mode === 'Bi-weekly' || rdoSettings.mode === 'Monthly') {
+      valueField =
+        '<label class="inline-rdo-field"><span>Daily deduction (hrs)</span>' +
+          '<input class="inline-rdo-input" type="number" min="0" step="0.1" value="' + (rdoSettings.dailyDeduction || '') + '" placeholder="' + (rdoSettings.mode === 'Bi-weekly' ? '0.8' : '0.4') + '" onchange="updateInlineRdoField(\'dailyDeduction\',this.value)">' +
+        '</label>';
+    } else if (rdoSettings.mode === 'Weekly Threshold') {
+      valueField =
+        '<label class="inline-rdo-field"><span>Threshold (hrs/wk)</span>' +
+          '<input class="inline-rdo-input" type="number" min="0" step="0.5" value="' + (rdoSettings.weeklyThreshold || '') + '" onchange="updateInlineRdoField(\'weeklyThreshold\',this.value)">' +
+        '</label>' +
+        '<label class="inline-rdo-field"><span>Weekly deduction (hrs)</span>' +
+          '<input class="inline-rdo-input" type="number" min="0" step="0.5" value="' + (rdoSettings.weeklyDeduction || '') + '" onchange="updateInlineRdoField(\'weeklyDeduction\',this.value)">' +
+        '</label>';
+    } else if (rdoSettings.mode === 'Percentage of Ordinary') {
+      valueField =
+        '<label class="inline-rdo-field"><span>Percentage (%)</span>' +
+          '<input class="inline-rdo-input" type="number" min="0" max="100" step="0.1" value="' + (rdoSettings.percentage || '') + '" onchange="updateInlineRdoField(\'percentage\',this.value)">' +
+        '</label>';
+    }
+
+    return '<div class="inline-rdo-block">' +
+      '<div class="inline-rdo-head">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
+        '<span>RDO Reduction</span>' +
+        '<button class="inline-rdo-remove" type="button" title="Remove RDO reduction" onclick="disableInlineRdo()">' +
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+        '</button>' +
+      '</div>' +
+      '<div class="inline-rdo-fields">' +
+        '<label class="inline-rdo-field"><span>Mode</span>' +
+          '<select class="inline-rdo-input" onchange="updateInlineRdoField(\'mode\',this.value)">' + modeOpts + '</select>' +
+        '</label>' +
+        valueField +
+        '<label class="inline-rdo-field"><span>Apply to pay item</span>' +
+          '<select class="inline-rdo-input" onchange="updateInlineRdoField(\'applyTo\',this.value)">' + payOpts + '</select>' +
+        '</label>' +
+      '</div>' +
+    '</div>';
+  }
+  function enableInlineRdo() {
+    rdoSettings.enabled = true;
+    renderRdoSection();
+    renderDaySections();
+    updateAdvancedOptionsState();
+  }
+  function disableInlineRdo() {
+    rdoSettings.enabled = false;
+    renderRdoSection();
+    renderDaySections();
+    updateAdvancedOptionsState();
+  }
+  function updateInlineRdoField(field, val) {
+    rdoSettings[field] = val;
+    renderRdoSection();
+    renderDaySections();
+  }
+
+  /* ─── Allowances section (Alec Edition) ─── */
+  function renderAllowancesSection() {
+    const typeOpts = function(sel) {
+      return '<option value="" disabled' + (!sel ? ' selected' : '') + '>Select allowance</option>' +
+        ALLOWANCE_TYPES.map(function(o) { return '<option value="' + o + '"' + (sel === o ? ' selected' : '') + '>' + o + '</option>'; }).join('');
+    };
+    const perOpts = function(sel) {
+      return ALLOWANCE_PER_UNITS.map(function(o) { return '<option value="' + o + '"' + (sel === o ? ' selected' : '') + '>' + o + '</option>'; }).join('');
+    };
+    const colHeaders =
+      '<div class="allowance-cols">' +
+        '<span>Allowance</span>' +
+        '<span>Amount</span>' +
+        '<span>Frequency</span>' +
+        '<span></span>' +
+      '</div>';
+    const rows = allowanceRowsData.map(function(row, idx) {
+      return '<div class="allowance-row">' +
+        '<select class="pay-item-select' + (!row.type ? ' placeholder' : '') + '" onchange="updateAllowanceRow(' + idx + ',\'type\',this.value)">' + typeOpts(row.type) + '</select>' +
+        '<div class="allowance-amount-wrap">$<input class="allowance-amount-input" type="number" min="0" step="0.01" placeholder="0.00" value="' + (row.amount || '') + '" onchange="updateAllowanceRow(' + idx + ',\'amount\',this.value)"></div>' +
+        '<select class="cond-type-select" onchange="updateAllowanceRow(' + idx + ',\'per\',this.value)">' + perOpts(row.per || 'per day') + '</select>' +
+        '<button class="remove-row-btn" type="button" title="Remove" onclick="removeAllowanceRow(' + idx + ')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+      '</div>';
+    }).join('');
+    const addBtn =
+      '<button class="add-pay-item-btn" type="button" onclick="addAllowanceRow()">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+        ' Add allowance' +
+      '</button>';
+    return '<div class="day-section">' +
+      '<div class="day-section-head">' +
+        '<div class="day-section-head-left">' +
+          '<div class="day-section-title">Allowances</div>' +
+          '<div class="day-section-subtitle">Flat-rate allowances paid in addition to ordinary earnings</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="day-section-body">' +
+        (allowanceRowsData.length > 0 ? colHeaders + rows : '<div style="font-size:13px;color:var(--text-disabled);padding:4px 0 10px;">No allowances yet.</div>') +
+        addBtn +
+      '</div>' +
+    '</div>';
+  }
+  function addAllowanceRow() {
+    allowanceRowsData.push({ type: '', amount: '', per: 'per day' });
+    renderDaySections();
+  }
+  function removeAllowanceRow(idx) {
+    allowanceRowsData.splice(idx, 1);
+    renderDaySections();
+  }
+  function updateAllowanceRow(idx, field, val) {
+    if (!allowanceRowsData[idx]) return;
+    allowanceRowsData[idx][field] = val;
   }
 
   /* ─── Rule Type (Hrs / Time) ───────────────── */
