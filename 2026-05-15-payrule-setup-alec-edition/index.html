@@ -3362,16 +3362,22 @@
     });
   }
 
-  /* ─── Form gate: scope, then payment type, then the rest (Alec Edition) ─── */
+  /* ─── Form gate: scope → (project if needed) → payment type → the rest (Alec Edition) ─── */
   function updateFormGate() {
-    const postScope = document.getElementById('post-scope');
-    const postType  = document.getElementById('post-emptype');
-    const saveBtn   = document.getElementById('btn-save-rule');
-    const hasScope  = !!ruleScope;
-    const hasType   = !!selectedEmpType;
-    if (postScope) postScope.style.display = hasScope ? '' : 'none';
-    if (postType)  postType.style.display  = (hasScope && hasType) ? '' : 'none';
-    const enabled = hasScope && hasType;
+    const postScope    = document.getElementById('post-scope');
+    const projectRow   = document.getElementById('project-picker-row');
+    const empTypeRow   = document.getElementById('ms-emptype')?.closest('.form-row');
+    const postType     = document.getElementById('post-emptype');
+    const saveBtn      = document.getElementById('btn-save-rule');
+    const hasScope     = !!ruleScope;
+    const isProject    = ruleScope === 'project';
+    const projectReady = !isProject || !!selectedProject; // company scope auto-satisfies project gate
+    const hasType      = !!selectedEmpType;
+    if (postScope)  postScope.style.display  = hasScope ? '' : 'none';
+    if (projectRow) projectRow.style.display = isProject ? '' : 'none';
+    if (empTypeRow) empTypeRow.style.display = projectReady ? '' : 'none';
+    if (postType)   postType.style.display   = (projectReady && hasType) ? '' : 'none';
+    const enabled = hasScope && projectReady && hasType;
     if (saveBtn) {
       saveBtn.disabled = !enabled;
       saveBtn.classList.toggle('btn-disabled', !enabled);
@@ -3380,9 +3386,64 @@
 
   /* ─── Rule Scope select (Alec Edition) ──────── */
   function selectRuleScope(val) {
+    if (ruleScope !== val) {
+      // Reset downstream selections when scope changes
+      selectedProject = '';
+      const lbl = document.getElementById('ms-project-label');
+      if (lbl) lbl.textContent = 'Select project';
+      const trig = document.getElementById('ms-project-trigger');
+      if (trig) trig.classList.remove('has-selection');
+    }
     ruleScope = val;
     document.getElementById('rule-scope-company').classList.toggle('selected', val === 'company');
     document.getElementById('rule-scope-project').classList.toggle('selected', val === 'project');
+    if (val === 'project') renderProjectOptions('');
+    updateFormGate();
+  }
+
+  /* ─── Project picker (Alec Edition) ──────── */
+  function toggleProjectDropdown() {
+    const dd = document.getElementById('ms-project-dd');
+    if (!dd) return;
+    const isOpen = dd.style.display === 'block';
+    closeAllMsDropdowns();
+    if (!isOpen) {
+      dd.style.display = 'block';
+      renderProjectOptions(document.getElementById('project-search-input').value || '');
+      setTimeout(function() {
+        const inp = document.getElementById('project-search-input');
+        if (inp) inp.focus();
+      }, 30);
+    }
+  }
+  function renderProjectOptions(q) {
+    const list = document.getElementById('project-options-list');
+    if (!list) return;
+    const query = (q || '').trim().toLowerCase();
+    const matches = PROJECTS_DATA.filter(function(p) {
+      if (!query) return true;
+      return p.name.toLowerCase().indexOf(query) !== -1
+          || p.code.toLowerCase().indexOf(query) !== -1
+          || p.client.toLowerCase().indexOf(query) !== -1;
+    });
+    if (matches.length === 0) {
+      list.innerHTML = '<div class="project-options-empty">No projects match "' + (q || '') + '"</div>';
+      return;
+    }
+    list.innerHTML = matches.map(function(p) {
+      const escName = p.name.replace(/'/g,"\\'");
+      const isSelected = selectedProject === p.code;
+      return '<div class="ss-option' + (isSelected ? ' selected' : '') + '" onclick="selectProject(\'' + p.code + '\',\'' + escName + '\')">' +
+        '<span class="project-option-name">' + p.name + '</span>' +
+        '<span class="project-option-meta">' + p.code + ' • ' + p.client + ' • ' + p.status + '</span>' +
+      '</div>';
+    }).join('');
+  }
+  function selectProject(code, name) {
+    selectedProject = code;
+    document.getElementById('ms-project-label').textContent = name + ' (' + code + ')';
+    document.getElementById('ms-project-trigger').classList.add('has-selection');
+    closeAllMsDropdowns();
     updateFormGate();
   }
 
