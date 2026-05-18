@@ -3424,22 +3424,30 @@
     });
   }
 
-  /* ─── Form gate: scope → (project if needed) → payment type → the rest (Alec Edition) ─── */
+  /* ─── Form gate: scope → (project + copy-from if needed) → payment type → the rest (Alec Edition) ─── */
   function updateFormGate() {
-    const postScope    = document.getElementById('post-scope');
-    const projectRow   = document.getElementById('project-picker-row');
-    const empTypeRow   = document.getElementById('ms-emptype')?.closest('.form-row');
-    const postType     = document.getElementById('post-emptype');
-    const saveBtn      = document.getElementById('btn-save-rule');
-    const hasScope     = !!ruleScope;
-    const isProject    = ruleScope === 'project';
-    const projectReady = !isProject || !!selectedProject; // company scope auto-satisfies project gate
-    const hasType      = !!selectedEmpType;
-    if (postScope)  postScope.style.display  = hasScope ? '' : 'none';
-    if (projectRow) projectRow.style.display = isProject ? '' : 'none';
-    if (empTypeRow) empTypeRow.style.display = projectReady ? '' : 'none';
-    if (postType)   postType.style.display   = (projectReady && hasType) ? '' : 'none';
-    const enabled = hasScope && projectReady && hasType;
+    const postScope     = document.getElementById('post-scope');
+    const projectRow    = document.getElementById('project-picker-row');
+    const copyFromRow   = document.getElementById('copy-from-row');
+    const copyPickerWrap= document.getElementById('copy-source-picker-wrap');
+    const empTypeRow    = document.getElementById('ms-emptype')?.closest('.form-row');
+    const postType      = document.getElementById('post-emptype');
+    const saveBtn       = document.getElementById('btn-save-rule');
+    const hasScope      = !!ruleScope;
+    const isProject     = ruleScope === 'project';
+    const projectReady  = !isProject || !!selectedProject;
+    // Project-scope rules also need a copy source. If "another project" is the source, the source project must be picked too.
+    const needsCopySource     = isProject && !!selectedProject;
+    const copySourceReady     = !needsCopySource || (!!copySource && (copySource !== 'project' || !!copySourceProject));
+    const showCopyPicker      = copySource === 'project';
+    const hasType             = !!selectedEmpType;
+    if (postScope)      postScope.style.display      = hasScope ? '' : 'none';
+    if (projectRow)     projectRow.style.display     = isProject ? '' : 'none';
+    if (copyFromRow)    copyFromRow.style.display    = needsCopySource ? '' : 'none';
+    if (copyPickerWrap) copyPickerWrap.style.display = (needsCopySource && showCopyPicker) ? '' : 'none';
+    if (empTypeRow)     empTypeRow.style.display     = (projectReady && copySourceReady) ? '' : 'none';
+    if (postType)       postType.style.display       = (projectReady && copySourceReady && hasType) ? '' : 'none';
+    const enabled = hasScope && projectReady && copySourceReady && hasType;
     if (saveBtn) {
       saveBtn.disabled = !enabled;
       saveBtn.classList.toggle('btn-disabled', !enabled);
