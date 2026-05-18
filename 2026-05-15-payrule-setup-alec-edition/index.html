@@ -3459,6 +3459,7 @@
     if (ruleScope !== val) {
       // Reset downstream selections when scope changes
       selectedProject = '';
+      resetCopySourceUi();
       const lbl = document.getElementById('ms-project-label');
       if (lbl) lbl.textContent = 'Select project';
       const trig = document.getElementById('ms-project-trigger');
@@ -3469,6 +3470,80 @@
     document.getElementById('rule-scope-project').classList.toggle('selected', val === 'project');
     if (val === 'project') renderProjectOptions('');
     updateFormGate();
+  }
+
+  /* ─── Copy-From step (Alec Edition) ─── */
+  function selectCopySource(val) {
+    if (copySource !== val) {
+      copySourceProject = '';
+      const lbl = document.getElementById('ms-copy-project-label');
+      if (lbl) lbl.textContent = 'Select source project';
+      const trig = document.getElementById('ms-copy-project-trigger');
+      if (trig) trig.classList.remove('has-selection');
+    }
+    copySource = val;
+    document.getElementById('copy-from-company').classList.toggle('selected', val === 'company');
+    document.getElementById('copy-from-project').classList.toggle('selected', val === 'project');
+    if (val === 'project') renderCopyProjectOptions('');
+    updateFormGate();
+  }
+  function toggleCopyProjectDropdown() {
+    const dd = document.getElementById('ms-copy-project-dd');
+    if (!dd) return;
+    const isOpen = dd.classList.contains('open');
+    closeAllMsDropdowns();
+    if (!isOpen) {
+      dd.classList.add('open');
+      renderCopyProjectOptions(document.getElementById('copy-project-search-input').value || '');
+      setTimeout(function() {
+        const inp = document.getElementById('copy-project-search-input');
+        if (inp) inp.focus();
+      }, 30);
+    }
+  }
+  function renderCopyProjectOptions(q) {
+    const list = document.getElementById('copy-project-options-list');
+    if (!list) return;
+    const query = (q || '').trim().toLowerCase();
+    // Exclude the currently-selected destination project so the user can't copy from itself
+    const matches = PROJECTS_DATA.filter(function(p) {
+      if (p.code === selectedProject) return false;
+      if (!query) return true;
+      return p.name.toLowerCase().indexOf(query) !== -1
+          || p.code.toLowerCase().indexOf(query) !== -1
+          || p.client.toLowerCase().indexOf(query) !== -1;
+    });
+    if (matches.length === 0) {
+      list.innerHTML = '<div class="project-options-empty">No projects match "' + (q || '') + '"</div>';
+      return;
+    }
+    list.innerHTML = matches.map(function(p) {
+      const escName = p.name.replace(/'/g,"\\'");
+      const isSelected = copySourceProject === p.code;
+      return '<div class="ss-option' + (isSelected ? ' selected' : '') + '" onclick="selectCopyProject(\'' + p.code + '\',\'' + escName + '\')">' +
+        '<span class="project-option-name">' + p.name + '</span>' +
+        '<span class="project-option-meta">' + p.code + ' • ' + p.client + ' • ' + p.status + '</span>' +
+      '</div>';
+    }).join('');
+  }
+  function selectCopyProject(code, name) {
+    copySourceProject = code;
+    document.getElementById('ms-copy-project-label').textContent = name + ' (' + code + ')';
+    document.getElementById('ms-copy-project-trigger').classList.add('has-selection');
+    closeAllMsDropdowns();
+    updateFormGate();
+  }
+  function resetCopySourceUi() {
+    copySource = '';
+    copySourceProject = '';
+    const cards = ['copy-from-company', 'copy-from-project'];
+    cards.forEach(function(id) { const el = document.getElementById(id); if (el) el.classList.remove('selected'); });
+    const lbl = document.getElementById('ms-copy-project-label');
+    if (lbl) lbl.textContent = 'Select source project';
+    const trig = document.getElementById('ms-copy-project-trigger');
+    if (trig) trig.classList.remove('has-selection');
+    const sInp = document.getElementById('copy-project-search-input');
+    if (sInp) sInp.value = '';
   }
 
   /* ─── Project picker (Alec Edition) ──────── */
