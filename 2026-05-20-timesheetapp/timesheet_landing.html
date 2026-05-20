@@ -1,0 +1,4619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Timesheet</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #143666;
+      --accent: #F2AD3E;
+      --bg: #ffffff;
+      --card: #ffffff;
+      --muted: #6b7280;
+      --border: rgba(0,0,0,0.08);
+      --green: #4caf50;
+      --green-bg: #e8f5e9;
+      --green-text: #2e7d32;
+      --amber-bg: #fff8ec;
+      --amber-text: #b86e00;
+      --radius-card: 12px;
+      --radius-pill: 24px;
+      --nav-height: 64px;
+    }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: #e8eaf0;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+    }
+
+    /* ── Mobile frame ── */
+    .phone {
+      width: 390px;
+      height: 820px;
+      background: var(--bg);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Sticky top bar ── */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Row 1: hamburger + title | refresh + calendar + bell */
+    .topbar-row1 {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px 4px;
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .topbar-title {
+      font-size: 17px;
+      font-weight: 500;
+      color: var(--primary);
+    }
+
+    .topbar-icons {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    /* Row 2: today date label */
+    .topbar-row2 {
+      padding: 2px 16px 10px;
+    }
+
+    .today-label {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--muted);
+    }
+
+    .icon-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px;
+    }
+
+    /* ── Scrollable content ── */
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 14px calc(var(--nav-height) + 80px);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* ── Welcome / action block ── */
+    .welcome-card {
+      background: var(--card);
+      border-radius: var(--radius-card);
+      padding: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+
+    .welcome-heading {
+      font-size: 19px;
+      font-weight: 500;
+      color: var(--primary);
+      margin: 4px 0 0;
+    }
+
+    .prev-worked {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 2px;
+    }
+
+    .prev-worked-icon {
+      flex-shrink: 0;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    .prev-worked-info { display: flex; flex-direction: column; gap: 3px; }
+
+    .prev-project {
+      font-size: 14px;
+      font-weight: 400;
+      color: #374151;
+    }
+
+    .prev-dates {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .btn-clockin {
+      width: 100%;
+      background: var(--accent);
+      color: #233759;
+      border: none;
+      border-radius: var(--radius-pill);
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 500;
+      font-family: 'Roboto', sans-serif;
+      cursor: pointer;
+      margin-bottom: 10px;
+      letter-spacing: 0.2px;
+    }
+
+    .btn-clockin:active { opacity: 0.9; }
+
+    .action-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    /* Plain text button — Add Timesheet */
+    .btn-text {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--accent);
+      padding: 9px 8px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: 'Roboto', sans-serif;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .btn-text:active { opacity: 0.7; }
+
+    /* Grey outlined button — Request Leave */
+    .btn-outline-grey {
+      flex: 1;
+      background: transparent;
+      border: 1.5px solid #d1d5db;
+      color: #374151;
+      border-radius: 5px;
+      padding: 9px 8px;
+      font-size: 13px;
+      font-weight: 400;
+      font-family: 'Roboto', sans-serif;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-outline-grey:active { background: #f9fafb; }
+
+    /* ── Section header ── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2px;
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--primary);
+    }
+
+    .section-link {
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    .section-link:hover { opacity: 1; text-decoration: underline; }
+
+    /* ── Timesheet cards ── */
+    .ts-card {
+      background: var(--card);
+      border-radius: var(--radius-card);
+      padding: 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      display: flex;
+      gap: 12px;
+      position: relative;
+      border-left: 3px solid transparent;
+    }
+
+    /* Status left-border variants */
+    .ts-card.status-unapproved { border-left-color: #F19100; }
+    .ts-card.status-approved   { border-left-color: #4caf50; background: #f9fefb; }
+    .ts-card.status-clocked    { border-left-color: #1976d2; background: #f0f6ff; }
+
+    /* Date box */
+    .date-box {
+      min-width: 46px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #f3f4f6;
+      border-radius: 8px;
+      padding: 6px 4px;
+      line-height: 1.2;
+    }
+
+    .date-box.approved { background: #d6f0de; }
+    .date-box.clocked  { background: #dbeafe; }
+
+    .date-day-name {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .date-day-num {
+      font-size: 22px;
+      font-weight: 400;
+      color: #4b5563;
+      line-height: 1;
+    }
+
+    .date-box.approved .date-day-name,
+    .date-box.approved .date-day-num { color: var(--green-text); }
+
+    .date-box.clocked .date-day-name,
+    .date-box.clocked .date-day-num  { color: #1565c0; }
+
+    .date-month {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .date-box.approved .date-month { color: var(--green-text); }
+    .date-box.clocked  .date-month { color: #1565c0; }
+
+    /* Clocked-in badge */
+    .badge-clocked {
+      background: #dbeafe;
+      color: #1565c0;
+    }
+
+    /* Card body */
+    .ts-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .ts-project {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--primary);
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .ts-clocked-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+
+    .ts-clocked-label {
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 0.4px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .ts-approved-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--green-text);
+      font-weight: 400;
+      margin-bottom: 2px;
+    }
+
+    .ts-approved-label {
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 0.4px;
+      color: var(--green-text);
+      text-transform: uppercase;
+    }
+
+    /* Icon chips row */
+    .chip-row {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+
+    .chip {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      border-radius: 6px;
+      padding: 3px 7px;
+      font-size: 11px;
+      font-weight: 400;
+    }
+
+    .chip-clock  { background: #fff3e0; color: var(--accent); }
+    .chip-check  { background: #e8f5e9; color: var(--green-text); }
+    .chip-umbrella { background: #e3f2fd; color: #1565c0; }
+    .chip-doc    { background: #e8eaf6; color: #3949ab; }
+    .chip-dollar { background: #f3e5f5; color: #7b1fa2; }
+    .chip-docket { background: #fff8ec; color: var(--amber-text); }
+
+    /* Status badge */
+    .status-badge {
+      position: absolute;
+      bottom: 14px;
+      right: 14px;
+      font-size: 11px;
+      font-weight: 400;
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+
+    .badge-unapproved {
+      background: var(--amber-bg);
+      color: var(--amber-text);
+    }
+
+    .badge-approved {
+      background: var(--green-bg);
+      color: var(--green-text);
+    }
+
+    /* ── Bottom nav ── */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 390px;
+      height: var(--nav-height);
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      display: flex;
+      z-index: 200;
+    }
+
+    .nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 500;
+      padding: 6px 0 4px;
+      text-decoration: none;
+    }
+
+    .nav-item.active {
+      color: var(--accent);
+    }
+
+    /* ── Scan QR FAB ── */
+    .fab-scan {
+      position: fixed;
+      bottom: calc(var(--nav-height) + 14px);
+      right: calc(50% - 195px + 14px);
+      background: var(--accent);
+      color: #233759;
+      border: none;
+      border-radius: var(--radius-pill);
+      padding: 12px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: 'Roboto', sans-serif;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      box-shadow: 0 4px 12px rgba(255,144,0,0.35);
+      z-index: 150;
+    }
+
+    .fab-scan:active { opacity: 0.9; }
+
+    /* ── Break icon ── */
+    .break-icon { font-size: 11px; opacity: 0.75; }
+
+    /* ── Clocked-in welcome card state ── */
+    .clocked-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .clocked-info { flex: 1; min-width: 0; }
+    .clocked-label {
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .clocked-project {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--primary);
+      margin-bottom: 6px;
+      line-height: 1.3;
+    }
+    .timer-duration-label {
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+    .timer-display {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--primary);
+      letter-spacing: 1.5px;
+      font-variant-numeric: tabular-nums;
+    }
+    .notes-icon-btn {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+      background: #f3f4f6;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary);
+      margin-top: 2px;
+    }
+    .notes-icon-btn:active { background: #e5e7eb; }
+
+    .btn-clockout {
+      flex: 1;
+      background: var(--accent);
+      color: #233759;
+      border: none;
+      border-radius: var(--radius-pill);
+      padding: 11px 8px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: 'Roboto', sans-serif;
+      cursor: pointer;
+    }
+    .btn-clockout:active { opacity: 0.9; }
+
+    .btn-switch-project {
+      flex: 1;
+      background: transparent;
+      border: 1.5px solid #d1d5db;
+      color: #374151;
+      border-radius: var(--radius-pill);
+      padding: 11px 8px;
+      font-size: 14px;
+      font-weight: 400;
+      font-family: 'Roboto', sans-serif;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-switch-project:active { background: #f9fafb; }
+
+    /* Separate action card below welcome card */
+    .action-card {
+      background: var(--card);
+      border-radius: var(--radius-card);
+      padding: 10px 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+
+    /* ════════════════════════════════════════
+       CLOCKED TIMESHEET DETAIL SCREEN
+    ════════════════════════════════════════ */
+    .detail-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      background: #fff;
+    }
+    .detail-header-center {
+      font-size: 17px;
+      font-weight: 500;
+      color: var(--primary);
+      flex: 1;
+      text-align: left;
+      margin-left: 8px;
+    }
+    .detail-delete-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #d4183d;
+      display: flex;
+      align-items: center;
+      padding: 2px;
+    }
+    .detail-project-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .detail-project-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--primary);
+    }
+    .detail-project-date {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .detail-clockin-col { text-align: right; }
+    .detail-clockin-label {
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+    .detail-clockin-time {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--primary);
+    }
+    .detail-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 16px 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .detail-meta-row svg { flex-shrink: 0; }
+    .detail-address-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 16px 8px;
+      font-size: 12px;
+      color: var(--accent);
+      text-decoration: underline;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+    }
+    .info-banner {
+      margin: 10px 16px;
+      background: #fff8ec;
+      border: 1px solid #f5d08a;
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      gap: 9px;
+      align-items: flex-start;
+      font-size: 12px;
+      color: #7c5200;
+      line-height: 1.5;
+    }
+    .info-banner svg { flex-shrink: 0; margin-top: 1px; }
+    .detail-section {
+      padding: 12px 16px;
+    }
+    .detail-section-label {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 6px;
+    }
+    .detail-hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .remarks-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .remarks-textarea {
+      flex: 1;
+      min-height: 80px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-family: 'Roboto', sans-serif;
+      color: var(--primary);
+      resize: none;
+      outline: none;
+      background: #fff;
+    }
+    .remarks-textarea::placeholder { color: #9ca3af; }
+    .remarks-textarea:focus { border-color: var(--primary); }
+    .attach-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 11px;
+      font-family: 'Roboto', sans-serif;
+      padding: 6px 4px;
+      flex-shrink: 0;
+    }
+    .detail-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0;
+    }
+    .daywork-btn {
+      width: 100%;
+      border: 1.5px solid var(--accent);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 500;
+      font-family: 'Roboto', sans-serif;
+      padding: 12px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .daywork-btn:active { background: #fff8ec; }
+
+    /* ── Clocked Details section (clock-out form) ── */
+    .co-clocked-section {
+      padding: 14px 16px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .co-clocked-title {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 10px;
+    }
+    .co-policy-banner {
+      display: flex;
+      gap: 9px;
+      align-items: flex-start;
+      background: #fff8ec;
+      border: 1.5px solid #f5c842;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: #7c5200;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+    .co-policy-banner svg { flex-shrink: 0; margin-top: 1px; }
+    .co-time-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .co-time-field {
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 8px 10px 10px;
+      background: #fff;
+      position: relative;
+    }
+    .co-time-field-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+      display: block;
+    }
+    .co-time-field-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .co-time-input {
+      border: none;
+      outline: none;
+      font-size: 16px;
+      font-family: 'Roboto', sans-serif;
+      color: var(--primary);
+      background: transparent;
+      width: 100%;
+      padding: 0;
+    }
+    .co-meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .co-originally-row {
+      display: flex;
+      gap: 6px;
+      align-items: flex-start;
+      margin-bottom: 6px;
+    }
+    .co-originally-row svg { flex-shrink: 0; margin-top: 2px; }
+    .co-originally-text {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .co-originally-time {
+      font-weight: 500;
+      color: var(--primary);
+    }
+    .co-address-link {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--accent);
+      cursor: pointer;
+    }
+    .co-break-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding-bottom: 14px;
+    }
+    .co-break-field {
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 8px 10px 10px;
+      background: #fff;
+    }
+    .co-break-label {
+      font-size: 11px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 4px;
+    }
+    .co-break-inner {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .co-break-input {
+      border: none;
+      outline: none;
+      font-size: 16px;
+      font-family: 'Roboto', sans-serif;
+      color: var(--primary);
+      background: transparent;
+      width: 50px;
+    }
+    .co-break-mins {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .co-duration-block {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding-top: 4px;
+    }
+    .co-duration-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .co-duration-value {
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--primary);
+    }
+
+    /* ── Equipment Forms section ── */
+    .forms-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+    }
+    .form-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 12px 14px 10px;
+      background: #fff;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .form-card:active { background: #f9fafb; }
+    .form-card-top {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+    }
+    .form-card-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--primary);
+    }
+    .form-card-required {
+      font-size: 12px;
+      color: #d4183d;
+    }
+    .form-card-equip-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .form-card-equip-name {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .form-status-badge {
+      display: inline-block;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 400;
+    }
+    .form-status-badge.not-started {
+      background: #f3f4f6;
+      color: #6b7280;
+    }
+    .form-status-badge.submitted {
+      background: var(--green-bg);
+      color: var(--green-text);
+    }
+
+    /* ── Equipment form screen fields ── */
+    .ef-section { padding: 16px 16px 0; display: flex; flex-direction: column; gap: 14px; }
+    .ef-field { display: flex; flex-direction: column; gap: 5px; }
+    .ef-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .ef-input, .ef-select, .ef-textarea {
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-family: 'Roboto', sans-serif;
+      color: var(--primary);
+      background: #fff;
+      outline: none;
+      width: 100%;
+    }
+    .ef-input:focus, .ef-select:focus, .ef-textarea:focus { border-color: var(--primary); }
+    .ef-textarea { min-height: 80px; resize: none; }
+    .ef-input[readonly] { background: #f9fafb; color: var(--muted); }
+
+    /* ── Linked Timesheets ── */
+    .linked-ts-section {
+      padding: 14px 16px 0;
+    }
+    .linked-ts-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+    }
+    .linked-ts-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 12px 14px;
+      background: #fff;
+      margin-bottom: 10px;
+      position: relative;
+    }
+    .linked-ts-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 5px;
+    }
+    .linked-ts-project {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--primary);
+    }
+    .linked-ts-ext {
+      color: var(--primary);
+      opacity: 0.6;
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+    }
+    .linked-ts-meta {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .linked-ts-sep { color: #d1d5db; }
+    .linked-ts-status {
+      position: absolute;
+      bottom: 10px;
+      right: 12px;
+      font-size: 11px;
+      padding: 2px 10px;
+      border-radius: 20px;
+    }
+    .linked-ts-status.unapproved { background: var(--amber-bg); color: var(--amber-text); }
+    .linked-ts-status.approved   { background: var(--green-bg);  color: var(--green-text); }
+
+    /* ── Step 2 footer (Back + Clock Out) ── */
+    .co-footer-2 {
+      display: none;
+      gap: 10px;
+      align-items: center;
+    }
+    .btn-back {
+      flex: 1;
+      border: 1.5px solid var(--primary);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--primary);
+      font-size: 15px;
+      font-weight: 500;
+      font-family: 'Roboto', sans-serif;
+      padding: 14px;
+      cursor: pointer;
+    }
+    .btn-back:active { background: #eef2f8; }
+
+    /* ── Time row (clock out form) ── */
+    .time-row {
+      display: flex;
+      align-items: stretch;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0;
+    }
+    .time-input-group {
+      flex: 1;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .time-input-group + .time-input-group {
+      border-left: 1px solid var(--border);
+    }
+    .time-label {
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+    }
+    .time-input {
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 15px;
+      font-family: 'Roboto', sans-serif;
+      color: var(--primary);
+      background: #fff;
+      outline: none;
+      width: 100%;
+    }
+    .time-input:focus { border-color: var(--primary); }
+
+    /* ── Date range button ── */
+    .date-range-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      border: 1.5px solid #d1d5db;
+      border-radius: 6px;
+      padding: 5px 10px;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--primary);
+      cursor: pointer;
+      font-family: 'Roboto', sans-serif;
+      white-space: nowrap;
+    }
+    .date-range-btn:active { background: #f9fafb; }
+
+    /* ── Calendar modal ── */
+    .cal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 600;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .cal-backdrop.open { display: flex; }
+    .cal-modal {
+      width: min(358px, calc(100vw - 32px));
+      background: #fff;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+    }
+    .cal-top {
+      background: var(--accent);
+      padding: 14px 20px 22px;
+      color: #fff;
+      position: relative;
+    }
+    .cal-top-label { font-size: 12px; opacity: 0.88; margin-bottom: 6px; letter-spacing: 0.3px; }
+    .cal-top-date  { font-size: 30px; font-weight: 400; letter-spacing: 0.2px; }
+    .cal-top-edit  {
+      position: absolute; top: 14px; right: 18px;
+      background: none; border: none; cursor: pointer; color: #fff; opacity: 0.85;
+      display: flex; align-items: center; padding: 4px;
+    }
+    .cal-body { padding: 12px 16px 4px; }
+    .cal-nav  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .cal-nav-month { font-size: 14px; font-weight: 500; color: #374151; display: flex; align-items: center; gap: 3px; cursor: pointer; }
+    .cal-nav-arrows { display: flex; }
+    .cal-arrow { background: none; border: none; cursor: pointer; color: #6b7280; font-size: 20px; padding: 2px 8px; font-family: sans-serif; line-height: 1; }
+    .cal-arrow:hover { color: var(--primary); }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+    .cal-dh   { text-align: center; font-size: 12px; font-weight: 500; color: #9ca3af; padding: 4px 0 8px; }
+    .cal-day  {
+      aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+      font-size: 14px; color: #374151; cursor: pointer; position: relative;
+      border-radius: 50%;
+    }
+    .cal-day:hover:not(.other-month) { background: #f3f4f6; }
+    .cal-day.other-month { color: #d1d5db; cursor: default; pointer-events: none; }
+    .cal-day.today:not(.range-start):not(.range-end) {
+      border: 1.5px solid var(--accent); color: var(--accent); font-weight: 600; border-radius: 50%;
+    }
+    .cal-day.in-range    { background: #fff3e0; border-radius: 0; }
+    .cal-day.range-start { background: var(--accent); color: #fff; border-radius: 50% 0 0 50%; }
+    .cal-day.range-end   { background: var(--accent); color: #fff; border-radius: 0 50% 50% 0; }
+    .cal-day.range-single { background: var(--accent); color: #fff; border-radius: 50%; }
+    .cal-footer { display: flex; justify-content: flex-end; gap: 4px; padding: 8px 12px 14px; }
+    .cal-btn    { background: none; border: none; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--accent); font-family: 'Roboto', sans-serif; padding: 8px 14px; border-radius: 6px; }
+    .cal-btn:hover { background: #fff8ec; }
+
+    /* ── Full-page nav screens ── */
+    .page-screen {
+      position: absolute;
+      inset: 0;
+      background: var(--bg);
+      z-index: 200;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .page-screen.open { display: flex; }
+    .page-content { flex: 1; overflow-y: auto; padding-bottom: calc(var(--nav-height) + 70px); }
+
+    /* ── Forms screen ── */
+    .forms-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+      background: #fff;
+    }
+    .forms-header-left { display: flex; align-items: center; gap: 10px; }
+    .forms-header-title { font-size: 18px; font-weight: 700; color: var(--primary); }
+    .forms-header-icons { display: flex; align-items: center; gap: 14px; }
+    .forms-tabs {
+      display: flex; border-bottom: 1px solid var(--border); background: #fff;
+    }
+    .forms-tab {
+      flex: 1; padding: 12px 0; text-align: center; font-size: 13px; font-weight: 600;
+      letter-spacing: 0.5px; color: var(--muted); border: none; background: none;
+      cursor: pointer; border-bottom: 2px solid transparent; font-family: 'Roboto', sans-serif;
+    }
+    .forms-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .forms-list { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+    .form-card {
+      border: 1px solid var(--border); border-radius: 12px; padding: 14px 14px 12px;
+      background: #fff; display: flex; flex-direction: column; gap: 4px; cursor: pointer;
+    }
+    .form-card-top { display: flex; align-items: flex-start; justify-content: space-between; }
+    .form-card-id { font-size: 12px; color: var(--muted); }
+    .form-card-id span { font-weight: 700; color: var(--primary); }
+    .form-card-star { color: var(--accent); flex-shrink: 0; }
+    .form-card-name { font-size: 14px; font-weight: 700; color: var(--primary); line-height: 1.35; }
+    .form-card-bottom { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+    .form-card-date { font-size: 12px; color: var(--muted); }
+    .form-card-arrow { color: var(--primary); opacity: 0.6; }
+
+    /* ── More popup ── */
+    .more-popup {
+      position: fixed;
+      bottom: calc(var(--nav-height) + 8px);
+      right: calc(50% - 195px + 8px);
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.14);
+      min-width: 210px;
+      z-index: 250;
+      overflow: hidden;
+      display: none;
+      border: 1px solid var(--border);
+    }
+    .more-popup.open { display: block; }
+    .more-popup-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--primary);
+      border-bottom: 1px solid var(--border);
+    }
+    .more-popup-item:last-child { border-bottom: none; }
+    .more-popup-item:active { background: #f5f6fa; }
+    .more-popup-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      background: #f3f4f6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary);
+      flex-shrink: 0;
+    }
+    .more-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 249;
+      display: none;
+    }
+    .more-backdrop.open { display: block; }
+
+    /* ── Remarks pen icon ── */
+    .remarks-wrap {
+      flex: 1;
+      position: relative;
+    }
+    .remarks-wrap .remarks-textarea {
+      width: 100%;
+      padding-bottom: 42px;
+    }
+    .remarks-pen-btn {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #eef2ff;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #4f6ef7;
+      flex-shrink: 0;
+    }
+    .remarks-pen-btn:active { background: #e0e7ff; }
+
+    /* ── Orange outlined button (Request Leave) ── */
+    .btn-outline-accent {
+      width: 100%;
+      background: transparent;
+      border: 1.5px solid #d1d5db;
+      color: #374151;
+      border-radius: 8px;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 500;
+      font-family: 'Roboto', sans-serif;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-outline-accent:active { background: #f9fafb; }
+
+    /* ── Clock-in button inactive state ── */
+    .btn-clockin.inactive {
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    /* ── Equipment form: selected items list ── */
+    .equip-selected-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .equip-selected-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 11px 14px;
+      background: #fff;
+      font-size: 13px;
+      color: var(--primary);
+    }
+    .equip-remove-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 16px;
+      padding: 0 0 0 8px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .equip-remove-btn:hover { color: #374151; }
+
+    /* ── Equipment sheet: hire tag badge ── */
+    .equip-hire-tag {
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--green-text);
+      background: var(--green-bg);
+      border-radius: 5px;
+      padding: 3px 9px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .equip-fs-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 15px 16px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      gap: 10px;
+    }
+    .equip-fs-item:active { background: #f5f6fa; }
+    .equip-fs-item.selected { background: #f0f4ff; }
+    .equip-fs-name {
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--primary);
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* ════════════════════════════════════════
+       CLOCK-IN SCREEN
+    ════════════════════════════════════════ */
+    .ci-screen {
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 300;
+      transform: translateX(100%);
+      transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+    }
+    .ci-screen.open { transform: translateX(0); }
+
+    .ci-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      background: #fff;
+    }
+    .ci-header-title {
+      font-size: 17px;
+      font-weight: 500;
+      color: var(--primary);
+    }
+
+    .ci-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+
+    .form-label {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--muted);
+    }
+    .form-label .req { color: #d4183d; margin-left: 2px; }
+
+    .select-field {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 12px 14px;
+      background: #fff;
+      cursor: pointer;
+      font-family: 'Roboto', sans-serif;
+      font-size: 14px;
+      color: var(--primary);
+      text-align: left;
+    }
+    .select-field .placeholder { color: #9ca3af; }
+    .select-field:focus { outline: none; border-color: var(--primary); }
+
+    .project-address {
+      display: none;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: var(--accent);
+      text-decoration: underline;
+      cursor: pointer;
+      padding: 0 2px;
+    }
+
+    .equip-section-label {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.6px;
+      color: var(--primary);
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .equip-hint {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 400;
+      margin-bottom: 8px;
+    }
+    .select-equip-btn {
+      width: 100%;
+      border: 1.5px dashed #c4cad6;
+      border-radius: 6px;
+      padding: 14px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 14px;
+      font-family: 'Roboto', sans-serif;
+      cursor: pointer;
+      text-align: center;
+    }
+    .select-equip-btn.has-value {
+      border-style: solid;
+      border-color: #d1d5db;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .select-equip-btn:focus { outline: none; }
+
+    .ci-footer {
+      flex-shrink: 0;
+      padding: 12px 16px max(env(safe-area-inset-bottom), 12px);
+      background: #fff;
+      border-top: 1px solid var(--border);
+      display: flex;
+    }
+    .ci-footer .btn-clockin {
+      margin-bottom: 0;
+      border-radius: 8px;
+      flex: 1;
+    }
+
+    /* ════════════════════════════════════════
+       FULL-SCREEN PROJECT SHEET
+    ════════════════════════════════════════ */
+    .full-sheet {
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+      z-index: 400;
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    }
+    .full-sheet.open { transform: translateY(0); }
+
+    .fs-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .fs-search {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 15px;
+      font-family: 'Roboto', sans-serif;
+      color: var(--primary);
+      background: transparent;
+    }
+    .fs-search::placeholder { color: #9ca3af; font-weight: 400; }
+
+    .fs-tabs {
+      display: flex;
+      gap: 10px;
+      padding: 14px 16px 10px;
+    }
+    .fs-tab {
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: 'Roboto', sans-serif;
+      cursor: pointer;
+      border: 1.5px solid transparent;
+    }
+    .fs-tab.active {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    .fs-tab.inactive {
+      background: transparent;
+      color: var(--primary);
+      border-color: #d1d5db;
+    }
+
+    .fs-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .fs-item {
+      padding: 16px 16px;
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--primary);
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .fs-item:active { background: #f5f6fa; }
+
+    /* ════════════════════════════════════════
+       PARTIAL EQUIPMENT BOTTOM SHEET
+    ════════════════════════════════════════ */
+    .part-sheet-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 400;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+    }
+    .part-sheet-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .part-sheet {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border-radius: 14px 14px 0 0;
+      z-index: 401;
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+      display: flex;
+      flex-direction: column;
+      max-height: 72%;
+    }
+    .part-sheet.open { transform: translateY(0); }
+
+    .ps-handle {
+      width: 36px; height: 4px;
+      background: #e5e7eb;
+      border-radius: 2px;
+      margin: 10px auto 4px;
+    }
+    .ps-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ps-title {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--primary);
+    }
+    .ps-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1;
+      padding: 2px 4px;
+    }
+
+    .ps-body { overflow-y: auto; flex: 1; padding-bottom: 8px; }
+
+    .ps-section-label {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 12px 16px 6px;
+    }
+    .ps-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      font-size: 14px;
+      color: var(--primary);
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+    }
+    .ps-item:last-child { border-bottom: none; }
+    .ps-item:active { background: #f5f6fa; }
+    .ps-item-icon {
+      width: 34px; height: 34px;
+      border-radius: 8px;
+      background: #f0f4ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary);
+      flex-shrink: 0;
+    }
+    .ps-item-name { font-size: 13px; font-weight: 400; }
+    .ps-item-sub  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+    /* ── Today's Shifts ── */
+    .shifts-section-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 10px;
+      padding: 0 2px;
+    }
+    .shifts-scroll {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      margin: 0 -14px;
+      padding: 0 14px 4px;
+      scrollbar-width: none;
+    }
+    .shifts-scroll::-webkit-scrollbar { display: none; }
+    .shift-card {
+      min-width: 250px;
+      background: #f8f9fc;
+      border-radius: 14px;
+      padding: 16px 16px 14px;
+      flex-shrink: 0;
+    }
+    .shift-project {
+      font-size: 14px;
+      font-weight: 400;
+      color: #111827;
+      margin-bottom: 3px;
+    }
+    .shift-address {
+      font-size: 13px;
+      color: var(--accent);
+      margin-bottom: 12px;
+      cursor: pointer;
+    }
+    .shift-time-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 13px;
+      color: #374151;
+      margin-bottom: 14px;
+    }
+    .shift-time-row svg { flex-shrink: 0; color: #6b7280; }
+    .shift-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .shift-allowance {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(124,58,237,0.12);
+      color: rgba(124,58,237,0.8);
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .shift-status {
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 400;
+    }
+    .shift-status.accepted  { background: var(--green-bg); color: var(--green-text); border: 0.5px solid rgba(46,125,50,0.5); }
+    .shift-status.in-review { background: #fef3c7; color: #92400e; border: 0.5px solid rgba(245,158,11,0.5); }
+
+    /* ── Shift card in clock-in screen ── */
+    .ci-shifts-scroll {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      margin: 0 -16px;
+      padding: 0 16px 4px;
+      scrollbar-width: none;
+    }
+    .ci-shifts-scroll::-webkit-scrollbar { display: none; }
+    .ci-shift-card {
+      position: relative;
+      min-width: 190px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color 0.15s;
+      flex-shrink: 0;
+    }
+    .ci-shift-card.selected { border-color: var(--accent); background: #fffbf2; }
+    .ci-shift-card.in-review-card { opacity: 0.5; cursor: not-allowed; }
+    .ci-shift-tick {
+      display: none;
+      position: absolute;
+      top: 8px; right: 8px;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .ci-shift-card.selected .ci-shift-tick { display: flex; }
+    .ci-shift-time  { font-size: 13px; font-weight: 600; color: var(--primary); margin-bottom: 4px; }
+    .ci-shift-proj  { font-size: 14px; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
+    .ci-shift-name  { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    .ci-shift-addr  { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--accent); text-decoration: underline; cursor: pointer; }
+  </style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <!-- Row 1: hamburger + title | refresh + calendar + bell -->
+    <div class="topbar-row1">
+      <div class="topbar-left">
+        <button class="icon-btn" title="Menu">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <span class="topbar-title">My Timesheet</span>
+      </div>
+      <div class="topbar-icons" style="gap:16px;">
+        <button class="icon-btn" title="Refresh">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+          </svg>
+        </button>
+        <button class="icon-btn" title="Notifications">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
+          </svg>
+        </button>
+        <button class="icon-btn" title="Add Timesheet" onclick="openAddTimesheetScreen()">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Row 2: today date -->
+    <div class="topbar-row2">
+      <span class="today-label">Today, Mon 18 May 2026</span>
+    </div>
+  </div>
+
+  <!-- SCROLLABLE CONTENT -->
+  <div class="content">
+
+    <div class="welcome-heading">Welcome back Sristi!</div>
+
+    <!-- Default: not clocked in (placeholder to keep JS toggle working) -->
+    <div id="stateDefault"></div>
+
+    <!-- WELCOME CARD — clocked-in state -->
+    <div class="welcome-card" id="welcomeBlock" style="display:none;">
+
+      <!-- Clocked in: shown after clock-in confirmed -->
+      <div id="stateClockedIn">
+        <div class="clocked-top">
+          <div class="clocked-info">
+            <div class="clocked-label">Currently working on</div>
+            <div class="clocked-project" id="clockedProject">—</div>
+            <div class="timer-duration-label">Clockin duration</div>
+            <div class="timer-display" id="timerDisplay">00 : 00 : 00</div>
+          </div>
+          <button class="notes-icon-btn" title="View details" onclick="openDetailScreen()">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="13" x2="12" y2="17"/>
+              <line x1="10" y1="15" x2="14" y2="15"/>
+            </svg>
+          </button>
+        </div>
+        <div class="action-row">
+          <button class="btn-clockout" onclick="openClockOutScreen()">Clock out</button>
+          <button class="btn-switch-project" onclick="openClockinSelectMode()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="15 18 9 12 15 6"/></svg>
+            Switch Project
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ACTION CARD — only visible when clocked in -->
+    <div id="actionClockedIn" style="display:none;"></div>
+
+    <!-- TODAY'S SHIFTS -->
+    <div style="padding-top:0;">
+      <div class="shifts-section-label">Today's Shifts:</div>
+      <div class="shifts-scroll">
+
+        <!-- Shift 1 — Accepted -->
+        <div class="shift-card" style="cursor:pointer;" onclick="openClockInWithShift('Harbour Bridge Maintenance','10 Boileau St, Keysborough VIC','Morning Shift','7:00 AM – 11:00 AM')">
+          <div class="shift-project">Harbour Bridge Maintenance</div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:3px;">Morning Shift</div>
+          <div class="shift-address">10 Boileau St, Keysborough VIC</div>
+          <div class="shift-time-row">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>7:00 AM – 11:00 AM</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+            <span>30m</span>
+          </div>
+          <div class="shift-bottom">
+            <span class="shift-allowance">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+              2
+            </span>
+            <span class="shift-status accepted">Accepted</span>
+          </div>
+        </div>
+
+        <!-- Shift 2 — In Review -->
+        <div class="shift-card">
+          <div class="shift-project">Tasman Highway Upgrade (THR-12)</div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:3px;">Afternoon Shift</div>
+          <div class="shift-address">14 Tasman Hwy, Launceston TAS</div>
+          <div class="shift-time-row">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>12:00 PM – 4:00 PM</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+            <span>0m</span>
+          </div>
+          <div class="shift-bottom">
+            <span class="shift-status in-review">In Review</span>
+          </div>
+        </div>
+
+        <!-- Shift 3 — Accepted -->
+        <div class="shift-card" style="cursor:pointer;" onclick="openClockInWithShift('Eastern Freeway Extension (EFX-07)','201 Eastern Freeway, Doncaster VIC','Evening Shift','4:30 PM – 8:00 PM')">
+          <div class="shift-project">Eastern Freeway Extension (EFX-07)</div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:3px;">Evening Shift</div>
+          <div class="shift-address">201 Eastern Freeway, Doncaster VIC</div>
+          <div class="shift-time-row">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span>4:30 PM – 8:00 PM</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+            <span>30m</span>
+          </div>
+          <div class="shift-bottom">
+            <span class="shift-allowance">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+              1
+            </span>
+            <span class="shift-status accepted">Accepted</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Clock in button — hidden when clocked in -->
+    <div id="clockinBtnWrapper" style="margin-top:4px;">
+      <button class="btn-clockin" onclick="openClockinSelectMode()">Clock in</button>
+    </div>
+
+    <!-- SECTION HEADER -->
+    <div class="section-header" style="margin-top:8px;">
+      <span class="section-title">Recent Shift Logs</span>
+      <button class="date-range-btn" onclick="openDateModal()">
+        <span id="dateRangeText">17–23 May 2026</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.5;flex-shrink:0;"><path d="M7 10l5 5 5-5z"/></svg>
+      </button>
+    </div>
+
+    <!-- LIVE CLOCKED-IN CARD — shown when user is clocked in -->
+    <div class="ts-card status-clocked" id="liveTimesheetCard" style="display:none; cursor:pointer;" onclick="openDetailScreen()">
+      <div class="date-box clocked" id="liveCardDateBox">
+        <span class="date-day-name" id="liveCardDay">Mon</span>
+        <span class="date-day-num" id="liveCardNum">18</span>
+        <span class="date-month" id="liveCardMonth">May</span>
+      </div>
+      <div class="ts-body">
+        <div class="ts-project" id="liveCardProject">—</div>
+        <div class="ts-clocked-row">
+          <span class="ts-clocked-label">Duration:</span>
+          <span id="liveCardTimer">00:00:00</span>
+        </div>
+        <div class="chip-row">
+          <span class="chip" style="background:#dbeafe;color:#1565c0;font-size:10px;padding:3px 8px;">● Live</span>
+        </div>
+      </div>
+      <span class="status-badge badge-clocked">Clocked In</span>
+    </div>
+
+    <!-- CARD 1 -->
+    <div class="ts-card status-unapproved">
+      <div class="date-box">
+        <span class="date-day-name">Mon</span>
+        <span class="date-day-num">18</span>
+        <span class="date-month">May</span>
+      </div>
+      <div class="ts-body">
+        <div class="ts-project">Tasman Highway Upgrade (THR-12)</div>
+        <div class="ts-clocked-row">
+          <span class="ts-clocked-label">Clocked:</span>
+          <span>1h 30m</span>
+          <span class="break-icon">☕</span>
+          <span>30m</span>
+        </div>
+        <div class="chip-row">
+          <span class="chip chip-clock">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            3
+          </span>
+          <span class="chip chip-check">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            1
+          </span>
+        </div>
+      </div>
+      <span class="status-badge badge-unapproved">Unapproved</span>
+    </div>
+
+    <!-- CARD 2 -->
+    <div class="ts-card status-unapproved">
+      <div class="date-box">
+        <span class="date-day-name">Mon</span>
+        <span class="date-day-num">18</span>
+        <span class="date-month">May</span>
+      </div>
+      <div class="ts-body">
+        <div class="ts-project">Eastern Freeway Extension (EFX-07)</div>
+        <div class="ts-clocked-row">
+          <span class="ts-clocked-label">Clocked:</span>
+          <span>1h 0m</span>
+          <span class="break-icon">☕</span>
+          <span>0m</span>
+        </div>
+        <div class="chip-row">
+          <span class="chip chip-clock">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            3
+          </span>
+          <span class="chip chip-check">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            1
+          </span>
+          <span class="chip chip-umbrella">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 12a11.05 11.05 0 00-22 0zm-5 7a3 3 0 01-6 0v-7"/></svg>
+            1
+          </span>
+          <span class="chip chip-doc">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            1
+          </span>
+        </div>
+      </div>
+      <span class="status-badge badge-unapproved">Unapproved</span>
+    </div>
+
+    <!-- CARD 3 -->
+    <div class="ts-card status-unapproved">
+      <div class="date-box">
+        <span class="date-day-name">Mon</span>
+        <span class="date-day-num">18</span>
+        <span class="date-month">May</span>
+      </div>
+      <div class="ts-body">
+        <div class="ts-project">Northcote Road Rehabilitation (NRR-03)</div>
+        <div class="ts-clocked-row">
+          <span class="ts-clocked-label">Clocked:</span>
+          <span>5h 0m</span>
+          <span class="break-icon">☕</span>
+          <span>60m</span>
+        </div>
+        <div class="chip-row">
+          <span class="chip chip-clock">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            3
+          </span>
+          <span class="chip chip-check">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            1
+          </span>
+        </div>
+      </div>
+      <span class="status-badge badge-unapproved">Unapproved</span>
+    </div>
+
+    <!-- CARD 4 — Approved -->
+    <div class="ts-card status-approved">
+      <div class="date-box approved">
+        <span class="date-day-name">Sun</span>
+        <span class="date-day-num">17</span>
+        <span class="date-month">May</span>
+      </div>
+      <div class="ts-body">
+        <div class="ts-project">Harbour Bridge Maintenance</div>
+        <div class="ts-clocked-row">
+          <span class="ts-clocked-label">Clocked:</span>
+          <span>8h 0m</span>
+          <span class="break-icon">☕</span>
+          <span>60m</span>
+        </div>
+        <div class="ts-approved-row">
+          <span class="ts-approved-label">Approved:</span>
+          <span>8h 0m</span>
+          <span class="break-icon">☕</span>
+          <span>60m</span>
+        </div>
+        <div class="chip-row">
+          <span class="chip chip-clock">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            1
+          </span>
+          <span class="chip chip-check">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            2
+          </span>
+          <span class="chip chip-umbrella">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 12a11.05 11.05 0 00-22 0zm-5 7a3 3 0 01-6 0v-7"/></svg>
+            1
+          </span>
+          <span class="chip chip-dollar">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+            1
+          </span>
+          <span class="chip chip-docket">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            1
+          </span>
+        </div>
+      </div>
+      <span class="status-badge badge-approved">Approved</span>
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- SCAN QR FAB -->
+  <button class="fab-scan">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="5" height="5"/><rect x="16" y="3" width="5" height="5"/><rect x="3" y="16" width="5" height="5"/>
+      <line x1="21" y1="16" x2="21" y2="21"/><line x1="16" y1="21" x2="21" y2="21"/>
+      <line x1="16" y1="16" x2="16" y2="16"/>
+      <line x1="11" y1="3" x2="11" y2="8"/><line x1="8" y1="11" x2="3" y2="11"/>
+      <line x1="11" y1="11" x2="11" y2="11"/><line x1="14" y1="8" x2="14" y2="11"/>
+      <line x1="14" y1="14" x2="11" y2="14"/><line x1="11" y1="17" x2="11" y2="21"/>
+    </svg>
+    Scan QR
+  </button>
+
+  <!-- BOTTOM NAV -->
+  <nav class="bottom-nav">
+    <!-- Timesheet (active) -->
+    <a class="nav-item active" href="#">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+      </svg>
+      Timesheet
+    </a>
+    <!-- Forms -->
+    <a class="nav-item" href="#" onclick="openPageScreen('screenForms'); return false;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        <polyline points="10 9 9 9 8 9"/>
+      </svg>
+      Forms
+    </a>
+    <!-- Site Docket -->
+    <a class="nav-item" href="#">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>
+      </svg>
+      Site Docket
+    </a>
+    <!-- Docket -->
+    <a class="nav-item" href="#">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      Docket
+    </a>
+    <!-- More -->
+    <a class="nav-item" id="moreNavBtn" href="#" onclick="toggleMorePopup(event)">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/>
+      </svg>
+      More
+    </a>
+  </nav>
+
+  <!-- DATE RANGE CALENDAR MODAL -->
+  <div class="cal-backdrop" id="calBackdrop" onclick="closeDateModal()">
+    <div class="cal-modal" onclick="event.stopPropagation()">
+      <div class="cal-top">
+        <div class="cal-top-label">Select date</div>
+        <div class="cal-top-date" id="calHeaderDate">Tue, 19 May</div>
+        <button class="cal-top-edit" title="Edit">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+        </button>
+      </div>
+      <div class="cal-body">
+        <div class="cal-nav">
+          <div class="cal-nav-month" id="calMonthYear">May 2026</div>
+          <div class="cal-nav-arrows">
+            <button class="cal-arrow" onclick="calPrevMonth()">&#8249;</button>
+            <button class="cal-arrow" onclick="calNextMonth()">&#8250;</button>
+          </div>
+        </div>
+        <div class="cal-grid">
+          <div class="cal-dh">M.</div><div class="cal-dh">Tu.</div><div class="cal-dh">W.</div>
+          <div class="cal-dh">Th.</div><div class="cal-dh">F.</div><div class="cal-dh">Sa.</div><div class="cal-dh">Su.</div>
+          <div id="calDaysGrid" style="display:contents;"></div>
+        </div>
+      </div>
+      <div class="cal-footer">
+        <button class="cal-btn" onclick="closeDateModal()">Cancel</button>
+        <button class="cal-btn" onclick="applyDateRange()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MORE POPUP BACKDROP -->
+  <div class="more-backdrop" id="moreBackdrop" onclick="closeMorePopup()"></div>
+
+  <!-- MORE POPUP -->
+  <div class="more-popup" id="morePopup">
+    <div class="more-popup-item" onclick="closeMorePopup()">
+      <div class="more-popup-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          <polyline points="9 16 11 18 15 14"/>
+        </svg>
+      </div>
+      Shifts
+    </div>
+    <div class="more-popup-item" onclick="closeMorePopup()">
+      <div class="more-popup-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+      </div>
+      Leave
+    </div>
+    <div class="more-popup-item" onclick="closeMorePopup()">
+      <div class="more-popup-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+        </svg>
+      </div>
+      File Manager
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════
+       CLOCKED TIMESHEET DETAIL SCREEN
+  ══════════════════════════════════════ -->
+  <div class="ci-screen" id="screenDetail">
+
+    <div class="detail-header">
+      <button class="icon-btn" onclick="closeScreen('screenDetail')" title="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="detail-header-center">Clocked Timesheet</span>
+      <button class="detail-delete-btn" title="Delete">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+          <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="ci-body">
+
+      <!-- Static project + clock-in time -->
+      <div class="detail-project-row">
+        <div>
+          <div class="detail-project-name" id="detailProjectName">—</div>
+          <div class="detail-project-date" id="detailProjectDate">Monday, 18 May</div>
+        </div>
+        <div class="detail-clockin-col">
+          <div class="detail-clockin-label">Clock in</div>
+          <div class="detail-clockin-time" id="detailClockInDisplay">9:12 AM</div>
+        </div>
+      </div>
+
+      <!-- Originally clocked meta -->
+      <div class="detail-meta-row">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        <span id="detailMetaText">Originally clocked in at 9:12 AM Australia/Victoria.</span>
+      </div>
+
+      <!-- Address -->
+      <div class="detail-address-row">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+        </svg>
+        <span id="detailAddress">—</span>
+      </div>
+
+      <!-- Info banner -->
+      <div class="info-banner">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b86e00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        You can correct your clocked project and clock-in time at the time of clocking out.
+      </div>
+
+      <!-- Remarks -->
+      <div class="detail-section">
+        <div class="detail-section-label">Remarks</div>
+        <div class="remarks-row">
+          <textarea class="remarks-textarea" placeholder="Remarks"></textarea>
+          <button class="attach-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+            </svg>
+            Attach Files
+          </button>
+        </div>
+      </div>
+
+      <div class="detail-divider"></div>
+
+      <!-- Equipment -->
+      <div class="detail-section">
+        <div class="detail-section-label">Equipment</div>
+        <p class="detail-hint">Please select the equipment you will be operating.</p>
+        <div class="equip-selected-list" id="detailEquipSelectedList"></div>
+        <button class="select-equip-btn" onclick="openDetailEquipSheet()">Select Equipment</button>
+      </div>
+
+      <!-- Forms section for detail screen -->
+      <div id="detailFormsSection" style="display:none;">
+        <div class="detail-divider"></div>
+        <div class="detail-section">
+          <div class="forms-label" style="margin-bottom:10px;">Forms</div>
+          <div id="detailFormsList"></div>
+        </div>
+      </div>
+
+      <div class="detail-divider"></div>
+
+      <!-- Allowance -->
+      <div class="detail-section">
+        <div class="detail-section-label">Allowance</div>
+        <button class="select-equip-btn" style="margin-top:6px;">Assign Allowance</button>
+      </div>
+
+      <div class="detail-divider"></div>
+
+      <!-- Daywork -->
+      <div class="detail-section">
+        <button class="daywork-btn">Create daywork record</button>
+      </div>
+
+    </div>
+
+    <div class="ci-footer">
+      <button class="btn-clockin" style="border-radius:8px;">Save</button>
+    </div>
+
+    <!-- Equipment sheet for detail form -->
+    <div class="full-sheet" id="sheetDetailEquipment">
+      <div class="fs-header">
+        <button class="icon-btn" onclick="closeSheet('sheetDetailEquipment')" title="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <input class="fs-search" id="detailEquipSearch" placeholder="Search Equipment" oninput="filterDetailEquipment()" />
+        <button class="icon-btn" style="color:#9ca3af">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+      </div>
+      <div style="padding:12px 16px 4px; font-size:11px; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Equipment</div>
+      <div class="fs-tabs">
+        <button class="fs-tab active" id="tabDetailEquipProject"    onclick="switchDetailEquipTab('project')">Project Equipment</button>
+        <button class="fs-tab inactive" id="tabDetailEquipUnassigned" onclick="switchDetailEquipTab('unassigned')">Unassigned Equipment</button>
+      </div>
+      <div class="fs-list" id="detailEquipList"></div>
+    </div>
+
+  </div><!-- /screenDetail -->
+
+  <!-- ══════════════════════════════════════
+       FORMS PAGE
+  ══════════════════════════════════════ -->
+  <div class="page-screen" id="screenForms">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="topbar-row1">
+        <div class="topbar-left">
+          <button class="icon-btn" title="Menu">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+          </button>
+          <span class="topbar-title">Forms</span>
+        </div>
+        <div class="topbar-icons" style="gap:16px;">
+          <button class="icon-btn" title="Search">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </button>
+          <button class="icon-btn" title="Filter">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          </button>
+          <button class="icon-btn" title="More">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="forms-tabs">
+      <button class="forms-tab active" id="formsTabSubmit" onclick="switchFormsTab('submit')">SUBMIT FORM</button>
+      <button class="forms-tab" id="formsTabResponses" onclick="switchFormsTab('responses')">RESPONSES</button>
+    </div>
+
+    <!-- Submit Form list -->
+    <div class="forms-list page-content" id="formsSubmitList">
+      <div class="form-card" onclick="openDemoForm(false)">
+        <div class="form-card-top"><div class="form-card-id">Form ID: <span>163</span></div>
+          <svg class="form-card-star" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <div class="form-card-name">Daily Plant Pre-Start Checklist</div>
+        <div class="form-card-bottom">
+          <span class="form-card-date">Last Submitted on 01:32 PM, 06 May, 2026</span>
+          <svg class="form-card-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+      </div>
+      <div class="form-card" onclick="openDemoForm(false)">
+        <div class="form-card-top"><div class="form-card-id">Form ID: <span>142</span></div>
+          <svg class="form-card-star" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <div class="form-card-name">Site Induction &amp; Safety Briefing Form</div>
+        <div class="form-card-bottom">
+          <span class="form-card-date">Last Submitted on 11:41 AM, 05 May, 2026</span>
+          <svg class="form-card-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+      </div>
+      <div class="form-card" onclick="openDemoForm(false)">
+        <div class="form-card-top"><div class="form-card-id">Form ID: <span>136</span></div>
+          <svg class="form-card-star" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <div class="form-card-name">Toolbox Talk Record Sheet</div>
+        <div class="form-card-bottom">
+          <span class="form-card-date">Last Submitted on 11:28 AM, 17 Mar, 2026</span>
+          <svg class="form-card-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+      </div>
+      <div class="form-card" onclick="openDemoForm(false)">
+        <div class="form-card-top"><div class="form-card-id">Form ID: <span>128</span></div>
+          <svg class="form-card-star" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <div class="form-card-name">Environmental Compliance Checklist</div>
+        <div class="form-card-bottom">
+          <span class="form-card-date">Last Submitted on 12:35 PM, 26 Dec, 2025</span>
+          <svg class="form-card-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+      </div>
+      <div class="form-card" onclick="openDemoForm(false)">
+        <div class="form-card-top"><div class="form-card-id">Form ID: <span>119</span></div>
+          <svg class="form-card-star" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <div class="form-card-name">Incident &amp; Near Miss Report</div>
+        <div class="form-card-bottom">
+          <span class="form-card-date">Last Submitted on 08:15 AM, 12 Nov, 2025</span>
+          <svg class="form-card-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Responses list -->
+    <div class="forms-list page-content" id="formsResponsesList" style="display:none;">
+      <div class="form-card" onclick="openDemoForm(true)">
+        <div class="form-card-top"><div class="form-card-id">Form ID: <span>163</span></div>
+          <svg class="form-card-star" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <div class="form-card-name">Daily Plant Pre-Start Checklist</div>
+        <div class="form-card-bottom">
+          <span class="form-card-date">Submitted on 01:32 PM, 06 May, 2026</span>
+          <svg class="form-card-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+      </div>
+      <div class="form-card" onclick="openDemoForm(true)">
+        <div class="form-card-top"><div class="form-card-id">Form ID: <span>136</span></div>
+          <svg class="form-card-star" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <div class="form-card-name">Toolbox Talk Record Sheet</div>
+        <div class="form-card-bottom">
+          <span class="form-card-date">Submitted on 11:28 AM, 17 Mar, 2026</span>
+          <svg class="form-card-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAB -->
+    <button class="fab-scan">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="5" height="5"/><rect x="16" y="3" width="5" height="5"/><rect x="3" y="16" width="5" height="5"/>
+        <line x1="21" y1="16" x2="21" y2="21"/><line x1="16" y1="21" x2="21" y2="21"/><line x1="16" y1="16" x2="16" y2="16"/>
+        <line x1="11" y1="3" x2="11" y2="8"/><line x1="8" y1="11" x2="3" y2="11"/>
+        <line x1="11" y1="11" x2="11" y2="11"/><line x1="14" y1="8" x2="14" y2="11"/>
+        <line x1="14" y1="14" x2="11" y2="14"/><line x1="11" y1="17" x2="11" y2="21"/>
+      </svg>
+      Scan QR
+    </button>
+
+    <!-- Bottom nav -->
+    <nav class="bottom-nav">
+      <a class="nav-item" href="#" onclick="closePageScreen('screenForms'); return false;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Timesheet
+      </a>
+      <a class="nav-item active" href="#">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+          <polyline points="10 9 9 9 8 9"/>
+        </svg>
+        Forms
+      </a>
+      <a class="nav-item" href="#">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>
+        </svg>
+        Site Docket
+      </a>
+      <a class="nav-item" href="#">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        Docket
+      </a>
+      <a class="nav-item" href="#">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/></svg>
+        More
+      </a>
+    </nav>
+
+  <!-- DEMO FORM SCREEN -->
+  <div class="ci-screen" id="screenDemoForm">
+    <div class="detail-header">
+      <button class="icon-btn" onclick="closeScreen('screenDemoForm')" title="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="ci-header-title" id="demoFormTitle">Daily Plant Pre-Start Checklist</span>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <button class="icon-btn" id="demoEditBtn" title="Edit" onclick="enableDemoFormEdit()" style="display:none;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+        </button>
+        <button class="icon-btn" title="More">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>
+        </button>
+      </div>
+    </div>
+    <div style="width:100%;height:2px;background:#e5e7eb;">
+      <div id="demoProgressFill" style="height:2px;width:0%;background:var(--accent);transition:width 0.3s ease;"></div>
+    </div>
+    <div class="ci-body" style="padding-bottom:100px;">
+
+      <!-- Section: General Information -->
+      <div style="padding:16px 16px 0;">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">General Information</div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label">Date <span class="req">*</span></label>
+          <input type="date" class="remarks-textarea" id="demoDate" style="padding:10px 12px;height:auto;resize:none;" value="">
+        </div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label">Project / Site <span class="req">*</span></label>
+          <div class="select-field" style="cursor:default;">
+            <span id="demoProject">Harbour Bridge Maintenance</span>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label">Operator Name <span class="req">*</span></label>
+          <input type="text" class="remarks-textarea" id="demoOperator" style="padding:10px 12px;height:auto;resize:none;" placeholder="Enter name">
+        </div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label">Supervisor <span class="req">*</span></label>
+          <input type="text" class="remarks-textarea" id="demoSupervisor" style="padding:10px 12px;height:auto;resize:none;" placeholder="Enter supervisor name">
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Plant / Equipment ID</label>
+          <input type="text" class="remarks-textarea" id="demoEquipId" style="padding:10px 12px;height:auto;resize:none;" placeholder="e.g. EX200-001">
+        </div>
+      </div>
+
+      <div class="detail-divider" style="margin:16px 0;"></div>
+
+      <!-- Section: Site Conditions -->
+      <div style="padding:0 16px;">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Site Conditions</div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label">Weather <span class="req">*</span></label>
+          <select class="remarks-textarea" id="demoWeather" style="padding:10px 12px;height:auto;resize:none;appearance:auto;">
+            <option value="">Select condition</option>
+            <option value="clear">Clear</option>
+            <option value="cloudy">Cloudy</option>
+            <option value="rainy">Rainy</option>
+            <option value="windy">Windy</option>
+            <option value="foggy">Foggy</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Ground Conditions <span class="req">*</span></label>
+          <select class="remarks-textarea" id="demoGround" style="padding:10px 12px;height:auto;resize:none;appearance:auto;">
+            <option value="">Select condition</option>
+            <option value="dry">Dry</option>
+            <option value="wet">Wet</option>
+            <option value="muddy">Muddy</option>
+            <option value="compacted">Compacted</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="detail-divider" style="margin:16px 0;"></div>
+
+      <!-- Section: Pre-Start Checks -->
+      <div style="padding:0 16px;">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Pre-Start Checks <span class="req">*</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:14px;color:#374151;">Engine oil level</span>
+          <input type="checkbox" id="chk0" style="width:18px;height:18px;accent-color:var(--accent);">
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:14px;color:#374151;">Coolant level</span>
+          <input type="checkbox" id="chk1" style="width:18px;height:18px;accent-color:var(--accent);">
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:14px;color:#374151;">Hydraulic fluid</span>
+          <input type="checkbox" id="chk2" style="width:18px;height:18px;accent-color:var(--accent);">
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:14px;color:#374151;">Tyre condition / pressure</span>
+          <input type="checkbox" id="chk3" style="width:18px;height:18px;accent-color:var(--accent);">
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:14px;color:#374151;">Lights &amp; indicators</span>
+          <input type="checkbox" id="chk4" style="width:18px;height:18px;accent-color:var(--accent);">
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:14px;color:#374151;">Horn &amp; backup alarm</span>
+          <input type="checkbox" id="chk5" style="width:18px;height:18px;accent-color:var(--accent);">
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:14px;color:#374151;">Safety guards in place</span>
+          <input type="checkbox" id="chk6" style="width:18px;height:18px;accent-color:var(--accent);">
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;">
+          <span style="font-size:14px;color:#374151;">Seat belt functional</span>
+          <input type="checkbox" id="chk7" style="width:18px;height:18px;accent-color:var(--accent);">
+        </div>
+      </div>
+
+      <div class="detail-divider" style="margin:16px 0;"></div>
+
+      <!-- Section: PPE -->
+      <div style="padding:0 16px;">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">PPE Worn <span class="req">*</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:14px;color:#374151;">Hard hat</span>
+          <input type="checkbox" id="ppe0" style="width:18px;height:18px;accent-color:var(--accent);">
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:14px;color:#374151;">High-vis vest</span>
+          <input type="checkbox" id="ppe1" style="width:18px;height:18px;accent-color:var(--accent);">
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:14px;color:#374151;">Safety boots</span>
+          <input type="checkbox" id="ppe2" style="width:18px;height:18px;accent-color:var(--accent);">
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:14px;color:#374151;">Gloves</span>
+          <input type="checkbox" id="ppe3" style="width:18px;height:18px;accent-color:var(--accent);">
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;">
+          <span style="font-size:14px;color:#374151;">Eye protection</span>
+          <input type="checkbox" id="ppe4" style="width:18px;height:18px;accent-color:var(--accent);">
+        </div>
+      </div>
+
+      <div class="detail-divider" style="margin:16px 0;"></div>
+
+      <!-- Section: Hazards -->
+      <div style="padding:0 16px;">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Hazard Assessment</div>
+        <div style="margin-bottom:12px;">
+          <label class="form-label">Hazards identified on site?</label>
+          <div style="display:flex;gap:10px;margin-top:6px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:14px;"><input type="radio" name="hazard" value="yes" id="hazardYes" style="accent-color:var(--accent);"> Yes</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:14px;"><input type="radio" name="hazard" value="no" id="hazardNo" checked> No</label>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">If yes, describe</label>
+          <textarea class="remarks-textarea" id="demoHazardDesc" rows="2" placeholder="Describe hazards..."></textarea>
+        </div>
+      </div>
+
+      <div class="detail-divider" style="margin:16px 0;"></div>
+
+      <!-- Section: Declaration -->
+      <div style="padding:0 16px 24px;">
+        <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Declaration</div>
+        <div class="form-group">
+          <label class="form-label">Additional Remarks</label>
+          <textarea class="remarks-textarea" id="demoRemarks" rows="3" placeholder="Any additional notes..."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer: submit (new form) or update (edit response) -->
+    <div class="ci-footer" id="demoFormFooter">
+      <button class="btn-clockin" id="demoFormBtn" style="border-radius:8px;" onclick="closeScreen('screenDemoForm')">Submit Form</button>
+    </div>
+  </div>
+
+  </div><!-- /screenForms -->
+
+  <!-- ══════════════════════════════════════
+       CLOCK-OUT SCREEN
+  ══════════════════════════════════════ -->
+  <div class="ci-screen" id="screenClockOut">
+
+    <div class="detail-header">
+      <button class="icon-btn" onclick="closeScreen('screenClockOut')" title="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="detail-header-center">Clock Out</span>
+      <div style="width:28px;"></div>
+    </div>
+
+    <div class="ci-body">
+
+      <!-- ── STEP 1 ── -->
+      <div id="coStep1">
+
+        <!-- Read-only date -->
+        <div style="padding:10px 16px 8px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          <span id="coDateDisplay" style="font-size:13px; color:var(--primary);">Monday, 18 May 2026</span>
+        </div>
+
+        <!-- Project selector -->
+        <div class="form-group" style="padding:12px 16px 10px; border-bottom:1px solid var(--border);">
+          <label class="form-label">Project <span class="req">*</span></label>
+          <button class="select-field" onclick="openCoProjectSheet()">
+            <span id="coProjectValue" class="placeholder">Select project</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color:#143666;opacity:0.6;flex-shrink:0"><path d="M7 10l5 5 5-5z"/></svg>
+          </button>
+        </div>
+
+        <!-- Clocked Details -->
+        <div class="co-clocked-section">
+          <div class="co-clocked-title">Clocked Details</div>
+          <div class="co-policy-banner">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b86e00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            Clock-in and Clock-out times are rounded to the nearest 15-minute interval as per company policy
+          </div>
+          <div class="co-time-grid">
+            <div class="co-time-field">
+              <span class="co-time-field-label">Clock in</span>
+              <div class="co-time-field-row">
+                <input type="time" class="co-time-input" id="coClockInTime" oninput="updateClockedDuration()" />
+              </div>
+            </div>
+            <div class="co-time-field">
+              <span class="co-time-field-label">Clock out</span>
+              <div class="co-time-field-row">
+                <input type="time" class="co-time-input" id="coClockOutTime" oninput="updateClockedDuration()" />
+              </div>
+            </div>
+          </div>
+          <div class="co-meta-grid">
+            <div>
+              <div class="co-originally-row">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                <span class="co-originally-text">Originally clocked in at <span class="co-originally-time" id="coOriginallyTime">—</span> Australia/Victoria.</span>
+              </div>
+              <div class="co-address-link">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+                </svg>
+                <span id="coAddress">Address</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:flex-start;padding-top:2px;">
+              <div class="co-address-link" id="coAddressRight" style="display:none;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+                </svg>
+                <span id="coAddressRight2">Address</span>
+              </div>
+            </div>
+          </div>
+          <div class="co-break-row">
+            <div class="co-break-field">
+              <span class="co-break-label">Break</span>
+              <div class="co-break-inner">
+                <input type="number" class="co-break-input" id="coBreak" value="0" min="0" oninput="updateClockedDuration()" />
+                <span class="co-break-mins">mins</span>
+              </div>
+            </div>
+            <div class="co-duration-block">
+              <span class="co-duration-label">Clocked duration</span>
+              <span class="co-duration-value" id="coDuration">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Remarks -->
+        <div class="detail-section">
+          <div class="detail-section-label">Remarks</div>
+          <div class="remarks-row">
+            <div class="remarks-wrap">
+              <textarea class="remarks-textarea" placeholder="Remarks"></textarea>
+              <button class="remarks-pen-btn" title="Edit remarks">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                </svg>
+              </button>
+            </div>
+            <button class="attach-btn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+              </svg>
+              Attach Files
+            </button>
+          </div>
+        </div>
+
+        <div class="detail-divider"></div>
+
+        <!-- Linked Timesheets -->
+        <div class="linked-ts-section">
+          <div class="linked-ts-label">Linked Timesheets</div>
+
+          <div class="linked-ts-card">
+            <div class="linked-ts-top">
+              <span class="linked-ts-project">Tasman Highway Upgrade (THR-12)</span>
+              <button class="linked-ts-ext">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+              </button>
+            </div>
+            <div class="linked-ts-meta">
+              <span>2:00 PM – 04:00 PM</span>
+              <span class="linked-ts-sep">|</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+              <span>30m</span>
+              <span class="linked-ts-sep">|</span>
+              <span>1h 30m</span>
+            </div>
+            <span class="linked-ts-status unapproved">Unapproved</span>
+          </div>
+
+          <div class="linked-ts-card">
+            <div class="linked-ts-top">
+              <span class="linked-ts-project">Eastern Freeway Extension (EFX-07)</span>
+              <button class="linked-ts-ext">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+              </button>
+            </div>
+            <div class="linked-ts-meta">
+              <span>1:00 PM – 02:00 PM</span>
+              <span class="linked-ts-sep">|</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+              <span>0m</span>
+              <span class="linked-ts-sep">|</span>
+              <span>1h 0m</span>
+            </div>
+            <span class="linked-ts-status unapproved">Unapproved</span>
+          </div>
+
+          <div class="linked-ts-card">
+            <div class="linked-ts-top">
+              <span class="linked-ts-project">Harbour Bridge Maintenance</span>
+              <button class="linked-ts-ext">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+              </button>
+            </div>
+            <div class="linked-ts-meta">
+              <span>7:45 AM – 01:45 PM</span>
+              <span class="linked-ts-sep">|</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+              <span>60m</span>
+              <span class="linked-ts-sep">|</span>
+              <span>5h 0m</span>
+            </div>
+            <span class="linked-ts-status unapproved">Unapproved</span>
+          </div>
+        </div>
+
+      </div><!-- /coStep1 -->
+
+      <!-- ── STEP 2 ── -->
+      <div id="coStep2" style="display:none;">
+
+        <!-- Cost Centre (required) -->
+        <div class="detail-section">
+          <div class="detail-section-label">Cost Centre <span class="req">*</span></div>
+          <button class="select-field" onclick="openCostCentreSheet()">
+            <span id="costCentreValue" class="placeholder">Select cost centre</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color:#143666;opacity:0.6;flex-shrink:0"><path d="M7 10l5 5 5-5z"/></svg>
+          </button>
+        </div>
+
+        <div class="detail-divider"></div>
+
+        <!-- Equipment -->
+        <div class="detail-section">
+          <div class="detail-section-label">Equipment</div>
+          <p class="detail-hint">Please select the equipment you will be operating.</p>
+          <div class="equip-selected-list" id="coEquipSelectedList"></div>
+          <button class="select-equip-btn" onclick="openCoEquipSheet()">Select Equipment</button>
+        </div>
+
+        <!-- Forms section (submitted forms only) -->
+        <div id="coFormsSection" style="display:none;">
+          <div class="detail-divider"></div>
+          <div class="detail-section">
+            <div class="forms-label" style="margin-bottom:10px;">Forms</div>
+            <div id="coFormsList"></div>
+          </div>
+        </div>
+
+        <div class="detail-divider"></div>
+
+        <!-- Allowance -->
+        <div class="detail-section">
+          <div class="detail-section-label">Allowance</div>
+          <button class="select-equip-btn" style="margin-top:6px;">Assign Allowance</button>
+        </div>
+
+        <div class="detail-divider"></div>
+
+        <!-- Daywork -->
+        <div class="detail-section">
+          <button class="daywork-btn">Create daywork record</button>
+        </div>
+
+      </div><!-- /coStep2 -->
+
+    </div>
+
+    <!-- Fixed footer — step 1: Next -->
+    <div class="ci-footer" id="coFooter1">
+      <button class="btn-clockin" style="border-radius:8px;" onclick="goToCoStep2()">Next</button>
+    </div>
+
+    <!-- Fixed footer — step 2: Back + Clock Out -->
+    <div class="ci-footer co-footer-2" id="coFooter2">
+      <button class="btn-back" onclick="goToCoStep1()">Back</button>
+      <button class="btn-clockin inactive" id="coSaveBtn" style="border-radius:8px; flex:2;" onclick="performClockOut()">Clock Out</button>
+    </div>
+
+    <!-- Project sheet -->
+    <div class="full-sheet" id="sheetCoProject">
+      <div class="fs-header">
+        <button class="icon-btn" onclick="closeSheet('sheetCoProject')" title="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <input class="fs-search" id="coProjectSearch" placeholder="Search Project" oninput="filterCoProjects()" />
+        <button class="icon-btn" style="color:#9ca3af">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+      </div>
+      <div class="fs-tabs">
+        <button class="fs-tab active"   id="tabCoProjectAssigned" onclick="switchCoProjectTab('assigned')">Assigned</button>
+        <button class="fs-tab inactive" id="tabCoProjectOther"    onclick="switchCoProjectTab('other')">Other</button>
+      </div>
+      <div class="fs-list" id="coProjectList"></div>
+    </div>
+
+    <!-- Cost Centre sheet -->
+    <div class="full-sheet" id="sheetCostCentre">
+      <div class="fs-header">
+        <button class="icon-btn" onclick="closeSheet('sheetCostCentre')" title="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <input class="fs-search" id="costCentreSearch" placeholder="Search Cost Centre" oninput="filterCostCentres()" />
+        <button class="icon-btn" style="color:#9ca3af">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+      </div>
+      <div style="padding:12px 16px 4px; font-size:11px; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Cost Centre</div>
+      <div class="fs-list" id="costCentreList"></div>
+    </div>
+
+    <!-- Equipment sheet -->
+    <div class="full-sheet" id="sheetCoEquipment">
+      <div class="fs-header">
+        <button class="icon-btn" onclick="closeSheet('sheetCoEquipment')" title="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <input class="fs-search" id="coEquipSearch" placeholder="Search Equipment" oninput="filterCoEquipment()" />
+        <button class="icon-btn" style="color:#9ca3af">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+      </div>
+      <div style="padding:12px 16px 4px; font-size:11px; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Equipment</div>
+      <div class="fs-tabs">
+        <button class="fs-tab active"   id="tabCoEquipProject"    onclick="switchCoEquipTab('project')">Project Equipment</button>
+        <button class="fs-tab inactive" id="tabCoEquipUnassigned" onclick="switchCoEquipTab('unassigned')">Unassigned Equipment</button>
+      </div>
+      <div class="fs-list" id="coEquipList"></div>
+    </div>
+
+  </div><!-- /screenClockOut -->
+
+  <!-- ══════════════════════════════════════
+       ADD TIMESHEET SCREEN
+  ══════════════════════════════════════ -->
+  <div class="ci-screen" id="screenAddTimesheet">
+
+    <div class="detail-header">
+      <button class="icon-btn" onclick="closeScreen('screenAddTimesheet')" title="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="detail-header-center">Add Timesheet</span>
+      <div style="width:28px;"></div>
+    </div>
+
+    <div class="ci-body">
+
+      <!-- ── STEP 1 ── -->
+      <div id="atStep1">
+
+        <!-- Editable date -->
+        <div class="form-group" style="padding:12px 16px 10px; border-bottom:1px solid var(--border);">
+          <label class="form-label">Date <span class="req">*</span></label>
+          <input type="date" id="atDateInput" style="width:100%; border:1px solid #d1d5db; border-radius:6px; padding:12px 14px; font-size:14px; font-family:'Roboto',sans-serif; color:var(--primary); background:#fff; outline:none; cursor:pointer;" />
+        </div>
+
+        <!-- Project selector -->
+        <div class="form-group" style="padding:12px 16px 10px; border-bottom:1px solid var(--border);">
+          <label class="form-label">Project <span class="req">*</span></label>
+          <button class="select-field" onclick="openAtProjectSheet()">
+            <span id="atProjectValue">Harbour Bridge Maintenance</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color:#143666;opacity:0.6;flex-shrink:0"><path d="M7 10l5 5 5-5z"/></svg>
+          </button>
+        </div>
+
+        <!-- Clocked Details -->
+        <div class="co-clocked-section">
+          <div class="co-clocked-title">Clocked Details</div>
+          <div class="co-policy-banner">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b86e00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            Clock-in and Clock-out times are rounded to the nearest 15-minute interval as per company policy
+          </div>
+          <div class="co-time-grid">
+            <div class="co-time-field">
+              <span class="co-time-field-label">Clock in</span>
+              <div class="co-time-field-row">
+                <input type="time" class="co-time-input" id="atClockInTime" oninput="updateAtDuration()" />
+              </div>
+            </div>
+            <div class="co-time-field">
+              <span class="co-time-field-label">Clock out</span>
+              <div class="co-time-field-row">
+                <input type="time" class="co-time-input" id="atClockOutTime" oninput="updateAtDuration()" />
+              </div>
+            </div>
+          </div>
+          <div class="co-meta-grid" style="margin-bottom:4px;">
+            <div>
+              <div class="co-originally-row">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                <span class="co-originally-text">Clock-in at <span class="co-originally-time">7:45 AM</span></span>
+              </div>
+              <div class="co-address-link">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+                </svg>
+                <span>10 Boileau St, Keysborough</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:flex-start;padding-top:2px;">
+              <div class="co-address-link">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+                </svg>
+                <span>10 Boileau St, Keysborough</span>
+              </div>
+            </div>
+          </div>
+          <div class="co-break-row">
+            <div class="co-break-field">
+              <span class="co-break-label">Break</span>
+              <div class="co-break-inner">
+                <input type="number" class="co-break-input" id="atBreak" value="60" min="0" oninput="updateAtDuration()" />
+                <span class="co-break-mins">mins</span>
+              </div>
+            </div>
+            <div class="co-duration-block">
+              <span class="co-duration-label">Clocked duration</span>
+              <span class="co-duration-value" id="atDuration">8h 00m</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Remarks -->
+        <div class="detail-section">
+          <div class="detail-section-label">Remarks</div>
+          <div class="remarks-row">
+            <div class="remarks-wrap">
+              <textarea class="remarks-textarea" placeholder="Remarks"></textarea>
+              <button class="remarks-pen-btn" title="Edit remarks">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                </svg>
+              </button>
+            </div>
+            <button class="attach-btn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+              </svg>
+              Attach Files
+            </button>
+          </div>
+        </div>
+
+        <div class="detail-divider"></div>
+
+        <!-- Linked Timesheets -->
+        <div class="linked-ts-section">
+          <div class="linked-ts-label">Linked Timesheets</div>
+          <div class="linked-ts-card">
+            <div class="linked-ts-top">
+              <span class="linked-ts-project">Harbour Bridge Maintenance</span>
+              <button class="linked-ts-ext">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+              </button>
+            </div>
+            <div class="linked-ts-meta">
+              <span>7:45 AM – 4:45 PM</span>
+              <span class="linked-ts-sep">|</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+              <span>60m</span>
+              <span class="linked-ts-sep">|</span>
+              <span>8h 0m</span>
+            </div>
+            <span class="linked-ts-status unapproved">Unapproved</span>
+          </div>
+        </div>
+
+      </div><!-- /atStep1 -->
+
+      <!-- ── STEP 2 ── -->
+      <div id="atStep2" style="display:none;">
+
+        <!-- Cost Centre (required) -->
+        <div class="detail-section">
+          <div class="detail-section-label">Cost Centre <span class="req">*</span></div>
+          <button class="select-field" onclick="openAtCostCentreSheet()">
+            <span id="atCostCentreValue" class="placeholder">Select cost centre</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color:#143666;opacity:0.6;flex-shrink:0"><path d="M7 10l5 5 5-5z"/></svg>
+          </button>
+        </div>
+
+        <div class="detail-divider"></div>
+
+        <!-- Equipment -->
+        <div class="detail-section">
+          <div class="detail-section-label">Equipment</div>
+          <p class="detail-hint">Please select the equipment you will be operating.</p>
+          <div class="equip-selected-list" id="atEquipSelectedList"></div>
+          <button class="select-equip-btn" onclick="openAtEquipSheet()">Select Equipment</button>
+        </div>
+
+        <div class="detail-divider"></div>
+
+        <!-- Allowance -->
+        <div class="detail-section">
+          <div class="detail-section-label">Allowance</div>
+          <button class="select-equip-btn" style="margin-top:6px;">Assign Allowance</button>
+        </div>
+
+        <div class="detail-divider"></div>
+
+        <!-- Daywork -->
+        <div class="detail-section">
+          <button class="daywork-btn">Create daywork record</button>
+        </div>
+
+      </div><!-- /atStep2 -->
+
+    </div>
+
+    <!-- Fixed footer — step 1: Next -->
+    <div class="ci-footer" id="atFooter1">
+      <button class="btn-clockin" style="border-radius:8px;" onclick="goToAtStep2()">Next</button>
+    </div>
+
+    <!-- Fixed footer — step 2: Back + Save -->
+    <div class="ci-footer co-footer-2" id="atFooter2">
+      <button class="btn-back" onclick="goToAtStep1()">Back</button>
+      <button class="btn-clockin inactive" id="atSaveBtn" style="border-radius:8px; flex:2;" onclick="performAtSave()">Save</button>
+    </div>
+
+    <!-- Project sheet -->
+    <div class="full-sheet" id="sheetAtProject">
+      <div class="fs-header">
+        <button class="icon-btn" onclick="closeSheet('sheetAtProject')" title="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <input class="fs-search" id="atProjectSearch" placeholder="Search Project" oninput="filterAtProjects()" />
+        <button class="icon-btn" style="color:#9ca3af">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+      </div>
+      <div class="fs-tabs">
+        <button class="fs-tab active"   id="tabAtProjectAssigned" onclick="switchAtProjectTab('assigned')">Assigned</button>
+        <button class="fs-tab inactive" id="tabAtProjectOther"    onclick="switchAtProjectTab('other')">Other</button>
+      </div>
+      <div class="fs-list" id="atProjectList"></div>
+    </div>
+
+    <!-- Cost Centre sheet -->
+    <div class="full-sheet" id="sheetAtCostCentre">
+      <div class="fs-header">
+        <button class="icon-btn" onclick="closeSheet('sheetAtCostCentre')" title="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <input class="fs-search" id="atCostCentreSearch" placeholder="Search Cost Centre" oninput="filterAtCostCentres()" />
+        <button class="icon-btn" style="color:#9ca3af">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+      </div>
+      <div style="padding:12px 16px 4px; font-size:11px; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Cost Centre</div>
+      <div class="fs-list" id="atCostCentreList"></div>
+    </div>
+
+    <!-- Equipment sheet -->
+    <div class="full-sheet" id="sheetAtEquipment">
+      <div class="fs-header">
+        <button class="icon-btn" onclick="closeSheet('sheetAtEquipment')" title="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <input class="fs-search" id="atEquipSearch" placeholder="Search Equipment" oninput="filterAtEquipment()" />
+        <button class="icon-btn" style="color:#9ca3af">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+      </div>
+      <div style="padding:12px 16px 4px; font-size:11px; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Equipment</div>
+      <div class="fs-tabs">
+        <button class="fs-tab active"   id="tabAtEquipProject"    onclick="switchAtEquipTab('project')">Project Equipment</button>
+        <button class="fs-tab inactive" id="tabAtEquipUnassigned" onclick="switchAtEquipTab('unassigned')">Unassigned Equipment</button>
+      </div>
+      <div class="fs-list" id="atEquipList"></div>
+    </div>
+
+  </div><!-- /screenAddTimesheet -->
+
+  <!-- ══════════════════════════════════════
+       CLOCK-IN SCREEN
+  ══════════════════════════════════════ -->
+  <div class="ci-screen" id="screenClockin">
+
+    <div class="ci-header">
+      <button class="icon-btn" onclick="closeScreen('screenClockin')" title="Back">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
+      <span class="ci-header-title">Clock in</span>
+    </div>
+
+    <div class="ci-body">
+
+      <!-- Today's Shifts section -->
+      <div id="ciShiftSection" style="padding:16px 16px 0;">
+
+        <!-- SELECT MODE: shown when clock-in opened without a shift -->
+        <div id="ciShiftSelectMode">
+          <div style="font-size:14px; font-weight:600; color:var(--primary); margin-bottom:2px;">Today's Shifts</div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:10px;">Select the shift you're working on</div>
+          <div class="ci-shifts-scroll">
+            <!-- Accepted shift 1 -->
+            <div class="ci-shift-card selected" id="ciShiftCard0" onclick="selectCiShift(0)">
+              <div class="ci-shift-tick">✓</div>
+              <div class="ci-shift-time">7:00 AM – 11:00 AM</div>
+              <div class="ci-shift-proj">Harbour Bridge Maintenance</div>
+              <div class="ci-shift-name">Morning Shift</div>
+              <div class="ci-shift-addr">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                <span>10 Boileau St, Keysborough VIC</span>
+              </div>
+            </div>
+            <!-- Accepted shift 2 -->
+            <div class="ci-shift-card" id="ciShiftCard2" onclick="selectCiShift(2)">
+              <div class="ci-shift-tick">✓</div>
+              <div class="ci-shift-time">4:30 PM – 8:00 PM</div>
+              <div class="ci-shift-proj">Eastern Freeway Extension (EFX-07)</div>
+              <div class="ci-shift-name">Evening Shift</div>
+              <div class="ci-shift-addr">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                <span>201 Eastern Freeway, Doncaster VIC</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SINGLE MODE: shown when opened directly from a shift card -->
+        <div id="ciShiftSingleMode" style="display:none;">
+          <div style="font-size:14px; font-weight:600; color:var(--primary); margin-bottom:10px;">Today's Shift</div>
+          <div class="ci-shift-card selected">
+            <div class="ci-shift-tick">✓</div>
+            <div class="ci-shift-time" id="ciSingleTime"></div>
+            <div class="ci-shift-proj" id="ciSingleProj"></div>
+            <div class="ci-shift-name" id="ciSingleName"></div>
+            <div class="ci-shift-addr">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span id="ciSingleAddr"></span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Project field -->
+      <div class="form-group" style="padding:16px 16px 0;">
+        <label class="form-label">Project <span class="req">*</span></label>
+        <button class="select-field" id="btnSelectProject" onclick="openSheet('sheetProject')">
+          <span id="projectValue" class="placeholder">Select project</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color:#143666;opacity:0.6;flex-shrink:0">
+            <path d="M7 10l5 5 5-5z"/>
+          </svg>
+        </button>
+        <div class="project-address" id="projectAddress">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+          </svg>
+          <span id="projectAddressText">10 Boileau Street, Keysborough</span>
+        </div>
+      </div>
+
+      <!-- Equipment field -->
+      <div class="form-group" style="padding:12px 16px 0;">
+        <div class="equip-section-label">Equipment</div>
+        <p class="equip-hint">Please select the equipment you will be operating.</p>
+        <div class="equip-selected-list" id="equipSelectedList"></div>
+        <button class="select-equip-btn" id="btnSelectEquip" onclick="openSheet('sheetEquipment')">
+          Select Equipment
+        </button>
+      </div>
+
+      <!-- Forms section (shown when equipment with forms is selected) -->
+      <div id="ciFormsSection" style="display:none; padding:12px 16px 16px;">
+        <div class="forms-label">Forms</div>
+        <div id="ciFormsList"></div>
+      </div>
+
+    </div>
+
+    <div class="ci-footer">
+      <button class="btn-clockin inactive" id="btnDoClockIn" onclick="confirmClockIn()">Clock in</button>
+    </div>
+
+    <!-- ── Project full-screen sheet ── -->
+    <div class="full-sheet" id="sheetProject">
+      <div class="fs-header">
+        <button class="icon-btn" onclick="closeSheet('sheetProject')" title="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+        <input class="fs-search" id="projectSearch" placeholder="Search Project" oninput="filterProjects()" />
+        <button class="icon-btn" style="color:var(--accent)">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="fs-tabs">
+        <button class="fs-tab active" id="tabAssigned" onclick="switchTab('assigned')">Assigned Projects</button>
+        <button class="fs-tab inactive" id="tabOther" onclick="switchTab('other')">Other Projects</button>
+      </div>
+
+      <div class="fs-list" id="projectList">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
+    <!-- ── Equipment full-screen sheet ── -->
+    <div class="full-sheet" id="sheetEquipment">
+      <div class="fs-header">
+        <button class="icon-btn" onclick="closeSheet('sheetEquipment')" title="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+        <input class="fs-search" id="equipSearch" placeholder="Search Equipment" oninput="filterEquipment()" />
+        <button class="icon-btn" style="color:#9ca3af">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+      </div>
+
+      <div style="padding:12px 16px 4px; font-size:11px; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;">Equipment</div>
+
+      <div class="fs-tabs">
+        <button class="fs-tab active" id="tabEquipProject"   onclick="switchEquipTab('project')">Project Equipment</button>
+        <button class="fs-tab inactive" id="tabEquipUnassigned" onclick="switchEquipTab('unassigned')">Unassigned Equipment</button>
+      </div>
+
+      <div class="fs-list" id="equipList">
+        <!-- populated by JS -->
+      </div>
+    </div>
+
+  </div><!-- /ci-screen -->
+
+  <!-- ══════════════════════════════════════
+       EQUIPMENT FORM SCREEN
+  ══════════════════════════════════════ -->
+  <div class="ci-screen" id="screenEquipForm" style="z-index:400;">
+
+    <div class="ci-header">
+      <button class="icon-btn" onclick="closeEquipForm()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="ci-header-title" id="equipFormTitle">Form</span>
+    </div>
+
+    <div class="ci-body">
+      <div class="ef-section">
+
+        <div class="ef-field">
+          <label class="ef-label">Equipment</label>
+          <input class="ef-input" id="equipFormEquipId" readonly />
+        </div>
+
+        <div class="ef-field">
+          <label class="ef-label">Operator Name</label>
+          <input class="ef-input" type="text" placeholder="Enter operator name" />
+        </div>
+
+        <div class="ef-field">
+          <label class="ef-label">Date</label>
+          <input class="ef-input" type="date" id="equipFormDate" />
+        </div>
+
+        <div class="ef-field">
+          <label class="ef-label">Engine Oil Level</label>
+          <select class="ef-select">
+            <option value="">Select…</option>
+            <option>OK</option>
+            <option>Low</option>
+            <option>Critical</option>
+          </select>
+        </div>
+
+        <div class="ef-field">
+          <label class="ef-label">Fuel Level</label>
+          <select class="ef-select">
+            <option value="">Select…</option>
+            <option>Full</option>
+            <option>3/4</option>
+            <option>1/2</option>
+            <option>1/4</option>
+            <option>Empty</option>
+          </select>
+        </div>
+
+        <div class="ef-field">
+          <label class="ef-label">Tyre Condition</label>
+          <select class="ef-select">
+            <option value="">Select…</option>
+            <option>OK</option>
+            <option>Needs Attention</option>
+          </select>
+        </div>
+
+        <div class="ef-field">
+          <label class="ef-label">Brakes</label>
+          <select class="ef-select">
+            <option value="">Select…</option>
+            <option>OK</option>
+            <option>Needs Attention</option>
+          </select>
+        </div>
+
+        <div class="ef-field">
+          <label class="ef-label">Lights &amp; Indicators</label>
+          <select class="ef-select">
+            <option value="">Select…</option>
+            <option>OK</option>
+            <option>Needs Attention</option>
+          </select>
+        </div>
+
+        <div class="ef-field">
+          <label class="ef-label">Defects / Notes</label>
+          <textarea class="ef-textarea" placeholder="Describe any defects or observations…"></textarea>
+        </div>
+
+        <div class="ef-field" style="padding-bottom:16px;">
+          <label class="ef-label">Operator Signature</label>
+          <input class="ef-input" type="text" placeholder="Type full name as signature" />
+        </div>
+
+      </div>
+    </div>
+
+    <div class="ci-footer">
+      <button class="btn-clockin" style="border-radius:8px;" onclick="submitEquipForm()">Submit</button>
+    </div>
+
+  </div><!-- /screenEquipForm -->
+
+</div><!-- /phone -->
+
+<script>
+  /* ── Data ── */
+  const projects = {
+    assigned: [
+      { name: 'Tasman Highway Upgrade (THR-12)',          address: '14 Tasman Hwy, Launceston TAS 7250' },
+      { name: 'Eastern Freeway Extension (EFX-07)',       address: '201 Eastern Freeway, Doncaster VIC 3108' },
+      { name: 'Northcote Road Rehabilitation (NRR-03)',   address: '23 Station St, Northcote VIC 3070' },
+      { name: 'Port Phillip Bay Trail (PPB-15)',          address: 'Beach Rd, Sandringham VIC 3191' },
+    ],
+    other: [
+      { name: 'CBD Pedestrian Bridge (CPB-01)',           address: '1 Collins St, Melbourne VIC 3000' },
+      { name: 'Melbourne Airport Taxiway (MAT-05)',       address: 'Melbourne Airport VIC 3045' },
+      { name: 'Yarra River Retaining Wall (YRR-11)',      address: 'Yarra River, Port Melbourne VIC 3207' },
+      { name: 'Doncaster Rail Corridor (DRC-22)',         address: 'Doncaster Rd, Doncaster VIC 3108' },
+    ]
+  };
+
+  const equipment = {
+    project: [
+      { name: '(bulldozer_8005 test) bulldozer test', tag: 'Wet Hire/Dry Hire' },
+      { name: '(Asphalt plant_3622) Asphalt plant',   tag: 'Wet Hire/Dry Hire' },
+      { name: '(Concrete pump_1102) Concrete pump',   tag: 'Dry Hire' },
+    ],
+    unassigned: [
+      { name: '(Roller_XP22) Roller XP22',  tag: 'Wet Hire' },
+      { name: '(Grader_M160) Grader M160',  tag: 'Dry Hire' },
+    ]
+  };
+
+  /* ── State ── */
+  let activeProjectTab  = 'assigned';
+  let activeEquipTab    = 'project';
+  let selectedProject   = null;
+  let selectedEquipment = [];
+  let activeSession     = null;   // persists clocked-in project across form reset
+  let timerInterval     = null;
+  let timerSeconds      = 0;
+
+  /* ── Screen helpers ── */
+  function openScreen(id)  { document.getElementById(id).classList.add('open'); }
+  function closeScreen(id) { document.getElementById(id).classList.remove('open'); }
+
+  function openSheet(id) {
+    document.getElementById(id).classList.add('open');
+    if (id === 'sheetProject') {
+      document.getElementById('projectSearch').value = '';
+      renderProjects(activeProjectTab, '');
+      setTimeout(() => document.getElementById('projectSearch').focus(), 300);
+    }
+    if (id === 'sheetEquipment') {
+      document.getElementById('equipSearch').value = '';
+      renderEquipSheet(activeEquipTab, '');
+      setTimeout(() => document.getElementById('equipSearch').focus(), 300);
+    }
+    if (id === 'sheetCoProject') {
+      renderCoProjects(coProjectTab, '');
+    }
+    if (id === 'sheetCostCentre') {
+      renderCostCentres('');
+    }
+    if (id === 'sheetCoEquipment') {
+      renderCoEquipSheet(coEquipTab, '');
+    }
+  }
+
+  function closeSheet(id) { document.getElementById(id).classList.remove('open'); }
+
+  /* ── Project sheet ── */
+  function switchTab(tab) {
+    activeProjectTab = tab;
+    document.getElementById('tabAssigned').className = 'fs-tab ' + (tab === 'assigned' ? 'active' : 'inactive');
+    document.getElementById('tabOther').className    = 'fs-tab ' + (tab === 'other'    ? 'active' : 'inactive');
+    renderProjects(tab, document.getElementById('projectSearch').value);
+  }
+
+  function filterProjects() {
+    renderProjects(activeProjectTab, document.getElementById('projectSearch').value);
+  }
+
+  function renderProjects(tab, query) {
+    const list  = document.getElementById('projectList');
+    const items = projects[tab].filter(p => p.name.toLowerCase().includes(query.toLowerCase()));
+    if (!items.length) {
+      list.innerHTML = `<div style="padding:24px 16px;color:var(--muted);font-size:13px;">No projects found</div>`;
+      return;
+    }
+    list.innerHTML = items.map(p =>
+      `<div class="fs-item" data-tab="${tab}" data-idx="${projects[tab].indexOf(p)}">${p.name}</div>`
+    ).join('');
+    list.querySelectorAll('.fs-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const p = projects[el.dataset.tab][+el.dataset.idx];
+        selectProject(p.name, p.address);
+      });
+    });
+  }
+
+  function selectProject(name, address) {
+    selectedProject = { name, address };
+    const val = document.getElementById('projectValue');
+    val.textContent = name;
+    val.classList.remove('placeholder');
+    document.getElementById('projectAddressText').textContent = address;
+    document.getElementById('projectAddress').style.display   = 'flex';
+    document.getElementById('btnDoClockIn').classList.remove('inactive');
+    closeSheet('sheetProject');
+  }
+
+  /* ── Equipment sheet ── */
+  function switchEquipTab(tab) {
+    activeEquipTab = tab;
+    document.getElementById('tabEquipProject').className    = 'fs-tab ' + (tab === 'project'    ? 'active' : 'inactive');
+    document.getElementById('tabEquipUnassigned').className = 'fs-tab ' + (tab === 'unassigned' ? 'active' : 'inactive');
+    renderEquipSheet(tab, document.getElementById('equipSearch').value);
+  }
+
+  function filterEquipment() {
+    renderEquipSheet(activeEquipTab, document.getElementById('equipSearch').value);
+  }
+
+  function renderEquipSheet(tab, query) {
+    const list  = document.getElementById('equipList');
+    const items = equipment[tab].filter(e => e.name.toLowerCase().includes(query.toLowerCase()));
+    if (!items.length) {
+      list.innerHTML = `<div style="padding:24px 16px;color:var(--muted);font-size:13px;">No equipment found</div>`;
+      return;
+    }
+    list.innerHTML = items.map(e => {
+      const idx       = equipment[tab].indexOf(e);
+      const isSelected = selectedEquipment.some(s => s.name === e.name);
+      return `<div class="equip-fs-item ${isSelected ? 'selected' : ''}" data-tab="${tab}" data-idx="${idx}">
+        <span class="equip-fs-name">${e.name}</span>
+        <span class="equip-hire-tag">${e.tag}</span>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('.equip-fs-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const e = equipment[el.dataset.tab][+el.dataset.idx];
+        toggleEquip(e);
+        closeSheet('sheetEquipment');
+      });
+    });
+  }
+
+  function toggleEquip(item) {
+    const idx = selectedEquipment.findIndex(e => e.name === item.name);
+    if (idx >= 0) selectedEquipment.splice(idx, 1); else selectedEquipment.push(item);
+    renderEquipFormList();
+    renderEquipForms('clockin');
+  }
+
+  function removeEquip(name) {
+    selectedEquipment = selectedEquipment.filter(e => e.name !== name);
+    renderEquipFormList();
+    renderEquipForms('clockin');
+    renderEquipSheet(activeEquipTab, document.getElementById('equipSearch') ? document.getElementById('equipSearch').value : '');
+  }
+
+  function renderEquipFormList() {
+    const container = document.getElementById('equipSelectedList');
+    container.innerHTML = selectedEquipment.map(e =>
+      `<div class="equip-selected-item">
+        <span>${e.name}</span>
+        <button class="equip-remove-btn" onclick="removeEquip(${JSON.stringify(e.name)})">&#x2715;</button>
+      </div>`
+    ).join('');
+  }
+
+  /* ── Timer ── */
+  function startTimer() {
+    timerSeconds = 0;
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      timerSeconds++;
+      const h = String(Math.floor(timerSeconds / 3600)).padStart(2, '0');
+      const m = String(Math.floor((timerSeconds % 3600) / 60)).padStart(2, '0');
+      const s = String(timerSeconds % 60).padStart(2, '0');
+      document.getElementById('timerDisplay').textContent = `${h} : ${m} : ${s}`;
+      document.getElementById('liveCardTimer').textContent = `${h}:${m}:${s}`;
+    }, 1000);
+  }
+
+  function stopTimer() {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    timerSeconds  = 0;
+  }
+
+  /* ── Clock in ── */
+  function confirmClockIn() {
+    if (!selectedProject) return;
+
+    const ciNow = new Date();
+    const ciH = String(ciNow.getHours()).padStart(2,'0');
+    const ciM = String(ciNow.getMinutes()).padStart(2,'0');
+    activeSession = { ...selectedProject, equipment: [...selectedEquipment], clockInTime: `${ciH}:${ciM}` };
+
+    document.getElementById('clockedProject').textContent    = activeSession.name;
+    document.getElementById('stateDefault').style.display      = 'none';
+    document.getElementById('clockinBtnWrapper').style.display = 'none';
+    document.getElementById('welcomeBlock').style.display      = 'block';
+    document.getElementById('actionClockedIn').style.display   = 'block';
+
+    // Populate and show the live history card
+    const now = new Date();
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    document.getElementById('liveCardDay').textContent   = days[now.getDay()];
+    document.getElementById('liveCardNum').textContent   = now.getDate();
+    document.getElementById('liveCardMonth').textContent = months[now.getMonth()];
+    document.getElementById('liveCardProject').textContent = activeSession.name;
+    document.getElementById('liveCardTimer').textContent   = '00:00:00';
+    document.getElementById('liveTimesheetCard').style.display = 'flex';
+
+    startTimer();
+    closeScreen('screenClockin');
+    resetClockInForm();
+  }
+
+  function resetClockInForm() {
+    selectedProject   = null;
+    selectedEquipment = [];
+    document.getElementById('ciShiftSelectMode').style.display = 'block';
+    document.getElementById('ciShiftSingleMode').style.display = 'none';
+    selectCiShift(0);
+    const val = document.getElementById('projectValue');
+    val.textContent = 'Select project';
+    val.classList.add('placeholder');
+    document.getElementById('projectAddress').style.display = 'none';
+    document.getElementById('btnDoClockIn').classList.add('inactive');
+    document.getElementById('equipSelectedList').innerHTML  = '';
+  }
+
+  /* ── Detail screen (read-only) ── */
+  let detailEquipTab      = 'project';
+  let detailSelectedEquip = [];
+
+  function openDetailScreen() {
+    if (!activeSession) return;
+    const now  = new Date();
+    const days  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const hh = String(now.getHours()).padStart(2,'0');
+    const mm = String(now.getMinutes()).padStart(2,'0');
+    const ampm = now.getHours() < 12 ? 'AM' : 'PM';
+    const h12  = now.getHours() % 12 || 12;
+    const timeStr = `${h12}:${String(now.getMinutes()).padStart(2,'0')} ${ampm}`;
+    document.getElementById('detailProjectName').textContent  = activeSession.name;
+    document.getElementById('detailProjectDate').textContent  = `${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]}`;
+    document.getElementById('detailClockInDisplay').textContent = activeSession.clockInTime
+      ? (() => { const [hh,mm] = activeSession.clockInTime.split(':'); const ap = +hh < 12 ? 'AM':'PM'; const h = +hh%12||12; return `${h}:${mm} ${ap}`; })()
+      : timeStr;
+    document.getElementById('detailMetaText').textContent = `Originally clocked in at ${document.getElementById('detailClockInDisplay').textContent} Australia/Victoria.`;
+    document.getElementById('detailAddress').textContent = activeSession.address;
+    detailSelectedEquip = [...(activeSession.equipment || [])];
+    renderDetailEquipFormList();
+    renderEquipForms('detail');
+    openScreen('screenDetail');
+  }
+
+  function openDetailEquipSheet() {
+    document.getElementById('detailEquipSearch').value = '';
+    renderDetailEquipSheet(detailEquipTab, '');
+    openSheet('sheetDetailEquipment');
+    setTimeout(() => document.getElementById('detailEquipSearch').focus(), 300);
+  }
+
+  function switchDetailEquipTab(tab) {
+    detailEquipTab = tab;
+    document.getElementById('tabDetailEquipProject').className    = 'fs-tab ' + (tab === 'project'    ? 'active' : 'inactive');
+    document.getElementById('tabDetailEquipUnassigned').className = 'fs-tab ' + (tab === 'unassigned' ? 'active' : 'inactive');
+    renderDetailEquipSheet(tab, document.getElementById('detailEquipSearch').value);
+  }
+
+  function filterDetailEquipment() {
+    renderDetailEquipSheet(detailEquipTab, document.getElementById('detailEquipSearch').value);
+  }
+
+  function renderDetailEquipSheet(tab, query) {
+    const list  = document.getElementById('detailEquipList');
+    const items = equipment[tab].filter(e => e.name.toLowerCase().includes(query.toLowerCase()));
+    if (!items.length) {
+      list.innerHTML = `<div style="padding:24px 16px;color:var(--muted);font-size:13px;">No equipment found</div>`;
+      return;
+    }
+    list.innerHTML = items.map(e => {
+      const idx        = equipment[tab].indexOf(e);
+      const isSelected = detailSelectedEquip.some(s => s.name === e.name);
+      return `<div class="equip-fs-item ${isSelected ? 'selected' : ''}" data-tab="${tab}" data-idx="${idx}">
+        <span class="equip-fs-name">${e.name}</span>
+        <span class="equip-hire-tag">${e.tag}</span>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('.equip-fs-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const e = equipment[el.dataset.tab][+el.dataset.idx];
+        toggleDetailEquip(e);
+        closeSheet('sheetDetailEquipment');
+      });
+    });
+  }
+
+  function toggleDetailEquip(item) {
+    const idx = detailSelectedEquip.findIndex(e => e.name === item.name);
+    if (idx >= 0) detailSelectedEquip.splice(idx, 1); else detailSelectedEquip.push(item);
+    renderDetailEquipFormList();
+    renderEquipForms('detail');
+  }
+
+  function removeDetailEquip(name) {
+    detailSelectedEquip = detailSelectedEquip.filter(e => e.name !== name);
+    renderDetailEquipFormList();
+    renderEquipForms('detail');
+    renderDetailEquipSheet(detailEquipTab, document.getElementById('detailEquipSearch').value);
+  }
+
+  function renderDetailEquipFormList() {
+    const container = document.getElementById('detailEquipSelectedList');
+    container.innerHTML = detailSelectedEquip.map(e =>
+      `<div class="equip-selected-item">
+        <span>${e.name}</span>
+        <button class="equip-remove-btn" onclick="removeDetailEquip(${JSON.stringify(e.name)})">&#x2715;</button>
+      </div>`
+    ).join('');
+  }
+
+  /* ── Clock-out step navigation ── */
+  function goToCoStep2() {
+    document.getElementById('coStep1').style.display    = 'none';
+    document.getElementById('coStep2').style.display    = 'block';
+    document.getElementById('coFooter1').style.display  = 'none';
+    document.getElementById('coFooter2').style.display  = 'flex';
+    document.getElementById('screenClockOut').querySelector('.ci-body').scrollTop = 0;
+  }
+
+  function goToCoStep1() {
+    document.getElementById('coStep2').style.display    = 'none';
+    document.getElementById('coStep1').style.display    = 'block';
+    document.getElementById('coFooter2').style.display  = 'none';
+    document.getElementById('coFooter1').style.display  = 'flex';
+  }
+
+  /* ── Clock-out screen ── */
+  const costCentres = [
+    { name: 'CC-001 Administration' },
+    { name: 'CC-002 Operations' },
+    { name: 'CC-003 Maintenance' },
+    { name: 'CC-004 Infrastructure' },
+    { name: 'CC-005 Civil Works' },
+    { name: 'CC-006 Project Management' },
+    { name: 'CC-007 Safety & Compliance' },
+  ];
+
+  let selectedCostCentre = null;
+  let coProjectTab       = 'assigned';
+  let coEquipTab         = 'project';
+  let coSelectedEquip    = [];
+
+  function updateClockedDuration() {
+    const ciVal    = document.getElementById('coClockInTime').value;
+    const coVal    = document.getElementById('coClockOutTime').value;
+    const breakMin = parseInt(document.getElementById('coBreak').value) || 0;
+    if (!ciVal || !coVal) { document.getElementById('coDuration').textContent = '—'; return; }
+    const [ciH, ciM] = ciVal.split(':').map(Number);
+    const [coH, coM] = coVal.split(':').map(Number);
+    let total = (coH * 60 + coM) - (ciH * 60 + ciM) - breakMin;
+    if (total < 0) total = 0;
+    const h = String(Math.floor(total / 60)).padStart(2, '0');
+    const m = String(total % 60).padStart(2, '0');
+    document.getElementById('coDuration').textContent = `${h}h ${m}m`;
+  }
+
+  function openClockOutScreen() {
+    if (!activeSession) return;
+
+    // Pre-fill project
+    const pval = document.getElementById('coProjectValue');
+    pval.textContent = activeSession.name;
+    pval.classList.remove('placeholder');
+
+    // Date display
+    const dn = new Date();
+    const dayNames   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    document.getElementById('coDateDisplay').textContent = `${dayNames[dn.getDay()]}, ${dn.getDate()} ${monthNames[dn.getMonth()]} ${dn.getFullYear()}`;
+
+    // Address links
+    document.getElementById('coAddress').textContent     = activeSession.address;
+    document.getElementById('coAddressRight2').textContent = activeSession.address;
+    document.getElementById('coAddressRight').style.display = 'flex';
+
+    // Pre-fill times
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    document.getElementById('coClockInTime').value  = activeSession.clockInTime || `${h}:${m}`;
+    document.getElementById('coClockOutTime').value = `${h}:${m}`;
+
+    // Originally clocked label
+    const ci = activeSession.clockInTime || `${h}:${m}`;
+    const [ciH, ciM] = ci.split(':').map(Number);
+    const ap  = ciH < 12 ? 'AM' : 'PM';
+    const h12 = ciH % 12 || 12;
+    document.getElementById('coOriginallyTime').textContent = `${h12}:${String(ciM).padStart(2,'0')} ${ap}`;
+
+    // Reset break + recalculate duration
+    document.getElementById('coBreak').value = '0';
+    updateClockedDuration();
+
+    // Reset cost centre
+    selectedCostCentre = null;
+    const cv = document.getElementById('costCentreValue');
+    cv.textContent = 'Select cost centre';
+    cv.classList.add('placeholder');
+    document.getElementById('coSaveBtn').classList.add('inactive');
+
+    // Pre-fill equipment
+    coSelectedEquip = [...(activeSession.equipment || [])];
+    renderCoEquipFormList();
+    renderEquipForms('clockout');
+
+    // Always start on step 1
+    goToCoStep1();
+
+    openScreen('screenClockOut');
+  }
+
+  function performClockOut() {
+    if (!selectedCostCentre) return;
+    stopTimer();
+    activeSession = null;
+    document.getElementById('timerDisplay').textContent        = '00 : 00 : 00';
+    document.getElementById('welcomeBlock').style.display      = 'none';
+    document.getElementById('actionClockedIn').style.display   = 'none';
+    document.getElementById('stateDefault').style.display      = 'block';
+    document.getElementById('clockinBtnWrapper').style.display = 'block';
+    document.getElementById('liveTimesheetCard').style.display = 'none';
+    document.getElementById('liveCardTimer').textContent       = '00:00:00';
+    closeScreen('screenClockOut');
+    selectedCostCentre = null;
+    coSelectedEquip    = [];
+  }
+
+  /* ── Clock-out project sheet ── */
+  function openCoProjectSheet() {
+    document.getElementById('coProjectSearch').value = '';
+    renderCoProjects(coProjectTab, '');
+    openSheet('sheetCoProject');
+    setTimeout(() => document.getElementById('coProjectSearch').focus(), 300);
+  }
+
+  function switchCoProjectTab(tab) {
+    coProjectTab = tab;
+    document.getElementById('tabCoProjectAssigned').className = 'fs-tab ' + (tab === 'assigned' ? 'active' : 'inactive');
+    document.getElementById('tabCoProjectOther').className    = 'fs-tab ' + (tab === 'other'    ? 'active' : 'inactive');
+    renderCoProjects(tab, document.getElementById('coProjectSearch').value);
+  }
+
+  function filterCoProjects() {
+    renderCoProjects(coProjectTab, document.getElementById('coProjectSearch').value);
+  }
+
+  function renderCoProjects(tab, query) {
+    const list  = document.getElementById('coProjectList');
+    const items = projects[tab].filter(p => p.name.toLowerCase().includes(query.toLowerCase()));
+    if (!items.length) {
+      list.innerHTML = `<div style="padding:24px 16px;color:var(--muted);font-size:13px;">No projects found</div>`;
+      return;
+    }
+    list.innerHTML = items.map(p =>
+      `<div class="fs-item" data-tab="${tab}" data-idx="${projects[tab].indexOf(p)}">${p.name}</div>`
+    ).join('');
+    list.querySelectorAll('.fs-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const p  = projects[el.dataset.tab][+el.dataset.idx];
+        const pv = document.getElementById('coProjectValue');
+        pv.textContent = p.name;
+        pv.classList.remove('placeholder');
+        document.getElementById('coAddress').textContent = p.address;
+        document.getElementById('coAddressRow').style.display = 'flex';
+        closeSheet('sheetCoProject');
+      });
+    });
+  }
+
+  /* ── Cost centre sheet ── */
+  function openCostCentreSheet() {
+    document.getElementById('costCentreSearch').value = '';
+    renderCostCentres('');
+    openSheet('sheetCostCentre');
+    setTimeout(() => document.getElementById('costCentreSearch').focus(), 300);
+  }
+
+  function filterCostCentres() {
+    renderCostCentres(document.getElementById('costCentreSearch').value);
+  }
+
+  function renderCostCentres(query) {
+    const list  = document.getElementById('costCentreList');
+    const items = costCentres.filter(c => c.name.toLowerCase().includes(query.toLowerCase()));
+    if (!items.length) {
+      list.innerHTML = `<div style="padding:24px 16px;color:var(--muted);font-size:13px;">No cost centres found</div>`;
+      return;
+    }
+    list.innerHTML = items.map((c, i) =>
+      `<div class="fs-item" data-idx="${i}">${c.name}</div>`
+    ).join('');
+    list.querySelectorAll('.fs-item').forEach(el => {
+      el.addEventListener('click', () => {
+        selectedCostCentre = costCentres[+el.dataset.idx];
+        const cv = document.getElementById('costCentreValue');
+        cv.textContent = selectedCostCentre.name;
+        cv.classList.remove('placeholder');
+        document.getElementById('coSaveBtn').classList.remove('inactive');
+        closeSheet('sheetCostCentre');
+      });
+    });
+  }
+
+  /* ── Clock-out equipment sheet ── */
+  function openCoEquipSheet() {
+    document.getElementById('coEquipSearch').value = '';
+    renderCoEquipSheet(coEquipTab, '');
+    openSheet('sheetCoEquipment');
+    setTimeout(() => document.getElementById('coEquipSearch').focus(), 300);
+  }
+
+  function switchCoEquipTab(tab) {
+    coEquipTab = tab;
+    document.getElementById('tabCoEquipProject').className    = 'fs-tab ' + (tab === 'project'    ? 'active' : 'inactive');
+    document.getElementById('tabCoEquipUnassigned').className = 'fs-tab ' + (tab === 'unassigned' ? 'active' : 'inactive');
+    renderCoEquipSheet(tab, document.getElementById('coEquipSearch').value);
+  }
+
+  function filterCoEquipment() {
+    renderCoEquipSheet(coEquipTab, document.getElementById('coEquipSearch').value);
+  }
+
+  function renderCoEquipSheet(tab, query) {
+    const list  = document.getElementById('coEquipList');
+    const items = equipment[tab].filter(e => e.name.toLowerCase().includes(query.toLowerCase()));
+    if (!items.length) {
+      list.innerHTML = `<div style="padding:24px 16px;color:var(--muted);font-size:13px;">No equipment found</div>`;
+      return;
+    }
+    list.innerHTML = items.map(e => {
+      const idx        = equipment[tab].indexOf(e);
+      const isSelected = coSelectedEquip.some(s => s.name === e.name);
+      return `<div class="equip-fs-item ${isSelected ? 'selected' : ''}" data-tab="${tab}" data-idx="${idx}">
+        <span class="equip-fs-name">${e.name}</span>
+        <span class="equip-hire-tag">${e.tag}</span>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('.equip-fs-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const e = equipment[el.dataset.tab][+el.dataset.idx];
+        toggleCoEquip(e);
+        closeSheet('sheetCoEquipment');
+      });
+    });
+  }
+
+  function toggleCoEquip(item) {
+    const idx = coSelectedEquip.findIndex(e => e.name === item.name);
+    if (idx >= 0) coSelectedEquip.splice(idx, 1); else coSelectedEquip.push(item);
+    renderCoEquipFormList();
+  }
+
+  function removeCoEquip(name) {
+    coSelectedEquip = coSelectedEquip.filter(e => e.name !== name);
+    renderCoEquipFormList();
+    renderCoEquipSheet(coEquipTab, document.getElementById('coEquipSearch').value);
+  }
+
+  function renderCoEquipFormList() {
+    const container = document.getElementById('coEquipSelectedList');
+    container.innerHTML = coSelectedEquip.map(e =>
+      `<div class="equip-selected-item">
+        <span>${e.name}</span>
+        <button class="equip-remove-btn" onclick="removeCoEquip(${JSON.stringify(e.name)})">&#x2715;</button>
+      </div>`
+    ).join('');
+  }
+
+  /* ── Equipment Forms ── */
+  const equipForms = {
+    '(bulldozer_8005 test) bulldozer test': [
+      { id: 'tanker_prestart',    title: 'Tanker Pre Start',           required: true  },
+      { id: 'bulldozer_safety',   title: 'Bulldozer Safety Check',     required: false },
+    ],
+    '(Asphalt plant_3622) Asphalt plant': [
+      { id: 'plant_inspection',   title: 'Plant Inspection Checklist', required: true  },
+      { id: 'plant_safety',       title: 'Plant Safety Check',         required: true  },
+    ],
+    '(Concrete pump_1102) Concrete pump': [
+      { id: 'pump_prestart',      title: 'Pump Pre-Start Check',       required: true  },
+      { id: 'pump_hazard',        title: 'Pump Hazard Assessment',     required: false },
+    ],
+    '(Roller_XP22) Roller XP22': [
+      { id: 'roller_daily',       title: 'Roller Daily Check',         required: true  },
+    ],
+    '(Grader_M160) Grader M160': [
+      { id: 'grader_prestart',    title: 'Grader Pre-Start',           required: true  },
+      { id: 'grader_environment', title: 'Environmental Checklist',    required: false },
+    ],
+  };
+
+  let formStatuses      = {};   // { formId: 'submitted' }
+  let currentFormId     = null;
+  let currentFormCtx    = null; // 'clockin' | 'detail'
+
+  function renderEquipForms(context) {
+    const equip     = context === 'clockin' ? selectedEquipment
+                    : context === 'detail'  ? detailSelectedEquip
+                    :                         coSelectedEquip;
+    const sectionId = context === 'clockin' ? 'ciFormsSection'
+                    : context === 'detail'  ? 'detailFormsSection'
+                    :                         'coFormsSection';
+    const listId    = context === 'clockin' ? 'ciFormsList'
+                    : context === 'detail'  ? 'detailFormsList'
+                    :                         'coFormsList';
+    const section   = document.getElementById(sectionId);
+    const list      = document.getElementById(listId);
+
+    // Collect one form per selected equipment
+    const allForms = [];
+    equip.forEach(e => {
+      const f = (equipForms[e.name] || [])[0];
+      if (f) allForms.push({ ...f, equipName: e.name });
+    });
+
+    // In detail/clockout views, only show submitted forms
+    const visibleForms = (context === 'clockin')
+      ? allForms
+      : allForms.filter(f => formStatuses[f.id] === 'submitted');
+
+    if (!visibleForms.length) { section.style.display = 'none'; list.innerHTML = ''; return; }
+
+    section.style.display = 'block';
+    list.innerHTML = visibleForms.map(f => {
+      const submitted = formStatuses[f.id] === 'submitted';
+      const safeTitle = f.title.replace(/'/g, "\\'");
+      const safeEquip = f.equipName.replace(/'/g, "\\'");
+      return `<div class="form-card" onclick="openEquipForm('${f.id}','${safeTitle}','${safeEquip}','${context}')">
+        <div class="form-card-top">
+          <span class="form-card-title">${f.title}</span>
+          ${f.required ? '<span class="form-card-required">(Required at clock in)</span>' : ''}
+        </div>
+        <div class="form-card-equip-row">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 17h20v2H2z"/><path d="M4 17V9l4-4h8l4 4v8"/><rect x="9" y="13" width="6" height="4"/>
+          </svg>
+          <span class="form-card-equip-name">${f.equipName}</span>
+        </div>
+        <span class="form-status-badge ${submitted ? 'submitted' : 'not-started'}">${submitted ? 'Submitted' : 'Not Started'}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function openEquipForm(formId, title, equipName, context) {
+    currentFormId  = formId;
+    currentFormCtx = context;
+    document.getElementById('equipFormTitle').textContent  = title;
+    document.getElementById('equipFormEquipId').value      = equipName;
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('equipFormDate').value         = today;
+    openScreen('screenEquipForm');
+  }
+
+  /* ── Forms screen ── */
+  function openPageScreen(id) {
+    document.getElementById(id).classList.add('open');
+  }
+  function closePageScreen(id) {
+    document.getElementById(id).classList.remove('open');
+  }
+
+  function switchFormsTab(tab) {
+    const isSubmit = tab === 'submit';
+    document.getElementById('formsTabSubmit').classList.toggle('active', isSubmit);
+    document.getElementById('formsTabResponses').classList.toggle('active', !isSubmit);
+    document.getElementById('formsSubmitList').style.display    = isSubmit ? 'flex' : 'none';
+    document.getElementById('formsResponsesList').style.display = isSubmit ? 'none' : 'flex';
+  }
+
+  function closeEquipForm() {
+    closeScreen('screenEquipForm');
+  }
+
+  function submitEquipForm() {
+    if (!currentFormId) return;
+    formStatuses[currentFormId] = 'submitted';
+    closeEquipForm();
+    if (currentFormCtx) renderEquipForms(currentFormCtx);
+  }
+
+  /* ── More popup ── */
+  function toggleMorePopup(e) {
+    e.preventDefault();
+    const popup    = document.getElementById('morePopup');
+    const backdrop = document.getElementById('moreBackdrop');
+    const isOpen   = popup.classList.contains('open');
+    popup.classList.toggle('open', !isOpen);
+    backdrop.classList.toggle('open', !isOpen);
+    document.getElementById('moreNavBtn').classList.toggle('active', !isOpen);
+  }
+
+  function closeMorePopup() {
+    document.getElementById('morePopup').classList.remove('open');
+    document.getElementById('moreBackdrop').classList.remove('open');
+    document.getElementById('moreNavBtn').classList.remove('active');
+  }
+
+  /* ── Date range calendar ── */
+  const CAL_MONTHS_LONG  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const CAL_MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const CAL_DAYS_SHORT   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  let calYear  = 2026, calMonth = 4; // May 2026
+  let calSelStart = new Date(2026, 4, 17); // Sun 17 May
+  let calSelEnd   = new Date(2026, 4, 23); // Sat 23 May
+  let calTempDate = new Date(2026, 4, 19); // today
+
+  function openDateModal() {
+    renderCalendar();
+    document.getElementById('calBackdrop').classList.add('open');
+  }
+  function closeDateModal() {
+    document.getElementById('calBackdrop').classList.remove('open');
+  }
+
+  function getWeekBounds(date) {
+    const d   = new Date(date);
+    const dow = d.getDay(); // 0=Sun
+    const sun = new Date(d); sun.setDate(d.getDate() - dow);
+    const sat = new Date(sun); sat.setDate(sun.getDate() + 6);
+    return { start: sun, end: sat };
+  }
+
+  function selectCalDate(y, m, d) {
+    const date = new Date(y, m, d);
+    const { start, end } = getWeekBounds(date);
+    calSelStart = start; calSelEnd = end; calTempDate = date;
+    calYear = y; calMonth = m;
+    renderCalendar();
+  }
+
+  function calPrevMonth() { if (--calMonth < 0) { calMonth = 11; calYear--; } renderCalendar(); }
+  function calNextMonth() { if (++calMonth > 11) { calMonth = 0; calYear++; } renderCalendar(); }
+
+  function renderCalendar() {
+    // header
+    document.getElementById('calHeaderDate').textContent =
+      `${CAL_DAYS_SHORT[calTempDate.getDay()]}, ${calTempDate.getDate()} ${CAL_MONTHS_SHORT[calTempDate.getMonth()]}`;
+    document.getElementById('calMonthYear').textContent =
+      `${CAL_MONTHS_LONG[calMonth]} ${calYear}  ▾`;
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    const firstDow = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+    const leadCells = firstDow === 0 ? 6 : firstDow - 1;     // Mon-start offset
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+
+    let html = '';
+    for (let i = 0; i < leadCells; i++) {
+      const pd = new Date(calYear, calMonth, -leadCells + i + 1);
+      html += `<div class="cal-day other-month">${pd.getDate()}</div>`;
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(calYear, calMonth, d); date.setHours(0,0,0,0);
+      const ts = date.getTime();
+      const isStart = ts === calSelStart.getTime();
+      const isEnd   = ts === calSelEnd.getTime();
+      const inRange = ts > calSelStart.getTime() && ts < calSelEnd.getTime();
+      const isToday = ts === today.getTime();
+      let cls = 'cal-day';
+      if (isStart && isEnd) cls += ' range-single';
+      else if (isStart) cls += ' range-start';
+      else if (isEnd)   cls += ' range-end';
+      else if (inRange) cls += ' in-range';
+      if (isToday && !isStart && !isEnd) cls += ' today';
+      html += `<div class="${cls}" onclick="selectCalDate(${calYear},${calMonth},${d})">${d}</div>`;
+    }
+    const used = (leadCells + daysInMonth) % 7;
+    for (let i = 1; i <= (used ? 7 - used : 0); i++)
+      html += `<div class="cal-day other-month">${i}</div>`;
+
+    document.getElementById('calDaysGrid').innerHTML = html;
+  }
+
+  function applyDateRange() {
+    const fmt = d => `${d.getDate()} ${CAL_MONTHS_SHORT[d.getMonth()]}`;
+    document.getElementById('dateRangeText').textContent =
+      `${fmt(calSelStart)} – ${fmt(calSelEnd)} ${calSelEnd.getFullYear()}`;
+    closeDateModal();
+  }
+
+  /* ── Clock-in with shift ── */
+  function openClockinSelectMode() {
+    document.getElementById('ciShiftSelectMode').style.display = 'block';
+    document.getElementById('ciShiftSingleMode').style.display = 'none';
+    selectCiShift(0);
+    openScreen('screenClockin');
+  }
+
+  function openClockInWithShift(projectName, address, shiftName, shiftTime) {
+    document.getElementById('ciShiftSelectMode').style.display = 'none';
+    document.getElementById('ciShiftSingleMode').style.display = 'block';
+    document.getElementById('ciSingleTime').textContent = shiftTime;
+    document.getElementById('ciSingleProj').textContent = projectName;
+    document.getElementById('ciSingleName').textContent = shiftName;
+    document.getElementById('ciSingleAddr').textContent = address;
+    selectProject(projectName, address);
+    openScreen('screenClockin');
+  }
+
+  const CI_SHIFTS = {
+    0: { project: 'Harbour Bridge Maintenance',         address: '10 Boileau St, Keysborough VIC' },
+    2: { project: 'Eastern Freeway Extension (EFX-07)', address: '201 Eastern Freeway, Doncaster VIC' }
+  };
+  let ciSelectedShift = 0;
+
+  function selectCiShift(idx) {
+    const shift = CI_SHIFTS[idx];
+    if (!shift) return;
+    ciSelectedShift = idx;
+    Object.keys(CI_SHIFTS).forEach(i => {
+      const card = document.getElementById('ciShiftCard' + i);
+      if (card) card.classList.toggle('selected', parseInt(i) === idx);
+    });
+    selectProject(shift.project, shift.address);
+  }
+
+  /* ── Add Timesheet screen ── */
+  let atProjectTab       = 'assigned';
+  let atEquipTab         = 'project';
+  let atSelectedEquip    = [];
+  let selectedAtCostCentre = null;
+
+  function openAddTimesheetScreen() {
+    // Date: today
+    document.getElementById('atDateInput').value = '2026-05-19';
+
+    // Project pre-fill
+    document.getElementById('atProjectValue').textContent = 'Harbour Bridge Maintenance';
+    document.getElementById('atProjectValue').classList.remove('placeholder');
+
+    // Times
+    document.getElementById('atClockInTime').value  = '07:45';
+    document.getElementById('atClockOutTime').value = '16:45';
+    document.getElementById('atBreak').value = '60';
+    updateAtDuration();
+
+    // Reset cost centre
+    selectedAtCostCentre = null;
+    const cv = document.getElementById('atCostCentreValue');
+    cv.textContent = 'Select cost centre';
+    cv.classList.add('placeholder');
+    document.getElementById('atSaveBtn').classList.add('inactive');
+
+    // Reset equipment
+    atSelectedEquip = [];
+    renderAtEquipFormList();
+
+    // Always start on step 1
+    document.getElementById('atStep1').style.display   = 'block';
+    document.getElementById('atStep2').style.display   = 'none';
+    document.getElementById('atFooter1').style.display = 'flex';
+    document.getElementById('atFooter2').style.display = 'none';
+
+    openScreen('screenAddTimesheet');
+  }
+
+  function goToAtStep2() {
+    document.getElementById('atStep1').style.display   = 'none';
+    document.getElementById('atStep2').style.display   = 'block';
+    document.getElementById('atFooter1').style.display = 'none';
+    document.getElementById('atFooter2').style.display = 'flex';
+    document.getElementById('screenAddTimesheet').querySelector('.ci-body').scrollTop = 0;
+  }
+
+  function goToAtStep1() {
+    document.getElementById('atStep2').style.display   = 'none';
+    document.getElementById('atStep1').style.display   = 'block';
+    document.getElementById('atFooter2').style.display = 'none';
+    document.getElementById('atFooter1').style.display = 'flex';
+  }
+
+  function updateAtDuration() {
+    const ciVal    = document.getElementById('atClockInTime').value;
+    const coVal    = document.getElementById('atClockOutTime').value;
+    const breakMin = parseInt(document.getElementById('atBreak').value) || 0;
+    if (!ciVal || !coVal) { document.getElementById('atDuration').textContent = '—'; return; }
+    const [ciH, ciM] = ciVal.split(':').map(Number);
+    const [coH, coM] = coVal.split(':').map(Number);
+    let total = (coH * 60 + coM) - (ciH * 60 + ciM) - breakMin;
+    if (total < 0) total = 0;
+    const h = String(Math.floor(total / 60)).padStart(2, '0');
+    const m = String(total % 60).padStart(2, '0');
+    document.getElementById('atDuration').textContent = `${h}h ${m}m`;
+  }
+
+  function performAtSave() {
+    if (!selectedAtCostCentre) return;
+    closeScreen('screenAddTimesheet');
+    selectedAtCostCentre = null;
+    atSelectedEquip = [];
+  }
+
+  /* Add Timesheet — project sheet */
+  function openAtProjectSheet() {
+    document.getElementById('atProjectSearch').value = '';
+    renderAtProjects(atProjectTab, '');
+    openSheet('sheetAtProject');
+    setTimeout(() => document.getElementById('atProjectSearch').focus(), 300);
+  }
+
+  function switchAtProjectTab(tab) {
+    atProjectTab = tab;
+    document.getElementById('tabAtProjectAssigned').className = 'fs-tab ' + (tab === 'assigned' ? 'active' : 'inactive');
+    document.getElementById('tabAtProjectOther').className    = 'fs-tab ' + (tab === 'other'    ? 'active' : 'inactive');
+    renderAtProjects(tab, document.getElementById('atProjectSearch').value);
+  }
+
+  function filterAtProjects() {
+    renderAtProjects(atProjectTab, document.getElementById('atProjectSearch').value);
+  }
+
+  function renderAtProjects(tab, query) {
+    const list  = document.getElementById('atProjectList');
+    const items = projects[tab].filter(p => p.name.toLowerCase().includes(query.toLowerCase()));
+    if (!items.length) {
+      list.innerHTML = `<div style="padding:24px 16px;color:var(--muted);font-size:13px;">No projects found</div>`;
+      return;
+    }
+    list.innerHTML = items.map(p =>
+      `<div class="fs-item" data-tab="${tab}" data-idx="${projects[tab].indexOf(p)}">${p.name}</div>`
+    ).join('');
+    list.querySelectorAll('.fs-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const p  = projects[el.dataset.tab][+el.dataset.idx];
+        const pv = document.getElementById('atProjectValue');
+        pv.textContent = p.name;
+        pv.classList.remove('placeholder');
+        closeSheet('sheetAtProject');
+      });
+    });
+  }
+
+  /* Add Timesheet — cost centre sheet */
+  function openAtCostCentreSheet() {
+    document.getElementById('atCostCentreSearch').value = '';
+    renderAtCostCentres('');
+    openSheet('sheetAtCostCentre');
+    setTimeout(() => document.getElementById('atCostCentreSearch').focus(), 300);
+  }
+
+  function filterAtCostCentres() {
+    renderAtCostCentres(document.getElementById('atCostCentreSearch').value);
+  }
+
+  function renderAtCostCentres(query) {
+    const list  = document.getElementById('atCostCentreList');
+    const items = costCentres.filter(c => c.name.toLowerCase().includes(query.toLowerCase()));
+    if (!items.length) {
+      list.innerHTML = `<div style="padding:24px 16px;color:var(--muted);font-size:13px;">No cost centres found</div>`;
+      return;
+    }
+    list.innerHTML = items.map((c, i) =>
+      `<div class="fs-item" data-idx="${i}">${c.name}</div>`
+    ).join('');
+    list.querySelectorAll('.fs-item').forEach(el => {
+      el.addEventListener('click', () => {
+        selectedAtCostCentre = costCentres[+el.dataset.idx];
+        const cv = document.getElementById('atCostCentreValue');
+        cv.textContent = selectedAtCostCentre.name;
+        cv.classList.remove('placeholder');
+        document.getElementById('atSaveBtn').classList.remove('inactive');
+        closeSheet('sheetAtCostCentre');
+      });
+    });
+  }
+
+  /* Add Timesheet — equipment sheet */
+  function openAtEquipSheet() {
+    document.getElementById('atEquipSearch').value = '';
+    renderAtEquipSheet(atEquipTab, '');
+    openSheet('sheetAtEquipment');
+    setTimeout(() => document.getElementById('atEquipSearch').focus(), 300);
+  }
+
+  function switchAtEquipTab(tab) {
+    atEquipTab = tab;
+    document.getElementById('tabAtEquipProject').className    = 'fs-tab ' + (tab === 'project'    ? 'active' : 'inactive');
+    document.getElementById('tabAtEquipUnassigned').className = 'fs-tab ' + (tab === 'unassigned' ? 'active' : 'inactive');
+    renderAtEquipSheet(tab, document.getElementById('atEquipSearch').value);
+  }
+
+  function filterAtEquipment() {
+    renderAtEquipSheet(atEquipTab, document.getElementById('atEquipSearch').value);
+  }
+
+  function renderAtEquipSheet(tab, query) {
+    const list  = document.getElementById('atEquipList');
+    const items = equipment[tab].filter(e => e.name.toLowerCase().includes(query.toLowerCase()));
+    if (!items.length) {
+      list.innerHTML = `<div style="padding:24px 16px;color:var(--muted);font-size:13px;">No equipment found</div>`;
+      return;
+    }
+    list.innerHTML = items.map(e => {
+      const idx        = equipment[tab].indexOf(e);
+      const isSelected = atSelectedEquip.some(s => s.name === e.name);
+      return `<div class="equip-fs-item ${isSelected ? 'selected' : ''}" data-tab="${tab}" data-idx="${idx}">
+        <span class="equip-fs-name">${e.name}</span>
+        <span class="equip-hire-tag">${e.tag}</span>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('.equip-fs-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const e = equipment[el.dataset.tab][+el.dataset.idx];
+        toggleAtEquip(e);
+        closeSheet('sheetAtEquipment');
+      });
+    });
+  }
+
+  function toggleAtEquip(item) {
+    const idx = atSelectedEquip.findIndex(e => e.name === item.name);
+    if (idx >= 0) atSelectedEquip.splice(idx, 1); else atSelectedEquip.push(item);
+    renderAtEquipFormList();
+  }
+
+  function removeAtEquip(name) {
+    atSelectedEquip = atSelectedEquip.filter(e => e.name !== name);
+    renderAtEquipFormList();
+    renderAtEquipSheet(atEquipTab, document.getElementById('atEquipSearch').value);
+  }
+
+  function renderAtEquipFormList() {
+    const container = document.getElementById('atEquipSelectedList');
+    container.innerHTML = atSelectedEquip.map(e =>
+      `<div class="equip-selected-item">
+        <span>${e.name}</span>
+        <button class="equip-remove-btn" onclick="removeAtEquip(${JSON.stringify(e.name)})">&#x2715;</button>
+      </div>`
+    ).join('');
+  }
+
+  /* ── Init ── */
+  renderProjects('assigned', '');
+
+  function updateDemoProgress() {
+    const textFields = ['demoDate','demoOperator','demoSupervisor','demoEquipId','demoWeather','demoGround','demoHazardDesc','demoRemarks'];
+    const preStartIds = ['chk0','chk1','chk2','chk3','chk4','chk5','chk6','chk7'];
+    const ppeIds      = ['ppe0','ppe1','ppe2','ppe3','ppe4'];
+    let filled = 0;
+    const total = textFields.length + 3; // 8 text/select + prestart group + ppe group + hazard radio
+    textFields.forEach(id => { const el = document.getElementById(id); if (el && el.value.trim()) filled++; });
+    if (preStartIds.some(id => document.getElementById(id)?.checked)) filled++;
+    if (ppeIds.some(id => document.getElementById(id)?.checked)) filled++;
+    if (document.getElementById('hazardYes')?.checked || document.getElementById('hazardNo')?.checked) filled++;
+    document.getElementById('demoProgressFill').style.width = Math.round((filled / total) * 100) + '%';
+  }
+
+  function attachDemoFormListeners() {
+    const allText = ['demoDate','demoOperator','demoSupervisor','demoEquipId','demoWeather','demoGround','demoHazardDesc','demoRemarks'];
+    const allCheck = ['chk0','chk1','chk2','chk3','chk4','chk5','chk6','chk7','ppe0','ppe1','ppe2','ppe3','ppe4','hazardYes','hazardNo'];
+    allText.forEach(id  => { const el = document.getElementById(id);  if (el) { el.addEventListener('input', updateDemoProgress); el.addEventListener('change', updateDemoProgress); } });
+    allCheck.forEach(id => { const el = document.getElementById(id);  if (el) el.addEventListener('change', updateDemoProgress); });
+  }
+
+  function setDemoFormFields(disabled) {
+    ['demoDate','demoOperator','demoSupervisor','demoEquipId','demoWeather','demoGround','demoHazardDesc','demoRemarks']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.disabled = disabled; });
+    ['chk0','chk1','chk2','chk3','chk4','chk5','chk6','chk7','ppe0','ppe1','ppe2','ppe3','ppe4','hazardYes','hazardNo']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.disabled = disabled; });
+  }
+
+  function openDemoForm(prefill) {
+    document.getElementById('demoDate').value      = prefill ? '2026-05-06' : '2026-05-19';
+    document.getElementById('demoOperator').value  = prefill ? 'Sristi Shrestha' : '';
+    document.getElementById('demoSupervisor').value= prefill ? 'James Harrington' : '';
+    document.getElementById('demoEquipId').value   = prefill ? 'EX200-007' : '';
+    document.getElementById('demoWeather').value   = prefill ? 'clear' : '';
+    document.getElementById('demoGround').value    = prefill ? 'dry' : '';
+    document.getElementById('demoHazardDesc').value= '';
+    document.getElementById('demoRemarks').value   = prefill ? 'All checks completed. Site conditions satisfactory for operations.' : '';
+
+    ['chk0','chk1','chk2','chk3','chk4','chk5','chk6','chk7','ppe0','ppe1','ppe2','ppe3','ppe4']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.checked = prefill; });
+    document.getElementById('hazardNo').checked = true;
+
+    setDemoFormFields(prefill);
+    document.getElementById('demoEditBtn').style.display    = prefill ? 'inline-flex' : 'none';
+    document.getElementById('demoFormFooter').style.display = prefill ? 'none' : 'block';
+    document.getElementById('demoFormBtn').textContent      = 'Submit Form';
+    const progressBar = document.getElementById('demoProgressFill').parentElement;
+    progressBar.style.display = prefill ? 'none' : 'block';
+
+    attachDemoFormListeners();
+    updateDemoProgress();
+    openScreen('screenDemoForm');
+  }
+
+  function enableDemoFormEdit() {
+    setDemoFormFields(false);
+    document.getElementById('demoEditBtn').style.display    = 'none';
+    document.getElementById('demoFormFooter').style.display = 'block';
+    document.getElementById('demoFormBtn').textContent      = 'Update';
+    document.getElementById('demoProgressFill').parentElement.style.display = 'block';
+    updateDemoProgress();
+  }
+</script>
+</body>
+</html>
