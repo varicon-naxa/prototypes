@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bill — PO Not Approved Error State</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:#f5f5f5; color:#1a2336; }
+.layout { display:flex; min-height:100vh; }
+
+/* Sidebar */
+.sidebar { width:200px; background:#1a2336; color:#cfd5e0; flex-shrink:0; display:flex; flex-direction:column; }
+.sb-top { display:flex; align-items:center; gap:10px; padding:14px; border-bottom:1px solid rgba(255,255,255,.07); }
+.sb-top .v { width:28px; height:28px; background:linear-gradient(135deg,#f7941d,#f15a24); border-radius:6px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:15px; }
+.sb-org { padding:10px 14px; font-size:12px; color:#f7941d; font-weight:600; border-bottom:1px solid rgba(255,255,255,.07); }
+.sb-nav { flex:1; overflow-y:auto; padding:6px 0; }
+.sb-item { display:flex; align-items:center; gap:10px; padding:9px 14px; font-size:12.5px; color:#cfd5e0; cursor:pointer; text-decoration:none; }
+.sb-item:hover { background:rgba(255,255,255,.04); }
+.sb-item.on { background:#f7941d; color:#fff; }
+.sb-item .ico { width:16px; text-align:center; }
+
+.main { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+
+/* Topbar */
+.topbar { background:#fff; border-bottom:1px solid #e5e7eb; padding:0 20px; height:52px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:10; }
+.topbar h1 { font-size:15px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; }
+.topbar-r { margin-left:auto; display:flex; align-items:center; gap:8px; }
+.tbtn { padding:6px 14px; border-radius:6px; font-size:12px; font-weight:600; border:1.5px solid #d1d5db; background:#fff; color:#374151; cursor:pointer; }
+.tbtn.search { border-radius:20px; background:#f0fafd; border-color:#cfe7f5; display:flex; align-items:center; gap:6px; }
+.tbtn.search .star { color:#f7941d; }
+.av { width:30px; height:30px; border-radius:50%; background:#1a2336; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+
+/* Breadcrumb */
+.breadcrumb { padding:10px 20px; background:#fff; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; gap:8px; font-size:13px; color:#6b7280; }
+.breadcrumb a { color:#f7941d; text-decoration:none; font-weight:500; }
+.breadcrumb .sep { color:#d1d5db; }
+
+/* Page */
+.page { padding:20px 24px 80px; }
+.attach-btn { display:inline-flex; align-items:center; gap:8px; padding:9px 18px; border:1.5px solid #d1d5db; border-radius:8px; background:#fff; font-size:13px; font-weight:600; color:#374151; cursor:pointer; margin-bottom:18px; }
+
+/* Summary */
+.section-label { font-size:12px; font-weight:700; color:#1a2336; margin-bottom:8px; display:flex; align-items:center; gap:7px; }
+.section-label .dot { width:8px; height:8px; border-radius:50%; background:#f7941d; }
+.summary-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; margin-bottom:12px; }
+.s-row { display:flex; border-bottom:1px solid #f3f4f6; }
+.s-row:last-child { border-bottom:none; }
+.s-field { flex:1; padding:11px 16px; border-right:1px solid #f3f4f6; display:flex; flex-direction:column; gap:4px; }
+.s-field:last-child { border-right:none; }
+.s-lbl { font-size:10.5px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.5px; }
+.s-val { font-size:13.5px; font-weight:600; color:#1a2336; display:flex; align-items:center; gap:4px; }
+.s-val select { border:none; background:transparent; font-size:13.5px; font-weight:600; color:#1a2336; cursor:pointer; width:100%; }
+.s-val input { border:none; background:transparent; font-size:13.5px; font-weight:600; color:#1a2336; width:100%; outline:none; }
+.s-val .chev { color:#9ca3af; font-size:11px; }
+
+/* Link trigger */
+.link-trigger { display:flex; align-items:center; gap:16px; padding:20px 22px; background:#fff; border:2px solid #f7941d; border-radius:12px; cursor:pointer; margin-bottom:14px; transition:all .15s; width:100%; font-family:inherit; text-align:left; }
+.link-trigger:hover { background:#fffcf8; }
+.lt-icon { width:48px; height:48px; border-radius:12px; background:#fff3e0; display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; }
+.lt-body { flex:1; }
+.lt-title { font-size:15px; font-weight:700; color:#c2410c; }
+.lt-sub { font-size:12.5px; color:#9ca3af; margin-top:3px; }
+.lt-arrow { font-size:20px; color:#f7941d; flex-shrink:0; }
+
+/* Line items (condensed) */
+.tab-bar { display:flex; border-bottom:2px solid #e5e7eb; }
+.tab { padding:10px 18px; font-size:12px; font-weight:700; color:#9ca3af; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; text-transform:uppercase; letter-spacing:.5px; }
+.tab.on { color:#f7941d; border-bottom-color:#f7941d; }
+.li-card { background:#fff; border:1px solid #e5e7eb; border-radius:0 0 12px 12px; overflow:hidden; border-top:none; }
+.li-top { padding:12px 16px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f3f4f6; }
+.li-title { font-size:13.5px; font-weight:700; }
+table { width:100%; border-collapse:collapse; font-size:12.5px; }
+th { padding:9px 12px; font-size:11px; font-weight:700; color:#6b7280; background:#f9fafb; border-bottom:1.5px solid #e5e7eb; text-align:left; text-transform:uppercase; letter-spacing:.3px; }
+td { padding:9px 12px; border-bottom:1px solid #f3f4f6; }
+td select { width:100%; padding:7px 9px; border:1.5px solid #d1d5db; border-radius:6px; font-size:12px; }
+.bulk-row { padding:10px 14px; display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid #f3f4f6; }
+.bbtn { padding:7px 14px; border:1.5px solid #d1d5db; border-radius:6px; font-size:12px; font-weight:600; color:#374151; background:#fff; cursor:pointer; }
+.bbtn.hi { border-color:#f7941d; background:#fff8f0; color:#c2410c; }
+.totals { padding:12px 18px; border-top:1px solid #f3f4f6; display:flex; flex-direction:column; align-items:flex-end; gap:4px; font-size:13px; }
+.appr { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:14px 16px; margin-top:14px; }
+.appr-lbl { font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px; }
+.appr-row { display:flex; align-items:center; gap:10px; }
+.asel { flex:1; padding:10px 12px; border:1.5px solid #d1d5db; border-radius:8px; font-size:13px; }
+
+/* Action bar */
+.action-bar { position:sticky; bottom:0; background:#fff; border-top:1.5px solid #e5e7eb; padding:12px 24px; display:flex; align-items:center; gap:10px; z-index:10; }
+.abtn { padding:11px 20px; border-radius:8px; font-size:13.5px; font-weight:700; cursor:pointer; border:1.5px solid; transition:all .15s; font-family:inherit; }
+.abtn-ghost { background:#fff; border-color:#d1d5db; color:#6b7280; }
+.abtn-outline { background:#fff; border-color:#d1d5db; color:#374151; }
+.abtn-outline:hover { background:#f9fafb; }
+.abtn-dark { background:#1a2336; border-color:#1a2336; color:#fff; }
+.abtn-orange { background:#f7941d; border-color:#f7941d; color:#fff; margin-left:auto; display:flex; align-items:center; gap:8px; box-shadow:0 4px 12px rgba(247,148,29,.28); }
+.abtn-orange:hover { background:#e8850f; }
+.abtn-orange .sp { width:1px; height:18px; background:rgba(255,255,255,.3); }
+
+/* ════════════════════════════════════════════════
+   MODAL
+   ════════════════════════════════════════════════ */
+.backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; align-items:center; justify-content:center; }
+.backdrop.open { display:flex; }
+.modal { background:#fff; border-radius:14px; width:90%; max-width:820px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 24px 64px rgba(0,0,0,.22); overflow:hidden; }
+.modal-header { padding:18px 22px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; gap:12px; flex-shrink:0; }
+.modal-title { font-size:16px; font-weight:700; flex:1; }
+.modal-close { width:34px; height:34px; border:1.5px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; color:#6b7280; }
+.modal-close:hover { background:#f3f4f6; }
+.modal-filters { padding:12px 22px; border-bottom:1px solid #e5e7eb; display:flex; gap:10px; flex-shrink:0; background:#fafafa; }
+.mf-select { display:flex; flex-direction:column; gap:4px; flex:1; }
+.mf-label { font-size:10.5px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.5px; }
+.mf-control { padding:9px 12px; border:1.5px solid #d1d5db; border-radius:8px; font-size:13px; background:#fff; }
+.modal-body { flex:1; display:flex; overflow:hidden; min-height:0; }
+.modal-col { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.modal-col + .modal-col { border-left:1px solid #e5e7eb; }
+.col-head { padding:12px 18px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.col-head-title { font-size:13px; font-weight:700; color:#1a2336; flex:1; }
+.col-act-btn { padding:5px 12px; border:1.5px solid #d1d5db; border-radius:6px; background:#fff; font-size:12px; font-weight:600; color:#374151; cursor:pointer; }
+.col-act-btn:hover { background:#f3f4f6; }
+.col-filters { padding:10px 18px; border-bottom:1px solid #f3f4f6; display:flex; gap:8px; flex-shrink:0; background:#fafafa; }
+.date-pick { display:flex; align-items:center; gap:6px; padding:8px 12px; border:1.5px solid #d1d5db; border-radius:8px; background:#fff; font-size:12.5px; color:#374151; cursor:pointer; flex:1; }
+.date-pick .chev { margin-left:auto; color:#9ca3af; font-size:10px; }
+.search-wrap { display:flex; align-items:center; gap:6px; padding:8px 12px; border:1.5px solid #d1d5db; border-radius:8px; background:#fff; flex:1; }
+.search-wrap input { border:none; outline:none; font-size:12.5px; background:transparent; flex:1; color:#374151; }
+.search-wrap input::placeholder { color:#9ca3af; }
+.search-icon { color:#9ca3af; font-size:14px; }
+.col-list { flex:1; overflow-y:auto; }
+
+/* ── Normal PO row ── */
+.po-row { display:flex; align-items:center; gap:14px; padding:16px 18px; border-bottom:1px solid #f3f4f6; cursor:pointer; transition:background .14s; }
+.po-row:hover { background:#fff8f0; }
+.po-row.sel { background:#fff8f0; }
+.po-icon { width:44px; height:44px; border-radius:10px; background:#fff3e0; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+.po-row.sel .po-icon { background:#f7941d; }
+.po-body { flex:1; }
+.po-num { font-size:14px; font-weight:700; color:#1a2336; }
+.po-desc { font-size:12px; color:#6b7280; margin-top:3px; }
+.po-meta { text-align:right; flex-shrink:0; }
+.po-amount { font-size:14px; font-weight:700; color:#1a2336; }
+.po-left { font-size:11px; color:#9ca3af; margin-top:3px; }
+.po-left.low { color:#f59e0b; }
+.po-check { width:28px; height:28px; border-radius:50%; border:2px solid #e5e7eb; display:flex; align-items:center; justify-content:center; font-size:14px; color:#fff; flex-shrink:0; transition:all .14s; }
+.po-row.sel .po-check { background:#f7941d; border-color:#f7941d; }
+
+/* ── UNAPPROVED PO row ── */
+.po-row.unapproved { cursor:pointer; }
+.po-row.unapproved:hover { background:#fffbeb; }
+.po-row.unapproved.sel { background:#fffbeb; }
+.po-row.unapproved .po-icon { background:#fef3c7; }
+.po-row.unapproved.sel .po-icon { background:#f59e0b; }
+.po-row.unapproved .po-num { color:#92400e; }
+
+/* Status badge on the PO row */
+.po-status-badge {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:3px 9px; border-radius:20px; font-size:11px; font-weight:700;
+  margin-top:5px; width:fit-content;
+}
+.badge-approved   { background:#dcfce7; color:#166534; }
+.badge-pending    { background:#fef3c7; color:#92400e; }
+.badge-draft      { background:#f3f4f6; color:#6b7280; }
+
+/* ── INLINE ERROR PANEL ── */
+/* Appears below the selected unapproved PO row, inside the list */
+.error-panel {
+  display:none;
+  margin:0 14px 10px;
+  border-radius:12px;
+  overflow:hidden;
+  border:2px solid #f59e0b;
+  background:#fffbeb;
+}
+.error-panel.visible { display:block; }
+
+.error-panel-body {
+  padding:16px 18px;
+  display:flex;
+  align-items:flex-start;
+  gap:14px;
+}
+.error-warn-icon {
+  width:44px; height:44px; border-radius:10px;
+  background:#fef3c7; border:1.5px solid #fcd34d;
+  display:flex; align-items:center; justify-content:center;
+  font-size:22px; flex-shrink:0; margin-top:1px;
+}
+.error-text { flex:1; }
+.error-title { font-size:14px; font-weight:700; color:#92400e; margin-bottom:4px; }
+.error-desc  { font-size:13px; color:#78350f; line-height:1.5; }
+.error-po-ref { font-weight:700; color:#92400e; }
+
+/* The two CTA buttons */
+.error-actions {
+  display:flex; gap:10px;
+  padding:14px 18px;
+  border-top:1px solid #fcd34d;
+  background:#fffdf0;
+}
+.err-btn {
+  flex:1; padding:13px 16px; border-radius:10px;
+  font-size:14px; font-weight:700; cursor:pointer;
+  border:none; font-family:inherit; transition:all .15s;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+}
+/* Primary: Approve PO */
+.err-btn-approve {
+  background:#f59e0b; color:#fff;
+  box-shadow:0 4px 12px rgba(245,158,11,.3);
+}
+.err-btn-approve:hover { background:#d97706; }
+/* Secondary: Choose another */
+.err-btn-choose {
+  background:#fff; color:#374151;
+  border:1.5px solid #d1d5db;
+}
+.err-btn-choose:hover { background:#f9fafb; }
+
+/* Approved-now toast (briefly shows after "Approve PO" sim) */
+.approve-toast {
+  display:none; position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+  background:#1a2336; color:#fff; padding:12px 22px; border-radius:10px;
+  font-size:13.5px; font-weight:600; z-index:200;
+  box-shadow:0 8px 24px rgba(0,0,0,.2); white-space:nowrap;
+}
+.approve-toast.show { display:block; }
+
+/* Docket rows */
+.dk-row { display:flex; align-items:center; gap:14px; padding:16px 18px; border-bottom:1px solid #f3f4f6; cursor:pointer; transition:background .14s; }
+.dk-row:hover { background:#f0fdf4; }
+.dk-row.sel { background:#f0fdf4; }
+.dk-icon { width:44px; height:44px; border-radius:10px; background:#f0fdf4; border:1.5px solid #d1fae5; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+.dk-row.sel .dk-icon { background:#22c55e; border-color:#22c55e; }
+.dk-body { flex:1; }
+.dk-num { font-size:14px; font-weight:700; color:#166534; }
+.dk-meta { font-size:12px; color:#6b7280; margin-top:3px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.dk-tag { padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700; background:#fef3c7; color:#92400e; }
+.dk-check { width:28px; height:28px; border-radius:6px; border:2px solid #d1fae5; display:flex; align-items:center; justify-content:center; font-size:14px; color:#fff; flex-shrink:0; transition:all .14s; }
+.dk-row.sel .dk-check { background:#22c55e; border-color:#22c55e; }
+
+/* Modal footer */
+.modal-footer { padding:14px 22px; border-top:1px solid #e5e7eb; display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-shrink:0; background:#fff; }
+.mf-cancel { padding:11px 24px; border:1.5px solid #d1d5db; border-radius:8px; background:#fff; font-size:13.5px; font-weight:600; color:#374151; cursor:pointer; font-family:inherit; }
+.mf-cancel:hover { background:#f9fafb; }
+.mf-save { padding:11px 32px; border:none; border-radius:8px; background:#f7941d; font-size:13.5px; font-weight:700; color:#fff; cursor:pointer; font-family:inherit; transition:background .15s; }
+.mf-save:hover { background:#e8850f; }
+.mf-save:disabled { opacity:.35; cursor:not-allowed; }
+
+/* Footer warning (shows when unapproved PO is selected) */
+.footer-warn {
+  display:none; flex:1; align-items:center; gap:8px;
+  padding:10px 14px; background:#fffbeb; border:1.5px solid #fcd34d;
+  border-radius:8px; font-size:13px; color:#92400e; font-weight:600;
+}
+.footer-warn.visible { display:flex; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sb-top">
+      <div class="v">V</div>
+      <span style="font-size:13px;font-weight:600;color:#fff;">Varicon</span>
+      <span style="margin-left:auto;color:rgba(255,255,255,.4);font-size:18px;cursor:pointer;">‹</span>
+    </div>
+    <div class="sb-org">Product Civil</div>
+    <div class="sb-nav">
+      <a class="sb-item" href="#"><span class="ico">📁</span> Projects</a>
+      <a class="sb-item" href="#"><span class="ico">📊</span> Dashboard</a>
+      <a class="sb-item" href="#"><span class="ico">🖼</span> Gallery</a>
+      <a class="sb-item" href="#"><span class="ico">⏱</span> Timesheet</a>
+      <a class="sb-item" href="#"><span class="ico">📋</span> Leave</a>
+      <a class="sb-item" href="#"><span class="ico">📅</span> Scheduler</a>
+      <a class="sb-item" href="#"><span class="ico">📄</span> Daywork Rec...</a>
+      <a class="sb-item" href="#"><span class="ico">🛒</span> Purchase Ord...</a>
+      <a class="sb-item" href="#"><span class="ico">🚚</span> Delivery Dock...</a>
+      <a class="sb-item on" href="#"><span class="ico">💰</span> Bills</a>
+      <a class="sb-item" href="#"><span class="ico">📝</span> Forms</a>
+      <a class="sb-item" href="#"><span class="ico">🔧</span> Plant &amp; Equip...</a>
+      <a class="sb-item" href="#"><span class="ico">👤</span> Resource Ass...</a>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <h1>Bills</h1>
+      <div class="topbar-r">
+        <button class="tbtn">Initial Data Upload</button>
+        <button class="tbtn search"><span class="star">✦</span> Search</button>
+        <button class="tbtn" style="width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;">+</button>
+        <div class="av">SG</div>
+      </div>
+    </div>
+
+    <div class="breadcrumb">
+      <a href="index.html">←</a>
+      <a href="#">Bills list</a>
+      <span class="sep">›</span>
+      <span>Add bill</span>
+    </div>
+
+    <div class="page">
+      <button class="attach-btn">📎 Attach bill</button>
+
+      <div class="section-label"><span class="dot"></span> Summary</div>
+      <div class="summary-card">
+        <div class="s-row">
+          <div class="s-field">
+            <div class="s-lbl">Supplier</div>
+            <div class="s-val"><select><option selected>Southeast Plant Hire</option></select><span class="chev">▾</span></div>
+          </div>
+          <div class="s-field">
+            <div class="s-lbl">Project</div>
+            <div class="s-val"><select><option value="">Project</option></select><span class="chev">▾</span></div>
+          </div>
+        </div>
+        <div class="s-row">
+          <div class="s-field">
+            <div class="s-lbl">Supplier invoice reference</div>
+            <div class="s-val"><input type="text" value="SPH-INV-0587"></div>
+          </div>
+          <div class="s-field">
+            <div class="s-lbl">Transaction date</div>
+            <div class="s-val" style="color:#6b7280;font-size:13px;">📅 Wed 20/05/2026 <span class="chev">▾</span></div>
+          </div>
+          <div class="s-field">
+            <div class="s-lbl">Due date</div>
+            <div class="s-val" style="color:#9ca3af;font-size:13px;">📅 Due date <span class="chev" style="margin-left:auto;">▾</span></div>
+          </div>
+        </div>
+      </div>
+
+      <button class="link-trigger" onclick="openModal()">
+        <div class="lt-icon">🔗</div>
+        <div class="lt-body">
+          <div class="lt-title">Link PO and Dockets</div>
+          <div class="lt-sub">Tap to select a purchase order and delivery dockets</div>
+        </div>
+        <span class="lt-arrow">›</span>
+      </button>
+
+      <div class="tab-bar"><div class="tab on">Line Item</div></div>
+      <div class="li-card">
+        <div class="li-top">
+          <div class="li-title">Line items</div>
+          <select style="padding:6px 10px;border:1.5px solid #d1d5db;border-radius:6px;font-size:12.5px;"><option>NST - Exclusive</option></select>
+        </div>
+        <table>
+          <thead><tr><th style="width:36px"><input type="checkbox"></th><th>Description</th><th style="width:130px">Project</th><th style="width:110px">Resource</th><th style="width:140px">Accounting code</th><th style="width:80px">Task</th><th style="width:100px">Cost centre</th></tr></thead>
+          <tbody>
+            <tr><td><input type="checkbox"></td><td>CAT 320 Excavator (20T) — Wet Hire</td><td><select><option>Project</option></select></td><td><select><option>Resource</option></select></td><td><select><option>Accounting code</option></select></td><td><select><option>Task</option></select></td><td><select><option>Cost centre</option></select></td></tr>
+            <tr><td><input type="checkbox"></td><td>Bobcat S770 Skid Steer — Wet Hire</td><td><select><option>Project</option></select></td><td><select><option>Resource</option></select></td><td><select><option>Accounting code</option></select></td><td><select><option>Task</option></select></td><td><select><option>Cost centre</option></select></td></tr>
+          </tbody>
+        </table>
+        <div class="bulk-row">
+          <button class="bbtn">+ Add new line</button>
+          <button class="bbtn">Bulk assign project</button>
+          <button class="bbtn hi">Bulk assign Accounting Code</button>
+        </div>
+        <div class="totals">
+          <div style="display:flex;gap:40px;color:#6b7280;"><span>Subtotal</span><span style="color:#1a2336;font-weight:700;">$ 0.00</span></div>
+          <div style="display:flex;gap:40px;color:#6b7280;"><span>Plus NST - Exclusive 10%</span><span style="color:#1a2336;font-weight:700;">$ 0.00</span></div>
+          <div style="display:flex;gap:40px;margin-top:6px;padding-top:8px;border-top:2px solid #e5e7eb;font-size:15px;font-weight:700;"><span>Total Incl. GST</span><span>$ 0.00</span></div>
+        </div>
+      </div>
+
+      <div class="appr">
+        <div class="appr-lbl">Approval workflow</div>
+        <div class="appr-row">
+          <select class="asel"><option>First approver</option></select>
+          <span style="color:#9ca3af;font-size:18px;">›</span>
+          <select class="asel"><option>Second approver</option></select>
+          <span style="color:#9ca3af;font-size:18px;">›</span>
+          <select class="asel"><option>suraj ghale (Labour)</option></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <button class="abtn abtn-ghost">Cancel</button>
+      <button class="abtn abtn-outline">Submit for approval <span style="opacity:.5">▾</span></button>
+      <button class="abtn abtn-dark">Approve &amp; Back to List <kbd style="font-size:11px;opacity:.7;">⌘L</kbd></button>
+      <button class="abtn abtn-orange">Approve &amp; next bill <kbd style="font-size:11px;opacity:.8;">⌘↵</kbd><span class="sp"></span><span style="font-size:11px;opacity:.7;">▾</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     MODAL
+     ════════════════════════════════ -->
+<div class="backdrop" id="backdrop" onclick="handleBackdrop(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+
+    <div class="modal-header">
+      <div class="modal-title">Select Purchase Order and Docket</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="modal-filters">
+      <div class="mf-select">
+        <div class="mf-label">Suppliers</div>
+        <select class="mf-control"><option>Southeast Plant Hire</option></select>
+      </div>
+      <div class="mf-select">
+        <div class="mf-label">Projects</div>
+        <select class="mf-control"><option>Projects</option><option>VD001 — Wynnum Road Upgrade Stage 2</option></select>
+      </div>
+    </div>
+
+    <div class="modal-body">
+
+      <!-- LEFT: Purchase Orders -->
+      <div class="modal-col">
+        <div class="col-head">
+          <div class="col-head-title">Purchase Orders</div>
+          <div style="display:flex;gap:6px;">
+            <button class="col-act-btn">Clear</button>
+            <button class="col-act-btn">Select all</button>
+          </div>
+        </div>
+        <div class="col-filters">
+          <div class="date-pick"><span style="color:#6b7280;">📅</span> Select Date Range <span class="chev">▾</span></div>
+          <div class="search-wrap"><span class="search-icon">🔍</span><input type="text" placeholder="Search Purchase Order"></div>
+        </div>
+
+        <div class="col-list" id="poList">
+
+          <!-- Approved PO -->
+          <div class="po-row" onclick="selectPO(this, false, 'PO-VD001-042', 'Plant Hire — Wynnum Road Upgrade Stage 2', '$28,000')">
+            <div class="po-icon">📋</div>
+            <div class="po-body">
+              <div class="po-num">PO-VD001-042</div>
+              <div class="po-desc">Plant Hire — Wynnum Road Upgrade Stage 2</div>
+              <div class="po-status-badge badge-approved">✓ Approved</div>
+            </div>
+            <div class="po-check"></div>
+          </div>
+
+          <!-- ⚠ UNAPPROVED PO — triggers the error -->
+          <div class="po-row unapproved" id="unapprovedRow" onclick="selectPO(this, true, 'PO-VD001-055', 'Earthworks — Northern Extension', '$62,000')">
+            <div class="po-icon">📋</div>
+            <div class="po-body">
+              <div class="po-num">PO-VD001-055</div>
+              <div class="po-desc">Earthworks — Northern Extension</div>
+              <div class="po-status-badge badge-pending">⏳ Pending approval</div>
+            </div>
+            <div class="po-check"></div>
+          </div>
+
+          <!-- ── INLINE ERROR PANEL ── -->
+          <div class="error-panel" id="errorPanel">
+            <div class="error-panel-body">
+              <div class="error-warn-icon">⚠️</div>
+              <div class="error-text">
+                <div class="error-title">Purchase order is not yet approved</div>
+                <div class="error-desc">
+                  <span class="error-po-ref" id="errorPORef">PO-VD001-055</span> is still pending approval and can't be linked to a bill until it's approved.
+                  Approve it now or choose a different PO.
+                </div>
+              </div>
+            </div>
+            <div class="error-actions">
+              <button class="err-btn err-btn-approve" onclick="simulateApprove()">
+                ✓ Approve PO
+              </button>
+              <button class="err-btn err-btn-choose" onclick="chooseAnother()">
+                ← Choose another PO
+              </button>
+            </div>
+          </div>
+
+          <!-- Another approved PO -->
+          <div class="po-row" onclick="selectPO(this, false, 'PO-VD001-041', 'Site Services — Wynnum Road', '$12,500')">
+            <div class="po-icon">📋</div>
+            <div class="po-body">
+              <div class="po-num">PO-VD001-041</div>
+              <div class="po-desc">Site Services — Wynnum Road</div>
+              <div class="po-status-badge badge-approved">✓ Approved</div>
+            </div>
+            <div class="po-check"></div>
+          </div>
+
+          <!-- Draft PO -->
+          <div class="po-row unapproved" onclick="selectPO(this, true, 'PO-VD001-058', 'Concrete Supply — Stage 3', '$18,500')">
+            <div class="po-icon">📋</div>
+            <div class="po-body">
+              <div class="po-num">PO-VD001-058</div>
+              <div class="po-desc">Concrete Supply — Stage 3</div>
+              <div class="po-status-badge badge-draft">Draft</div>
+            </div>
+            <div class="po-check"></div>
+          </div>
+
+        </div><!-- /col-list -->
+      </div>
+
+      <!-- RIGHT: Dockets -->
+      <div class="modal-col">
+        <div class="col-head">
+          <div class="col-head-title">Dockets</div>
+          <div style="display:flex;gap:6px;">
+            <button class="col-act-btn">Clear</button>
+            <button class="col-act-btn">Select all</button>
+          </div>
+        </div>
+        <div class="col-filters">
+          <div class="date-pick" style="flex:1.2;"><span style="color:#6b7280;">📅</span> Mon 20/04/2026 – Wed 20/05/2026 <span class="chev">▾</span></div>
+          <div class="search-wrap"><span class="search-icon">🔍</span><input type="text" placeholder="Search Dockets"></div>
+        </div>
+        <div class="col-list">
+          <div style="padding:8px 18px 4px;font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;">All Dockets</div>
+
+          <div class="dk-row sel" onclick="toggleDK(this)">
+            <div class="dk-icon">🚚</div>
+            <div class="dk-body">
+              <div class="dk-num">0545NA20260519093516</div>
+              <div class="dk-meta"><span>11111</span><span class="dk-tag">To be paid</span><span>19/05/2026</span><span>• PO-0545NA-004</span></div>
+            </div>
+            <div class="dk-check">✓</div>
+          </div>
+
+          <div class="dk-row" onclick="toggleDK(this)">
+            <div class="dk-icon">🚚</div>
+            <div class="dk-body">
+              <div class="dk-num">sd</div>
+              <div class="dk-meta"><span>11111</span><span class="dk-tag">To be paid</span><span>Icon2</span><span>• 15/05/2026</span><span>• PO-Icon2-002</span></div>
+            </div>
+            <div class="dk-check"></div>
+          </div>
+
+          <div class="dk-row" onclick="toggleDK(this)">
+            <div class="dk-icon">🚚</div>
+            <div class="dk-body">
+              <div class="dk-num">0545NA20260504082431</div>
+              <div class="dk-meta"><span>11111</span><span class="dk-tag">To be paid</span><span>0545NA</span><span>• 04/05/2026</span><span>• PO-0545NA-004</span></div>
+            </div>
+            <div class="dk-check"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /modal-body -->
+
+    <div class="modal-footer">
+      <!-- Warning shown when unapproved PO selected -->
+      <div class="footer-warn" id="footerWarn">⚠️ Approve or change the PO before saving</div>
+      <button class="mf-cancel" onclick="closeModal()">Cancel</button>
+      <button class="mf-save" id="saveBtn" onclick="saveModal()">Save</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Approve toast -->
+<div class="approve-toast" id="approveToast">✓ PO approved — you can now link it to this bill</div>
+
+<script>
+let unapprovedSelected = false;
+let currentSelectedPONum = null;
+
+function openModal()  { document.getElementById('backdrop').classList.add('open'); }
+function closeModal() { document.getElementById('backdrop').classList.remove('open'); }
+function handleBackdrop(e) { if (e.target === document.getElementById('backdrop')) closeModal(); }
+
+function selectPO(row, isUnapproved, num, desc, amount) {
+  // Clear all selections first
+  document.querySelectorAll('#poList .po-row').forEach(r => {
+    r.classList.remove('sel');
+    r.querySelector('.po-check').textContent = '';
+  });
+  // Hide error panel
+  document.getElementById('errorPanel').classList.remove('visible');
+
+  row.classList.add('sel');
+  row.querySelector('.po-check').textContent = '✓';
+  currentSelectedPONum = num;
+
+  if (isUnapproved) {
+    unapprovedSelected = true;
+    // Show inline error panel right below this row
+    document.getElementById('errorPORef').textContent = num;
+    document.getElementById('errorPanel').classList.add('visible');
+    // Disable Save, show footer warning
+    document.getElementById('saveBtn').disabled = true;
+    document.getElementById('footerWarn').classList.add('visible');
+    // Scroll error into view
+    setTimeout(() => document.getElementById('errorPanel').scrollIntoView({ behavior:'smooth', block:'nearest' }), 60);
+  } else {
+    unapprovedSelected = false;
+    document.getElementById('saveBtn').disabled = false;
+    document.getElementById('footerWarn').classList.remove('visible');
+  }
+}
+
+function chooseAnother() {
+  // Clear the unapproved selection
+  document.querySelectorAll('#poList .po-row').forEach(r => {
+    r.classList.remove('sel');
+    r.querySelector('.po-check').textContent = '';
+  });
+  document.getElementById('errorPanel').classList.remove('visible');
+  document.getElementById('footerWarn').classList.remove('visible');
+  document.getElementById('saveBtn').disabled = false;
+  unapprovedSelected = false;
+  // Scroll back to top of PO list
+  document.getElementById('poList').scrollTo({ top:0, behavior:'smooth' });
+}
+
+function simulateApprove() {
+  // Simulate opening PO in a new tab and coming back with it approved
+  document.getElementById('errorPanel').classList.remove('visible');
+  document.getElementById('footerWarn').classList.remove('visible');
+
+  // Update the badge on the row to "Approved"
+  const row = document.getElementById('unapprovedRow');
+  row.classList.remove('unapproved');
+  const badge = row.querySelector('.po-status-badge');
+  badge.className = 'po-status-badge badge-approved';
+  badge.textContent = '✓ Approved';
+  // Change icon color
+  row.querySelector('.po-icon').style.background = '#fff3e0';
+  row.querySelector('.po-num').style.color = '#1a2336';
+  // Update onclick to non-unapproved
+  row.onclick = function() { selectPO(this, false, 'PO-VD001-055', 'Earthworks — Northern Extension', '$62,000'); };
+  // Keep it selected
+  document.getElementById('saveBtn').disabled = false;
+  unapprovedSelected = false;
+
+  // Show toast
+  const toast = document.getElementById('approveToast');
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3200);
+}
+
+function toggleDK(row) {
+  row.classList.toggle('sel');
+  row.querySelector('.dk-check').textContent = row.classList.contains('sel') ? '✓' : '';
+}
+
+function saveModal() {
+  if (unapprovedSelected) return;
+  closeModal();
+}
+</script>
+</body>
+</html>

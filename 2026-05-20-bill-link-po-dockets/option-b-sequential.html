@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Option B — Sequential Steps · Bill: Link PO & Dockets</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f0f2; color: #1a2336; }
+
+  .layout { display: flex; min-height: 100vh; }
+  .sidebar { width: 56px; background: #1a2336; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 6px; }
+  .sidebar .v-icon { width: 36px; height: 36px; background: linear-gradient(135deg,#f7941d,#f15a24); border-radius: 8px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:18px; margin-bottom:10px; }
+  .sidebar .dot { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px; color:rgba(255,255,255,.4); cursor:pointer; }
+  .sidebar .dot.on { background:#f7941d; color:#fff; }
+
+  .main { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+
+  /* topbar */
+  .topbar { background:#fff; border-bottom:1px solid #e5e7eb; padding:0 24px; display:flex; align-items:center; height:52px; gap:12px; flex-shrink:0; }
+  .back { font-size:18px; color:#6b7280; text-decoration:none; padding:8px; border-radius:6px; }
+  .back:hover { background:#f3f4f6; }
+  .crumb { font-size:13px; color:#6b7280; }
+  .crumb a { color:#f7941d; font-weight:600; text-decoration:none; }
+  .topbar-r { margin-left:auto; display:flex; align-items:center; gap:8px; }
+  .tbtn { padding:6px 14px; border-radius:6px; font-size:12.5px; font-weight:600; cursor:pointer; border:1.5px solid #d1d5db; background:#fff; color:#374151; }
+  .av { width:30px; height:30px; border-radius:50%; background:#1a2336; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+
+  /* STEP INDICATOR BAR */
+  .step-bar { background:#fff; border-bottom:1px solid #e5e7eb; padding:0 28px; display:flex; align-items:stretch; height:52px; gap:0; flex-shrink:0; }
+  .step-item { display:flex; align-items:center; gap:10px; padding:0 20px 0 0; cursor:default; position:relative; }
+  .step-item::after { content:'›'; position:absolute; right:4px; top:50%; transform:translateY(-50%); color:#d1d5db; font-size:16px; }
+  .step-item:last-child::after { display:none; }
+  .step-num { width:26px; height:26px; border-radius:50%; border:2px solid #d1d5db; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#9ca3af; flex-shrink:0; }
+  .step-num.active { border-color:#f7941d; color:#f7941d; background:#fff8f0; }
+  .step-num.done { border-color:#22c55e; background:#22c55e; color:#fff; }
+  .step-lbl { font-size:12.5px; font-weight:600; color:#9ca3af; white-space:nowrap; }
+  .step-lbl.active { color:#f7941d; }
+  .step-lbl.done { color:#22c55e; }
+
+  /* VIEWS — only one visible at a time */
+  .view { display:none; flex:1; }
+  .view.active { display:flex; flex-direction:column; }
+
+  /* ===== SUMMARY VIEW ===== */
+  .sum-page { padding:20px 28px; max-width:760px; }
+
+  .attach { display:inline-flex; align-items:center; gap:8px; padding:10px 20px; border:1.5px solid #d1d5db; border-radius:8px; background:#fff; font-size:13px; font-weight:600; color:#374151; cursor:pointer; margin-bottom:18px; }
+
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; margin-bottom:12px; }
+  .card-lbl { font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.5px; padding:14px 18px 0; }
+  .fields { display:flex; flex-wrap:wrap; }
+  .field { flex:1; min-width:140px; padding:10px 18px 14px; border-right:1px solid #f3f4f6; }
+  .field:last-child { border-right:none; }
+  .fl { font-size:10.5px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:.4px; margin-bottom:5px; }
+  .fv { font-size:14px; font-weight:600; color:#1a2336; display:flex; align-items:center; gap:4px; }
+  .fv select { border:none; background:transparent; font-size:14px; font-weight:600; color:#1a2336; cursor:pointer; }
+  .fv input { border:none; background:transparent; font-size:14px; font-weight:600; color:#1a2336; width:100%; }
+
+  /* Big "Next: Link PO" button */
+  .next-btn { display:flex; align-items:center; gap:14px; padding:20px 24px; background:#f7941d; border:none; border-radius:12px; cursor:pointer; width:100%; font-family:inherit; margin-bottom:12px; transition:background .15s; }
+  .next-btn:hover { background:#e8850f; }
+  .next-btn-icon { font-size:28px; }
+  .next-btn-body { flex:1; text-align:left; }
+  .next-btn-title { font-size:16px; font-weight:700; color:#fff; }
+  .next-btn-sub { font-size:12.5px; color:rgba(255,255,255,.75); margin-top:3px; }
+  .next-btn-arrow { font-size:22px; color:rgba(255,255,255,.8); }
+
+  /* ===== PO VIEW ===== */
+  .po-page { padding:0; display:flex; flex-direction:column; flex:1; }
+  .po-header { padding:20px 28px 14px; background:#fff; border-bottom:1px solid #e5e7eb; }
+  .po-header h2 { font-size:18px; font-weight:700; margin-bottom:4px; }
+  .po-header p { font-size:13px; color:#6b7280; }
+  .po-header .context-pill { display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:20px; background:#fff8f0; border:1px solid #fed7aa; font-size:12px; font-weight:600; color:#c2410c; margin-top:10px; }
+
+  .po-list-wrap { flex:1; overflow-y:auto; padding:16px 28px; display:flex; flex-direction:column; gap:10px; }
+
+  /* Skip card */
+  .skip-card { display:flex; align-items:center; gap:16px; padding:18px 22px; background:#fff; border:2px solid #e5e7eb; border-radius:14px; cursor:pointer; transition:all .18s; }
+  .skip-card:hover { border-color:#9ca3af; background:#f9fafb; }
+  .skip-icon { width:52px; height:52px; border-radius:12px; background:#f3f4f6; display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; }
+  .skip-body { flex:1; }
+  .skip-title { font-size:15px; font-weight:700; color:#6b7280; }
+  .skip-desc { font-size:12.5px; color:#9ca3af; margin-top:3px; }
+
+  /* PO cards — large */
+  .po-card { display:flex; align-items:center; gap:16px; padding:20px 22px; background:#fff; border:2px solid #e5e7eb; border-radius:14px; cursor:pointer; transition:all .18s; }
+  .po-card:hover { border-color:#f7941d; background:#fff8f0; transform:translateY(-1px); box-shadow:0 4px 16px rgba(0,0,0,.06); }
+  .po-card.selected { border-color:#f7941d; background:#fff8f0; }
+  .po-card-icon { width:52px; height:52px; border-radius:12px; background:#fff3e0; display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; }
+  .po-card.selected .po-card-icon { background:#f7941d; }
+  .po-card-body { flex:1; }
+  .po-card-num { font-size:16px; font-weight:800; color:#1a2336; }
+  .po-card-desc { font-size:13px; color:#6b7280; margin-top:4px; }
+  .po-card-meta { text-align:right; flex-shrink:0; }
+  .po-card-amount { font-size:16px; font-weight:800; color:#1a2336; }
+  .po-card-left { font-size:12px; color:#9ca3af; margin-top:4px; }
+  .po-card-left.low { color:#f59e0b; }
+  .po-card-check { width:32px; height:32px; border-radius:50%; border:2.5px solid #e5e7eb; display:flex; align-items:center; justify-content:center; font-size:16px; color:#fff; flex-shrink:0; transition:all .15s; }
+  .po-card.selected .po-card-check { background:#f7941d; border-color:#f7941d; }
+
+  /* ===== DOCKET VIEW ===== */
+  .dk-page { padding:0; display:flex; flex-direction:column; flex:1; }
+  .dk-header { padding:20px 28px 14px; background:#fff; border-bottom:1px solid #e5e7eb; }
+  .dk-header h2 { font-size:18px; font-weight:700; margin-bottom:4px; }
+  .dk-header p { font-size:13px; color:#6b7280; }
+  .dk-header .linked-po { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:20px; background:#f0fdf4; border:1.5px solid #86efac; font-size:12.5px; font-weight:700; color:#166534; margin-top:10px; }
+
+  .dk-list-wrap { flex:1; overflow-y:auto; padding:16px 28px; display:flex; flex-direction:column; gap:10px; }
+
+  .dk-card { display:flex; align-items:center; gap:16px; padding:20px 22px; background:#fff; border:2.5px solid #e5e7eb; border-radius:14px; cursor:pointer; transition:all .18s; }
+  .dk-card:hover { border-color:#22c55e; background:#f0fdf4; }
+  .dk-card.selected { border-color:#22c55e; background:#f0fdf4; }
+  .dk-card-icon { width:52px; height:52px; border-radius:12px; background:#f0fdf4; border:1.5px solid #d1fae5; display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; }
+  .dk-card.selected .dk-card-icon { background:#22c55e; border-color:#22c55e; }
+  .dk-card-body { flex:1; }
+  .dk-card-num { font-size:16px; font-weight:800; color:#166534; }
+  .dk-card-desc { font-size:13px; color:#6b7280; margin-top:4px; }
+  .dk-card-check { width:32px; height:32px; border-radius:50%; border:2.5px solid #d1fae5; display:flex; align-items:center; justify-content:center; font-size:16px; color:#fff; flex-shrink:0; transition:all .15s; }
+  .dk-card.selected .dk-card-check { background:#22c55e; border-color:#22c55e; }
+
+  /* ===== FORM VIEW ===== */
+  .form-page { padding:20px 28px 20px; max-width:760px; flex:1; }
+  .section-lbl { font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+  .linked-strip { display:flex; align-items:center; gap:10px; padding:12px 16px; background:#fff; border:1px solid #e5e7eb; border-radius:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .linked-chip { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:20px; font-size:13px; font-weight:700; }
+  .chip-po { background:#fff8f0; border:1.5px solid #fed7aa; color:#c2410c; }
+  .chip-dk { background:#f0fdf4; border:1.5px solid #86efac; color:#166534; }
+  .chip-edit { padding:6px 12px; border:1.5px solid #d1d5db; border-radius:20px; font-size:12px; font-weight:600; color:#6b7280; cursor:pointer; background:#fff; margin-left:auto; font-family:inherit; }
+  .chip-edit:hover { background:#f3f4f6; }
+
+  .li-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; }
+  .li-top { padding:12px 18px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #f3f4f6; }
+  .li-title { font-size:14px; font-weight:700; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { padding:9px 12px; font-size:11px; font-weight:700; color:#6b7280; background:#f9fafb; border-bottom:1.5px solid #e5e7eb; text-align:left; text-transform:uppercase; letter-spacing:.3px; }
+  td { padding:9px 12px; border-bottom:1px solid #f3f4f6; }
+  td select { width:100%; padding:7px 9px; border:1.5px solid #d1d5db; border-radius:6px; font-size:12.5px; }
+  td.pf select { border-color:#86efac; background:#f0fdf4; color:#166534; }
+  .bulk-row { padding:10px 14px; display:flex; gap:8px; flex-wrap:wrap; border-top:1px solid #f3f4f6; }
+  .bbtn { padding:7px 14px; border:1.5px solid #d1d5db; border-radius:6px; font-size:12px; font-weight:600; color:#374151; background:#fff; cursor:pointer; }
+  .bbtn.hi { border-color:#f7941d; background:#fff8f0; color:#c2410c; }
+  .totals { padding:12px 18px; text-align:right; border-top:1px solid #f3f4f6; font-size:13px; display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+
+  .appr { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px 18px; margin-top:12px; }
+  .appr-lbl { font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px; }
+  .appr-row { display:flex; align-items:center; gap:10px; }
+  .asel { flex:1; padding:10px 12px; border:1.5px solid #d1d5db; border-radius:8px; font-size:13px; }
+
+  /* action bar */
+  .action-bar { background:#fff; border-top:1.5px solid #e5e7eb; padding:14px 28px; display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .abtn { padding:13px 24px; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; border:1.5px solid; transition:all .15s; font-family:inherit; }
+  .abtn-ghost { background:#fff; border-color:#d1d5db; color:#6b7280; }
+  .abtn-outline { background:#fff; border-color:#d1d5db; color:#374151; }
+  .abtn-outline:hover { background:#f3f4f6; }
+  .abtn-primary { background:#f7941d; border-color:#f7941d; color:#fff; flex:1; text-align:center; box-shadow:0 4px 12px rgba(247,148,29,.28); font-size:15px; }
+  .abtn-primary:hover { background:#e8850f; }
+  .abtn-primary:disabled { opacity:.35; cursor:not-allowed; box-shadow:none; }
+  .abtn-dark { background:#1a2336; border-color:#1a2336; color:#fff; }
+  .abtn-dark:hover { background:#252f48; }
+  .abtn-orange { background:#f7941d; border-color:#f7941d; color:#fff; margin-left:auto; box-shadow:0 4px 12px rgba(247,148,29,.28); }
+  .abtn-green { background:#22c55e; border-color:#22c55e; color:#fff; flex:1; font-size:15px; box-shadow:0 4px 12px rgba(34,197,94,.28); }
+  .abtn-green:hover { background:#16a34a; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <div class="sidebar">
+    <div class="v-icon">V</div>
+    <div class="dot">📁</div><div class="dot">📊</div><div class="dot">⏱</div>
+    <div class="dot">📋</div><div class="dot">🛒</div><div class="dot">🚚</div>
+    <div class="dot on">💰</div><div class="dot">⚙️</div>
+  </div>
+
+  <div class="main">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <a class="back" href="index.html">←</a>
+      <span class="crumb"><a href="#">Bills list</a> › Add bill</span>
+      <div class="topbar-r">
+        <button class="tbtn">Initial Data Upload</button>
+        <button class="tbtn">🔍 Search</button>
+        <button class="tbtn">+</button>
+        <div class="av">SG</div>
+      </div>
+    </div>
+
+    <!-- Step bar -->
+    <div class="step-bar">
+      <div class="step-item">
+        <div class="step-num done" id="sn1">✓</div>
+        <div class="step-lbl done" id="sl1">Summary</div>
+      </div>
+      <div class="step-item">
+        <div class="step-num" id="sn2">2</div>
+        <div class="step-lbl" id="sl2">Link PO</div>
+      </div>
+      <div class="step-item">
+        <div class="step-num" id="sn3">3</div>
+        <div class="step-lbl" id="sl3">Link Dockets</div>
+      </div>
+      <div class="step-item">
+        <div class="step-num" id="sn4">4</div>
+        <div class="step-lbl" id="sl4">Line Items</div>
+      </div>
+    </div>
+
+    <!-- ===== VIEW 1: SUMMARY ===== -->
+    <div class="view active" id="viewSummary">
+      <div class="sum-page">
+        <button class="attach">📎 Attach bill</button>
+
+        <div class="card">
+          <div class="card-lbl">Summary</div>
+          <div class="fields">
+            <div class="field">
+              <div class="fl">Supplier</div>
+              <div class="fv"><select><option>Southeast Plant Hire</option></select></div>
+            </div>
+            <div class="field">
+              <div class="fl">Supplier invoice ref</div>
+              <div class="fv"><input type="text" value="SPH-INV-0587"></div>
+            </div>
+            <div class="field">
+              <div class="fl">Transaction date</div>
+              <div class="fv" style="color:#6b7280;font-size:13px;">📅 Wed 20/05/2026 ▾</div>
+            </div>
+            <div class="field">
+              <div class="fl">Due date</div>
+              <div class="fv" style="color:#9ca3af;font-size:13px;">📅 Due date ▾</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BIG CTA to the next step -->
+        <button class="next-btn" onclick="goTo('po')">
+          <span class="next-btn-icon">🔗</span>
+          <div class="next-btn-body">
+            <div class="next-btn-title">Next: Link Purchase Order & Dockets</div>
+            <div class="next-btn-sub">Connect this bill to the right PO and delivery dockets</div>
+          </div>
+          <span class="next-btn-arrow">›</span>
+        </button>
+      </div>
+
+      <div class="action-bar">
+        <button class="abtn abtn-ghost">Cancel</button>
+        <button class="abtn abtn-outline">Save as Draft</button>
+        <button class="abtn abtn-primary" onclick="goTo('po')">Next: Link PO & Dockets →</button>
+      </div>
+    </div>
+
+    <!-- ===== VIEW 2: LINK PO ===== -->
+    <div class="view" id="viewPO">
+      <div class="po-page">
+        <div class="po-header">
+          <h2>Link Purchase Order</h2>
+          <p>Select the PO this bill is being charged against</p>
+          <div class="context-pill">📄 SPH-INV-0587 · Southeast Plant Hire · $24,706.00</div>
+        </div>
+
+        <div class="po-list-wrap">
+          <!-- Skip -->
+          <div class="skip-card" onclick="skipPO()">
+            <div class="skip-icon">✕</div>
+            <div class="skip-body">
+              <div class="skip-title">No purchase order</div>
+              <div class="skip-desc">This bill doesn't relate to a PO — continue without linking one</div>
+            </div>
+          </div>
+
+          <!-- PO cards -->
+          <div class="po-card" id="po1" onclick="selectPO('PO-VD001-042','Plant Hire — Wynnum Road Upgrade Stage 2','$28,000','$5,294 remaining',this)">
+            <div class="po-card-icon">📋</div>
+            <div class="po-card-body">
+              <div class="po-card-num">PO-VD001-042</div>
+              <div class="po-card-desc">Plant Hire — Wynnum Road Upgrade Stage 2</div>
+            </div>
+            <div class="po-card-meta">
+              <div class="po-card-amount">$28,000</div>
+              <div class="po-card-left">$5,294 remaining</div>
+            </div>
+            <div class="po-card-check"></div>
+          </div>
+          <div class="po-card" id="po2" onclick="selectPO('PO-VD001-038','Earthworks Stage 2 — Wynnum Road','$45,000','$12,600 remaining',this)">
+            <div class="po-card-icon">📋</div>
+            <div class="po-card-body">
+              <div class="po-card-num">PO-VD001-038</div>
+              <div class="po-card-desc">Earthworks Stage 2 — Wynnum Road</div>
+            </div>
+            <div class="po-card-meta">
+              <div class="po-card-amount">$45,000</div>
+              <div class="po-card-left">$12,600 remaining</div>
+            </div>
+            <div class="po-card-check"></div>
+          </div>
+          <div class="po-card" id="po3" onclick="selectPO('PO-VD001-041','Site Services — Wynnum Road','$12,500','$340 remaining — low',this)">
+            <div class="po-card-icon">📋</div>
+            <div class="po-card-body">
+              <div class="po-card-num">PO-VD001-041</div>
+              <div class="po-card-desc">Site Services — Wynnum Road</div>
+            </div>
+            <div class="po-card-meta">
+              <div class="po-card-amount">$12,500</div>
+              <div class="po-card-left low">$340 remaining — low</div>
+            </div>
+            <div class="po-card-check"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <button class="abtn abtn-ghost" onclick="goTo('summary')">← Back</button>
+        <button class="abtn abtn-primary" id="poNextBtn" onclick="goTo('docket')" disabled>Next: Dockets →</button>
+      </div>
+    </div>
+
+    <!-- ===== VIEW 3: LINK DOCKETS ===== -->
+    <div class="view" id="viewDocket">
+      <div class="dk-page">
+        <div class="dk-header">
+          <h2>Link Delivery Dockets</h2>
+          <p>Select the dockets that match items on this bill — tap to toggle</p>
+          <div class="linked-po" id="linkedPOPill">🔗 PO-VD001-042 linked</div>
+        </div>
+
+        <div class="dk-list-wrap">
+          <div class="skip-card" onclick="skipDockets()">
+            <div class="skip-icon">✕</div>
+            <div class="skip-body">
+              <div class="skip-title">No dockets</div>
+              <div class="skip-desc">No delivery dockets for this bill — continue without linking any</div>
+            </div>
+          </div>
+
+          <div class="dk-card selected" onclick="toggleDK(this)">
+            <div class="dk-card-icon">🚚</div>
+            <div class="dk-card-body">
+              <div class="dk-card-num">DD-VD001-089</div>
+              <div class="dk-card-desc">09/03/2026 — Excavator & Bobcat delivery</div>
+            </div>
+            <div class="dk-card-check">✓</div>
+          </div>
+          <div class="dk-card selected" onclick="toggleDK(this)">
+            <div class="dk-card-icon">🚚</div>
+            <div class="dk-card-body">
+              <div class="dk-card-num">DD-VD001-091</div>
+              <div class="dk-card-desc">13/03/2026 — Equipment return & demob</div>
+            </div>
+            <div class="dk-card-check">✓</div>
+          </div>
+          <div class="dk-card" onclick="toggleDK(this)">
+            <div class="dk-card-icon">🚚</div>
+            <div class="dk-card-body">
+              <div class="dk-card-num">DD-VD001-093</div>
+              <div class="dk-card-desc">16/03/2026 — Excavator re-delivery</div>
+            </div>
+            <div class="dk-card-check"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <button class="abtn abtn-ghost" onclick="goTo('po')">← Back</button>
+        <button class="abtn abtn-green" onclick="goTo('form')">Done — Review Line Items →</button>
+      </div>
+    </div>
+
+    <!-- ===== VIEW 4: FORM (line items + submit) ===== -->
+    <div class="view" id="viewForm">
+      <div class="form-page">
+
+        <!-- Linked summary strip -->
+        <div class="linked-strip" id="linkedStrip">
+          <span class="linked-chip chip-po" id="poChip">🔗 PO-VD001-042</span>
+          <span class="linked-chip chip-dk">🚚 2 dockets linked</span>
+          <button class="chip-edit" onclick="goTo('po')">Edit linking</button>
+        </div>
+
+        <div class="section-lbl">Line Item</div>
+        <div class="li-card">
+          <div class="li-top">
+            <div class="li-title">Line items</div>
+            <select style="padding:6px 10px; border:1.5px solid #d1d5db; border-radius:6px; font-size:12.5px;"><option>NST - Exclusive</option></select>
+          </div>
+          <table>
+            <thead>
+              <tr><th style="width:36px"><input type="checkbox"></th><th>Description</th><th style="width:130px">Project</th><th style="width:110px">Resource</th><th style="width:130px">Accounting code</th><th style="width:80px">Task</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><input type="checkbox"></td>
+                <td>CAT 320 Excavator — Wet Hire</td>
+                <td class="pf"><select><option>(VD001) Wynnum Rd</option></select></td>
+                <td><select><option>Resource</option></select></td>
+                <td><select><option>Accounting code</option></select></td>
+                <td><select><option>Task</option></select></td>
+              </tr>
+              <tr>
+                <td><input type="checkbox"></td>
+                <td>Bobcat S770 Skid Steer</td>
+                <td class="pf"><select><option>(VD001) Wynnum Rd</option></select></td>
+                <td><select><option>Resource</option></select></td>
+                <td><select><option>Accounting code</option></select></td>
+                <td><select><option>Task</option></select></td>
+              </tr>
+              <tr>
+                <td><input type="checkbox"></td>
+                <td>10,000L Water Cart</td>
+                <td><select><option>Select…</option></select></td>
+                <td><select><option>Resource</option></select></td>
+                <td><select><option>Accounting code</option></select></td>
+                <td><select><option>Task</option></select></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="bulk-row">
+            <button class="bbtn">+ Add new line</button>
+            <button class="bbtn">Bulk assign project</button>
+            <button class="bbtn hi">Bulk assign Accounting Code</button>
+          </div>
+          <div class="totals">
+            <div style="display:flex; gap:40px; color:#6b7280;"><span>Subtotal</span><span style="color:#1a2336;font-weight:700;">$0.00</span></div>
+            <div style="display:flex; gap:40px; color:#6b7280;"><span>Plus NST - Exclusive 10%</span><span style="color:#1a2336;font-weight:700;">$0.00</span></div>
+            <div style="display:flex; gap:40px; margin-top:6px; padding-top:8px; border-top:2px solid #e5e7eb; font-size:15px; font-weight:700;"><span>Total Incl. GST</span><span>$0.00</span></div>
+          </div>
+        </div>
+
+        <div class="appr">
+          <div class="appr-lbl">Approval workflow</div>
+          <div class="appr-row">
+            <select class="asel"><option>First approver</option></select>
+            <span style="color:#9ca3af;font-size:18px;">›</span>
+            <select class="asel"><option>Second approver</option></select>
+            <span style="color:#9ca3af;font-size:18px;">›</span>
+            <select class="asel"><option>suraj ghale (Labour)</option></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <button class="abtn abtn-ghost">Cancel</button>
+        <button class="abtn abtn-outline">Submit for approval <span style="opacity:.5">▾</span></button>
+        <button class="abtn abtn-dark">Approve & Back to List ⌘L</button>
+        <button class="abtn abtn-orange">Approve & next bill ⌘↵</button>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div>
+
+<script>
+let selectedPOData = null;
+
+const VIEWS = { summary:'viewSummary', po:'viewPO', docket:'viewDocket', form:'viewForm' };
+const STEP_KEYS = ['summary','po','docket','form'];
+
+function goTo(key) {
+  Object.values(VIEWS).forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById(VIEWS[key]).classList.add('active');
+  updateStepBar(key);
+  window.scrollTo(0,0);
+}
+
+function updateStepBar(key) {
+  const idx = STEP_KEYS.indexOf(key); // 0=summary,1=po,2=docket,3=form
+  const steps = [1,2,3,4];
+  const labels = ['Summary','Link PO','Dockets','Line Items'];
+  steps.forEach((s,i) => {
+    const num = document.getElementById('sn'+s);
+    const lbl = document.getElementById('sl'+s);
+    num.className = 'step-num';
+    lbl.className = 'step-lbl';
+    if (i < idx) { num.classList.add('done'); num.textContent='✓'; lbl.classList.add('done'); }
+    else if (i === idx) { num.classList.add('active'); num.textContent=s; lbl.classList.add('active'); }
+    else { num.textContent=s; }
+  });
+}
+
+function selectPO(num, desc, amount, left, el) {
+  document.querySelectorAll('.po-card').forEach(c => {
+    c.classList.remove('selected');
+    c.querySelector('.po-card-check').textContent = '';
+  });
+  el.classList.add('selected');
+  el.querySelector('.po-card-check').textContent = '✓';
+  selectedPOData = { num, desc };
+  document.getElementById('poNextBtn').disabled = false;
+  document.getElementById('linkedPOPill').textContent = '🔗 ' + num + ' linked';
+  document.getElementById('poChip').textContent = '🔗 ' + num;
+}
+
+function skipPO() {
+  selectedPOData = null;
+  document.querySelectorAll('.po-card').forEach(c => { c.classList.remove('selected'); c.querySelector('.po-card-check').textContent=''; });
+  document.getElementById('linkedPOPill').textContent = '✕ No PO';
+  document.getElementById('poChip').textContent = '✕ No PO';
+  document.getElementById('poNextBtn').disabled = false;
+  goTo('docket');
+}
+
+function toggleDK(el) {
+  el.classList.toggle('selected');
+  const chk = el.querySelector('.dk-card-check');
+  chk.textContent = el.classList.contains('selected') ? '✓' : '';
+}
+
+function skipDockets() {
+  document.querySelectorAll('.dk-card').forEach(c => { c.classList.remove('selected'); c.querySelector('.dk-card-check').textContent=''; });
+  goTo('form');
+}
+</script>
+</body>
+</html>
