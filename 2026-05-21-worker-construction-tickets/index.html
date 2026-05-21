@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Worker Construction Tickets</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #fafafa; color: #1f2937; min-height: 100vh; font-size: 13px;
+  }
+
+  /* ---------- App shell ---------- */
+  .app { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar {
+    background: #0f1b35; color: #c8d3e6; padding: 0; display: flex; flex-direction: column;
+    border-right: 1px solid #0a1428;
+  }
+  .sidebar-brand {
+    display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+    border-bottom: 1px solid #1a2a4a;
+  }
+  .brand-mark {
+    width: 28px; height: 28px; background: #F19100; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 800; font-size: 14px;
+  }
+  .brand-text { color: #fff; font-weight: 700; font-size: 14px; }
+
+  .workspace-pill {
+    margin: 12px 12px 8px; padding: 8px 10px; background: #1a2a4a;
+    border-radius: 8px; display: flex; align-items: center; gap: 8px; cursor: pointer;
+  }
+  .workspace-pill .ws-mark {
+    width: 24px; height: 24px; background: #F19100; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 11px;
+  }
+  .workspace-pill .ws-name { color: #fff; font-weight: 600; font-size: 12.5px; flex: 1; }
+  .workspace-pill .ws-arrow { color: #c8d3e6; font-size: 11px; }
+
+  .nav { padding: 4px 8px 16px; flex: 1; overflow-y: auto; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px;
+    color: #c8d3e6; text-decoration: none; cursor: pointer; font-size: 12.5px;
+    margin: 1px 0; user-select: none;
+  }
+  .nav-item:hover { background: rgba(255,255,255,0.05); color: #fff; }
+  .nav-item.active { background: #F19100; color: #fff; font-weight: 600; }
+  .nav-item.active .nav-icon svg { stroke: #fff; }
+  .nav-icon { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
+  .nav-icon svg { width: 15px; height: 15px; stroke: #c8d3e6; fill: none; stroke-width: 1.8; }
+  .nav-badge {
+    margin-left: auto; background: #F19100; color: #fff; font-size: 10px;
+    padding: 1px 6px; border-radius: 8px; font-weight: 700;
+  }
+  .nav-section {
+    margin: 14px 10px 6px; font-size: 10px; color: #6c7a99; letter-spacing: 0.8px;
+    text-transform: uppercase; font-weight: 700;
+  }
+  .nav-sub { padding-left: 28px; }
+  .nav-sub .nav-item { font-size: 12px; padding: 6px 10px; }
+  .nav-sub .nav-item.active { background: rgba(241,145,0,0.16); color: #F19100; }
+
+  .sidebar-foot {
+    padding: 10px 12px; border-top: 1px solid #1a2a4a; font-size: 11px; color: #6c7a99;
+  }
+  .sidebar-foot .kb {
+    display: flex; align-items: center; gap: 8px; padding: 8px;
+    background: #1a2a4a; border-radius: 6px;
+  }
+  .kb-icon {
+    width: 28px; height: 28px; border-radius: 50%; background: #F19100;
+    display: flex; align-items: center; justify-content: center; color: #fff;
+  }
+
+  /* Main */
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .topbar {
+    background: #fff; border-bottom: 1px solid #e9ecef; padding: 12px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .crumb { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #143666; font-size: 16px; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px;
+    border-radius: 6px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    border: 1px solid transparent; transition: all .12s;
+  }
+  .btn-primary { background: #F19100; color: #fff; }
+  .btn-primary:hover { background: #d77d00; }
+  .btn-ghost { background: #fff; border-color: #d8dde6; color: #143666; }
+  .btn-ghost:hover { background: #f5f6f8; }
+  .btn-blue {
+    background: #e7f0ff; color: #2456b8; border: 1px solid #cfdcfa;
+  }
+  .btn-blue:hover { background: #d4e1ff; }
+  .help-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px;
+    border: 1px solid #ffdfaa; background: #fff8ec; color: #c87b00;
+    border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .user-pill {
+    display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px;
+    background: #f5f6f8; border-radius: 999px; font-size: 12.5px;
+  }
+  .user-pill .av {
+    width: 26px; height: 26px; border-radius: 50%; background: #143666; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;
+  }
+
+  /* Content */
+  .content { padding: 18px 24px 60px; flex: 1; overflow-y: auto; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* Workers page */
+  .filter-row {
+    display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .select {
+    padding: 8px 28px 8px 12px; background: #fff; border: 1px solid #d8dde6;
+    border-radius: 6px; font-size: 12.5px; min-width: 160px; cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3e%3cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3e%3c/svg%3e");
+    background-repeat: no-repeat; background-position: right 10px center;
+  }
+  .tabs {
+    display: flex; gap: 24px; border-bottom: 1px solid #e9ecef; margin-bottom: 0;
+    align-items: center; justify-content: space-between;
+  }
+  .tabs-left { display: flex; gap: 24px; align-items: center; }
+  .tab {
+    padding: 10px 2px; font-size: 12.5px; font-weight: 700; color: #6b7280;
+    cursor: pointer; border-bottom: 2px solid transparent; letter-spacing: 0.4px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tab.active { color: #143666; border-bottom-color: #F19100; }
+  .tab-count {
+    background: #fff3df; color: #c87b00; padding: 1px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 700;
+  }
+  .tabs-right { display: flex; gap: 10px; align-items: center; }
+  .icon-btn {
+    width: 30px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+    background: #fff; border: 1px solid #d8dde6; border-radius: 6px; cursor: pointer; color: #6b7280;
+  }
+  .icon-btn:hover { color: #143666; border-color: #b9c2cf; }
+  .icon-btn.active { color: #F19100; border-color: #F19100; background: #fff8ec; }
+  .search-input {
+    padding: 7px 10px 7px 30px; border: 1px solid #d8dde6; border-radius: 6px;
+    font-size: 12px; width: 220px; background: #fff
+      url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3e%3ccircle cx='11' cy='11' r='7'/%3e%3cline x1='21' y1='21' x2='16.5' y2='16.5'/%3e%3c/svg%3e")
+      no-repeat 9px center;
+  }
+
+  /* Table */
+  .table-wrap { background: #fff; border: 1px solid #e9ecef; border-top: none; border-radius: 0 0 8px 8px; overflow: hidden; }
+  table.workers { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.workers thead {
+    background: #f6f8fb; border-bottom: 1px solid #e9ecef;
+  }
+  table.workers th {
+    text-align: left; padding: 10px 12px; font-weight: 700; color: #4b5563; font-size: 11.5px;
+    border-bottom: 1px solid #e9ecef; white-space: nowrap;
+  }
+  table.workers td {
+    padding: 11px 12px; border-bottom: 1px solid #f1f3f5; color: #1f2937; vertical-align: middle;
+  }
+  table.workers tbody tr { cursor: pointer; }
+  table.workers tbody tr:hover { background: #fafbfd; }
+  .checkbox {
+    width: 14px; height: 14px; border: 1.5px solid #c4cad4; border-radius: 3px;
+    display: inline-block; vertical-align: middle; background: #fff; cursor: pointer;
+  }
+  .verified-mark { color: #16a34a; font-weight: 700; }
+
+  /* Status pills */
+  .pill {
+    display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 11px;
+    font-weight: 700; letter-spacing: 0.2px;
+  }
+  .pill-active { background: #ecfdf3; color: #058537; }
+  .pill-inactive { background: #ffe4e4; color: #b42525; }
+  .pill-green { background: #ecfdf3; color: #058537; }
+  .pill-amber { background: #fff4d6; color: #a35a00; }
+  .pill-yellow { background: #fff8d6; color: #92670a; }
+  .pill-red { background: #ffe4e4; color: #b42525; }
+  .pill-gray { background: #eef0f3; color: #6b7280; }
+  .pill-blue { background: #e7f0ff; color: #2456b8; }
+
+  .row-actions { display: flex; gap: 6px; }
+  .row-actions .icon-btn { width: 26px; height: 26px; }
+  .ticket-cell {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .ticket-count { font-weight: 700; color: #143666; }
+
+  /* ---------- Tickets page ---------- */
+  .page-title {
+    font-size: 20px; font-weight: 700; color: #143666; margin-bottom: 4px;
+  }
+  .page-sub { font-size: 13px; color: #6b7280; margin-bottom: 18px; }
+
+  .stat-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px;
+  }
+  .stat-card {
+    background: #fff; border: 1px solid #e9ecef; border-radius: 10px;
+    padding: 14px 16px; cursor: pointer; transition: all .15s;
+  }
+  .stat-card:hover { border-color: #cfd6e0; box-shadow: 0 2px 8px rgba(20,54,102,0.05); }
+  .stat-card.selected { border-color: #F19100; background: #fffaf2; }
+  .stat-label { font-size: 11px; color: #6b7280; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+  .stat-value { font-size: 26px; font-weight: 700; color: #143666; margin-top: 4px; }
+  .stat-value.red { color: #b42525; }
+  .stat-value.amber { color: #a35a00; }
+  .stat-value.yellow { color: #92670a; }
+  .stat-value.green { color: #058537; }
+  .stat-meta { font-size: 11px; color: #6b7280; margin-top: 4px; }
+
+  table.tickets { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; }
+  table.tickets thead { background: #f6f8fb; }
+  table.tickets th {
+    text-align: left; padding: 10px 12px; font-weight: 700; color: #4b5563; font-size: 11.5px;
+    border-bottom: 1px solid #e9ecef; white-space: nowrap;
+  }
+  table.tickets td {
+    padding: 11px 12px; border-bottom: 1px solid #f1f3f5; color: #1f2937;
+  }
+  table.tickets tbody tr:hover { background: #fafbfd; cursor: pointer; }
+
+  .worker-mini { display: flex; align-items: center; gap: 8px; }
+  .worker-av {
+    width: 26px; height: 26px; border-radius: 50%; background: #143666; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .worker-av.c1 { background: #6f5fff; }
+  .worker-av.c2 { background: #2a9d8f; }
+  .worker-av.c3 { background: #e76f51; }
+  .worker-av.c4 { background: #1f7aec; }
+  .worker-av.c5 { background: #b14ab9; }
+
+  .ticket-icon {
+    width: 28px; height: 28px; border-radius: 6px; background: #f5f6f8; color: #143666;
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    font-size: 14px;
+  }
+
+  /* ---------- Side panel ---------- */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(15,27,53,0.35);
+    opacity: 0; pointer-events: none; transition: opacity .18s; z-index: 50;
+  }
+  .overlay.open { opacity: 1; pointer-events: auto; }
+  .side-panel {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 720px; max-width: 96vw;
+    background: #fff; box-shadow: -10px 0 30px rgba(15,27,53,0.12);
+    transform: translateX(100%); transition: transform .22s ease-out;
+    z-index: 60; display: flex; flex-direction: column;
+  }
+  .side-panel.open { transform: translateX(0); }
+  .panel-head {
+    padding: 18px 24px; border-bottom: 1px solid #eef1f5; display: flex; align-items: flex-start; gap: 14px;
+  }
+  .panel-head .av-big {
+    width: 48px; height: 48px; border-radius: 50%; background: #143666; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .panel-head-info { flex: 1; min-width: 0; }
+  .panel-head-info h2 { font-size: 17px; font-weight: 700; color: #143666; }
+  .panel-head-info .sub { font-size: 12.5px; color: #6b7280; margin-top: 3px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .panel-close {
+    background: none; border: none; color: #6b7280; font-size: 22px; cursor: pointer;
+    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    border-radius: 6px;
+  }
+  .panel-close:hover { background: #f1f3f5; color: #143666; }
+
+  .panel-tabs {
+    display: flex; gap: 18px; padding: 0 24px; border-bottom: 1px solid #eef1f5;
+  }
+  .panel-tab {
+    padding: 10px 0; font-size: 12.5px; font-weight: 700; color: #6b7280;
+    cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  .panel-tab.active { color: #143666; border-bottom-color: #F19100; }
+  .panel-tab .pt-count {
+    background: #eef0f3; color: #4b5563; font-size: 10px; padding: 1px 7px;
+    border-radius: 10px; margin-left: 6px; font-weight: 700;
+  }
+  .panel-tab.active .pt-count { background: #fff3df; color: #c87b00; }
+
+  .panel-body { flex: 1; overflow-y: auto; padding: 18px 24px 80px; }
+  .panel-tab-content { display: none; }
+  .panel-tab-content.active { display: block; }
+
+  .panel-section-head {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+  }
+  .panel-section-head h3 { font-size: 13px; font-weight: 700; color: #143666; }
+
+  .ticket-card {
+    background: #fff; border: 1px solid #e9ecef; border-radius: 8px;
+    padding: 12px 14px; margin-bottom: 8px;
+    display: grid; grid-template-columns: 36px 1fr auto auto; gap: 12px; align-items: center;
+  }
+  .ticket-card:hover { border-color: #d1d8e1; }
+  .ticket-card .tc-icon {
+    width: 36px; height: 36px; background: #f5f6f8; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+  }
+  .ticket-card.expired .tc-icon { background: #ffe4e4; }
+  .ticket-card.expiring .tc-icon { background: #fff4d6; }
+  .tc-body { min-width: 0; }
+  .tc-title { font-weight: 700; color: #143666; font-size: 13px; }
+  .tc-meta { font-size: 11.5px; color: #6b7280; margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .tc-meta .sep { color: #c4cad4; }
+  .tc-actions { display: flex; gap: 4px; }
+  .tc-actions .icon-btn { width: 26px; height: 26px; }
+
+  /* Add ticket form */
+  .form-card {
+    background: #fff; border: 1px dashed #d8dde6; border-radius: 10px;
+    padding: 16px 18px; margin-bottom: 14px;
+  }
+  .form-card h4 { font-size: 13px; font-weight: 700; color: #143666; margin-bottom: 12px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-grid.full { grid-template-columns: 1fr; }
+  .form-field label {
+    display: block; font-size: 11.5px; font-weight: 700; color: #4b5563; margin-bottom: 4px;
+  }
+  .form-field input, .form-field select, .form-field textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid #d8dde6; border-radius: 6px;
+    font-size: 12.5px; font-family: inherit; background: #fff;
+  }
+  .form-field input:focus, .form-field select:focus, .form-field textarea:focus {
+    outline: none; border-color: #F19100; box-shadow: 0 0 0 2px #fff3df;
+  }
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+  .file-drop {
+    border: 1.5px dashed #d8dde6; border-radius: 8px; padding: 14px;
+    text-align: center; color: #6b7280; font-size: 12px; cursor: pointer; background: #fafbfd;
+  }
+  .file-drop:hover { border-color: #F19100; background: #fffaf2; color: #143666; }
+
+  .empty-state {
+    text-align: center; padding: 40px 20px; color: #6b7280; font-size: 13px;
+    background: #fafbfd; border-radius: 10px; border: 1px dashed #e9ecef;
+  }
+  .empty-state .em-icon { font-size: 32px; margin-bottom: 8px; opacity: 0.5; }
+
+  /* Overview tab */
+  .info-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; padding: 6px 0;
+  }
+  .info-item { font-size: 12.5px; }
+  .info-label { color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px; }
+  .info-value { color: #1f2937; font-weight: 500; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: #143666; color: #fff; padding: 10px 18px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; opacity: 0; pointer-events: none;
+    transition: all .25s; z-index: 100; display: flex; align-items: center; gap: 8px;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Compliance summary block on overview */
+  .compliance-card {
+    background: linear-gradient(135deg, #fffaf2, #fff8ec);
+    border: 1px solid #ffe1b3; border-radius: 10px;
+    padding: 14px 16px; margin-top: 14px;
+  }
+  .compliance-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 0; font-size: 12.5px;
+  }
+  .compliance-row + .compliance-row { border-top: 1px dashed #f0e4cc; }
+
+  /* Filter bar on tickets page */
+  .ticket-filter-bar {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    background: #fff; border: 1px solid #e9ecef; border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 12px;
+  }
+
+  hr.divider { border: none; border-top: 1px solid #eef1f5; margin: 14px 0; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ Sidebar ============ -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-mark">V</div>
+      <div class="brand-text">Varicon</div>
+    </div>
+
+    <div class="workspace-pill">
+      <div class="ws-mark">C</div>
+      <div class="ws-name">Cookie's Civil</div>
+      <div class="ws-arrow">›</div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-item"><span class="nav-icon">📁</span>Projects</div>
+      <div class="nav-item"><span class="nav-icon">📊</span>Dashboard</div>
+      <div class="nav-item"><span class="nav-icon">🖼️</span>Gallery</div>
+      <div class="nav-item"><span class="nav-icon">⏱️</span>Timesheet</div>
+      <div class="nav-item"><span class="nav-icon">🌴</span>Leave<span class="nav-badge">8</span></div>
+      <div class="nav-item"><span class="nav-icon">📅</span>Scheduler</div>
+      <div class="nav-item"><span class="nav-icon">📋</span>Daywork Record</div>
+      <div class="nav-item"><span class="nav-icon">🛒</span>Purchase Order<span class="nav-badge">3</span></div>
+      <div class="nav-item"><span class="nav-icon">📄</span>Site Docket</div>
+      <div class="nav-item"><span class="nav-icon">💵</span>Bills</div>
+      <div class="nav-item"><span class="nav-icon">📝</span>Forms</div>
+      <div class="nav-item"><span class="nav-icon">🔧</span>Plant &amp; Equipment</div>
+      <div class="nav-item"><span class="nav-icon">👥</span>Resource Assigner</div>
+      <div class="nav-item"><span class="nav-icon">🏷️</span>Suppliers</div>
+      <div class="nav-item"><span class="nav-icon">📂</span>File Manager</div>
+
+      <div class="nav-section">User Management</div>
+      <div class="nav-item"><span class="nav-icon">👤</span>Users</div>
+      <div class="nav-item active" data-page="workers"><span class="nav-icon">👷</span>Workers</div>
+      <div class="nav-item" data-page="tickets"><span class="nav-icon">🎫</span>Tickets <span class="nav-badge" id="navTicketBadge">5</span></div>
+      <div class="nav-item">Roles and Permissions</div>
+      <div class="nav-item">Clients</div>
+
+      <div class="nav-section">Settings</div>
+      <div class="nav-item"><span class="nav-icon">💳</span>Payroll Settings</div>
+      <div class="nav-item"><span class="nav-icon">⚙️</span>Settings</div>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="kb">
+        <div class="kb-icon">?</div>
+        <div>
+          <div style="color:#fff;font-weight:700;font-size:11.5px">Got Questions?</div>
+          <div>Visit Knowledge Base</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ Main ============ -->
+  <div class="main">
+
+    <div class="topbar">
+      <div class="crumb" id="crumb">Workers</div>
+      <div class="topbar-right">
+        <button class="btn btn-ghost">Initial Data Upload</button>
+        <button class="btn btn-blue">🔍 Search</button>
+        <button class="btn btn-ghost" style="padding:6px 10px;font-size:16px">+</button>
+        <div class="user-pill">
+          <div class="av">AN</div>
+          <div>Alec Neill</div>
+          <span style="color:#9ca3af">▾</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ============ Workers page ============ -->
+      <div class="page active" id="page-workers">
+
+        <div class="filter-row">
+          <select class="select"><option>Worker Resource</option></select>
+          <select class="select"><option>Pay category</option></select>
+          <select class="select"><option>Payment Type</option></select>
+          <select class="select"><option>Company</option></select>
+          <select class="select" id="ticketStatusFilter">
+            <option value="">Ticket status (all)</option>
+            <option value="expired">Has expired ticket</option>
+            <option value="expiring">Expiring within 30 days</option>
+            <option value="missing">Missing required tickets</option>
+            <option value="valid">All valid</option>
+          </select>
+          <div style="flex:1"></div>
+          <button class="help-btn">❔ Need Help?</button>
+          <button class="btn btn-ghost">⬆️ Import Workers</button>
+          <button class="btn btn-primary">+ Add Worker</button>
+        </div>
+
+        <div class="tabs">
+          <div class="tabs-left">
+            <div class="tab active">ALL <span class="tab-count" id="tabCountAll">23</span></div>
+            <div class="tab">ACTIVE <span class="tab-count">21</span></div>
+            <div class="tab">INACTIVE <span class="tab-count">2</span></div>
+            <div class="tab">UNVERIFIED</div>
+          </div>
+          <div class="tabs-right">
+            <button class="icon-btn" title="Column view">▤</button>
+            <button class="icon-btn active" title="List view">≡</button>
+            <input class="search-input" placeholder="Search worker">
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="workers">
+            <thead>
+              <tr>
+                <th style="width:32px"><span class="checkbox"></span></th>
+                <th>Worker ID ↕</th>
+                <th>Worker Name ↕</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Worker resource</th>
+                <th>Company</th>
+                <th>Payment Type</th>
+                <th>Tickets</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="workersBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ============ Tickets page ============ -->
+      <div class="page" id="page-tickets">
+        <div class="page-title">Construction Tickets</div>
+        <div class="page-sub">Track licenses, certificates and competencies across your workforce.</div>
+
+        <div class="stat-grid">
+          <div class="stat-card" data-stat="all">
+            <div class="stat-label">Total tickets</div>
+            <div class="stat-value" id="statTotal">0</div>
+            <div class="stat-meta">Across all workers</div>
+          </div>
+          <div class="stat-card" data-stat="expired">
+            <div class="stat-label">Expired</div>
+            <div class="stat-value red" id="statExpired">0</div>
+            <div class="stat-meta">Renewal overdue</div>
+          </div>
+          <div class="stat-card" data-stat="expiring30">
+            <div class="stat-label">Expiring ≤30 days</div>
+            <div class="stat-value amber" id="statExpiring30">0</div>
+            <div class="stat-meta">Action required soon</div>
+          </div>
+          <div class="stat-card" data-stat="expiring90">
+            <div class="stat-label">Expiring 31–90 days</div>
+            <div class="stat-value yellow" id="statExpiring90">0</div>
+            <div class="stat-meta">Plan ahead</div>
+          </div>
+        </div>
+
+        <div class="ticket-filter-bar">
+          <select class="select" id="ticketTypeFilter">
+            <option value="">All ticket types</option>
+          </select>
+          <select class="select" id="ticketCompanyFilter">
+            <option value="">All companies</option>
+          </select>
+          <select class="select" id="ticketStatusFilter2">
+            <option value="">All statuses</option>
+            <option value="expired">Expired</option>
+            <option value="expiring30">Expiring ≤30 days</option>
+            <option value="expiring90">Expiring 31–90 days</option>
+            <option value="valid">Valid</option>
+          </select>
+          <input class="search-input" placeholder="Search worker / ticket #" id="ticketSearch" style="margin-left:auto">
+          <button class="btn btn-primary" id="exportTicketsBtn">⬇️ Export</button>
+        </div>
+
+        <div style="background:#fff; border:1px solid #e9ecef; border-radius:10px; overflow:hidden">
+          <table class="tickets">
+            <thead>
+              <tr>
+                <th>Worker</th>
+                <th>Ticket type</th>
+                <th>Number</th>
+                <th>Issued</th>
+                <th>Expires</th>
+                <th>Status</th>
+                <th>Document</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="ticketsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============ Side panel ============ -->
+<div class="overlay" id="overlay"></div>
+<div class="side-panel" id="sidePanel">
+  <div class="panel-head">
+    <div class="av-big" id="pAv">--</div>
+    <div class="panel-head-info">
+      <h2 id="pName">—</h2>
+      <div class="sub" id="pSub"></div>
+    </div>
+    <button class="panel-close" onclick="closePanel()">×</button>
+  </div>
+  <div class="panel-tabs">
+    <div class="panel-tab" data-ptab="overview">Overview</div>
+    <div class="panel-tab active" data-ptab="tickets">Tickets <span class="pt-count" id="pTicketCount">0</span></div>
+    <div class="panel-tab" data-ptab="documents">Documents</div>
+    <div class="panel-tab" data-ptab="activity">Activity</div>
+  </div>
+  <div class="panel-body">
+
+    <!-- Overview -->
+    <div class="panel-tab-content" id="ptab-overview">
+      <div class="info-grid" id="overviewGrid"></div>
+
+      <div class="compliance-card">
+        <div style="font-weight:700; color:#143666; font-size:13px; margin-bottom:6px">
+          🎫 Ticket compliance summary
+        </div>
+        <div id="complianceRows"></div>
+      </div>
+    </div>
+
+    <!-- Tickets -->
+    <div class="panel-tab-content active" id="ptab-tickets">
+      <div class="panel-section-head">
+        <h3>Tickets &amp; certifications</h3>
+        <button class="btn btn-primary" id="showAddTicketBtn">+ Add ticket</button>
+      </div>
+
+      <div id="addTicketForm" style="display:none">
+        <div class="form-card">
+          <h4>Add ticket / certification</h4>
+          <div class="form-grid">
+            <div class="form-field">
+              <label>Ticket type *</label>
+              <select id="ftType">
+                <option value="">Select ticket type…</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>Ticket / license number</label>
+              <input type="text" id="ftNumber" placeholder="e.g. WC-12345">
+            </div>
+            <div class="form-field">
+              <label>Issue date *</label>
+              <input type="date" id="ftIssued">
+            </div>
+            <div class="form-field">
+              <label>Expiry date</label>
+              <input type="date" id="ftExpiry">
+            </div>
+            <div class="form-field">
+              <label>Issuing body</label>
+              <input type="text" id="ftIssuer" placeholder="e.g. SafeWork NSW">
+            </div>
+            <div class="form-field">
+              <label>State / jurisdiction</label>
+              <select id="ftState">
+                <option value="">Select…</option>
+                <option>NSW</option><option>VIC</option><option>QLD</option>
+                <option>WA</option><option>SA</option><option>TAS</option>
+                <option>ACT</option><option>NT</option><option>National</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-grid full" style="margin-top:12px">
+            <div class="form-field">
+              <label>Upload document (front + back)</label>
+              <div class="file-drop" id="fileDrop">
+                📎 Drag and drop or <u>browse to upload</u> ticket photo or PDF
+              </div>
+            </div>
+            <div class="form-field">
+              <label>Notes</label>
+              <textarea id="ftNotes" rows="2" placeholder="Optional — conditions, restrictions, training provider…"></textarea>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-ghost" onclick="hideAddForm()">Cancel</button>
+            <button class="btn btn-primary" id="saveTicketBtn">Save ticket</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="ticketList"></div>
+    </div>
+
+    <!-- Documents -->
+    <div class="panel-tab-content" id="ptab-documents">
+      <div class="empty-state">
+        <div class="em-icon">📄</div>
+        <div>No general documents uploaded.</div>
+        <div style="font-size:11.5px; margin-top:4px">Use the Tickets tab for licences and certifications.</div>
+      </div>
+    </div>
+
+    <!-- Activity -->
+    <div class="panel-tab-content" id="ptab-activity">
+      <div class="empty-state">
+        <div class="em-icon">🕒</div>
+        <div>Activity log will appear here.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast">✓ Saved</div>
+
+<script>
+/* ============================================================
+   DATA
+   ============================================================ */
+
+const TODAY = new Date('2026-05-21');
+
+// Australian construction standard ticket types
+const TICKET_TYPES = [
+  { id: 'white_card',  name: 'White Card (CPCCWHS1001)',  icon: '🪪', defaultMonths: null,  required: true,  category: 'General safety' },
+  { id: 'wah',         name: 'Working at Heights',        icon: '🪜', defaultMonths: 24,    required: false, category: 'High risk' },
+  { id: 'confined',    name: 'Confined Space Entry',      icon: '🔒', defaultMonths: 24,    required: false, category: 'High risk' },
+  { id: 'first_aid',   name: 'First Aid (HLTAID011)',     icon: '➕', defaultMonths: 36,    required: false, category: 'Medical' },
+  { id: 'cpr',         name: 'CPR (HLTAID009)',           icon: '🫁', defaultMonths: 12,    required: false, category: 'Medical' },
+  { id: 'ewp',         name: 'EWP — Yellow Card / WP',    icon: '🛗', defaultMonths: 60,    required: false, category: 'High risk' },
+  { id: 'forklift',    name: 'Forklift (LF)',             icon: '🚜', defaultMonths: 60,    required: false, category: 'High risk' },
+  { id: 'asbestos',    name: 'Asbestos Awareness',        icon: '☣️', defaultMonths: 24,    required: false, category: 'Hazardous' },
+  { id: 'traffic',     name: 'Traffic Control / RIIWHS', icon: '🚧', defaultMonths: 36,    required: false, category: 'Roadworks' },
+];
+
+const REQUIRED_TICKET_IDS = ['white_card']; // baseline required for every worker
+
+// Workers from the screenshot
+let WORKERS = [
+  { id:'JD',  workerId:'Juan Delard',     name:'Juan Delard',       email:'-',                                phone:'+61420791209',  resource:'Labourer',  company:"Cookie's Civil Pty", payment:'Wages',     status:'Active',   color:'c1' },
+  { id:'RM',  workerId:'Rasik Manandhar', name:'Rasik Manandhar',   email:'rasik.manandhar@varicon.com.au',   phone:'+9779847388097',resource:'Foreman',   company:"Cookie's Civil Pty", payment:'Casual',    status:'Active',   color:'c2' },
+  { id:'SS',  workerId:'Sal Shr',         name:'Sal Shr',           email:'saleenashrestha24@gmail.com',     phone:'+9779863512202',resource:'Foreman',   company:"Cookie's Civil Pty", payment:'Wages',     status:'Active',   color:'c3' },
+  { id:'NK',  workerId:'Nammy',           name:'Nammy Kirat',       email:'nammy@varicon.com.au',             phone:'-',             resource:'Labourer',  company:"Cookie's Civil Pty", payment:'-',         status:'Inactive', color:'c4' },
+  { id:'AN',  workerId:'A001',            name:'Alec Neill',         email:'alec@varicon.com.au',              phone:'+61478995977',  resource:'Engineer',  company:"Cookie's Civil Pty", payment:'Salary',    status:'Active',   color:'c5' },
+  { id:'SN',  workerId:'SagarNeupane',    name:'SagarNeupane Test', email:'-',                                phone:'-',             resource:'SagarTestResource', company:"Cookie's Civil Pty", payment:'Wages', status:'Active', color:'c1' },
+  { id:'CM',  workerId:'213456',          name:'Caleb Marshall',    email:'cmarshall771@outlook.com',         phone:'+61405392571',  resource:'Engineer',  company:'11',                 payment:'Wages',     status:'Active',   color:'c2' },
+  { id:'A2',  workerId:'123',             name:'Amir Two',           email:'-',                                phone:'-',             resource:'Plumber',   company:"Cookie's Civil Pty", payment:'Wages',     status:'Active',   color:'c3' },
+  { id:'AM',  workerId:'Amir',            name:'Amir Mitri',         email:'-',                                phone:'+61412968340',  resource:'Engineer',  company:"Cookie's Civil Pty", payment:'Salary',    status:'Active',   color:'c4' },
+  { id:'CB',  workerId:'Cris Baker',      name:'Cris Baker',         email:'cbaker@varicon.com.au',            phone:'+61404392812',  resource:'Engineer',  company:"Cookie's Civil Pty", payment:'Wages',     status:'Active',   color:'c5' },
+  { id:'GC',  workerId:'George Carpenter',name:'George Carpenter',   email:'george@varicon.com.au',            phone:'+61422887928',  resource:'Labourer',  company:"Cookie's Civil Pty", payment:'Wages',     status:'Active',   color:'c1' },
+  { id:'BK',  workerId:'001',             name:'Boni Khatiwada',     email:'boni.khatiwada@varicon.com.au',    phone:'+9779860153200',resource:'Labourer',  company:"Cookie's Civil Pty", payment:'Casual',    status:'Active',   color:'c2' },
+  { id:'PM',  workerId:'PM',              name:'Prashant Manandhar', email:'-',                                phone:'+9779841171288',resource:'Engineer',  company:"Cookie's Civil Pty", payment:'Salary',    status:'Active',   color:'c3' },
+  { id:'UJ',  workerId:'NCELL UJ',        name:'Udip Joshi NCELL',   email:'joshiudip65@gmail.com',            phone:'+9779702035878',resource:'Labourer',  company:"Cookie's Civil Pty", payment:'-',         status:'Inactive', color:'c4' },
+  { id:'UJ2', workerId:'UdipJoshi',       name:'Udip Joshi',         email:'udip.joshi+123@varicon.com.au',    phone:'-',             resource:'Subcontractor Operator', company:'Landscaping Solutions', payment:'Subcontractor', status:'Active', color:'c5' },
+  { id:'PM2', workerId:'Prashant Manandhar', name:'Prashant Manandhar', email:'prashant.manandhar@varicon.com.au', phone:'-',         resource:'Labourer',  company:"Cookie's Civil Pty", payment:'Salary',    status:'Active',   color:'c1' },
+  { id:'ST',  workerId:'EMP-132',         name:'Susan TimTim',       email:'susantimilsina10@gmail.com',       phone:'-',             resource:'Engineer',  company:"Cookie's Civil Pty", payment:'Wages',     status:'Active',   color:'c2' },
+  { id:'BS',  workerId:'BS',              name:'Bishwas Shrestha',   email:'-',                                phone:'+9779843440957',resource:'Engineer',  company:'Mitchcon Pty Ltd',   payment:'Salary',    status:'Active',   color:'c3' },
+];
+
+// Seed tickets — mix of valid, expiring, expired
+let TICKETS = [
+  // Juan Delard — labourer, fully ticketed
+  { id:'t1',  workerKey:'JD', type:'white_card', number:'WC-209117', issued:'2024-08-12', expiry:null,         issuer:'SafeWork NSW',   state:'NSW' },
+  { id:'t2',  workerKey:'JD', type:'wah',         number:'WAH-2289',  issued:'2024-06-10', expiry:'2026-06-10', issuer:'TAFE NSW',       state:'NSW' },
+  { id:'t3',  workerKey:'JD', type:'first_aid',   number:'FA-77812',  issued:'2024-03-04', expiry:'2027-03-04', issuer:'St John Ambulance', state:'National' },
+
+  // Rasik — foreman, broad cover, one expiring
+  { id:'t4',  workerKey:'RM', type:'white_card', number:'WC-118293', issued:'2022-01-18', expiry:null,         issuer:'SafeWork NSW',   state:'NSW' },
+  { id:'t5',  workerKey:'RM', type:'wah',         number:'WAH-5512',  issued:'2024-07-02', expiry:'2026-07-02', issuer:'TAFE NSW',       state:'NSW' },
+  { id:'t6',  workerKey:'RM', type:'confined',    number:'CS-3380',   issued:'2024-09-14', expiry:'2026-09-14', issuer:'TAFE NSW',       state:'NSW' },
+  { id:'t7',  workerKey:'RM', type:'first_aid',   number:'FA-66120',  issued:'2023-05-22', expiry:'2026-05-22', issuer:'Red Cross',      state:'National' },
+  { id:'t8',  workerKey:'RM', type:'forklift',    number:'LF-009881', issued:'2022-10-04', expiry:'2027-10-04', issuer:'SafeWork NSW',   state:'NSW' },
+
+  // Sal — foreman, one EXPIRED
+  { id:'t9',  workerKey:'SS', type:'white_card', number:'WC-771234', issued:'2023-06-15', expiry:null,         issuer:'SafeWork NSW',   state:'NSW' },
+  { id:'t10', workerKey:'SS', type:'wah',         number:'WAH-4407',  issued:'2024-02-08', expiry:'2026-02-08', issuer:'Allens Training',state:'NSW' },
+  { id:'t11', workerKey:'SS', type:'first_aid',   number:'FA-30022',  issued:'2025-01-15', expiry:'2028-01-15', issuer:'Red Cross',      state:'National' },
+
+  // Alec — engineer, mostly office
+  { id:'t12', workerKey:'AN', type:'white_card', number:'WC-099812', issued:'2025-02-10', expiry:null,         issuer:'SafeWork NSW',   state:'NSW' },
+
+  // Caleb Marshall — engineer
+  { id:'t13', workerKey:'CM', type:'white_card', number:'WC-554478', issued:'2023-11-12', expiry:null,         issuer:'SafeWork NSW',   state:'NSW' },
+  { id:'t14', workerKey:'CM', type:'first_aid',   number:'FA-22815',  issued:'2024-05-30', expiry:'2026-06-15', issuer:'St John Ambulance', state:'National' },
+
+  // Amir Two — plumber
+  { id:'t15', workerKey:'A2', type:'white_card', number:'WC-882210', issued:'2023-07-19', expiry:null,         issuer:'SafeWork NSW',   state:'NSW' },
+  { id:'t16', workerKey:'A2', type:'confined',    number:'CS-8821',   issued:'2024-04-10', expiry:'2026-04-10', issuer:'TAFE NSW',       state:'NSW' }, // EXPIRED
+
+  // Amir Mitri — engineer
+  { id:'t17', workerKey:'AM', type:'white_card', number:'WC-651300', issued:'2024-01-22', expiry:null,         issuer:'SafeWork NSW',   state:'NSW' },
+  { id:'t18', workerKey:'AM', type:'ewp',         number:'WP-118822', issued:'2022-11-15', expiry:'2027-11-15', issuer:'SafeWork NSW',   state:'NSW' },
+
+  // Cris Baker — engineer
+  { id:'t19', workerKey:'CB', type:'white_card', number:'WC-339001', issued:'2024-09-01', expiry:null,         issuer:'SafeWork NSW',   state:'NSW' },
+  { id:'t20', workerKey:'CB', type:'wah',         number:'WAH-7790',  issued:'2024-12-04', expiry:'2026-12-04', issuer:'Allens Training',state:'NSW' },
+
+  // George Carpenter — labourer, ticket EXPIRING SOON
+  { id:'t21', workerKey:'GC', type:'white_card', number:'WC-101199', issued:'2023-03-20', expiry:null,         issuer:'SafeWork NSW',   state:'NSW' },
+  { id:'t22', workerKey:'GC', type:'wah',         number:'WAH-2110',  issued:'2024-06-05', expiry:'2026-06-05', issuer:'TAFE NSW',       state:'NSW' }, // expiring 15 days
+  { id:'t23', workerKey:'GC', type:'asbestos',    number:'AB-3382',   issued:'2024-08-12', expiry:'2026-08-12', issuer:'Allens Training',state:'NSW' },
+
+  // Boni — labourer, casual
+  { id:'t24', workerKey:'BK', type:'white_card', number:'WC-225588', issued:'2024-10-04', expiry:null,         issuer:'SafeWork NSW',   state:'NSW' },
+  { id:'t25', workerKey:'BK', type:'traffic',     number:'TC-08812',  issued:'2024-03-15', expiry:'2027-03-15', issuer:'AustRoads',      state:'NSW' },
+
+  // Prashant (PM) — engineer
+  { id:'t26', workerKey:'PM', type:'white_card', number:'WC-477821', issued:'2023-12-01', expiry:null,         issuer:'SafeWork NSW',   state:'NSW' },
+  { id:'t27', workerKey:'PM', type:'first_aid',   number:'FA-115522', issued:'2023-08-19', expiry:'2026-08-19', issuer:'Red Cross',      state:'National' },
+
+  // Udip Joshi (subcontractor operator)
+  { id:'t28', workerKey:'UJ2',type:'white_card', number:'WC-110044', issued:'2022-07-12', expiry:null,         issuer:'SafeWork NSW',   state:'NSW' },
+  { id:'t29', workerKey:'UJ2',type:'forklift',    number:'LF-220011', issued:'2021-09-10', expiry:'2026-09-10', issuer:'SafeWork NSW',   state:'NSW' },
+  { id:'t30', workerKey:'UJ2',type:'ewp',         number:'WP-991122', issued:'2021-05-22', expiry:'2026-05-22', issuer:'SafeWork NSW',   state:'NSW' }, // expiring 1 day
+
+  // Susan TimTim — engineer
+  { id:'t31', workerKey:'ST', type:'white_card', number:'WC-770013', issued:'2024-02-14', expiry:null,         issuer:'SafeWork NSW',   state:'NSW' },
+
+  // Bishwas — engineer
+  { id:'t32', workerKey:'BS', type:'white_card', number:'WC-339922', issued:'2023-11-12', expiry:null,         issuer:'SafeWork NSW',   state:'NSW' },
+  { id:'t33', workerKey:'BS', type:'first_aid',   number:'FA-208845', issued:'2022-04-04', expiry:'2025-04-04', issuer:'Red Cross',      state:'National' }, // EXPIRED
+];
+
+let currentWorker = null;
+let activeStatFilter = null;
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+
+function fmtDate(s) {
+  if (!s) return '—';
+  const d = new Date(s);
+  return d.toLocaleDateString('en-AU', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+function daysUntil(expiry) {
+  if (!expiry) return null;
+  const d = new Date(expiry);
+  return Math.round((d - TODAY) / (1000*60*60*24));
+}
+
+function getTicketStatus(ticket) {
+  if (!ticket.expiry) return { key:'no_expiry', label:'No expiry', cls:'pill-blue' };
+  const days = daysUntil(ticket.expiry);
+  if (days < 0)  return { key:'expired',    label:'Expired ' + Math.abs(days) + 'd ago', cls:'pill-red',    days };
+  if (days <= 30) return { key:'expiring30', label:'Expires in ' + days + 'd',            cls:'pill-amber',  days };
+  if (days <= 90) return { key:'expiring90', label:'Expires in ' + days + 'd',            cls:'pill-yellow', days };
+  return { key:'valid', label:'Valid', cls:'pill-green', days };
+}
+
+function getWorkerCompliance(workerKey) {
+  const tickets = TICKETS.filter(t => t.workerKey === workerKey);
+  let expired = 0, expiring30 = 0, expiring90 = 0, valid = 0;
+  for (const t of tickets) {
+    const s = getTicketStatus(t);
+    if (s.key === 'expired') expired++;
+    else if (s.key === 'expiring30') expiring30++;
+    else if (s.key === 'expiring90') expiring90++;
+    else valid++;
+  }
+  // Missing required
+  const heldTypes = new Set(tickets.map(t => t.type));
+  const missing = REQUIRED_TICKET_IDS.filter(r => !heldTypes.has(r));
+  return { total: tickets.length, expired, expiring30, expiring90, valid, missing };
+}
+
+function getTicketTypeMeta(typeId) {
+  return TICKET_TYPES.find(t => t.id === typeId) || { name: typeId, icon: '🎫' };
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = '✓ ' + msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+/* ============================================================
+   WORKERS TABLE
+   ============================================================ */
+
+function renderWorkers(filter = '') {
+  const tbody = document.getElementById('workersBody');
+  const statusFilter = document.getElementById('ticketStatusFilter').value;
+
+  const rows = WORKERS.filter(w => {
+    if (statusFilter === 'expired')   return getWorkerCompliance(w.id).expired > 0;
+    if (statusFilter === 'expiring')  return getWorkerCompliance(w.id).expiring30 > 0;
+    if (statusFilter === 'missing')   return getWorkerCompliance(w.id).missing.length > 0;
+    if (statusFilter === 'valid')     {
+      const c = getWorkerCompliance(w.id);
+      return c.total > 0 && c.expired === 0 && c.expiring30 === 0 && c.missing.length === 0;
+    }
+    return true;
+  });
+
+  tbody.innerHTML = rows.map(w => {
+    const c = getWorkerCompliance(w.id);
+    let ticketPill;
+    if (c.expired > 0) {
+      ticketPill = `<span class="pill pill-red">${c.expired} expired</span>`;
+    } else if (c.expiring30 > 0) {
+      ticketPill = `<span class="pill pill-amber">${c.expiring30} expiring</span>`;
+    } else if (c.missing.length > 0) {
+      ticketPill = `<span class="pill pill-gray">${c.missing.length} missing</span>`;
+    } else if (c.total > 0) {
+      ticketPill = `<span class="pill pill-green">All valid</span>`;
+    } else {
+      ticketPill = `<span class="pill pill-gray">No tickets</span>`;
+    }
+    const statusPill = w.status === 'Active'
+      ? '<span class="pill pill-active">Active</span>'
+      : '<span class="pill pill-inactive">Inactive</span>';
+
+    return `
+      <tr onclick="openWorker('${w.id}')">
+        <td><span class="checkbox" onclick="event.stopPropagation()"></span></td>
+        <td>${w.workerId}</td>
+        <td>${w.name}</td>
+        <td>${w.email}</td>
+        <td>${w.phone}</td>
+        <td>(${w.resource}) ${w.resource}</td>
+        <td>${w.company}</td>
+        <td>${w.payment}</td>
+        <td>
+          <div class="ticket-cell">
+            <span class="ticket-count">${c.total}</span>
+            ${ticketPill}
+          </div>
+        </td>
+        <td>${statusPill} <span class="verified-mark">✓</span></td>
+        <td><div class="row-actions">
+          <button class="icon-btn" onclick="event.stopPropagation();openWorker('${w.id}')" title="View">✎</button>
+          <button class="icon-btn" onclick="event.stopPropagation()" title="Archive">⬇</button>
+        </div></td>
+      </tr>`;
+  }).join('');
+}
+
+/* ============================================================
+   SIDE PANEL
+   ============================================================ */
+
+function openWorker(workerKey) {
+  const w = WORKERS.find(x => x.id === workerKey);
+  if (!w) return;
+  currentWorker = w;
+
+  document.getElementById('pAv').textContent = w.name.split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase();
+  document.getElementById('pAv').className = 'av-big worker-av ' + w.color;
+  document.getElementById('pName').textContent = w.name;
+  const c = getWorkerCompliance(w.id);
+  document.getElementById('pSub').innerHTML = `
+    <span>👷 ${w.resource}</span>
+    <span>🏢 ${w.company}</span>
+    <span>${w.status === 'Active' ? '<span class="pill pill-active">Active</span>' : '<span class="pill pill-inactive">Inactive</span>'}</span>
+  `;
+  document.getElementById('pTicketCount').textContent = c.total;
+
+  // Switch active tab to tickets by default
+  document.querySelectorAll('.panel-tab').forEach(t => t.classList.toggle('active', t.dataset.ptab === 'tickets'));
+  document.querySelectorAll('.panel-tab-content').forEach(c => c.classList.toggle('active', c.id === 'ptab-tickets'));
+
+  renderPanelOverview();
+  renderPanelTickets();
+  hideAddForm();
+
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('sidePanel').classList.add('open');
+}
+
+function closePanel() {
+  document.getElementById('overlay').classList.remove('open');
+  document.getElementById('sidePanel').classList.remove('open');
+  currentWorker = null;
+}
+
+function renderPanelOverview() {
+  const w = currentWorker;
+  const c = getWorkerCompliance(w.id);
+  document.getElementById('overviewGrid').innerHTML = `
+    <div class="info-item"><div class="info-label">Worker ID</div><div class="info-value">${w.workerId}</div></div>
+    <div class="info-item"><div class="info-label">Email</div><div class="info-value">${w.email}</div></div>
+    <div class="info-item"><div class="info-label">Phone</div><div class="info-value">${w.phone}</div></div>
+    <div class="info-item"><div class="info-label">Worker resource</div><div class="info-value">${w.resource}</div></div>
+    <div class="info-item"><div class="info-label">Company</div><div class="info-value">${w.company}</div></div>
+    <div class="info-item"><div class="info-label">Payment type</div><div class="info-value">${w.payment}</div></div>
+  `;
+  let compRows = '';
+  if (c.total === 0) {
+    compRows = `<div class="compliance-row"><span>No tickets recorded yet.</span><span><a href="#" onclick="document.querySelector('.panel-tab[data-ptab=tickets]').click();return false;" style="color:#F19100">Add first ticket →</a></span></div>`;
+  } else {
+    if (c.expired > 0)     compRows += `<div class="compliance-row"><span>🔴 Expired</span><span><b>${c.expired}</b> ticket${c.expired===1?'':'s'}</span></div>`;
+    if (c.expiring30 > 0)  compRows += `<div class="compliance-row"><span>🟠 Expiring within 30 days</span><span><b>${c.expiring30}</b></span></div>`;
+    if (c.expiring90 > 0)  compRows += `<div class="compliance-row"><span>🟡 Expiring 31–90 days</span><span><b>${c.expiring90}</b></span></div>`;
+    compRows += `<div class="compliance-row"><span>🟢 Valid &amp; no-expiry tickets</span><span><b>${c.valid}</b></span></div>`;
+    if (c.missing.length > 0)
+      compRows += `<div class="compliance-row"><span>⚪ Missing required</span><span><b>${c.missing.map(m => getTicketTypeMeta(m).name.split(' ')[0]).join(', ')}</b></span></div>`;
+  }
+  document.getElementById('complianceRows').innerHTML = compRows;
+}
+
+function renderPanelTickets() {
+  const w = currentWorker;
+  const tickets = TICKETS.filter(t => t.workerKey === w.id)
+    .sort((a,b) => {
+      const sa = getTicketStatus(a), sb = getTicketStatus(b);
+      const order = { expired:0, expiring30:1, expiring90:2, valid:3, no_expiry:4 };
+      return order[sa.key] - order[sb.key];
+    });
+
+  const list = document.getElementById('ticketList');
+  document.getElementById('pTicketCount').textContent = tickets.length;
+
+  if (tickets.length === 0) {
+    list.innerHTML = `<div class="empty-state">
+      <div class="em-icon">🎫</div>
+      <div>No tickets yet for ${w.name}.</div>
+      <div style="font-size:11.5px; margin-top:4px">Click <b>+ Add ticket</b> above to record their first licence or certification.</div>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = tickets.map(t => {
+    const meta = getTicketTypeMeta(t.type);
+    const s = getTicketStatus(t);
+    const cardCls = s.key === 'expired' ? 'expired'
+                  : (s.key === 'expiring30' || s.key === 'expiring90') ? 'expiring' : '';
+    return `
+      <div class="ticket-card ${cardCls}">
+        <div class="tc-icon">${meta.icon}</div>
+        <div class="tc-body">
+          <div class="tc-title">${meta.name}</div>
+          <div class="tc-meta">
+            <span>#${t.number || '—'}</span>
+            <span class="sep">·</span>
+            <span>Issued ${fmtDate(t.issued)}</span>
+            <span class="sep">·</span>
+            <span>Expires ${fmtDate(t.expiry)}</span>
+            <span class="sep">·</span>
+            <span>${t.state || ''}</span>
+          </div>
+        </div>
+        <div><span class="pill ${s.cls}">${s.label}</span></div>
+        <div class="tc-actions">
+          <button class="icon-btn" title="View document" onclick="toast('Document preview (stub)')">👁</button>
+          <button class="icon-btn" title="Renew" onclick="renewTicket('${t.id}')">↻</button>
+          <button class="icon-btn" title="Delete" onclick="deleteTicket('${t.id}')">🗑</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ============================================================
+   ADD / EDIT / DELETE TICKET
+   ============================================================ */
+
+function populateTypeDropdowns() {
+  const ftType = document.getElementById('ftType');
+  const tFilter = document.getElementById('ticketTypeFilter');
+  TICKET_TYPES.forEach(t => {
+    ftType.insertAdjacentHTML('beforeend', `<option value="${t.id}">${t.icon} ${t.name}</option>`);
+    tFilter.insertAdjacentHTML('beforeend', `<option value="${t.id}">${t.name}</option>`);
+  });
+  // company dropdown
+  const companies = [...new Set(WORKERS.map(w => w.company))];
+  const cFilter = document.getElementById('ticketCompanyFilter');
+  companies.forEach(c => cFilter.insertAdjacentHTML('beforeend', `<option value="${c}">${c}</option>`));
+}
+
+function showAddForm() {
+  document.getElementById('addTicketForm').style.display = 'block';
+  document.getElementById('ftIssued').value = '2026-05-21';
+  document.getElementById('ftType').focus();
+}
+function hideAddForm() {
+  document.getElementById('addTicketForm').style.display = 'none';
+  ['ftType','ftNumber','ftIssued','ftExpiry','ftIssuer','ftState','ftNotes'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+}
+
+// Auto-fill expiry when type changes
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('ftType').addEventListener('change', e => {
+    const t = TICKET_TYPES.find(x => x.id === e.target.value);
+    const issued = document.getElementById('ftIssued').value || '2026-05-21';
+    if (t && t.defaultMonths) {
+      const d = new Date(issued);
+      d.setMonth(d.getMonth() + t.defaultMonths);
+      document.getElementById('ftExpiry').value = d.toISOString().slice(0,10);
+    } else if (t && t.defaultMonths === null) {
+      document.getElementById('ftExpiry').value = '';
+    }
+  });
+});
+
+function saveTicket() {
+  if (!currentWorker) return;
+  const type = document.getElementById('ftType').value;
+  const number = document.getElementById('ftNumber').value;
+  const issued = document.getElementById('ftIssued').value;
+  const expiry = document.getElementById('ftExpiry').value || null;
+  const issuer = document.getElementById('ftIssuer').value;
+  const state = document.getElementById('ftState').value;
+  if (!type) { alert('Please select a ticket type.'); return; }
+  if (!issued) { alert('Please set the issue date.'); return; }
+  TICKETS.push({
+    id: 't' + Date.now(),
+    workerKey: currentWorker.id,
+    type, number, issued, expiry, issuer, state
+  });
+  hideAddForm();
+  renderPanelTickets();
+  renderPanelOverview();
+  renderWorkers();
+  renderTicketsPage();
+  refreshNavBadge();
+  toast(getTicketTypeMeta(type).name + ' added');
+}
+
+function deleteTicket(id) {
+  if (!confirm('Remove this ticket?')) return;
+  TICKETS = TICKETS.filter(t => t.id !== id);
+  renderPanelTickets();
+  renderPanelOverview();
+  renderWorkers();
+  renderTicketsPage();
+  refreshNavBadge();
+  toast('Ticket removed');
+}
+
+function renewTicket(id) {
+  const t = TICKETS.find(x => x.id === id);
+  if (!t) return;
+  const meta = getTicketTypeMeta(t.type);
+  const months = meta.defaultMonths || 24;
+  const newIssue = new Date(TODAY);
+  const newExpiry = new Date(TODAY);
+  newExpiry.setMonth(newExpiry.getMonth() + months);
+  t.issued = newIssue.toISOString().slice(0,10);
+  t.expiry = newExpiry.toISOString().slice(0,10);
+  renderPanelTickets();
+  renderPanelOverview();
+  renderWorkers();
+  renderTicketsPage();
+  refreshNavBadge();
+  toast(meta.name + ' renewed');
+}
+
+/* ============================================================
+   TICKETS PAGE
+   ============================================================ */
+
+function renderTicketsPage() {
+  // Stats
+  let total = TICKETS.length, expired = 0, expiring30 = 0, expiring90 = 0;
+  for (const t of TICKETS) {
+    const s = getTicketStatus(t);
+    if (s.key === 'expired') expired++;
+    else if (s.key === 'expiring30') expiring30++;
+    else if (s.key === 'expiring90') expiring90++;
+  }
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statExpired').textContent = expired;
+  document.getElementById('statExpiring30').textContent = expiring30;
+  document.getElementById('statExpiring90').textContent = expiring90;
+
+  // Filters
+  const typeF = document.getElementById('ticketTypeFilter').value;
+  const compF = document.getElementById('ticketCompanyFilter').value;
+  const statF = document.getElementById('ticketStatusFilter2').value;
+  const search = document.getElementById('ticketSearch').value.toLowerCase();
+
+  let rows = TICKETS.slice();
+  if (typeF) rows = rows.filter(t => t.type === typeF);
+  if (statF) rows = rows.filter(t => getTicketStatus(t).key === statF);
+  if (compF) rows = rows.filter(t => {
+    const w = WORKERS.find(x => x.id === t.workerKey); return w && w.company === compF;
+  });
+  if (activeStatFilter) {
+    rows = rows.filter(t => {
+      const s = getTicketStatus(t);
+      if (activeStatFilter === 'all') return true;
+      return s.key === activeStatFilter;
+    });
+  }
+  if (search) {
+    rows = rows.filter(t => {
+      const w = WORKERS.find(x => x.id === t.workerKey);
+      return (w && w.name.toLowerCase().includes(search)) ||
+             (t.number || '').toLowerCase().includes(search) ||
+             getTicketTypeMeta(t.type).name.toLowerCase().includes(search);
+    });
+  }
+
+  // Sort: most-urgent first
+  rows.sort((a,b) => {
+    const sa = getTicketStatus(a), sb = getTicketStatus(b);
+    const order = { expired:0, expiring30:1, expiring90:2, valid:3, no_expiry:4 };
+    if (order[sa.key] !== order[sb.key]) return order[sa.key] - order[sb.key];
+    const da = sa.days ?? 99999, db = sb.days ?? 99999;
+    return da - db;
+  });
+
+  const body = document.getElementById('ticketsBody');
+  if (rows.length === 0) {
+    body.innerHTML = `<tr><td colspan="8" style="padding:30px; text-align:center; color:#6b7280">
+      <div style="font-size:24px; margin-bottom:6px; opacity:.5">🎫</div>
+      No tickets match the current filter.
+    </td></tr>`;
+    return;
+  }
+
+  body.innerHTML = rows.map(t => {
+    const w = WORKERS.find(x => x.id === t.workerKey);
+    const meta = getTicketTypeMeta(t.type);
+    const s = getTicketStatus(t);
+    return `
+      <tr onclick="openWorker('${w.id}')">
+        <td>
+          <div class="worker-mini">
+            <div class="worker-av ${w.color}">${w.name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase()}</div>
+            <div>
+              <div style="font-weight:600;color:#143666">${w.name}</div>
+              <div style="font-size:11px;color:#6b7280">${w.resource} · ${w.company}</div>
+            </div>
+          </div>
+        </td>
+        <td>
+          <div style="display:flex; align-items:center; gap:8px">
+            <span class="ticket-icon">${meta.icon}</span>
+            <span>${meta.name}</span>
+          </div>
+        </td>
+        <td><code style="font-size:11.5px;background:#f5f6f8;padding:2px 6px;border-radius:4px">${t.number || '—'}</code></td>
+        <td>${fmtDate(t.issued)}</td>
+        <td>${fmtDate(t.expiry)}</td>
+        <td><span class="pill ${s.cls}">${s.label}</span></td>
+        <td><a href="#" onclick="event.stopPropagation();toast('Document preview (stub)');return false;" style="color:#2456b8;font-size:12px">📎 View</a></td>
+        <td onclick="event.stopPropagation()" style="text-align:right">
+          <button class="icon-btn" title="Renew" onclick="renewTicket('${t.id}')">↻</button>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+function refreshNavBadge() {
+  let count = 0;
+  for (const t of TICKETS) {
+    const s = getTicketStatus(t);
+    if (s.key === 'expired' || s.key === 'expiring30') count++;
+  }
+  const badge = document.getElementById('navTicketBadge');
+  badge.textContent = count;
+  badge.style.display = count > 0 ? '' : 'none';
+}
+
+/* ============================================================
+   NAV / ROUTING
+   ============================================================ */
+
+function go(page) {
+  document.querySelectorAll('.nav-item').forEach(n => {
+    n.classList.toggle('active', n.dataset.page === page);
+  });
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.getElementById('crumb').textContent = page === 'workers' ? 'Workers' : 'Tickets';
+  if (page === 'tickets') renderTicketsPage();
+}
+
+document.querySelectorAll('.nav-item[data-page]').forEach(n => {
+  n.addEventListener('click', () => go(n.dataset.page));
+});
+
+// Stat-card filter on tickets page
+document.querySelectorAll('.stat-card').forEach(card => {
+  card.addEventListener('click', () => {
+    const s = card.dataset.stat;
+    if (activeStatFilter === s || s === 'all') {
+      activeStatFilter = null;
+      document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('selected'));
+    } else {
+      activeStatFilter = s;
+      document.querySelectorAll('.stat-card').forEach(c => c.classList.toggle('selected', c === card));
+    }
+    renderTicketsPage();
+  });
+});
+
+// Wire other filters
+['ticketTypeFilter','ticketCompanyFilter','ticketStatusFilter2','ticketSearch'].forEach(id => {
+  document.getElementById(id).addEventListener('input', renderTicketsPage);
+});
+document.getElementById('ticketStatusFilter').addEventListener('change', () => renderWorkers());
+
+document.getElementById('overlay').addEventListener('click', closePanel);
+
+// Panel tabs
+document.querySelectorAll('.panel-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.panel-tab').forEach(x => x.classList.toggle('active', x === t));
+    document.querySelectorAll('.panel-tab-content').forEach(c => c.classList.toggle('active', c.id === 'ptab-' + t.dataset.ptab));
+    if (t.dataset.ptab === 'overview') renderPanelOverview();
+  });
+});
+
+document.getElementById('showAddTicketBtn').addEventListener('click', showAddForm);
+document.getElementById('saveTicketBtn').addEventListener('click', saveTicket);
+document.getElementById('fileDrop').addEventListener('click', () => toast('File upload (stub)'));
+document.getElementById('exportTicketsBtn').addEventListener('click', () => toast('Exported as CSV (stub)'));
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+
+populateTypeDropdowns();
+renderWorkers();
+renderTicketsPage();
+refreshNavBadge();
+document.getElementById('tabCountAll').textContent = WORKERS.length;
+</script>
+
+</body>
+</html>
