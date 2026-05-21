@@ -1546,20 +1546,96 @@ function populateTypeDropdowns() {
   const companies = [...new Set(WORKERS.map(w => w.company))];
   const cFilter = document.getElementById('ticketCompanyFilter');
   companies.forEach(c => cFilter.insertAdjacentHTML('beforeend', `<option value="${c}">${c}</option>`));
-  // worker dropdown — alphabetical, "On this site" group first
-  const wFilter = document.getElementById('ticketWorkerFilter');
+  // Multi-select worker dropdown content
+  renderWorkerFilterList('');
+  document.getElementById('msQuickCount').textContent = `${SITE_WORKER_IDS.length} workers`;
+}
+
+function renderWorkerFilterList(search) {
+  const q = (search || '').toLowerCase();
   const onSite = WORKERS.filter(w => SITE_WORKER_IDS.includes(w.id))
                         .sort((a,b) => a.name.localeCompare(b.name));
   const others = WORKERS.filter(w => !SITE_WORKER_IDS.includes(w.id))
                         .sort((a,b) => a.name.localeCompare(b.name));
-  wFilter.insertAdjacentHTML('beforeend',
-    `<option value="__site__">— On this site (${onSite.length}) —</option>`);
-  onSite.forEach(w => wFilter.insertAdjacentHTML('beforeend',
-    `<option value="${w.id}">${w.name}</option>`));
-  wFilter.insertAdjacentHTML('beforeend',
-    `<option value="" disabled>──────────</option>`);
-  others.forEach(w => wFilter.insertAdjacentHTML('beforeend',
-    `<option value="${w.id}">${w.name}</option>`));
+
+  const renderRow = (w) => {
+    const initials = w.name.split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase();
+    const sel = workerFilterSelection.has(w.id);
+    const tc = TICKETS.filter(t => t.workerKey === w.id).length;
+    return `<div class="ms-option ${sel?'selected':''}" data-wid="${w.id}">
+      <span class="cb ${sel?'checked':''}"></span>
+      <span class="ms-av worker-av ${w.color}">${initials}</span>
+      <span class="ms-name">${w.name}</span>
+      <span class="ms-tcount">${tc}</span>
+    </div>`;
+  };
+
+  const matches = (w) => !q || w.name.toLowerCase().includes(q) || w.resource.toLowerCase().includes(q);
+  const onSiteVisible = onSite.filter(matches);
+  const othersVisible = others.filter(matches);
+
+  let html = '';
+  if (onSiteVisible.length > 0) {
+    html += `<div class="ms-group-label">On this site (${onSiteVisible.length})</div>`;
+    html += onSiteVisible.map(renderRow).join('');
+  }
+  if (othersVisible.length > 0) {
+    html += `<div class="ms-group-label">Other workers (${othersVisible.length})</div>`;
+    html += othersVisible.map(renderRow).join('');
+  }
+  if (onSiteVisible.length === 0 && othersVisible.length === 0) {
+    html = `<div style="padding:20px; text-align:center; color:#9ca3af; font-size:12px">No workers match "${search}"</div>`;
+  }
+  document.getElementById('msList').innerHTML = html;
+
+  // Update "Select all on this site" checkbox state
+  const allSiteSelected = SITE_WORKER_IDS.every(id => workerFilterSelection.has(id));
+  const someSiteSelected = SITE_WORKER_IDS.some(id => workerFilterSelection.has(id));
+  const qcb = document.getElementById('msQuickCb');
+  qcb.classList.remove('checked','partial');
+  if (allSiteSelected) qcb.classList.add('checked');
+  else if (someSiteSelected) qcb.classList.add('partial');
+}
+
+function updateWorkerFilterButton() {
+  const btn = document.getElementById('msButton');
+  const label = document.getElementById('msLabel');
+  const n = workerFilterSelection.size;
+  // Strip any existing count/clear elements
+  btn.querySelectorAll('.ms-count, .ms-clear').forEach(el => el.remove());
+
+  if (n === 0) {
+    label.textContent = 'All workers';
+    btn.classList.remove('has-selection');
+    return;
+  }
+  btn.classList.add('has-selection');
+  if (n === 1) {
+    const w = WORKERS.find(x => x.id === [...workerFilterSelection][0]);
+    label.textContent = w ? w.name : '1 worker';
+  } else if (n === SITE_WORKER_IDS.length &&
+             SITE_WORKER_IDS.every(id => workerFilterSelection.has(id))) {
+    label.textContent = 'On this site';
+  } else {
+    label.textContent = `${n} workers`;
+  }
+  // Insert clear (×) before the dropdown caret
+  const clearBtn = document.createElement('span');
+  clearBtn.className = 'ms-clear';
+  clearBtn.textContent = '×';
+  clearBtn.title = 'Clear';
+  clearBtn.onclick = (e) => {
+    e.stopPropagation();
+    workerFilterSelection.clear();
+    refreshWorkerFilter();
+  };
+  btn.appendChild(clearBtn);
+}
+
+function refreshWorkerFilter() {
+  updateWorkerFilterButton();
+  renderWorkerFilterList(document.getElementById('msSearch').value);
+  renderTicketsPage();
 }
 
 function showAddForm() {
