@@ -2041,7 +2041,7 @@ document.querySelectorAll('.stat-card').forEach(card => {
 });
 
 // Wire other filters
-['ticketTypeFilter','ticketCompanyFilter','ticketStatusFilter2','ticketSearch','ticketWorkerFilter'].forEach(id => {
+['ticketTypeFilter','ticketCompanyFilter','ticketStatusFilter2','ticketSearch'].forEach(id => {
   document.getElementById(id).addEventListener('input', renderTicketsPage);
 });
 
@@ -2049,6 +2049,51 @@ document.getElementById('cbSelectAll').addEventListener('click', toggleSelectAll
 document.getElementById('bulkClear').addEventListener('click', clearSelection);
 document.getElementById('bulkDownloadBtn').addEventListener('click', bulkDownload);
 document.getElementById('bulkExportBtn').addEventListener('click', bulkExport);
+
+// --- Multi-select worker filter ---
+const msPanel = document.getElementById('msPanel');
+const msButton = document.getElementById('msButton');
+msButton.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const open = msPanel.classList.toggle('open');
+  if (open) {
+    document.getElementById('msSearch').focus();
+    renderWorkerFilterList(document.getElementById('msSearch').value);
+  }
+});
+document.addEventListener('click', (e) => {
+  if (!msPanel.contains(e.target) && e.target !== msButton && !msButton.contains(e.target)) {
+    msPanel.classList.remove('open');
+  }
+});
+document.getElementById('msSearch').addEventListener('input', e => {
+  renderWorkerFilterList(e.target.value);
+});
+document.getElementById('msList').addEventListener('click', (e) => {
+  const opt = e.target.closest('.ms-option');
+  if (!opt) return;
+  const wid = opt.dataset.wid;
+  if (workerFilterSelection.has(wid)) workerFilterSelection.delete(wid);
+  else workerFilterSelection.add(wid);
+  refreshWorkerFilter();
+});
+document.getElementById('msQuick').addEventListener('click', () => {
+  const allSelected = SITE_WORKER_IDS.every(id => workerFilterSelection.has(id));
+  if (allSelected) {
+    SITE_WORKER_IDS.forEach(id => workerFilterSelection.delete(id));
+  } else {
+    SITE_WORKER_IDS.forEach(id => workerFilterSelection.add(id));
+  }
+  refreshWorkerFilter();
+});
+document.getElementById('msSelectAll').addEventListener('click', () => {
+  WORKERS.forEach(w => workerFilterSelection.add(w.id));
+  refreshWorkerFilter();
+});
+document.getElementById('msClearAll').addEventListener('click', () => {
+  workerFilterSelection.clear();
+  refreshWorkerFilter();
+});
 document.getElementById('ticketStatusFilter').addEventListener('change', () => renderWorkers());
 
 document.getElementById('overlay').addEventListener('click', closePanel);
