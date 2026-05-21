@@ -1616,12 +1616,15 @@ function renderTicketsPage() {
     return da - db;
   });
 
+  lastRenderedTicketIds = rows.map(t => t.id);
+
   const body = document.getElementById('ticketsBody');
   if (rows.length === 0) {
-    body.innerHTML = `<tr><td colspan="8" style="padding:30px; text-align:center; color:#6b7280">
+    body.innerHTML = `<tr><td colspan="9" style="padding:30px; text-align:center; color:#6b7280">
       <div style="font-size:24px; margin-bottom:6px; opacity:.5">🎫</div>
       No tickets match the current filter.
     </td></tr>`;
+    refreshBulkBar();
     return;
   }
 
@@ -1629,8 +1632,12 @@ function renderTicketsPage() {
     const w = WORKERS.find(x => x.id === t.workerKey);
     const meta = getTicketTypeMeta(t.type);
     const s = getTicketStatus(t);
+    const selected = selectedTicketIds.has(t.id);
     return `
-      <tr onclick="openWorker('${w.id}')">
+      <tr class="${selected ? 'row-selected' : ''}" onclick="openWorker('${w.id}')">
+        <td class="cb-cell" onclick="event.stopPropagation();toggleTicketSelection('${t.id}')">
+          <span class="cb ${selected ? 'checked' : ''}"></span>
+        </td>
         <td>
           <div class="worker-mini">
             <div class="worker-av ${w.color}">${w.name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase()}</div>
@@ -1656,6 +1663,80 @@ function renderTicketsPage() {
         </td>
       </tr>`;
   }).join('');
+
+  refreshBulkBar();
+}
+
+function toggleTicketSelection(id) {
+  if (selectedTicketIds.has(id)) selectedTicketIds.delete(id);
+  else selectedTicketIds.add(id);
+  renderTicketsPage();
+}
+
+function refreshBulkBar() {
+  // Header checkbox state
+  const cbHead = document.getElementById('cbSelectAll');
+  const visibleSelected = lastRenderedTicketIds.filter(id => selectedTicketIds.has(id));
+  cbHead.classList.remove('checked', 'partial');
+  if (visibleSelected.length === lastRenderedTicketIds.length && lastRenderedTicketIds.length > 0) {
+    cbHead.classList.add('checked');
+  } else if (visibleSelected.length > 0) {
+    cbHead.classList.add('partial');
+  }
+  // Bulk bar
+  const bar = document.getElementById('bulkBar');
+  const count = selectedTicketIds.size;
+  if (count === 0) {
+    bar.classList.remove('show');
+    return;
+  }
+  bar.classList.add('show');
+  document.getElementById('bulkCount').textContent =
+    count + ' ticket' + (count === 1 ? '' : 's') + ' selected';
+
+  // Meta: how many actually have documents (in this prototype assume all do)
+  const meta = document.getElementById('bulkMeta');
+  // Distinct workers in selection
+  const workers = new Set();
+  selectedTicketIds.forEach(id => {
+    const t = TICKETS.find(x => x.id === id);
+    if (t) workers.add(t.workerKey);
+  });
+  meta.textContent = '· ' + workers.size + ' worker' + (workers.size === 1 ? '' : 's');
+}
+
+function toggleSelectAllVisible() {
+  const visibleSelected = lastRenderedTicketIds.filter(id => selectedTicketIds.has(id));
+  if (visibleSelected.length === lastRenderedTicketIds.length) {
+    // deselect just the visible ones
+    lastRenderedTicketIds.forEach(id => selectedTicketIds.delete(id));
+  } else {
+    lastRenderedTicketIds.forEach(id => selectedTicketIds.add(id));
+  }
+  renderTicketsPage();
+}
+
+function clearSelection() {
+  selectedTicketIds.clear();
+  renderTicketsPage();
+}
+
+function bulkDownload() {
+  const ids = Array.from(selectedTicketIds);
+  if (ids.length === 0) return;
+  // Group by worker for the zip structure
+  const byWorker = {};
+  ids.forEach(id => {
+    const t = TICKETS.find(x => x.id === id);
+    if (!t) return;
+    (byWorker[t.workerKey] = byWorker[t.workerKey] || []).push(t);
+  });
+  const workerCount = Object.keys(byWorker).length;
+  toast(`Preparing tickets-${new Date().toISOString().slice(0,10)}.zip — ${ids.length} document${ids.length===1?'':'s'} across ${workerCount} worker${workerCount===1?'':'s'}`);
+}
+
+function bulkExport() {
+  toast(`Exported ${selectedTicketIds.size} ticket${selectedTicketIds.size===1?'':'s'} to CSV (stub)`);
 }
 
 function refreshNavBadge() {
