@@ -1603,8 +1603,105 @@ function go(page) {
   });
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
-  document.getElementById('crumb').textContent = page === 'workers' ? 'Workers' : 'Tickets';
+  const crumb = document.getElementById('crumb');
+  if (page === 'workers') crumb.textContent = 'Workers';
+  else if (page === 'tickets') crumb.textContent = 'Tickets';
+  else if (page === 'project') {
+    crumb.innerHTML = `<button class="back" title="Back" onclick="go('workers')">←</button>
+      <span class="title">(${CURRENT_PROJECT.code}) ${CURRENT_PROJECT.name}</span>
+      <span class="caret">▾</span>`;
+  }
   if (page === 'tickets') renderTicketsPage();
+  if (page === 'project') renderProjectPage();
+}
+
+function renderProjectPage() {
+  // Site workers
+  const workers = SITE_WORKER_IDS.map(id => WORKERS.find(w => w.id === id)).filter(Boolean);
+  document.getElementById('swCount').textContent = workers.length;
+
+  // Summary tally across this site's workers
+  let siteExpired = 0, siteExpiring = 0, siteValid = 0, siteMissing = 0;
+  for (const w of workers) {
+    const c = getWorkerCompliance(w.id);
+    siteExpired   += c.expired;
+    siteExpiring  += c.expiring30;
+    siteValid     += c.valid;
+    siteMissing   += c.missing.length;
+  }
+  document.getElementById('swSummary').innerHTML = `
+    <div class="item"><span class="dot red"></span>${siteExpired} expired</div>
+    <div class="item"><span class="dot amber"></span>${siteExpiring} expiring ≤30d</div>
+    <div class="item"><span class="dot green"></span>${siteValid} valid</div>
+    <div class="item"><span class="dot gray"></span>${siteMissing} missing required</div>
+  `;
+
+  // Worker cards
+  document.getElementById('swGrid').innerHTML = workers.map(w => {
+    const c = getWorkerCompliance(w.id);
+    const initials = w.name.split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase();
+    let pillCls = 'pill-green', pillLabel = 'All valid';
+    if (c.expired > 0) { pillCls = 'pill-red'; pillLabel = c.expired + ' expired'; }
+    else if (c.expiring30 > 0) { pillCls = 'pill-amber'; pillLabel = c.expiring30 + ' expiring'; }
+    else if (c.missing.length > 0) { pillCls = 'pill-gray'; pillLabel = 'Missing required'; }
+    else if (c.total === 0) { pillCls = 'pill-gray'; pillLabel = 'No tickets'; }
+
+    // Find most urgent expiry to surface inline
+    const tickets = TICKETS.filter(t => t.workerKey === w.id);
+    let urgentNote = '', urgentCls = '';
+    let mostUrgent = null;
+    for (const t of tickets) {
+      const s = getTicketStatus(t);
+      if (s.key === 'expired' || s.key === 'expiring30') {
+        if (!mostUrgent || (s.days !== undefined && s.days < mostUrgent.s.days)) {
+          mostUrgent = { t, s };
+        }
+      }
+    }
+    if (mostUrgent) {
+      const meta = getTicketTypeMeta(mostUrgent.t.type);
+      const short = meta.name.split('(')[0].split('—')[0].trim();
+      urgentNote = `⚠️ ${short}: ${mostUrgent.s.label}`;
+      urgentCls = mostUrgent.s.key === 'expired' ? '' : 'amber';
+    }
+
+    return `
+      <div class="sw-card" onclick="openWorker('${w.id}')">
+        <div class="sw-av worker-av ${w.color}">${initials}</div>
+        <div style="min-width:0">
+          <div class="sw-name">${w.name}</div>
+          <div class="sw-role">${w.resource} · ${c.total} ticket${c.total===1?'':'s'}</div>
+          ${urgentNote ? `<div class="sw-warn ${urgentCls}">${urgentNote}</div>` : ''}
+        </div>
+        <span class="sw-pill ${pillCls}">${pillLabel}</span>
+      </div>`;
+  }).join('');
+
+  // Fake cash flow chart bars
+  renderCashFlowChart();
+}
+
+function renderCashFlowChart() {
+  const months = 15;
+  const seed = [
+    {c:5,k:0,v:-1},{c:0,k:0,v:0},{c:0,k:3,v:-1},{c:0,k:6,v:-1},
+    {c:9,k:12,v:-3},{c:18,k:21,v:-3},{c:0,k:0,v:0},{c:0,k:7,v:-2},
+    {c:0,k:0,v:0},{c:0,k:5,v:-2},{c:0,k:0,v:0},{c:0,k:2,v:0},
+    {c:0,k:15,v:-12},{c:0,k:1,v:0},{c:0,k:0,v:0}
+  ];
+  const max = 22;
+  const html = seed.map(s => {
+    const claim = Math.max(0, s.c) / max * 100;
+    const cost  = Math.max(0, s.k) / max * 100;
+    const variance = Math.abs(s.v) / max * 100;
+    return `
+      <div class="cf-bar-group">
+        ${s.c ? `<div class="cf-bar claim" style="height:${claim}%"></div>` : ''}
+        ${s.k ? `<div class="cf-bar cost" style="height:${cost}%"></div>` : ''}
+        ${s.v ? `<div class="cf-bar var" style="height:${variance}%"></div>` : ''}
+      </div>`;
+  }).join('');
+  document.getElementById('cfChart').innerHTML = html;
 }
 
 document.querySelectorAll('.nav-item[data-page]').forEach(n => {
