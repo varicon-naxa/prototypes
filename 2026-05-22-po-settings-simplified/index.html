@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Purchase Order Settings (Simplified)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; font-size: 14px; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 220px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; color: #ccc; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.8; }
+
+  /* Main */
+  .main { flex: 1; min-width: 0; }
+
+  /* Top bar */
+  .top-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; background: #fff; border-bottom: 1px solid #e0e0e0; position: sticky; top: 0; z-index: 50; }
+  .top-bar h1 { font-size: 18px; font-weight: 600; color: #333; }
+  .top-bar-actions { display: flex; gap: 10px; align-items: center; }
+  .btn-secondary { padding: 9px 18px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; color: #555; }
+  .btn-secondary:hover { background: #f5f5f5; }
+  .btn-primary { padding: 9px 18px; border: none; border-radius: 6px; background: #f7941d; font-size: 13px; font-weight: 700; cursor: pointer; color: #fff; }
+  .btn-primary:hover { background: #e8850f; }
+  .search-pill { padding: 7px 14px; border-radius: 999px; border: 1px solid #d0d0d0; background: #fff; font-size: 13px; color: #999; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: #4a5fa5; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+
+  /* Settings layout: left settings nav + content */
+  .settings-wrap { display: flex; gap: 0; background: #fff; min-height: calc(100vh - 65px); }
+  .settings-nav { width: 240px; flex-shrink: 0; border-right: 1px solid #e8e8e8; padding: 20px 0; }
+  .settings-nav-item { padding: 11px 24px; font-size: 13px; color: #555; cursor: pointer; border-left: 3px solid transparent; }
+  .settings-nav-item:hover { background: #fafafa; }
+  .settings-nav-item.active { color: #f7941d; font-weight: 600; border-left-color: #f7941d; background: #fff8f0; }
+
+  /* Settings content */
+  .settings-content { flex: 1; min-width: 0; padding: 28px 36px 60px; max-width: 1100px; }
+  .page-title { font-size: 22px; font-weight: 600; color: #1a1a2e; margin-bottom: 4px; }
+  .page-subtitle { font-size: 13px; color: #888; margin-bottom: 28px; }
+  .page-header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; }
+  .need-help { color: #f7941d; font-size: 13px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+
+  /* Section card */
+  .section { background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; margin-bottom: 20px; overflow: hidden; }
+  .section-header { padding: 18px 24px; border-bottom: 1px solid #f0f0f0; background: #fafbfc; }
+  .section-title { font-size: 15px; font-weight: 600; color: #1a1a2e; display: flex; align-items: center; gap: 10px; }
+  .section-title .num { width: 24px; height: 24px; background: #f7941d; color: #fff; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+  .section-desc { font-size: 12px; color: #888; margin-top: 4px; margin-left: 34px; }
+  .section-body { padding: 22px 24px; }
+
+  /* Field row */
+  .field-row { display: grid; grid-template-columns: 1fr 360px; gap: 24px; padding: 16px 0; border-bottom: 1px solid #f4f4f4; align-items: start; }
+  .field-row:last-child { border-bottom: none; }
+  .field-row.stacked { grid-template-columns: 1fr; }
+  .field-label { font-size: 14px; font-weight: 600; color: #333; margin-bottom: 4px; }
+  .field-help { font-size: 12px; color: #888; line-height: 1.5; }
+  .field-help ul { margin-top: 6px; padding-left: 18px; }
+  .field-help li { margin-bottom: 2px; }
+  .field-control { display: flex; flex-direction: column; gap: 6px; }
+  .input, .select { width: 100%; padding: 9px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff; }
+  .input:focus, .select:focus { outline: none; border-color: #f7941d; }
+  .select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M3 5l3 3 3-3' stroke='%23999' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+
+  /* Two cols input */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* Checkboxes */
+  .checkbox-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px 24px; margin-top: 4px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #444; cursor: pointer; padding: 8px 10px; border-radius: 6px; transition: background 0.15s; }
+  .check:hover { background: #fafafa; }
+  .check input { width: 16px; height: 16px; accent-color: #f7941d; cursor: pointer; }
+  .check.checked { background: #fff8f0; color: #1a1a2e; font-weight: 500; }
+
+  /* Workflow */
+  .workflow { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; align-items: stretch; }
+  .wf-step { background: #fafbfc; border: 1px solid #e8e8e8; border-radius: 10px; padding: 16px; position: relative; }
+  .wf-step-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .wf-badge { font-size: 11px; font-weight: 700; color: #f7941d; background: #fff2dd; padding: 4px 10px; border-radius: 999px; letter-spacing: 0.3px; text-transform: uppercase; }
+  .wf-edit { color: #999; cursor: pointer; font-size: 13px; }
+  .wf-edit:hover { color: #f7941d; }
+  .wf-step h3 { font-size: 14px; font-weight: 600; color: #1a1a2e; margin-bottom: 4px; }
+  .wf-step p { font-size: 12px; color: #888; margin-bottom: 12px; }
+  .wf-approver { background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; }
+  .wf-approver .name { font-weight: 600; color: #333; display: flex; justify-content: space-between; align-items: center; }
+  .wf-approver .role { font-size: 11px; color: #888; margin-top: 2px; }
+  .wf-approver .amount { font-size: 11px; color: #555; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #eee; }
+  .wf-approver .amount strong { color: #1a1a2e; }
+  .wf-add { width: 100%; padding: 8px; border: 1px dashed #d0d0d0; border-radius: 6px; background: transparent; color: #888; font-size: 12px; cursor: pointer; font-family: inherit; }
+  .wf-add:hover { border-color: #f7941d; color: #f7941d; }
+  .wf-arrow { position: absolute; right: -19px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; background: #fff; border: 1px solid #e8e8e8; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #aaa; z-index: 2; }
+  .wf-step:last-child .wf-arrow { display: none; }
+
+  /* Logo upload */
+  .upload-box { border: 2px dashed #d0d0d0; border-radius: 8px; padding: 24px; text-align: center; color: #888; cursor: pointer; transition: all 0.15s; background: #fafbfc; }
+  .upload-box:hover { border-color: #f7941d; background: #fff8f0; color: #f7941d; }
+  .upload-box .icon { font-size: 24px; margin-bottom: 6px; }
+  .upload-box .text { font-size: 12px; font-weight: 600; letter-spacing: 0.3px; }
+  .upload-hint { font-size: 11px; color: #999; margin-top: 8px; display: flex; gap: 6px; align-items: flex-start; }
+
+  /* Email chips */
+  .chips-input { border: 1px solid #d0d0d0; border-radius: 6px; padding: 6px 8px; min-height: 38px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; background: #fff; }
+  .chip { background: #f0f0f0; border-radius: 14px; padding: 4px 10px 4px 10px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .chip .x { cursor: pointer; color: #888; font-size: 14px; line-height: 1; }
+  .chips-input input { border: none; outline: none; font-size: 13px; padding: 4px; flex: 1; min-width: 200px; font-family: inherit; }
+
+  /* Bottom save bar */
+  .save-bar { position: sticky; bottom: 0; background: #fff; border-top: 1px solid #e8e8e8; padding: 14px 36px; display: flex; justify-content: flex-end; gap: 10px; z-index: 40; }
+
+  /* Modal */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 200; }
+  .modal-backdrop.show { display: flex; }
+  .modal { background: #fff; border-radius: 12px; width: 580px; max-width: 92vw; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 18px 24px; border-bottom: 1px solid #eee; }
+  .modal-head h3 { font-size: 16px; font-weight: 600; }
+  .modal-head .close { font-size: 22px; color: #888; cursor: pointer; background: none; border: none; }
+  .modal-head .done { color: #f7941d; font-weight: 700; font-size: 13px; letter-spacing: 0.5px; cursor: pointer; background: none; border: none; }
+  .modal-body { padding: 20px 24px; }
+  .modal-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; margin-bottom: 14px; }
+  .modal-row .field-label { margin-bottom: 6px; font-size: 12px; }
+  .modal-row .remove { width: 32px; height: 32px; border: none; background: none; color: #c33; cursor: pointer; font-size: 16px; }
+  .modal-add { color: #888; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; padding: 6px 0; }
+  .modal-add:hover { color: #f7941d; }
+
+  /* Callout */
+  .callout { background: #fff8f0; border: 1px solid #ffd9a8; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #8b5a00; display: flex; gap: 8px; align-items: flex-start; margin-bottom: 16px; }
+  .callout .icon { flex-shrink: 0; color: #f7941d; font-weight: 700; }
+
+  @media (max-width: 900px) {
+    .field-row { grid-template-columns: 1fr; }
+    .checkbox-grid { grid-template-columns: 1fr 1fr; }
+    .workflow { grid-template-columns: 1fr; }
+    .wf-arrow { display: none !important; }
+    .settings-nav { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="v-icon">V</div>
+      <span>Varicon</span>
+    </div>
+    <div class="sidebar-item"><span class="icon">📋</span>Dayworks</div>
+    <div class="sidebar-item"><span class="icon">🛒</span>Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">📄</span>Site Docket</div>
+    <div class="sidebar-item"><span class="icon">💰</span>Bills</div>
+    <div class="sidebar-item"><span class="icon">📝</span>Forms</div>
+    <div class="sidebar-item"><span class="icon">🚜</span>Plant & Equipment</div>
+    <div class="sidebar-item"><span class="icon">👥</span>Resource Assigner</div>
+    <div class="sidebar-item"><span class="icon">🏭</span>Suppliers</div>
+    <div class="sidebar-item"><span class="icon">📁</span>File Manager</div>
+    <div class="sidebar-item"><span class="icon">👤</span>User Management</div>
+    <div class="sidebar-item"><span class="icon">💵</span>Payroll Settings</div>
+    <div class="sidebar-item active"><span class="icon">⚙️</span>Settings</div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- Top bar -->
+    <div class="top-bar">
+      <h1>Other Settings</h1>
+      <div class="top-bar-actions">
+        <button class="btn-secondary">Initial Data Upload</button>
+        <div class="search-pill">🔍 Search</div>
+        <button class="btn-secondary" style="padding: 8px 12px;">+</button>
+        <div class="avatar">AN</div>
+      </div>
+    </div>
+
+    <!-- Settings (settings nav + content) -->
+    <div class="settings-wrap">
+
+      <!-- Left settings nav -->
+      <nav class="settings-nav">
+        <div class="settings-nav-item">Cost Centre Settings</div>
+        <div class="settings-nav-item">Cost Tracking Settings</div>
+        <div class="settings-nav-item">Project Settings</div>
+        <div class="settings-nav-item">Timesheet Settings</div>
+        <div class="settings-nav-item">Leave Management Settings</div>
+        <div class="settings-nav-item">Bill Settings</div>
+        <div class="settings-nav-item active">Purchase Order Settings</div>
+        <div class="settings-nav-item">Site Docket Settings</div>
+        <div class="settings-nav-item">Sitediary Settings</div>
+        <div class="settings-nav-item">Currency and Tax Settings</div>
+        <div class="settings-nav-item">Account Integration</div>
+        <div class="settings-nav-item">Name Mapping</div>
+        <div class="settings-nav-item">Claim Settings</div>
+        <div class="settings-nav-item">Daywork Record Settings</div>
+        <div class="settings-nav-item">Subcontract Settings</div>
+      </nav>
+
+      <!-- Content -->
+      <div class="settings-content">
+
+        <div class="page-header-row">
+          <div>
+            <h2 class="page-title">Purchase Order Settings</h2>
+            <p class="page-subtitle">Everything that controls how Purchase Orders are numbered, approved, branded and emailed — all in one place.</p>
+          </div>
+          <div class="need-help">❓ Need Help?</div>
+        </div>
+
+        <!-- Section 1: PO Number Format -->
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title"><span class="num">1</span>PO Number Format</div>
+            <div class="section-desc">How Purchase Order numbers are generated. Combine a prefix, a starting number, and let the system increment automatically.</div>
+          </div>
+          <div class="section-body">
+            <div class="field-row">
+              <div>
+                <div class="field-label">Prefix</div>
+                <div class="field-help">
+                  Text that appears before the number. You can include dynamic tags:
+                  <ul>
+                    <li><code>[JobNumber]</code> — inserts the project's job number</li>
+                    <li><code>[ProjectName]</code> — inserts the project name</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="field-control">
+                <select class="select">
+                  <option>PO-[JobNumber]-</option>
+                  <option>PO-</option>
+                  <option>[ProjectName]-</option>
+                  <option>Custom…</option>
+                </select>
+                <div style="font-size: 11px; color: #999;">Preview: <strong style="color: #333;">PO-J2025-0001</strong></div>
+              </div>
+            </div>
+
+            <div class="field-row">
+              <div>
+                <div class="field-label">Starting Number</div>
+                <div class="field-help">The first PO will use this number. Subsequent POs increment by one.</div>
+              </div>
+              <div class="field-control">
+                <input class="input" type="text" value="0001">
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section 2: PO Form Fields -->
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title"><span class="num">2</span>PO Form Fields</div>
+            <div class="section-desc">Optional fields shown when creating a Purchase Order. Tick the ones your team needs.</div>
+          </div>
+          <div class="section-body">
+            <div class="checkbox-grid">
+              <label class="check checked"><input type="checkbox" checked> Delivery Address</label>
+              <label class="check"><input type="checkbox"> Delivery Date</label>
+              <label class="check"><input type="checkbox"> Delivery Status</label>
+              <label class="check"><input type="checkbox"> Due Date</label>
+              <label class="check"><input type="checkbox"> Supplier Invoice Date</label>
+              <label class="check"><input type="checkbox"> Invoice Email</label>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section 3: Approval Workflow -->
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title"><span class="num">3</span>Approval Workflow</div>
+            <div class="section-desc">Who can create, approve and close a Purchase Order. Set the assigned approvers and their allocated approval amount for each step.</div>
+          </div>
+          <div class="section-body">
+            <div class="workflow">
+
+              <div class="wf-step">
+                <div class="wf-step-head">
+                  <span class="wf-badge">Step 1</span>
+                  <button class="wf-edit" onclick="openModal('Create / Submit')">✏️ Edit</button>
+                </div>
+                <h3>Create / Submit</h3>
+                <p>Who can raise a new PO.</p>
+                <div class="wf-approver">
+                  <div class="name">Senior Manager <span style="color:#999; font-size:11px;">×</span></div>
+                  <div class="role">Executive</div>
+                  <div class="amount">Allocated amount: <strong>Any Amount</strong></div>
+                </div>
+                <button class="wf-add" onclick="openModal('Create / Submit')">+ Add Creator</button>
+                <div class="wf-arrow">→</div>
+              </div>
+
+              <div class="wf-step">
+                <div class="wf-step-head">
+                  <span class="wf-badge">Step 2</span>
+                  <button class="wf-edit" onclick="openModal('Approve')">✏️ Edit</button>
+                </div>
+                <h3>Approve</h3>
+                <p>Who signs off the PO before it's sent.</p>
+                <div class="wf-approver">
+                  <div class="name">Senior Manager <span style="color:#999; font-size:11px;">×</span></div>
+                  <div class="role">Executive</div>
+                  <div class="amount">Allocated amount: <strong>Any Amount</strong></div>
+                </div>
+                <button class="wf-add" onclick="openModal('Approve')">+ Add Approver</button>
+                <div class="wf-arrow">→</div>
+              </div>
+
+              <div class="wf-step">
+                <div class="wf-step-head">
+                  <span class="wf-badge">Step 3</span>
+                  <button class="wf-edit" onclick="openModal('Close')">✏️ Edit</button>
+                </div>
+                <h3>Close</h3>
+                <p>Who can finalise the PO once delivered.</p>
+                <div class="wf-approver">
+                  <div class="name">Senior Manager <span style="color:#999; font-size:11px;">×</span></div>
+                  <div class="role">Executive</div>
+                  <div class="amount">Allocated amount: <strong>Any Amount</strong></div>
+                </div>
+                <button class="wf-add" onclick="openModal('Close')">+ Add Approver</button>
+                <div class="wf-arrow">→</div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+        <!-- Section 4: PDF Branding -->
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title"><span class="num">4</span>PDF Branding</div>
+            <div class="section-desc">How your Purchase Order PDF looks when sent to suppliers.</div>
+          </div>
+          <div class="section-body">
+            <div class="field-row">
+              <div>
+                <div class="field-label">Organisation Name</div>
+                <div class="field-help">Appears at the top of every PO PDF.</div>
+              </div>
+              <div class="field-control">
+                <input class="input" type="text" value="Cookie's Civil">
+              </div>
+            </div>
+
+            <div class="field-row">
+              <div>
+                <div class="field-label">ABN</div>
+                <div class="field-help">Your company's Australian Business Number.</div>
+              </div>
+              <div class="field-control">
+                <input class="input" type="text" value="123 456 789">
+              </div>
+            </div>
+
+            <div class="field-row">
+              <div>
+                <div class="field-label">Organisation Logo</div>
+                <div class="field-help">Upload a PNG file. Recommended size: 300×100px.</div>
+              </div>
+              <div class="field-control">
+                <div class="upload-box">
+                  <div class="icon">☁️</div>
+                  <div class="text">UPLOAD LOGO</div>
+                </div>
+                <div class="upload-hint"><span>ℹ️</span> PNG format only, for best PDF compatibility.</div>
+              </div>
+            </div>
+
+            <div class="field-row">
+              <div>
+                <div class="field-label">Terms &amp; Conditions</div>
+                <div class="field-help">A PDF document appended to every Purchase Order export.</div>
+              </div>
+              <div class="field-control">
+                <button class="btn-secondary" style="align-self: flex-start;">📎 Upload T&amp;C</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section 5: Email Defaults -->
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title"><span class="num">5</span>Email Defaults</div>
+            <div class="section-desc">Default email addresses used when sending Purchase Orders and receiving supplier invoices.</div>
+          </div>
+          <div class="section-body">
+            <div class="field-row stacked">
+              <div>
+                <div class="field-label">Invoice Email</div>
+                <div class="field-help">The email that suppliers should send their invoices to. Shown on the PO PDF.</div>
+              </div>
+              <div class="field-control">
+                <input class="input" type="email" value="accounts@varicondemo.com.au" style="max-width: 420px;">
+              </div>
+            </div>
+
+            <div class="field-row stacked">
+              <div>
+                <div class="field-label">Default PO Recipients</div>
+                <div class="field-help">These addresses are pre-filled in the "send to" field whenever a PO is emailed. Recipients can still be edited per PO.</div>
+              </div>
+              <div class="field-control">
+                <div class="chips-input">
+                  <span class="chip">ashishdhungana@gmail.com <span class="x">×</span></span>
+                  <input type="text" placeholder="Type emails separated by comma or semicolon, then press Enter">
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+    <!-- Sticky save bar -->
+    <div class="save-bar">
+      <button class="btn-secondary">Cancel</button>
+      <button class="btn-primary">Save changes</button>
+    </div>
+
+  </main>
+</div>
+
+<!-- Modal: Edit step approvers -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Approvers for the step "<span id="modalStep">Create / Submit</span>"</h3>
+      <div style="display:flex; gap:14px; align-items:center;">
+        <button class="done" onclick="closeModal()">DONE</button>
+        <button class="close" onclick="closeModal()">×</button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div class="callout">
+        <span class="icon">✓</span>
+        <div>Approval amount is the maximum PO value this user can sign off at this step. Use <strong>Any Amount</strong> for unlimited approval authority.</div>
+      </div>
+
+      <div class="modal-row">
+        <div>
+          <div class="field-label">Assigned Approver</div>
+          <select class="select">
+            <option>Senior Manager — Executive</option>
+            <option>Project Manager — Operations</option>
+            <option>Site Supervisor — Field</option>
+          </select>
+        </div>
+        <div>
+          <div class="field-label">Allocated Approval Amount</div>
+          <select class="select">
+            <option>Any Amount</option>
+            <option>Up to $1,000</option>
+            <option>Up to $5,000</option>
+            <option>Up to $10,000</option>
+            <option>Up to $50,000</option>
+            <option>Custom…</option>
+          </select>
+        </div>
+        <button class="remove" title="Remove">×</button>
+      </div>
+
+      <div class="modal-add" onclick="alert('Would add another approver row')">+ Add another approver</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Checkbox toggling visual
+  document.querySelectorAll('.check input').forEach(cb => {
+    cb.addEventListener('change', e => {
+      e.target.closest('.check').classList.toggle('checked', e.target.checked);
+    });
+  });
+
+  // Modal
+  function openModal(step) {
+    document.getElementById('modalStep').textContent = step;
+    document.getElementById('modal').classList.add('show');
+  }
+  function closeModal() {
+    document.getElementById('modal').classList.remove('show');
+  }
+  document.getElementById('modal').addEventListener('click', e => {
+    if (e.target.id === 'modal') closeModal();
+  });
+</script>
+
+</body>
+</html>
