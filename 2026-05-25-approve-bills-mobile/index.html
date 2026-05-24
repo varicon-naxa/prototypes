@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Varicon Mobile — Approve Bills</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root{
+    --navy: #2A3E5E;
+    --navy-deep: #1F2F4A;
+    --orange: #F2AD3E;
+    --orange-dark: #DE9A2A;
+    --text: #1F2F4A;
+    --muted: #7A8699;
+    --line: #E6E9EE;
+    --bg: #F5F6F8;
+    --green: #2E7D32;
+    --green-bg: #E8F5E9;
+    --red: #C62828;
+    --red-bg: #FFEBEE;
+    --amber: #B86E00;
+    --amber-bg: #FFF4E0;
+    --blue: #1565C0;
+    --blue-bg: #E3F2FD;
+  }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    background: #DCE0E8;
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Desktop frame */
+  .stage {
+    max-width: 420px;
+    margin: 0 auto;
+    background: #fff;
+    min-height: 100vh;
+    position: relative;
+    box-shadow: 0 0 32px rgba(0,0,0,.08);
+    overflow-x: hidden;
+  }
+
+  /* Status bar */
+  .status-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 20px 6px; background: var(--navy); color: #fff;
+    font-size: 13px; font-weight: 600;
+  }
+  .status-bar .right { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+  .status-bar .battery { background: rgba(255,255,255,.18); border-radius: 6px; padding: 1px 6px; font-size: 11px; font-weight: 700; }
+
+  /* App bar */
+  .appbar {
+    background: var(--navy); color: #fff;
+    padding: 14px 16px 18px; display: flex; align-items: center; gap: 14px;
+  }
+  .appbar .ico { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .appbar .ico svg { width: 22px; height: 22px; stroke: #fff; stroke-width: 2; fill: none; }
+  .appbar h1 { font-size: 22px; font-weight: 700; flex: 1; }
+  .appbar .right-icons { display: flex; gap: 14px; }
+
+  /* FaceID banner */
+  .faceid {
+    background: #FDF2DC; padding: 14px 16px;
+    display: flex; align-items: center; gap: 14px; font-size: 13px; color: var(--text);
+  }
+  .faceid .fp { font-size: 22px; }
+  .faceid .text b { font-weight: 700; }
+  .faceid .x { margin-left: auto; font-size: 18px; color: var(--text); cursor: pointer; padding: 4px 6px; }
+
+  /* Screens */
+  .screen { display: none; padding-bottom: 100px; min-height: 100vh; }
+  .screen.active { display: block; }
+
+  /* Project list */
+  .project-card {
+    margin: 12px 16px; background: #fff;
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 18px 20px; cursor: pointer;
+    transition: transform .12s, box-shadow .12s;
+  }
+  .project-card:active { transform: scale(.99); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .project-card .code-row { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--orange); margin-bottom: 8px; }
+  .project-card .code-row .dot { width: 4px; height: 4px; background: var(--orange); border-radius: 50%; }
+  .project-card .code-row .type { color: var(--orange); font-weight: 500; }
+  .project-card .title { font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 16px; line-height: 1.2; }
+  .project-card .badge-active {
+    display: inline-block; padding: 6px 14px; border-radius: 999px;
+    background: var(--green-bg); color: var(--green); font-size: 13px; font-weight: 500;
+  }
+
+  /* Scan QR fab */
+  .fab-scan {
+    position: fixed; right: calc(50% - 200px); bottom: 90px;
+    background: var(--orange); color: var(--text); border: none;
+    padding: 14px 22px; border-radius: 999px; font-size: 15px; font-weight: 700;
+    box-shadow: 0 6px 16px rgba(242,173,62,.4);
+    display: flex; align-items: center; gap: 10px; cursor: pointer; z-index: 20;
+  }
+  .fab-scan svg { width: 20px; height: 20px; }
+
+  /* Bottom nav */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 420px; max-width: 100vw; background: #fff;
+    border-top: 1px solid var(--line);
+    display: flex; padding: 8px 0 14px; z-index: 15;
+  }
+  .btab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 0; cursor: pointer; color: var(--muted); }
+  .btab .ico { font-size: 22px; }
+  .btab .lbl { font-size: 11px; font-weight: 500; }
+  .btab.active { color: var(--orange); }
+  .btab.active .ico svg { stroke: var(--orange); fill: var(--orange); }
+  .btab .ico svg { width: 22px; height: 22px; stroke: var(--muted); stroke-width: 1.8; fill: none; }
+  .btab.active .ico svg { stroke: var(--orange); }
+
+  /* System nav stripe */
+  .sysnav { height: 32px; background: #0a0a0a; display: flex; align-items: center; justify-content: center; gap: 90px; }
+  .sysnav span { color: #fff; font-size: 14px; }
+  .sysnav .pill { width: 14px; height: 14px; border: 1.5px solid #fff; border-radius: 50%; }
+
+  /* ==== Project Detail ==== */
+  .pd-appbar { background: var(--navy); color: #fff; padding: 14px 16px 18px; display: flex; align-items: center; gap: 14px; }
+  .pd-appbar .back { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .pd-appbar h1 { flex: 1; font-size: 22px; font-weight: 700; }
+  .pd-appbar .star { font-size: 22px; cursor: pointer; }
+
+  .pd-title-wrap { padding: 18px 16px 12px; background: #fff; }
+  .pd-title-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .pd-title-row .h { font-size: 24px; font-weight: 700; line-height: 1.2; color: var(--text); }
+  .pd-title-row .h .code { color: var(--orange); }
+  .pd-meta { font-size: 14px; color: var(--text); display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .pd-meta .ico { color: var(--muted); }
+  .pd-meta.row2 { border-top: none; margin-top: 8px; padding-top: 6px; }
+  .pd-meta .key { color: var(--text); }
+  .pd-meta .val { color: var(--muted); }
+
+  .features {
+    background: #EEF1F5; padding: 20px 16px 24px;
+  }
+  .features .label {
+    font-size: 13px; font-weight: 600; color: var(--muted);
+    letter-spacing: 1px; margin-bottom: 14px;
+  }
+  .features-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  .feature {
+    background: #fff; border-radius: 12px; padding: 22px 12px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    cursor: pointer; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    transition: transform .12s;
+  }
+  .feature:active { transform: scale(.97); }
+  .feature .icon-circle {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: #FDF2DC; display: flex; align-items: center; justify-content: center;
+  }
+  .feature .icon-circle svg { width: 28px; height: 28px; stroke: var(--orange); stroke-width: 2; fill: var(--orange); }
+  .feature .feature-name { font-size: 16px; font-weight: 600; color: var(--text); text-align: center; }
+  .feature .beta-tag {
+    position: absolute; top: 14px; right: 14px;
+    background: var(--orange); color: #fff; font-size: 11px; font-weight: 700;
+    padding: 3px 10px; border-radius: 4px;
+  }
+  .feature .new-tag {
+    position: absolute; top: 14px; right: 14px;
+    background: var(--green); color: #fff; font-size: 11px; font-weight: 700;
+    padding: 3px 10px; border-radius: 4px;
+  }
+  .feature .count-badge {
+    position: absolute; top: 12px; right: 12px;
+    background: var(--red); color: #fff; font-size: 12px; font-weight: 700;
+    min-width: 22px; height: 22px; padding: 0 6px;
+    border-radius: 999px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ==== Approve Bills List ==== */
+  .ab-appbar { background: var(--navy); color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 14px; }
+  .ab-appbar .back { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .ab-appbar .title-wrap { flex: 1; }
+  .ab-appbar h1 { font-size: 18px; font-weight: 700; }
+  .ab-appbar .sub { font-size: 12px; color: rgba(255,255,255,.7); margin-top: 2px; }
+  .ab-appbar .filter-ico { font-size: 22px; cursor: pointer; }
+  .ab-appbar .filter-ico svg { width: 22px; height: 22px; stroke: #fff; stroke-width: 2; fill: none; }
+
+  /* Tabs */
+  .tabs {
+    background: #fff; display: flex; border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .tab {
+    flex: 1; padding: 14px 0; text-align: center;
+    font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer;
+    border-bottom: 3px solid transparent;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .tab .tab-count {
+    background: var(--bg); color: var(--text); border-radius: 999px;
+    padding: 2px 8px; font-size: 11px; font-weight: 700; min-width: 22px;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--orange); }
+  .tab.active .tab-count { background: var(--orange); color: #fff; }
+
+  /* Summary chip strip */
+  .summary-strip {
+    padding: 14px 16px; background: #fff; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .summary-strip .total {
+    font-size: 13px; color: var(--muted);
+  }
+  .summary-strip .total b { color: var(--text); font-weight: 700; font-size: 14px; }
+  .select-all-btn {
+    background: none; border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 14px; font-size: 13px; font-weight: 600;
+    color: var(--text); cursor: pointer;
+  }
+
+  /* Bill rows */
+  .bill-list { padding: 8px 12px 0; }
+  .bill-row {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px; margin-bottom: 10px;
+    display: flex; gap: 12px; align-items: flex-start;
+    cursor: pointer; transition: border-color .12s, background .12s;
+  }
+  .bill-row.selected { border-color: var(--orange); background: #FFFBF2; }
+  .bill-row .check {
+    width: 22px; height: 22px; border: 2px solid #C9CFD9; border-radius: 6px;
+    flex-shrink: 0; margin-top: 2px;
+    display: flex; align-items: center; justify-content: center;
+    background: #fff; transition: background .12s, border-color .12s;
+  }
+  .bill-row.selected .check { background: var(--orange); border-color: var(--orange); }
+  .bill-row.selected .check::after {
+    content: ''; width: 6px; height: 11px; border-right: 2px solid #fff; border-bottom: 2px solid #fff;
+    transform: rotate(45deg); margin-bottom: 2px;
+  }
+  .bill-row .body { flex: 1; min-width: 0; }
+  .bill-row .top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+  .bill-row .vendor { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.3; }
+  .bill-row .bill-no { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .bill-row .amount { font-size: 16px; font-weight: 700; color: var(--text); white-space: nowrap; }
+  .bill-row .meta {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;
+  }
+  .bill-row .chip {
+    font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px;
+  }
+  .chip.po { background: var(--blue-bg); color: var(--blue); }
+  .chip.amber { background: var(--amber-bg); color: var(--amber); }
+  .chip.green { background: var(--green-bg); color: var(--green); }
+  .chip.red { background: var(--red-bg); color: var(--red); }
+  .chip.grey { background: #EEF1F5; color: var(--muted); }
+  .bill-row .due {
+    font-size: 12px; color: var(--muted); margin-top: 8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .bill-row .due.overdue { color: var(--red); font-weight: 600; }
+
+  /* Empty state */
+  .empty {
+    padding: 60px 24px; text-align: center; color: var(--muted);
+  }
+  .empty .em-icon { font-size: 56px; margin-bottom: 12px; opacity: .35; }
+  .empty .em-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+  .empty .em-body { font-size: 13px; line-height: 1.5; }
+
+  /* Bulk action bar */
+  .bulk-bar {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: 0; width: 420px; max-width: 100vw;
+    background: var(--navy-deep); color: #fff;
+    padding: 12px 16px 24px; display: none;
+    align-items: center; justify-content: space-between; gap: 12px; z-index: 25;
+    box-shadow: 0 -4px 16px rgba(0,0,0,.18);
+  }
+  .bulk-bar.show { display: flex; }
+  .bulk-bar .count { font-size: 14px; font-weight: 600; }
+  .bulk-bar .count .sub { font-size: 11px; color: rgba(255,255,255,.6); display: block; margin-top: 1px; font-weight: 500; }
+  .bulk-bar .actions { display: flex; gap: 8px; }
+  .bulk-bar button {
+    border: none; padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; gap: 6px;
+  }
+  .bulk-bar .btn-reject { background: rgba(255,255,255,.12); color: #fff; }
+  .bulk-bar .btn-approve { background: var(--orange); color: var(--navy-deep); }
+
+  /* ==== Bill Detail ==== */
+  .bd-appbar { background: var(--navy); color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 14px; }
+  .bd-appbar .back { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .bd-appbar h1 { flex: 1; font-size: 18px; font-weight: 700; }
+  .bd-appbar .more { font-size: 22px; cursor: pointer; }
+
+  .bd-hero { background: #fff; padding: 18px 16px 4px; }
+  .bd-hero .vendor-row { display: flex; align-items: center; gap: 12px; }
+  .bd-hero .vendor-logo {
+    width: 48px; height: 48px; border-radius: 10px; background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 800; color: var(--orange);
+  }
+  .bd-hero .vendor-name { font-size: 18px; font-weight: 700; }
+  .bd-hero .vendor-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .bd-hero .amount-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 18px; }
+  .bd-hero .amount { font-size: 32px; font-weight: 800; color: var(--text); }
+  .bd-hero .amount .currency { font-size: 16px; color: var(--muted); font-weight: 600; margin-right: 4px; }
+  .bd-hero .due-block { text-align: right; }
+  .bd-hero .due-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; font-weight: 700; }
+  .bd-hero .due-date { font-size: 13px; font-weight: 600; color: var(--amber); margin-top: 3px; }
+  .bd-hero .due-date.overdue { color: var(--red); }
+
+  .bd-status-strip {
+    background: var(--amber-bg); padding: 10px 16px; font-size: 12px; color: var(--amber);
+    font-weight: 600; display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid #F0E5D0;
+  }
+
+  .bd-section { background: #fff; margin-top: 8px; padding: 16px; }
+  .bd-section h3 {
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;
+  }
+  .bd-row {
+    display: flex; justify-content: space-between; padding: 10px 0;
+    border-bottom: 1px solid #F0F2F5; font-size: 14px;
+  }
+  .bd-row:last-child { border-bottom: none; }
+  .bd-row .k { color: var(--muted); }
+  .bd-row .v { color: var(--text); font-weight: 600; text-align: right; }
+  .bd-row .v.link { color: var(--blue); }
+
+  /* Line items */
+  .line-item {
+    display: flex; gap: 10px; padding: 12px 0;
+    border-bottom: 1px solid #F0F2F5;
+  }
+  .line-item:last-child { border-bottom: none; }
+  .line-item .li-body { flex: 1; min-width: 0; }
+  .line-item .li-desc { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.3; }
+  .line-item .li-meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .line-item .li-amt { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; text-align: right; }
+
+  .total-row {
+    margin-top: 8px; padding-top: 12px; border-top: 2px solid var(--text);
+    display: flex; justify-content: space-between; font-size: 16px; font-weight: 800;
+  }
+
+  /* Attachments */
+  .attachments { display: flex; gap: 10px; flex-wrap: wrap; }
+  .attachment {
+    width: 80px; cursor: pointer;
+  }
+  .attachment .thumb {
+    width: 80px; height: 96px; border-radius: 8px;
+    border: 1px solid var(--line); background: #FCFCFD;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--orange);
+  }
+  .attachment .thumb svg { width: 32px; height: 32px; }
+  .attachment .a-name {
+    font-size: 11px; color: var(--muted); margin-top: 4px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* Bottom action bar (single bill) */
+  .single-actions {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: 0; width: 420px; max-width: 100vw;
+    background: #fff; border-top: 1px solid var(--line);
+    padding: 12px 16px 24px; display: flex; gap: 10px; z-index: 25;
+  }
+  .single-actions button {
+    flex: 1; border: none; padding: 14px 0; border-radius: 10px;
+    font-size: 15px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-reject {
+    background: #fff; color: var(--red); border: 1.5px solid var(--red) !important;
+  }
+  .btn-approve {
+    background: var(--orange); color: var(--navy-deep);
+  }
+  .btn-approve:disabled, .btn-reject:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* Modal */
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(15,25,45,.55);
+    z-index: 50; align-items: flex-end; justify-content: center;
+    animation: fadeIn .15s ease;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: #fff; width: 420px; max-width: 100%;
+    border-radius: 16px 16px 0 0; padding: 20px 18px 28px;
+    animation: slideUp .18s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .modal .handle { width: 40px; height: 4px; background: #D6DAE2; border-radius: 999px; margin: 0 auto 16px; }
+  .modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+  .modal .modal-sub { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  .modal label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .modal textarea {
+    width: 100%; min-height: 92px; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px; font-family: inherit; font-size: 14px; resize: none;
+    color: var(--text);
+  }
+  .modal textarea:focus { outline: 2px solid rgba(242,173,62,.4); border-color: var(--orange); }
+  .modal .reject-reasons {
+    display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 14px;
+  }
+  .modal .reason-chip {
+    border: 1px solid var(--line); background: #fff;
+    border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 600;
+    color: var(--text); cursor: pointer;
+  }
+  .modal .reason-chip.active { border-color: var(--red); background: var(--red-bg); color: var(--red); }
+  .modal .actions { display: flex; gap: 10px; margin-top: 18px; }
+  .modal .btn-cancel {
+    flex: 1; background: var(--bg); color: var(--text);
+    border: none; padding: 14px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+  .modal .btn-confirm-approve {
+    flex: 2; background: var(--orange); color: var(--navy-deep);
+    border: none; padding: 14px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+  .modal .btn-confirm-reject {
+    flex: 2; background: var(--red); color: #fff;
+    border: none; padding: 14px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+  .modal .btn-confirm-reject:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* Toast */
+  .toast {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: 110px; background: var(--navy-deep); color: #fff;
+    padding: 12px 18px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    z-index: 60; display: none; align-items: center; gap: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.25);
+  }
+  .toast.show { display: flex; animation: toastIn .25s ease; }
+  @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+  /* Prototype hint */
+  .proto-hint {
+    background: #FFF9E6; color: #6B5400; padding: 8px 16px;
+    font-size: 11px; text-align: center; border-bottom: 1px solid #F0E5B0;
+  }
+
+</style>
+</head>
+<body>
+<div class="stage">
+
+<!-- ============================================ -->
+<!-- SCREEN 1: PROJECTS LIST                       -->
+<!-- ============================================ -->
+<div class="screen active" id="screen-projects">
+  <div class="status-bar">
+    <div class="left">09:42</div>
+    <div class="right"><span>📶</span><span>📡</span><span class="battery">88</span></div>
+  </div>
+  <div class="appbar">
+    <div class="ico" title="Menu">
+      <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </div>
+    <h1>Projects</h1>
+    <div class="right-icons">
+      <div class="ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg></div>
+      <div class="ico"><svg viewBox="0 0 24 24"><path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2h16z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></div>
+      <div class="ico"><svg viewBox="0 0 24 24"><polygon points="3 4 21 4 14 13 14 20 10 20 10 13 3 4"/></svg></div>
+    </div>
+  </div>
+  <div class="faceid">
+    <div class="fp">🔒</div>
+    <div class="text">Enable <b>Face ID/Fingerprint</b> for faster login. Click here to enable.</div>
+    <div class="x">×</div>
+  </div>
+
+  <div class="project-card" onclick="go('screen-project-detail')">
+    <div class="code-row"><span>VAR011</span><span class="dot"></span><span class="type">Civil</span></div>
+    <div class="title">Residential House Foundation</div>
+    <div class="badge-active">Active</div>
+  </div>
+
+  <div class="project-card" onclick="go('screen-project-detail')">
+    <div class="code-row"><span>VAR010</span><span class="dot"></span><span class="type">Civil</span></div>
+    <div class="title">VAR010</div>
+    <div class="badge-active">Active</div>
+  </div>
+
+  <div class="project-card" onclick="go('screen-project-detail')">
+    <div class="code-row"><span>VAR006</span><span class="dot"></span><span class="type">Civil</span></div>
+    <div class="title">Little Collins Roadworks</div>
+    <div class="badge-active">Active</div>
+  </div>
+
+  <div class="project-card" onclick="go('screen-project-detail')">
+    <div class="code-row"><span>VAR005</span><span class="dot"></span><span class="type">Civil</span></div>
+    <div class="title">Bar Beach Curb Works</div>
+    <div class="badge-active">Active</div>
+  </div>
+
+  <button class="fab-scan" onclick="event.stopPropagation();">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="21" y2="14"/><line x1="14" y1="18" x2="21" y2="18"/><line x1="14" y1="21" x2="18" y2="21"/></svg>
+    Scan QR
+  </button>
+
+  <div class="bottom-nav">
+    <div class="btab active">
+      <div class="ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16v3H4z"/><rect x="4" y="9" width="16" height="11" rx="1"/></svg></div>
+      <div class="lbl">Projects</div>
+    </div>
+    <div class="btab">
+      <div class="ico"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg></div>
+      <div class="lbl">Forms</div>
+    </div>
+    <div class="btab">
+      <div class="ico"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="9" r="3"/><path d="M6 19c1-3 4-4 6-4s5 1 6 4"/></svg></div>
+      <div class="lbl">Leave</div>
+    </div>
+    <div class="btab">
+      <div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-6-6-8 8"/></svg></div>
+      <div class="lbl">Gallery</div>
+    </div>
+    <div class="btab">
+      <div class="ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+      <div class="lbl">Files</div>
+    </div>
+  </div>
+  <div class="sysnav"><span>|||</span><span class="pill"></span><span>＜</span></div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCREEN 2: PROJECT DETAIL                      -->
+<!-- ============================================ -->
+<div class="screen" id="screen-project-detail">
+  <div class="status-bar">
+    <div class="left">09:42</div>
+    <div class="right"><span>📶</span><span>📡</span><span class="battery">88</span></div>
+  </div>
+  <div class="pd-appbar">
+    <div class="back" onclick="go('screen-projects')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </div>
+    <h1>Projects</h1>
+    <div class="star">☆</div>
+  </div>
+  <div class="faceid">
+    <div class="fp">🔒</div>
+    <div class="text">Enable <b>Face ID/Fingerprint</b> for faster login. Click here to enable.</div>
+    <div class="x">×</div>
+  </div>
+
+  <div class="pd-title-wrap">
+    <div class="pd-title-row">
+      <div class="h">Residential House Foundation - <span class="code">VAR011</span></div>
+      <div class="badge-active">Active</div>
+    </div>
+    <div class="pd-meta">
+      <span class="ico">👷</span><span class="key" style="text-decoration: underline;">Civil</span>
+    </div>
+    <div class="pd-meta">
+      <span class="ico">🗺</span><span class="val">Victoria</span>
+    </div>
+    <div class="pd-meta">
+      <span class="ico">📅</span><span class="val"><b style="color: var(--text);">Start:</b> 26/05/2025 - <b style="color: var(--text);">Completion:</b> 01/09/2026</span>
+    </div>
+  </div>
+
+  <div class="features">
+    <div class="label">PROJECT FEATURES</div>
+    <div class="features-grid">
+
+      <div class="feature">
+        <div class="icon-circle">
+          <svg viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><path d="M6 2h10a2 2 0 0 1 2 2v18l-4-2-3 2-3-2-4 2V4a2 2 0 0 1 2-2z"/></svg>
+        </div>
+        <div class="feature-name">Site Diary</div>
+      </div>
+
+      <div class="feature">
+        <div class="icon-circle">
+          <svg viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><circle cx="12" cy="12" r="10"/><polyline points="12 7 12 12 15 14" stroke="#fff" stroke-width="2" fill="none"/></svg>
+        </div>
+        <div class="feature-name">Timesheet</div>
+      </div>
+
+      <div class="feature">
+        <div class="icon-circle">
+          <svg viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><path d="M5 3h10l4 4v14H5z"/><path d="M9 13l3 3 6-6" stroke="#fff" stroke-width="2" fill="none"/></svg>
+        </div>
+        <div class="feature-name">Daywork Records</div>
+      </div>
+
+      <div class="feature">
+        <div class="icon-circle">
+          <svg viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><path d="M3 5h3l2 12h11l2-8H7"/><circle cx="9" cy="20" r="2"/><circle cx="18" cy="20" r="2"/></svg>
+        </div>
+        <div class="feature-name">Purchase Order</div>
+      </div>
+
+      <div class="feature">
+        <div class="icon-circle">
+          <svg viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><path d="M6 3h12v18H6z"/><path d="M9 11h6M9 15h4" stroke="#fff" stroke-width="2"/></svg>
+        </div>
+        <div class="feature-name">Site Dockets</div>
+      </div>
+
+      <div class="feature">
+        <div class="icon-circle">
+          <svg viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5" stroke="#fff" stroke-width="2"/></svg>
+        </div>
+        <div class="feature-name">Forms</div>
+      </div>
+
+      <div class="feature">
+        <div class="icon-circle">
+          <svg viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        </div>
+        <div class="feature-name">File Manager</div>
+      </div>
+
+      <div class="feature">
+        <div class="icon-circle">
+          <svg viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="16" cy="16" r="4" fill="#fff"/><text x="16" y="19" font-size="6" text-anchor="middle" fill="var(--orange)" font-weight="800">$</text></svg>
+        </div>
+        <div class="feature-name">Daily Cost Tracking</div>
+      </div>
+
+      <!-- NEW: Approve Bills tile -->
+      <div class="feature" onclick="go('screen-approve-bills')">
+        <div class="count-badge">5</div>
+        <div class="icon-circle">
+          <svg viewBox="0 0 24 24" fill="var(--orange)" stroke="none">
+            <path d="M6 2h9l4 4v16H6z"/>
+            <path d="M9 13l2.5 2.5L17 10" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="feature-name">Approve Bills</div>
+        <div class="new-tag">NEW</div>
+      </div>
+
+      <div class="feature">
+        <div class="beta-tag">BETA</div>
+        <div class="icon-circle">
+          <svg viewBox="0 0 24 24" fill="var(--orange)" stroke="none"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10h-10z" fill="#fff"/></svg>
+        </div>
+        <div class="feature-name">Production Tracking</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="sysnav"><span>|||</span><span class="pill"></span><span>＜</span></div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCREEN 3: APPROVE BILLS LIST                  -->
+<!-- ============================================ -->
+<div class="screen" id="screen-approve-bills">
+  <div class="status-bar">
+    <div class="left">09:42</div>
+    <div class="right"><span>📶</span><span>📡</span><span class="battery">88</span></div>
+  </div>
+  <div class="ab-appbar">
+    <div class="back" onclick="go('screen-project-detail')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </div>
+    <div class="title-wrap">
+      <h1>Approve Bills</h1>
+      <div class="sub">Residential House Foundation · VAR011</div>
+    </div>
+    <div class="filter-ico">
+      <svg viewBox="0 0 24 24"><polygon points="3 4 21 4 14 13 14 20 10 20 10 13 3 4"/></svg>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="pending" onclick="switchTab('pending')">Pending <span class="tab-count" id="count-pending">5</span></div>
+    <div class="tab" data-tab="approved" onclick="switchTab('approved')">Approved <span class="tab-count" id="count-approved">2</span></div>
+    <div class="tab" data-tab="rejected" onclick="switchTab('rejected')">Rejected <span class="tab-count" id="count-rejected">1</span></div>
+  </div>
+
+  <div class="summary-strip" id="summary-strip">
+    <div class="total">Total pending: <b id="total-amount">$48,237.50</b></div>
+    <button class="select-all-btn" onclick="toggleSelectAll()" id="selectAllBtn">Select all</button>
+  </div>
+
+  <div class="bill-list" id="bill-list">
+    <!-- bills are rendered by JS -->
+  </div>
+
+  <div class="bulk-bar" id="bulk-bar">
+    <div class="count" id="bulk-count">
+      0 selected
+      <span class="sub" id="bulk-sub">$0.00</span>
+    </div>
+    <div class="actions">
+      <button class="btn-reject" onclick="openModal('reject', null, true)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+        Reject
+      </button>
+      <button class="btn-approve" onclick="openModal('approve', null, true)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Approve
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- SCREEN 4: BILL DETAIL                         -->
+<!-- ============================================ -->
+<div class="screen" id="screen-bill-detail">
+  <div class="status-bar">
+    <div class="left">09:42</div>
+    <div class="right"><span>📶</span><span>📡</span><span class="battery">88</span></div>
+  </div>
+  <div class="bd-appbar">
+    <div class="back" onclick="go('screen-approve-bills')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    </div>
+    <h1>Bill Details</h1>
+    <div class="more">⋮</div>
+  </div>
+
+  <div class="bd-status-strip" id="bd-status-strip">
+    <span>⏳</span><span id="bd-status-text">Pending your approval · Assigned 2 days ago</span>
+  </div>
+
+  <div class="bd-hero" id="bd-hero">
+    <!-- filled by JS -->
+  </div>
+
+  <div class="bd-section">
+    <h3>Bill Information</h3>
+    <div class="bd-row"><div class="k">Bill Number</div><div class="v" id="bd-bill-no">—</div></div>
+    <div class="bd-row"><div class="k">Bill Date</div><div class="v" id="bd-bill-date">—</div></div>
+    <div class="bd-row"><div class="k">Linked PO</div><div class="v link" id="bd-po">—</div></div>
+    <div class="bd-row"><div class="k">Cost Centre</div><div class="v" id="bd-cc">—</div></div>
+    <div class="bd-row"><div class="k">Submitted by</div><div class="v" id="bd-submitter">—</div></div>
+  </div>
+
+  <div class="bd-section">
+    <h3>Line Items</h3>
+    <div id="bd-line-items"></div>
+    <div class="total-row">
+      <div>Total (inc GST)</div>
+      <div id="bd-total">$0.00</div>
+    </div>
+  </div>
+
+  <div class="bd-section">
+    <h3>Attachments</h3>
+    <div class="attachments" id="bd-attachments">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <div style="height: 100px;"></div>
+
+  <div class="single-actions" id="single-actions">
+    <button class="btn-reject" onclick="openModal('reject', currentBillId, false)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      Reject
+    </button>
+    <button class="btn-approve" onclick="openModal('approve', currentBillId, false)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      Approve
+    </button>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- APPROVE MODAL                                 -->
+<!-- ============================================ -->
+<div class="modal-backdrop" id="modal-approve" onclick="closeModalIfBackdrop(event,'modal-approve')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="handle"></div>
+    <h3 id="approve-title">Approve bill?</h3>
+    <div class="modal-sub" id="approve-sub">This will mark the bill as approved.</div>
+    <label>Comment (optional)</label>
+    <textarea id="approve-comment" placeholder="Add a note for the AP team…"></textarea>
+    <div class="actions">
+      <button class="btn-cancel" onclick="closeModal('modal-approve')">Cancel</button>
+      <button class="btn-confirm-approve" onclick="confirmApprove()">Approve</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- REJECT MODAL                                  -->
+<!-- ============================================ -->
+<div class="modal-backdrop" id="modal-reject" onclick="closeModalIfBackdrop(event,'modal-reject')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="handle"></div>
+    <h3 id="reject-title">Reject bill?</h3>
+    <div class="modal-sub" id="reject-sub">The bill will be sent back to the submitter.</div>
+    <label>Reason</label>
+    <div class="reject-reasons" id="reject-reasons">
+      <div class="reason-chip" onclick="pickReason(this,'Wrong amount')">Wrong amount</div>
+      <div class="reason-chip" onclick="pickReason(this,'Missing PO link')">Missing PO link</div>
+      <div class="reason-chip" onclick="pickReason(this,'Duplicate')">Duplicate</div>
+      <div class="reason-chip" onclick="pickReason(this,'Wrong supplier')">Wrong supplier</div>
+      <div class="reason-chip" onclick="pickReason(this,'Other')">Other</div>
+    </div>
+    <label>Comment</label>
+    <textarea id="reject-comment" placeholder="Explain why so the submitter can fix it…" oninput="validateReject()"></textarea>
+    <div class="actions">
+      <button class="btn-cancel" onclick="closeModal('modal-reject')">Cancel</button>
+      <button class="btn-confirm-reject" id="btn-confirm-reject" onclick="confirmReject()" disabled>Reject</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+  <span id="toast-text">Bill approved</span>
+</div>
+
+</div>
+
+<script>
+/* ============================================ */
+/* Sample bills data                              */
+/* ============================================ */
+const bills = [
+  {
+    id: 'B-4521', vendor: 'Boral Limited', logo: 'B',
+    billNo: 'INV-87432', amount: 14250.00, gst: 1295.45,
+    date: '23/05/2026', due: '06/06/2026', dueDays: 12,
+    po: 'PO-0832', cc: 'Concrete Works', submitter: 'James Wilson',
+    status: 'pending', assignedAgo: '2 days ago',
+    chips: [{type:'po', label:'PO-0832 linked'}, {type:'grey', label:'Concrete'}],
+    lines: [
+      {desc: '32 MPa Premix Concrete', meta: '85 m³ @ $145.00', amt: 12325.00},
+      {desc: 'Pumping Service', meta: '6 hrs @ $185.00', amt: 1110.00},
+      {desc: 'After-hours surcharge', meta: '', amt: 280.00},
+      {desc: 'Delivery', meta: '3 loads', amt: 535.00}
+    ],
+    attachments: ['boral-invoice-87432.pdf', 'delivery-docket-2521.jpg', 'site-receipt.jpg']
+  },
+  {
+    id: 'B-4519', vendor: 'Hire Right Plant', logo: 'H',
+    billNo: 'HRP-2026-1142', amount: 8430.00, gst: 766.36,
+    date: '22/05/2026', due: '21/05/2026', dueDays: -2,
+    po: 'PO-0814', cc: 'Earthworks', submitter: 'Sarah Chen',
+    status: 'pending', assignedAgo: '4 days ago',
+    chips: [{type:'po', label:'PO-0814 linked'}, {type:'red', label:'Overdue 2d'}],
+    lines: [
+      {desc: '20T Excavator hire', meta: 'Wk ending 22/05 · 38 hrs', amt: 5320.00},
+      {desc: 'Operator', meta: '38 hrs @ $68.00', amt: 2584.00},
+      {desc: 'Fuel surcharge', meta: '', amt: 526.00}
+    ],
+    attachments: ['HRP-invoice.pdf', 'timesheet-week-21.pdf']
+  },
+  {
+    id: 'B-4515', vendor: 'Bunnings Trade', logo: 'B',
+    billNo: 'BNT-558921', amount: 1847.50, gst: 167.95,
+    date: '20/05/2026', due: '19/06/2026', dueDays: 25,
+    po: null, cc: 'Site Setup', submitter: 'Mike Rodriguez',
+    status: 'pending', assignedAgo: '6 days ago',
+    chips: [{type:'amber', label:'No PO'}, {type:'grey', label:'Consumables'}],
+    lines: [
+      {desc: 'Star pickets x 50', meta: '', amt: 425.00},
+      {desc: 'Safety mesh 50m roll x 4', meta: '', amt: 596.00},
+      {desc: 'Hi-vis vests x 12', meta: '', amt: 348.00},
+      {desc: 'Site safety signage', meta: '', amt: 478.50}
+    ],
+    attachments: ['bunnings-tax-invoice.pdf']
+  },
+  {
+    id: 'B-4510', vendor: 'Stramit Steel', logo: 'S',
+    billNo: 'SS-90234', amount: 18420.00, gst: 1674.55,
+    date: '18/05/2026', due: '02/06/2026', dueDays: 8,
+    po: 'PO-0791', cc: 'Structural Steel', submitter: 'James Wilson',
+    status: 'pending', assignedAgo: '8 days ago',
+    chips: [{type:'po', label:'PO-0791 linked'}, {type:'grey', label:'Steel'}],
+    lines: [
+      {desc: 'UB 250x89x32 x 12m lengths', meta: '8 ea', amt: 9840.00},
+      {desc: 'PFC 200x75x22 x 9m lengths', meta: '6 ea', amt: 5544.00},
+      {desc: 'Plate 12mm x 1200x2400', meta: '4 ea', amt: 2280.00},
+      {desc: 'Delivery (semi)', meta: '', amt: 756.00}
+    ],
+    attachments: ['stramit-invoice.pdf', 'mill-certs.pdf', 'delivery-docket.jpg']
+  },
+  {
+    id: 'B-4502', vendor: 'AAA Crane Trucks', logo: 'A',
+    billNo: 'AAA-3318', amount: 5290.00, gst: 480.91,
+    date: '15/05/2026', due: '14/06/2026', dueDays: 20,
+    po: 'PO-0775', cc: 'Plant Hire', submitter: 'Sarah Chen',
+    status: 'pending', assignedAgo: '10 days ago',
+    chips: [{type:'po', label:'PO-0775 linked'}, {type:'grey', label:'Plant hire'}],
+    lines: [
+      {desc: 'Crane truck 8T (4 days)', meta: '@ $1,150/day', amt: 4600.00},
+      {desc: 'Travel', meta: '2 hrs @ $135', amt: 270.00},
+      {desc: 'After hours callout', meta: '', amt: 420.00}
+    ],
+    attachments: ['aaa-invoice-3318.pdf']
+  },
+  // Approved (history)
+  {
+    id: 'B-4498', vendor: 'Westbuild Materials', logo: 'W',
+    billNo: 'WB-22018', amount: 6240.00, gst: 567.27,
+    date: '10/05/2026', due: '09/06/2026', dueDays: 15,
+    po: 'PO-0752', cc: 'Site Setup', submitter: 'Mike Rodriguez',
+    status: 'approved', approvedDate: '12/05/2026', approvedNote: 'OK to pay — matches PO',
+    chips: [{type:'po', label:'PO-0752 linked'}, {type:'green', label:'Approved'}],
+    lines: [
+      {desc: 'Roadbase 20mm', meta: '40 t @ $128', amt: 5120.00},
+      {desc: 'Geofabric 4m roll', meta: '50m', amt: 580.00},
+      {desc: 'Delivery', meta: '2 loads', amt: 540.00}
+    ],
+    attachments: ['westbuild-invoice.pdf', 'weighbridge-docket.jpg']
+  },
+  {
+    id: 'B-4485', vendor: 'BlueScope Steel', logo: 'B',
+    billNo: 'BSS-67711', amount: 12480.00, gst: 1134.55,
+    date: '04/05/2026', due: '03/06/2026', dueDays: 9,
+    po: 'PO-0741', cc: 'Structural Steel', submitter: 'James Wilson',
+    status: 'approved', approvedDate: '05/05/2026', approvedNote: '',
+    chips: [{type:'po', label:'PO-0741 linked'}, {type:'green', label:'Approved'}],
+    lines: [
+      {desc: 'Galv. purlins C200', meta: '24 lengths', amt: 8640.00},
+      {desc: 'Top hat sections', meta: '32 lengths', amt: 3120.00},
+      {desc: 'Delivery', meta: '', amt: 720.00}
+    ],
+    attachments: ['bluescope-invoice.pdf']
+  },
+  // Rejected (history)
+  {
+    id: 'B-4490', vendor: 'Quickfix Trades', logo: 'Q',
+    billNo: 'QF-1180', amount: 4250.00, gst: 386.36,
+    date: '08/05/2026', due: '07/06/2026', dueDays: 13,
+    po: null, cc: 'Concrete Works', submitter: 'Mike Rodriguez',
+    status: 'rejected', rejectedDate: '09/05/2026',
+    rejectedReason: 'Missing PO link',
+    rejectedNote: 'No PO has been raised for this work. Please raise a PO first.',
+    chips: [{type:'amber', label:'No PO'}, {type:'red', label:'Rejected'}],
+    lines: [
+      {desc: 'Form-up labour', meta: '2 days · 2 workers', amt: 3200.00},
+      {desc: 'Materials', meta: '', amt: 1050.00}
+    ],
+    attachments: ['quickfix-inv.pdf']
+  }
+];
+
+/* ============================================ */
+/* State                                          */
+/* ============================================ */
+let currentTab = 'pending';
+let selected = new Set();
+let currentBillId = null;
+let modalMode = null; // 'approve' | 'reject'
+let modalBulk = false;
+
+/* ============================================ */
+/* Helpers                                        */
+/* ============================================ */
+function fmt(n) {
+  return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function go(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  if (id === 'screen-approve-bills') {
+    selected.clear();
+    renderBills();
+    updateBulkBar();
+  }
+}
+
+function getTabBills() { return bills.filter(b => b.status === currentTab); }
+
+function updateCounts() {
+  document.getElementById('count-pending').textContent = bills.filter(b => b.status === 'pending').length;
+  document.getElementById('count-approved').textContent = bills.filter(b => b.status === 'approved').length;
+  document.getElementById('count-rejected').textContent = bills.filter(b => b.status === 'rejected').length;
+}
+
+function renderBills() {
+  updateCounts();
+  const list = document.getElementById('bill-list');
+  const tabBills = getTabBills();
+  const total = tabBills.reduce((s, b) => s + b.amount, 0);
+  document.getElementById('total-amount').textContent = fmt(total);
+
+  const strip = document.getElementById('summary-strip');
+  const totalLabel = strip.querySelector('.total');
+  if (currentTab === 'pending') {
+    totalLabel.innerHTML = `Total pending: <b id="total-amount">${fmt(total)}</b>`;
+    document.getElementById('selectAllBtn').style.display = tabBills.length ? 'inline-block' : 'none';
+  } else if (currentTab === 'approved') {
+    totalLabel.innerHTML = `${tabBills.length} approved · <b id="total-amount">${fmt(total)}</b>`;
+    document.getElementById('selectAllBtn').style.display = 'none';
+  } else {
+    totalLabel.innerHTML = `${tabBills.length} rejected · <b id="total-amount">${fmt(total)}</b>`;
+    document.getElementById('selectAllBtn').style.display = 'none';
+  }
+
+  if (tabBills.length === 0) {
+    list.innerHTML = `
+      <div class="empty">
+        <div class="em-icon">${currentTab === 'pending' ? '✅' : currentTab === 'approved' ? '📁' : '📂'}</div>
+        <div class="em-title">${currentTab === 'pending' ? "You're all caught up" : 'Nothing here yet'}</div>
+        <div class="em-body">${currentTab === 'pending' ? 'No bills assigned to you for approval on this project.' : `Bills you ${currentTab === 'approved' ? 'approve' : 'reject'} will appear here.`}</div>
+      </div>`;
+    return;
+  }
+
+  list.innerHTML = tabBills.map(b => `
+    <div class="bill-row ${selected.has(b.id) ? 'selected' : ''}" data-id="${b.id}">
+      ${currentTab === 'pending' ? `<div class="check" onclick="event.stopPropagation(); toggleSelect('${b.id}')"></div>` : '<div style="width:0"></div>'}
+      <div class="body" onclick="openBill('${b.id}')">
+        <div class="top">
+          <div>
+            <div class="vendor">${b.vendor}</div>
+            <div class="bill-no">${b.billNo}</div>
+          </div>
+          <div class="amount">${fmt(b.amount)}</div>
+        </div>
+        <div class="meta">${b.chips.map(c => `<span class="chip ${c.type}">${c.label}</span>`).join('')}</div>
+        ${currentTab === 'pending' ? `
+          <div class="due ${b.dueDays < 0 ? 'overdue' : ''}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Due ${b.due} · ${b.dueDays < 0 ? `${Math.abs(b.dueDays)}d overdue` : `in ${b.dueDays}d`}
+          </div>
+        ` : currentTab === 'approved' ? `
+          <div class="due">Approved ${b.approvedDate}${b.approvedNote ? ` · "${b.approvedNote}"` : ''}</div>
+        ` : `
+          <div class="due overdue" style="color: var(--red);">Rejected ${b.rejectedDate} · ${b.rejectedReason}</div>
+        `}
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleSelect(id) {
+  if (currentTab !== 'pending') return;
+  if (selected.has(id)) selected.delete(id);
+  else selected.add(id);
+  renderBills();
+  updateBulkBar();
+}
+
+function toggleSelectAll() {
+  const pendingIds = bills.filter(b => b.status === 'pending').map(b => b.id);
+  const allSelected = pendingIds.every(id => selected.has(id));
+  if (allSelected) { selected.clear(); document.getElementById('selectAllBtn').textContent = 'Select all'; }
+  else { pendingIds.forEach(id => selected.add(id)); document.getElementById('selectAllBtn').textContent = 'Deselect all'; }
+  renderBills();
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('bulk-bar');
+  if (selected.size === 0) {
+    bar.classList.remove('show');
+    document.querySelector('.bottom-nav') && (document.querySelector('.bottom-nav').style.display = '');
+    return;
+  }
+  bar.classList.add('show');
+  const total = bills.filter(b => selected.has(b.id)).reduce((s, b) => s + b.amount, 0);
+  document.getElementById('bulk-count').innerHTML = `${selected.size} selected<span class="sub">${fmt(total)}</span>`;
+}
+
+function switchTab(t) {
+  currentTab = t;
+  selected.clear();
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === t));
+  renderBills();
+  updateBulkBar();
+}
+
+/* ============================================ */
+/* Bill detail                                    */
+/* ============================================ */
+function openBill(id) {
+  currentBillId = id;
+  const b = bills.find(x => x.id === id);
+  if (!b) return;
+
+  // Status strip
+  const strip = document.getElementById('bd-status-strip');
+  const stripText = document.getElementById('bd-status-text');
+  if (b.status === 'pending') {
+    strip.style.background = 'var(--amber-bg)'; strip.style.color = 'var(--amber)';
+    stripText.textContent = `Pending your approval · Assigned ${b.assignedAgo}`;
+    strip.querySelector('span').textContent = '⏳';
+    document.getElementById('single-actions').style.display = 'flex';
+  } else if (b.status === 'approved') {
+    strip.style.background = 'var(--green-bg)'; strip.style.color = 'var(--green)';
+    stripText.textContent = `Approved ${b.approvedDate}${b.approvedNote ? ` · "${b.approvedNote}"` : ''}`;
+    strip.querySelector('span').textContent = '✓';
+    document.getElementById('single-actions').style.display = 'none';
+  } else {
+    strip.style.background = 'var(--red-bg)'; strip.style.color = 'var(--red)';
+    stripText.textContent = `Rejected ${b.rejectedDate} · ${b.rejectedReason}${b.rejectedNote ? ` — "${b.rejectedNote}"` : ''}`;
+    strip.querySelector('span').textContent = '✕';
+    document.getElementById('single-actions').style.display = 'none';
+  }
+
+  document.getElementById('bd-hero').innerHTML = `
+    <div class="vendor-row">
+      <div class="vendor-logo">${b.logo}</div>
+      <div>
+        <div class="vendor-name">${b.vendor}</div>
+        <div class="vendor-sub">${b.chips.map(c => c.label).slice(0,2).join(' · ')}</div>
+      </div>
+    </div>
+    <div class="amount-row">
+      <div class="amount"><span class="currency">AUD</span>${fmt(b.amount).slice(1)}</div>
+      <div class="due-block">
+        <div class="due-label">Due</div>
+        <div class="due-date ${b.dueDays < 0 ? 'overdue' : ''}">${b.due}${b.dueDays < 0 ? ` (${Math.abs(b.dueDays)}d overdue)` : ''}</div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('bd-bill-no').textContent = b.billNo;
+  document.getElementById('bd-bill-date').textContent = b.date;
+  const poEl = document.getElementById('bd-po');
+  if (b.po) { poEl.textContent = b.po; poEl.className = 'v link'; }
+  else { poEl.textContent = 'Not linked'; poEl.className = 'v'; poEl.style.color = 'var(--amber)'; }
+  document.getElementById('bd-cc').textContent = b.cc;
+  document.getElementById('bd-submitter').textContent = b.submitter;
+
+  document.getElementById('bd-line-items').innerHTML = b.lines.map(l => `
+    <div class="line-item">
+      <div class="li-body">
+        <div class="li-desc">${l.desc}</div>
+        ${l.meta ? `<div class="li-meta">${l.meta}</div>` : ''}
+      </div>
+      <div class="li-amt">${fmt(l.amt)}</div>
+    </div>
+  `).join('');
+  document.getElementById('bd-total').textContent = fmt(b.amount);
+
+  document.getElementById('bd-attachments').innerHTML = b.attachments.map(name => {
+    const isImage = /\.(jpg|jpeg|png|gif)$/i.test(name);
+    return `
+      <div class="attachment">
+        <div class="thumb">
+          ${isImage
+            ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 17l-6-6-8 8"/></svg>`
+            : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h9l4 4v16H6z"/><line x1="9" y1="12" x2="16" y2="12"/><line x1="9" y1="16" x2="16" y2="16"/></svg>`}
+        </div>
+        <div class="a-name">${name}</div>
+      </div>
+    `;
+  }).join('');
+
+  go('screen-bill-detail');
+}
+
+/* ============================================ */
+/* Modals                                         */
+/* ============================================ */
+function openModal(mode, billId, bulk) {
+  modalMode = mode;
+  modalBulk = bulk;
+  if (mode === 'approve') {
+    const target = bulk ? `${selected.size} bill${selected.size>1?'s':''}` : 'this bill';
+    const total = bulk
+      ? fmt(bills.filter(b => selected.has(b.id)).reduce((s, b) => s + b.amount, 0))
+      : fmt(bills.find(b => b.id === billId).amount);
+    document.getElementById('approve-title').textContent = bulk ? `Approve ${selected.size} bills?` : 'Approve bill?';
+    document.getElementById('approve-sub').textContent = bulk
+      ? `${target} totalling ${total} will be approved and sent to AP.`
+      : `${total} will be approved and sent to AP for payment.`;
+    document.getElementById('approve-comment').value = '';
+    document.getElementById('modal-approve').classList.add('show');
+  } else {
+    document.getElementById('reject-title').textContent = bulk ? `Reject ${selected.size} bills?` : 'Reject bill?';
+    document.getElementById('reject-sub').textContent = bulk
+      ? `All ${selected.size} bills will be sent back to their submitters.`
+      : 'The bill will be sent back to the submitter.';
+    document.getElementById('reject-comment').value = '';
+    document.querySelectorAll('.reason-chip').forEach(c => c.classList.remove('active'));
+    document.getElementById('btn-confirm-reject').disabled = true;
+    document.getElementById('modal-reject').classList.add('show');
+  }
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function closeModalIfBackdrop(e, id) { if (e.target.id === id) closeModal(id); }
+
+function pickReason(el, label) {
+  document.querySelectorAll('.reason-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  validateReject();
+}
+
+function validateReject() {
+  const hasReason = !!document.querySelector('.reason-chip.active');
+  const hasComment = document.getElementById('reject-comment').value.trim().length > 0;
+  document.getElementById('btn-confirm-reject').disabled = !(hasReason && hasComment);
+}
+
+function confirmApprove() {
+  const ids = modalBulk ? Array.from(selected) : [currentBillId];
+  ids.forEach(id => {
+    const b = bills.find(x => x.id === id);
+    if (b) {
+      b.status = 'approved';
+      b.approvedDate = '25/05/2026';
+      b.approvedNote = document.getElementById('approve-comment').value.trim();
+      b.chips = [{type: 'green', label: 'Approved'}];
+    }
+  });
+  selected.clear();
+  closeModal('modal-approve');
+  showToast(ids.length === 1 ? 'Bill approved' : `${ids.length} bills approved`);
+  if (modalBulk || ids.length === 0) { renderBills(); updateBulkBar(); }
+  else { go('screen-approve-bills'); }
+}
+
+function confirmReject() {
+  const reason = document.querySelector('.reason-chip.active').textContent;
+  const note = document.getElementById('reject-comment').value.trim();
+  const ids = modalBulk ? Array.from(selected) : [currentBillId];
+  ids.forEach(id => {
+    const b = bills.find(x => x.id === id);
+    if (b) {
+      b.status = 'rejected';
+      b.rejectedDate = '25/05/2026';
+      b.rejectedReason = reason;
+      b.rejectedNote = note;
+      b.chips = [{type: 'red', label: 'Rejected'}];
+    }
+  });
+  selected.clear();
+  closeModal('modal-reject');
+  showToast(ids.length === 1 ? 'Bill rejected and sent back' : `${ids.length} bills rejected`);
+  if (modalBulk || ids.length === 0) { renderBills(); updateBulkBar(); }
+  else { go('screen-approve-bills'); }
+}
+
+function showToast(text) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-text').textContent = text;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* Initial render */
+renderBills();
+</script>
+</body>
+</html>
