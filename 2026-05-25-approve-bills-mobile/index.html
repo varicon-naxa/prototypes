@@ -1547,7 +1547,19 @@ function openBill(id) {
   else { dkEl.textContent = 'Not linked'; dkEl.style.color = 'var(--muted)'; }
   document.getElementById('bd-submitter').textContent = b.submitter;
 
-  // Line items (full breakdown)
+  // Line items (full breakdown with per-line PO/docket match)
+  function lineMatchChip(kind, lineExc, refAmt) {
+    if (refAmt == null) return `<span class="li-match-chip missing"><span class="ico">—</span>No ${kind} line</span>`;
+    const diff = +(lineExc - refAmt).toFixed(2);
+    if (Math.abs(diff) < 0.50) {
+      return `<span class="li-match-chip match"><span class="ico">✓</span>${kind} ${fmt(refAmt)} matches</span>`;
+    }
+    if (diff > 0) {
+      return `<span class="li-match-chip over"><span class="ico">⚠</span>${kind} ${fmt(refAmt)} · over by ${fmt(diff)}</span>`;
+    }
+    return `<span class="li-match-chip partial"><span class="ico">i</span>${kind} ${fmt(refAmt)} · billed ${Math.round(lineExc / refAmt * 100)}%</span>`;
+  }
+
   document.getElementById('bd-line-items').innerHTML = b.lines.map(l => `
     <div class="line-card">
       <div class="li-head">
@@ -1560,6 +1572,10 @@ function openBill(id) {
         <div class="li-meta-row"><span class="k">Account code</span><span class="v">${l.accCode}</span></div>
         <div class="li-meta-row"><span class="k">Unit · Qty</span><span class="v">${l.unit} · ${l.qty}</span></div>
         <div class="li-meta-row"><span class="k">Unit cost</span><span class="v">${fmt(l.unitCost)}</span></div>
+      </div>
+      <div class="li-match">
+        ${lineMatchChip('PO', l.excGst, l.poLineAmt)}
+        ${lineMatchChip('Docket', l.excGst, l.docketLineAmt)}
       </div>
       <div class="li-subtotal">
         <span>Exc GST ${fmt(l.excGst)}</span>
