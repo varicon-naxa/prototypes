@@ -1124,6 +1124,46 @@ function fmt(n) {
   return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/* Stage chip HTML for the list row. Reads bill.status + bill.approvers. */
+function stageChip(b) {
+  const total = b.approvers.length;
+  const myIdx = b.approvers.findIndex(a => a.isYou);
+  const myStep = myIdx + 1;
+
+  // Build dots based on bill status
+  let dots, text;
+  if (b.status === 'pending') {
+    dots = b.approvers.map(a => {
+      if (a.status === 'done') return '<span class="sd done"></span>';
+      if (a.status === 'current') return '<span class="sd current"></span>';
+      return '<span class="sd"></span>';
+    }).join('');
+    const priorDone = b.approvers.slice(0, myIdx).every(a => a.status === 'done');
+    if (total === 1) {
+      text = `<span class="you-bit">Sole approver · awaiting you</span>`;
+    } else if (priorDone) {
+      text = `Step ${myStep} of ${total} · <span class="you-bit">awaiting you</span>`;
+    } else {
+      text = `<span class="pre-bit">Step ${myStep} of ${total} · waiting on earlier approver</span>`;
+    }
+  } else if (b.status === 'approved') {
+    dots = b.approvers.map(a => `<span class="sd done"></span>`).join('');
+    text = `<span class="stage-approved">Approved · all ${total} step${total>1?'s':''} complete</span>`;
+  } else { // rejected
+    dots = b.approvers.map((a, i) => {
+      if (a.status === 'done') return '<span class="sd done"></span>';
+      if (a.status === 'rejected') return '<span class="sd rejected"></span>';
+      return '<span class="sd"></span>';
+    }).join('');
+    text = `<span class="stage-rejected">Rejected at step ${myStep} of ${total}</span>`;
+  }
+
+  return `<div class="stage-row">
+    <div class="stage-dots">${dots}</div>
+    <div class="stage-text">${text}</div>
+  </div>`;
+}
+
 function go(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
