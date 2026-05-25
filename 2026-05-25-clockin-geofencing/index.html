@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clock-in · Geofencing Flow</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #143666;
+      --primary-soft: #2a4a7a;
+      --accent: #F2AD3E;
+      --accent-dark: #d8951f;
+      --bg: #ffffff;
+      --muted: #6b7280;
+      --muted-2: #9ca3af;
+      --border: rgba(0,0,0,0.08);
+      --green: #2e7d32;
+      --green-bg: #e8f5e9;
+      --green-soft: #c8e6c9;
+      --red: #c62828;
+      --red-bg: #ffebee;
+      --red-soft: #ffcdd2;
+      --amber-bg: #fff8ec;
+      --amber-text: #b86e00;
+      --grey-bg: #f3f4f6;
+      --radius-card: 12px;
+      --radius-pill: 24px;
+    }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: #e8eaf0;
+      min-height: 100vh;
+      padding: 32px 24px 80px;
+      color: var(--primary);
+    }
+
+    /* ── Page header ── */
+    .page-header {
+      max-width: 1400px;
+      margin: 0 auto 28px;
+    }
+    .page-title {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    .page-sub {
+      font-size: 14px;
+      color: var(--muted);
+      margin-top: 4px;
+      max-width: 720px;
+    }
+
+    /* ── Flow rows ── */
+    .flow-section {
+      max-width: 1400px;
+      margin: 0 auto 36px;
+    }
+    .flow-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+    .flow-label.shared {
+      background: #e0e7f1;
+      color: var(--primary);
+    }
+    .flow-label.within {
+      background: var(--green-bg);
+      color: var(--green);
+    }
+    .flow-label.outside {
+      background: var(--red-bg);
+      color: var(--red);
+    }
+    .flow-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .flow-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    /* Phone frame */
+    .phone-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+    }
+    .phone {
+      width: 320px;
+      height: 660px;
+      background: var(--bg);
+      border-radius: 26px;
+      box-shadow: 0 6px 22px rgba(20, 54, 102, 0.18), 0 0 0 8px #1a1a2e, 0 0 0 9px #333;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .phone-caption {
+      width: 320px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+      padding: 0 6px;
+      line-height: 1.4;
+    }
+    .phone-caption b { color: var(--primary); font-weight: 600; }
+
+    /* Status bar */
+    .statusbar {
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      font-size: 11px;
+      color: var(--primary);
+      font-weight: 500;
+      background: #fff;
+    }
+    .statusbar-right { display: flex; gap: 4px; align-items: center; opacity: 0.8; }
+    .statusbar-right svg { width: 12px; height: 12px; }
+
+    /* Top bar */
+    .topbar {
+      display: flex;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+      background: #fff;
+    }
+    .topbar-back {
+      width: 24px;
+      height: 24px;
+      color: var(--primary);
+      cursor: pointer;
+    }
+    .topbar-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .topbar-icons { margin-left: auto; display: flex; gap: 10px; }
+    .topbar-icons svg { width: 20px; height: 20px; color: var(--primary); }
+
+    /* Body content */
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 16px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      background: #fff;
+    }
+    .content.has-banner { padding-top: 0; }
+
+    /* Field label */
+    .field-label {
+      font-size: 14px;
+      color: #374151;
+      margin-bottom: 6px;
+      font-weight: 400;
+    }
+    .field-label.heavy {
+      font-size: 12px;
+      color: var(--primary);
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+    .field-help {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 4px;
+      margin-bottom: 10px;
+      line-height: 1.4;
+    }
+    .field-dropdown {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-size: 15px;
+      color: var(--primary);
+      font-weight: 500;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fff;
+    }
+    .field-dropdown .chev {
+      color: var(--primary);
+      font-size: 12px;
+    }
+    .field-select-empty {
+      width: 100%;
+      border: 1.5px dashed #cbd5e1;
+      border-radius: 8px;
+      padding: 14px;
+      text-align: center;
+      font-size: 14px;
+      color: var(--primary-soft);
+      background: #fff;
+    }
+
+    /* Geofence banner */
+    .geo-banner {
+      display: flex;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      align-items: flex-start;
+    }
+    .geo-banner.ok { background: var(--green-bg); border-bottom-color: var(--green-soft); }
+    .geo-banner.bad { background: var(--red-bg); border-bottom-color: var(--red-soft); }
+    .geo-banner.pending { background: var(--amber-bg); border-bottom-color: #f5d896; }
+
+    .geo-icon {
+      flex-shrink: 0;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 700;
+    }
+    .geo-icon.ok { background: #43a047; }
+    .geo-icon.bad { background: #e53935; }
+    .geo-icon.pending { background: #f59e0b; }
+    .geo-icon svg { width: 14px; height: 14px; }
+
+    .geo-body { flex: 1; min-width: 0; }
+    .geo-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 2px;
+    }
+    .geo-title.bad { color: var(--red); }
+    .geo-title.ok { color: var(--green); }
+    .geo-meta {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .geo-meta b { color: var(--primary); font-weight: 600; }
+
+    /* Sticky bottom CTA */
+    .bottom-cta {
+      padding: 12px 14px 14px;
+      background: #fff;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      width: 100%;
+      background: var(--accent);
+      color: #233759;
+      border: none;
+      border-radius: var(--radius-pill);
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-primary.disabled {
+      background: #f0e4cc;
+      color: #b3a37e;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      width: 100%;
+      background: #fff;
+      border: 1.5px solid var(--accent);
+      color: var(--accent-dark);
+      border-radius: var(--radius-pill);
+      padding: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-outline-red {
+      width: 100%;
+      background: #fff;
+      border: 1.5px solid #e53935;
+      color: var(--red);
+      border-radius: var(--radius-pill);
+      padding: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-link {
+      background: none;
+      border: none;
+      color: var(--primary-soft);
+      text-decoration: underline;
+      font-size: 12.5px;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 4px 0;
+    }
+
+    /* Bottom nav */
+    .bottom-nav {
+      height: 56px;
+      background: #fff;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      padding-bottom: 4px;
+    }
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      font-size: 10px;
+      color: var(--muted-2);
+    }
+    .nav-item svg { width: 18px; height: 18px; }
+    .nav-item.active {
+      color: var(--accent);
+    }
+    .nav-item.active .nav-circle {
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 2px;
+    }
+
+    /* Landing welcome card */
+    .welcome-card {
+      padding: 14px;
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .welcome-heading {
+      font-size: 19px;
+      font-weight: 500;
+      color: var(--primary);
+      margin-bottom: 10px;
+    }
+    .prev-label {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .prev-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .prev-project { font-size: 15px; font-weight: 500; color: var(--primary); }
+    .prev-dates { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .prev-date-right { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+    /* Modal sheet */
+    .sheet-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(20, 30, 50, 0.5);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .sheet {
+      width: 100%;
+      background: #fff;
+      border-radius: 14px 14px 0 0;
+      padding: 18px 16px 16px;
+      box-shadow: 0 -6px 18px rgba(0,0,0,0.18);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 92%;
+    }
+    .sheet-handle {
+      width: 38px;
+      height: 4px;
+      background: #d1d5db;
+      border-radius: 999px;
+      align-self: center;
+      margin-bottom: 4px;
+    }
+    .sheet-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .sheet-sub {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .sheet-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .form-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .textarea {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 11px 12px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--primary);
+      resize: none;
+      min-height: 90px;
+      background: #fafbfc;
+    }
+    .textarea::placeholder { color: var(--muted-2); }
+    .reason-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .chip {
+      font-size: 12px;
+      color: var(--primary-soft);
+      background: #eef2f7;
+      border-radius: 999px;
+      padding: 6px 10px;
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+    .chip.selected {
+      background: #143666;
+      color: #fff;
+    }
+
+    /* Pending success state */
+    .success-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: var(--amber-bg);
+      color: var(--amber-text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 28px auto 14px;
+    }
+    .success-icon svg { width: 32px; height: 32px; }
+    .success-title {
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--primary);
+      text-align: center;
+      margin-bottom: 6px;
+    }
+    .success-sub {
+      font-size: 13.5px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.5;
+      padding: 0 18px;
+    }
+    .receipt-card {
+      margin: 18px 4px 0;
+      background: var(--grey-bg);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .receipt-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12.5px;
+    }
+    .receipt-row .k { color: var(--muted); }
+    .receipt-row .v { color: var(--primary); font-weight: 500; }
+
+    /* Notice / explainer panel under flow */
+    .explainer {
+      margin: 12px 0 0;
+      padding: 12px 16px;
+      background: #fff;
+      border-radius: 10px;
+      border-left: 4px solid var(--accent);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      font-size: 13px;
+      color: #374151;
+      line-height: 1.55;
+      max-width: 960px;
+    }
+    .explainer b { color: var(--primary); }
+
+    /* Flow arrow between phones */
+    .arrow {
+      align-self: center;
+      display: flex;
+      align-items: center;
+      color: var(--muted-2);
+      font-size: 22px;
+      padding: 0 4px;
+      margin-top: 280px;
+    }
+
+    /* Toggle pill (mock setting reminder) */
+    .setting-callout {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 12px 4px 6px;
+      font-size: 11.5px;
+      color: var(--muted);
+      margin-left: 8px;
+    }
+    .toggle {
+      width: 26px;
+      height: 14px;
+      background: var(--accent);
+      border-radius: 999px;
+      position: relative;
+    }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: #fff;
+      border-radius: 50%;
+      top: 2px;
+      right: 2px;
+    }
+
+    /* small dotted divider in body */
+    .or-divider {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted-2);
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin: 2px 0;
+    }
+    .or-divider::before, .or-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #e5e7eb;
+    }
+
+    /* For screens that scroll */
+    .scroll { overflow-y: auto; }
+  </style>
+</head>
+<body>
+
+  <div class="page-header">
+    <div class="page-title">Clock-in · Geofencing flow</div>
+    <div class="page-sub">
+      When the project has geofencing enabled, the app checks the user's location before allowing a clock-in. Two paths shown: within the site boundary (auto-approve) and outside the site boundary (blocked, with override request).
+      <span class="setting-callout">Geofencing <span class="toggle"></span> ON for (C100) Barton</span>
+    </div>
+  </div>
+
+  <!-- ============ STEP 0 ============ -->
+  <div class="flow-section">
+    <div class="flow-label shared"><span class="flow-dot"></span>Step 1 · Shared starting point</div>
+    <div class="flow-row">
+
+      <!-- Phone 1: Landing -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="statusbar">
+            <span>12:28</span>
+            <span class="statusbar-right">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 22h20v-2H2v2zm2-6h4v4H4v-4zm6-4h4v8h-4v-8zm6-6h4v14h-4V6z"/></svg>
+              <span>70%</span>
+            </span>
+          </div>
+          <div class="topbar">
+            <svg class="topbar-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <span class="topbar-title">My Timesheet</span>
+            <div class="topbar-icons">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            </div>
+          </div>
+          <div class="content" style="background:#f4f5f8;">
+            <div class="welcome-card">
+              <div class="welcome-heading">Welcome back Alec!</div>
+              <div class="prev-label">Previously worked on</div>
+              <div class="prev-row">
+                <div>
+                  <div class="prev-project">Barton</div>
+                  <div class="prev-dates">From Mon, 18 May, 2026 – Tue, 26 May, 2026</div>
+                </div>
+                <div class="prev-date-right">Mon, 25 May, 2026</div>
+              </div>
+              <div style="height:14px;"></div>
+              <button class="btn-primary" style="box-shadow: 0 0 0 3px rgba(242,173,62,0.25);">Clock in</button>
+              <button class="btn-link" style="display:block; margin: 8px auto 0;">＋ Add Timesheet</button>
+            </div>
+            <div style="font-size:11px; color:var(--muted); text-align:center; margin-top:6px;">User taps <b style="color:var(--primary);">Clock in</b> → app silently requests GPS fix</div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>1.</b> Landing — user taps Clock in</div>
+      </div>
+
+      <div class="arrow">→</div>
+
+      <!-- Phone 2: Location check -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="statusbar">
+            <span>12:28</span>
+            <span class="statusbar-right"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 22h20v-2H2v2zm2-6h4v4H4v-4zm6-4h4v8h-4v-8zm6-6h4v14h-4V6z"/></svg><span>70%</span></span>
+          </div>
+          <div class="topbar">
+            <svg class="topbar-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            <span class="topbar-title">Clockin</span>
+          </div>
+          <div class="geo-banner pending">
+            <div class="geo-icon pending">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            </div>
+            <div class="geo-body">
+              <div class="geo-title">Checking your location…</div>
+              <div class="geo-meta">Verifying you're within the <b>(C100) Barton</b> site boundary.</div>
+            </div>
+          </div>
+          <div class="content has-banner">
+            <div>
+              <div class="field-label">Project</div>
+              <div class="field-dropdown">
+                <span>(C100) Barton</span>
+                <span class="chev">▼</span>
+              </div>
+            </div>
+            <div>
+              <div class="field-label heavy">Equipment</div>
+              <div class="field-help">Please select the equipment you will be operating.</div>
+              <div class="field-select-empty">Select Equipment</div>
+            </div>
+          </div>
+          <div class="bottom-cta">
+            <button class="btn-primary disabled">Clock in</button>
+          </div>
+        </div>
+        <div class="phone-caption"><b>2.</b> GPS check — Clock in disabled until location confirmed (typically &lt;2s)</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ PATH A: WITHIN GEOFENCE ============ -->
+  <div class="flow-section">
+    <div class="flow-label within"><span class="flow-dot"></span>Path A · Within geofence</div>
+    <div class="flow-row">
+
+      <!-- Phone 3A: Form with green banner -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="statusbar">
+            <span>12:28</span>
+            <span class="statusbar-right"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 22h20v-2H2v2zm2-6h4v4H4v-4zm6-4h4v8h-4v-8zm6-6h4v14h-4V6z"/></svg><span>70%</span></span>
+          </div>
+          <div class="topbar">
+            <svg class="topbar-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            <span class="topbar-title">Clockin</span>
+          </div>
+          <div class="geo-banner ok">
+            <div class="geo-icon ok">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="geo-body">
+              <div class="geo-title ok">You're on site</div>
+              <div class="geo-meta">Inside <b>(C100) Barton</b> boundary · ~42 m from centre · Updated just now</div>
+            </div>
+          </div>
+          <div class="content has-banner">
+            <div>
+              <div class="field-label">Project</div>
+              <div class="field-dropdown">
+                <span>(C100) Barton</span>
+                <span class="chev">▼</span>
+              </div>
+            </div>
+            <div>
+              <div class="field-label heavy">Equipment</div>
+              <div class="field-help">Please select the equipment you will be operating.</div>
+              <div class="field-select-empty">Select Equipment</div>
+            </div>
+          </div>
+          <div class="bottom-cta">
+            <button class="btn-primary">Clock in</button>
+          </div>
+        </div>
+        <div class="phone-caption"><b>3A.</b> Inside boundary — green banner, Clock in enabled</div>
+      </div>
+
+      <div class="arrow">→</div>
+
+      <!-- Phone 4A: Clocked in success -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="statusbar">
+            <span>12:29</span>
+            <span class="statusbar-right"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 22h20v-2H2v2zm2-6h4v4H4v-4zm6-4h4v8h-4v-8zm6-6h4v14h-4V6z"/></svg><span>70%</span></span>
+          </div>
+          <div class="topbar">
+            <svg class="topbar-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <span class="topbar-title">My Timesheet</span>
+          </div>
+          <div class="content" style="background:#f4f5f8;">
+            <div style="background: var(--green-bg); border: 1px solid var(--green-soft); border-radius: 10px; padding: 12px 14px; display:flex; gap:10px; align-items:center;">
+              <div style="width:32px; height:32px; border-radius:50%; background:#43a047; color:#fff; display:flex; align-items:center; justify-content:center;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:16px; height:16px;"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div>
+                <div style="font-size:14px; font-weight:700; color:var(--green);">Clocked in at 12:28 PM</div>
+                <div style="font-size:11.5px; color:var(--muted);">Location verified · (C100) Barton</div>
+              </div>
+            </div>
+
+            <div class="welcome-card" style="padding:14px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div style="font-size:14px; font-weight:600; color:var(--primary);">(C100) Barton</div>
+                <div style="font-size:11px; color:var(--muted);">Today · Mon 25 May</div>
+              </div>
+              <div style="display:flex; gap:18px; font-size:12px; color:var(--muted); margin-bottom:14px;">
+                <div><div style="font-size:10px; text-transform:uppercase; letter-spacing:0.4px;">Clocked</div><div style="font-size:15px; color:var(--primary); font-weight:500;">00h 01m</div></div>
+                <div><div style="font-size:10px; text-transform:uppercase; letter-spacing:0.4px;">Break</div><div style="font-size:15px; color:var(--primary); font-weight:500;">0m</div></div>
+              </div>
+              <button class="btn-outline-red" style="padding:10px;">Clock out</button>
+            </div>
+            <div style="font-size:11px; color:var(--muted); text-align:center;">Timesheet card now shows live clocked-in state.</div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>4A.</b> Clocked in — live timer running, return to timesheet</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ PATH B: OUTSIDE GEOFENCE ============ -->
+  <div class="flow-section">
+    <div class="flow-label outside"><span class="flow-dot"></span>Path B · Outside geofence</div>
+    <div class="flow-row">
+
+      <!-- Phone 3B: Form with red banner (blocked) -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="statusbar">
+            <span>12:28</span>
+            <span class="statusbar-right"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 22h20v-2H2v2zm2-6h4v4H4v-4zm6-4h4v8h-4v-8zm6-6h4v14h-4V6z"/></svg><span>70%</span></span>
+          </div>
+          <div class="topbar">
+            <svg class="topbar-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            <span class="topbar-title">Clockin</span>
+          </div>
+          <div class="geo-banner bad">
+            <div class="geo-icon bad">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12" y2="16"/><circle cx="12" cy="12" r="9"/></svg>
+            </div>
+            <div class="geo-body">
+              <div class="geo-title bad">You're outside the site boundary</div>
+              <div class="geo-meta"><b>240 m</b> from (C100) Barton · Move closer or request a manager override to clock in.</div>
+            </div>
+          </div>
+          <div class="content has-banner">
+            <div>
+              <div class="field-label">Project</div>
+              <div class="field-dropdown">
+                <span>(C100) Barton</span>
+                <span class="chev">▼</span>
+              </div>
+            </div>
+            <div>
+              <div class="field-label heavy">Equipment</div>
+              <div class="field-help">Please select the equipment you will be operating.</div>
+              <div class="field-select-empty">Select Equipment</div>
+            </div>
+          </div>
+          <div class="bottom-cta">
+            <button class="btn-primary disabled">Clock in</button>
+            <button class="btn-outline-red">Request override</button>
+            <button class="btn-link" style="text-align:center;">Try again — refresh location</button>
+          </div>
+        </div>
+        <div class="phone-caption"><b>3B.</b> Outside boundary — Clock in blocked, Request override surfaced</div>
+      </div>
+
+      <div class="arrow">→</div>
+
+      <!-- Phone 4B: Override request sheet -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="statusbar">
+            <span>12:28</span>
+            <span class="statusbar-right"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 22h20v-2H2v2zm2-6h4v4H4v-4zm6-4h4v8h-4v-8zm6-6h4v14h-4V6z"/></svg><span>70%</span></span>
+          </div>
+          <div class="topbar">
+            <svg class="topbar-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            <span class="topbar-title">Clockin</span>
+          </div>
+          <!-- dimmed background -->
+          <div style="flex:1; background:#f4f5f8; position:relative; overflow:hidden;">
+            <div style="position:absolute; inset:0; background:rgba(20, 30, 50, 0.45);"></div>
+            <div style="position:absolute; left:0; right:0; bottom:0;">
+              <div class="sheet">
+                <div class="sheet-handle"></div>
+                <div class="sheet-title">Request override</div>
+                <div class="sheet-sub">You're <b style="color:var(--red);">240 m</b> outside the (C100) Barton boundary. Your project manager will review this request before the clock-in is approved.</div>
+
+                <div class="sheet-form">
+                  <div>
+                    <div class="form-label" style="margin-bottom:6px;">Reason</div>
+                    <div class="reason-chips">
+                      <span class="chip selected">Off-site task</span>
+                      <span class="chip">GPS inaccurate</span>
+                      <span class="chip">Travelling to site</span>
+                      <span class="chip">Other</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="form-label" style="margin-bottom:6px;">Notes <span style="color:var(--muted-2); font-weight:400; text-transform:none; letter-spacing:0;">(optional)</span></div>
+                    <textarea class="textarea" placeholder="e.g. Collecting materials from supplier yard before heading to site.">Picking up timber order from Carter Holt yard, ETA on site 1:00 PM.</textarea>
+                  </div>
+                  <div style="font-size:11.5px; color:var(--muted); display:flex; gap:6px; align-items:center;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0;"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12" y2="16"/></svg>
+                    Location, distance, and timestamp are attached automatically.
+                  </div>
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top:4px;">
+                  <button class="btn-secondary" style="flex:1;">Cancel</button>
+                  <button class="btn-primary" style="flex:1.4;">Send request</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>4B.</b> Override request — choose reason, optional note, send to manager</div>
+      </div>
+
+      <div class="arrow">→</div>
+
+      <!-- Phone 5B: Pending approval -->
+      <div class="phone-wrap">
+        <div class="phone">
+          <div class="statusbar">
+            <span>12:29</span>
+            <span class="statusbar-right"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 22h20v-2H2v2zm2-6h4v4H4v-4zm6-4h4v8h-4v-8zm6-6h4v14h-4V6z"/></svg><span>70%</span></span>
+          </div>
+          <div class="topbar">
+            <svg class="topbar-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <span class="topbar-title">My Timesheet</span>
+          </div>
+          <div class="content" style="background:#f4f5f8;">
+            <div class="success-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            </div>
+            <div class="success-title">Override request sent</div>
+            <div class="success-sub">Your project manager has been notified. You'll receive a push notification once it's approved or declined.</div>
+
+            <div class="receipt-card">
+              <div class="receipt-row"><span class="k">Project</span><span class="v">(C100) Barton</span></div>
+              <div class="receipt-row"><span class="k">Distance from site</span><span class="v">240 m</span></div>
+              <div class="receipt-row"><span class="k">Reason</span><span class="v">Off-site task</span></div>
+              <div class="receipt-row"><span class="k">Requested at</span><span class="v">12:29 PM</span></div>
+              <div class="receipt-row"><span class="k">Status</span><span class="v" style="color:var(--amber-text);">Awaiting approval</span></div>
+            </div>
+
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:8px;">
+              <button class="btn-secondary">View request</button>
+              <button class="btn-link" style="text-align:center;">Back to timesheet</button>
+            </div>
+          </div>
+        </div>
+        <div class="phone-caption"><b>5B.</b> Pending — clock-in begins only after manager approves</div>
+      </div>
+
+    </div>
+
+    <div class="explainer">
+      <b>Why block instead of warn:</b> Geofencing exists to ensure time is recorded against real on-site presence — silently allowing off-site clock-ins defeats the purpose. The override path keeps legitimate exceptions (depot pickups, travel time, GPS error) unblocked while leaving an audit trail for the PM. Distance, GPS accuracy, and timestamp are auto-attached so the manager doesn't have to ask.
+    </div>
+  </div>
+
+</body>
+</html>
