@@ -1180,13 +1180,31 @@ function fmt(n) {
   return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/* Docket chip — site docket is the delivery check. */
+/* Compare amounts with tolerance for rounding (50c) */
+function matchStatus(billExc, refAmt) {
+  if (refAmt == null) return null;
+  if (Math.abs(billExc - refAmt) < 0.50) return 'exact';
+  if (billExc > refAmt) return 'over';
+  return 'partial';
+}
+
+/* PO chip — shows amount match status against the linked PO */
+function poChip(b) {
+  if (!b.po) return { type: 'amber', label: 'No PO' };
+  const m = matchStatus(b.excTotal, b.poTotal);
+  if (m === 'exact') return { type: 'po-match', label: `${b.po} ✓ matches` };
+  if (m === 'over') return { type: 'red', label: `${b.po} ⚠ over by ${fmt(b.excTotal - b.poTotal)}` };
+  const pct = Math.round((b.excTotal / b.poTotal) * 100);
+  return { type: 'po', label: `${b.po} · ${pct}% of PO` };
+}
+
+/* Docket chip — site docket is the delivery check */
 function docketChip(b) {
-  if (b.docket) {
-    const shortRef = b.docket.length > 10 ? b.docket.slice(-6) : b.docket;
-    return { type: 'docket', label: `Docket ✓ …${shortRef}` };
-  }
-  return { type: 'amber', label: 'No docket' };
+  if (!b.docket) return { type: 'amber', label: 'No docket' };
+  const m = matchStatus(b.excTotal, b.docketTotal);
+  if (m === 'exact') return { type: 'docket-match', label: `Docket ✓ matches` };
+  if (m === 'over') return { type: 'red', label: `Docket ⚠ under by ${fmt(b.excTotal - b.docketTotal)}` };
+  return { type: 'docket', label: `Docket · partial delivery` };
 }
 
 /* Stage chip HTML for the list row. Reads bill.status + bill.approvers. */
