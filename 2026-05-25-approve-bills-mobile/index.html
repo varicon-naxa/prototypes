@@ -1265,24 +1265,62 @@ function openBill(id) {
     </div>
   `;
 
+  // Approvers
+  document.getElementById('bd-approvers').innerHTML = b.approvers.map(a => {
+    const initials = a.isYou ? 'You' : a.name.split(' ').map(p => p[0]).slice(0,2).join('');
+    let metaHtml = '';
+    if (a.status === 'done') metaHtml = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Approved ${a.date || ''}${a.note ? `<span class="note">"${a.note}"</span>` : ''}`;
+    else if (a.status === 'current') metaHtml = `<span>⏳</span> Pending your action`;
+    else if (a.status === 'rejected') metaHtml = `<span>✕</span> Rejected ${a.date || ''}${a.note ? `<span class="note">"${a.note}"</span>` : ''}`;
+    else metaHtml = `<span>○</span> Waiting`;
+    const dotContent = a.status === 'done' ? '✓' : a.status === 'rejected' ? '✕' : (a.isYou ? '•' : initials);
+    return `
+      <div class="approver-step ${a.status}">
+        <div class="line"></div>
+        <div class="dot">${dotContent}</div>
+        <div class="body">
+          <div class="nm">${a.name}${a.isYou ? '<span class="you-pill">YOU</span>' : ''}</div>
+          <div class="role">${a.role} · ${a.email}</div>
+          <div class="meta">${metaHtml}</div>
+        </div>
+      </div>`;
+  }).join('');
+
   document.getElementById('bd-bill-no').textContent = b.billNo;
   document.getElementById('bd-bill-date').textContent = b.date;
   const poEl = document.getElementById('bd-po');
-  if (b.po) { poEl.textContent = b.po; poEl.className = 'v link'; }
+  if (b.po) { poEl.textContent = b.po; poEl.className = 'v link'; poEl.style.color = ''; }
   else { poEl.textContent = 'Not linked'; poEl.className = 'v'; poEl.style.color = 'var(--amber)'; }
-  document.getElementById('bd-cc').textContent = b.cc;
+  const dkEl = document.getElementById('bd-docket');
+  if (b.docket) { dkEl.textContent = b.docket; dkEl.style.color = 'var(--text)'; }
+  else { dkEl.textContent = 'Not linked'; dkEl.style.color = 'var(--muted)'; }
   document.getElementById('bd-submitter').textContent = b.submitter;
 
+  // Line items (full breakdown)
   document.getElementById('bd-line-items').innerHTML = b.lines.map(l => `
-    <div class="line-item">
-      <div class="li-body">
+    <div class="line-card">
+      <div class="li-head">
         <div class="li-desc">${l.desc}</div>
-        ${l.meta ? `<div class="li-meta">${l.meta}</div>` : ''}
+        <div class="li-total">${fmt(l.incGst)}</div>
       </div>
-      <div class="li-amt">${fmt(l.amt)}</div>
+      <div class="li-resource">${l.resource}</div>
+      <div class="li-meta-list">
+        <div class="li-meta-row"><span class="k">Cost centre</span><span class="v">${l.costCentre}</span></div>
+        <div class="li-meta-row"><span class="k">Account code</span><span class="v">${l.accCode}</span></div>
+        <div class="li-meta-row"><span class="k">Unit · Qty</span><span class="v">${l.unit} · ${l.qty}</span></div>
+        <div class="li-meta-row"><span class="k">Unit cost</span><span class="v">${fmt(l.unitCost)}</span></div>
+      </div>
+      <div class="li-subtotal">
+        <span>Exc GST ${fmt(l.excGst)}</span>
+        <span class="gst">GST ${l.gstRate}% · ${fmt(l.gstAmt)}</span>
+      </div>
     </div>
   `).join('');
-  document.getElementById('bd-total').textContent = fmt(b.amount);
+
+  const totals = sumLines(b.lines);
+  document.getElementById('bd-subtotal').textContent = fmt(totals.exc);
+  document.getElementById('bd-gst').textContent = fmt(totals.gst);
+  document.getElementById('bd-total').textContent = fmt(totals.inc);
 
   document.getElementById('bd-attachments').innerHTML = b.attachments.map(name => {
     const isImage = /\.(jpg|jpeg|png|gif)$/i.test(name);
