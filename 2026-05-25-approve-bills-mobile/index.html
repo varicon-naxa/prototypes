@@ -917,126 +917,179 @@
 /* ============================================ */
 /* Sample bills data                              */
 /* ============================================ */
+/* Helper: build a line item */
+function L(desc, resource, costCentre, accCode, unit, qty, unitCost) {
+  const excGst = +(qty * unitCost).toFixed(2);
+  const gstAmt = +(excGst * 0.10).toFixed(2);
+  return { desc, resource, costCentre, accCode, unit, qty, unitCost,
+           gstRate: 10, excGst, gstAmt, incGst: +(excGst + gstAmt).toFixed(2) };
+}
+
+/* Helper: sum line totals */
+function sumLines(lines) {
+  return lines.reduce((s, l) => ({
+    exc: s.exc + l.excGst, gst: s.gst + l.gstAmt, inc: s.inc + l.incGst
+  }), { exc: 0, gst: 0, inc: 0 });
+}
+
+/* "You" — the current approver in this prototype */
+const YOU = { name: 'You (Alec Neill)', role: 'Third Approver', email: 'alec@varicon.com.au', isYou: true };
+
 const bills = [
   {
     id: 'B-4521', vendor: 'Boral Limited', logo: 'B',
-    billNo: 'INV-87432', amount: 14250.00, gst: 1295.45,
-    date: '23/05/2026', due: '06/06/2026', dueDays: 12,
-    po: 'PO-0832', cc: 'Concrete Works', submitter: 'James Wilson',
+    billNo: 'INV-87432', date: '23/05/2026', due: '06/06/2026', dueDays: 12,
+    po: 'PO-0832', docket: '23561220260512451213', submitter: 'James Wilson',
     status: 'pending', assignedAgo: '2 days ago',
     chips: [{type:'po', label:'PO-0832 linked'}, {type:'grey', label:'Concrete'}],
+    approvers: [
+      { name: 'Prashant Manandhar', role: 'First Approver', email: 'prashant@varicon.com.au', status: 'done', date: '23/05/2026' },
+      { name: 'George Carpenter', role: 'Second Approver', email: 'george@varicon.com.au', status: 'done', date: '24/05/2026' },
+      { ...YOU, status: 'current' }
+    ],
     lines: [
-      {desc: '32 MPa Premix Concrete', meta: '85 m³ @ $145.00', amt: 12325.00},
-      {desc: 'Pumping Service', meta: '6 hrs @ $185.00', amt: 1110.00},
-      {desc: 'After-hours surcharge', meta: '', amt: 280.00},
-      {desc: 'Delivery', meta: '3 loads', amt: 535.00}
+      L('32 MPa Premix Concrete', '32 MPa Concrete Mix - 20mm aggregate', '(004) Concrete Works', '410-M - Materials', 'm³', 85, 145.00),
+      L('Pumping Service', 'Concrete pump (38m boom)', '(004) Concrete Works', '410-S - Subcontract', 'Hour', 6, 185.00),
+      L('After-hours surcharge', 'After-hours premium', '(004) Concrete Works', '410-M - Materials', 'Each', 1, 280.00),
+      L('Delivery', 'Concrete agitator delivery', '(004) Concrete Works', '410-M - Materials', 'Load', 3, 178.33)
     ],
     attachments: ['boral-invoice-87432.pdf', 'delivery-docket-2521.jpg', 'site-receipt.jpg']
   },
   {
     id: 'B-4519', vendor: 'Hire Right Plant', logo: 'H',
-    billNo: 'HRP-2026-1142', amount: 8430.00, gst: 766.36,
-    date: '22/05/2026', due: '21/05/2026', dueDays: -2,
-    po: 'PO-0814', cc: 'Earthworks', submitter: 'Sarah Chen',
+    billNo: 'HRP-2026-1142', date: '22/05/2026', due: '21/05/2026', dueDays: -2,
+    po: 'PO-0814', docket: '12345620260511122813', submitter: 'Sarah Chen',
     status: 'pending', assignedAgo: '4 days ago',
     chips: [{type:'po', label:'PO-0814 linked'}, {type:'red', label:'Overdue 2d'}],
+    approvers: [
+      { name: 'Prashant Manandhar', role: 'First Approver', email: 'prashant@varicon.com.au', status: 'done', date: '22/05/2026' },
+      { name: 'George Carpenter', role: 'Second Approver', email: 'george@varicon.com.au', status: 'done', date: '23/05/2026' },
+      { ...YOU, status: 'current' }
+    ],
     lines: [
-      {desc: '20T Excavator hire', meta: 'Wk ending 22/05 · 38 hrs', amt: 5320.00},
-      {desc: 'Operator', meta: '38 hrs @ $68.00', amt: 2584.00},
-      {desc: 'Fuel surcharge', meta: '', amt: 526.00}
+      L('50 tonne excavator', '30t Excavator Wet Hire (Excluding Fuel)', '(002) Bulk Earthworks', '000-P - 000-P', 'Hour', 20, 160.00),
+      L('Operator', 'Plant operator (HR licence)', '(002) Bulk Earthworks', '000-L - Labour', 'Hour', 38, 68.00),
+      L('Fuel surcharge', 'Diesel surcharge', '(002) Bulk Earthworks', '000-M - Materials', 'Each', 1, 526.00)
     ],
     attachments: ['HRP-invoice.pdf', 'timesheet-week-21.pdf']
   },
   {
     id: 'B-4515', vendor: 'Bunnings Trade', logo: 'B',
-    billNo: 'BNT-558921', amount: 1847.50, gst: 167.95,
-    date: '20/05/2026', due: '19/06/2026', dueDays: 25,
-    po: null, cc: 'Site Setup', submitter: 'Mike Rodriguez',
+    billNo: 'BNT-558921', date: '20/05/2026', due: '19/06/2026', dueDays: 25,
+    po: null, docket: null, submitter: 'Mike Rodriguez',
     status: 'pending', assignedAgo: '6 days ago',
     chips: [{type:'amber', label:'No PO'}, {type:'grey', label:'Consumables'}],
+    approvers: [
+      { name: 'Prashant Manandhar', role: 'First Approver', email: 'prashant@varicon.com.au', status: 'done', date: '20/05/2026' },
+      { name: 'George Carpenter', role: 'Second Approver', email: 'george@varicon.com.au', status: 'done', date: '21/05/2026' },
+      { ...YOU, status: 'current' }
+    ],
     lines: [
-      {desc: 'Star pickets x 50', meta: '', amt: 425.00},
-      {desc: 'Safety mesh 50m roll x 4', meta: '', amt: 596.00},
-      {desc: 'Hi-vis vests x 12', meta: '', amt: 348.00},
-      {desc: 'Site safety signage', meta: '', amt: 478.50}
+      L('Star pickets', 'Star picket 1.65m', '(006) Site Setup', '500-M - Consumables', 'Each', 50, 8.50),
+      L('Safety mesh', 'Safety mesh roll 50m', '(006) Site Setup', '500-M - Consumables', 'Roll', 4, 149.00),
+      L('Hi-vis vests', 'Hi-vis vest Class D/N', '(006) Site Setup', '500-PPE - PPE', 'Each', 12, 29.00),
+      L('Site safety signage', 'Site sign pack (10x A2)', '(006) Site Setup', '500-M - Consumables', 'Pack', 1, 478.50)
     ],
     attachments: ['bunnings-tax-invoice.pdf']
   },
   {
     id: 'B-4510', vendor: 'Stramit Steel', logo: 'S',
-    billNo: 'SS-90234', amount: 18420.00, gst: 1674.55,
-    date: '18/05/2026', due: '02/06/2026', dueDays: 8,
-    po: 'PO-0791', cc: 'Structural Steel', submitter: 'James Wilson',
+    billNo: 'SS-90234', date: '18/05/2026', due: '02/06/2026', dueDays: 8,
+    po: 'PO-0791', docket: '88112520260518221101', submitter: 'James Wilson',
     status: 'pending', assignedAgo: '8 days ago',
     chips: [{type:'po', label:'PO-0791 linked'}, {type:'grey', label:'Steel'}],
+    approvers: [
+      { name: 'Prashant Manandhar', role: 'First Approver', email: 'prashant@varicon.com.au', status: 'done', date: '18/05/2026' },
+      { name: 'George Carpenter', role: 'Second Approver', email: 'george@varicon.com.au', status: 'done', date: '19/05/2026' },
+      { ...YOU, status: 'current' }
+    ],
     lines: [
-      {desc: 'UB 250x89x32 x 12m lengths', meta: '8 ea', amt: 9840.00},
-      {desc: 'PFC 200x75x22 x 9m lengths', meta: '6 ea', amt: 5544.00},
-      {desc: 'Plate 12mm x 1200x2400', meta: '4 ea', amt: 2280.00},
-      {desc: 'Delivery (semi)', meta: '', amt: 756.00}
+      L('UB 250x89x32', 'Universal Beam 250UB32 (12m)', '(008) Structural Steel', '600-M - Materials', 'Each', 8, 1230.00),
+      L('PFC 200x75x22', 'Parallel Flange Channel 200PFC22 (9m)', '(008) Structural Steel', '600-M - Materials', 'Each', 6, 924.00),
+      L('Plate 12mm', 'Steel plate 12mm 1200x2400', '(008) Structural Steel', '600-M - Materials', 'Each', 4, 570.00),
+      L('Delivery (semi)', 'Semi-trailer delivery', '(008) Structural Steel', '600-M - Materials', 'Each', 1, 756.00)
     ],
     attachments: ['stramit-invoice.pdf', 'mill-certs.pdf', 'delivery-docket.jpg']
   },
   {
     id: 'B-4502', vendor: 'AAA Crane Trucks', logo: 'A',
-    billNo: 'AAA-3318', amount: 5290.00, gst: 480.91,
-    date: '15/05/2026', due: '14/06/2026', dueDays: 20,
-    po: 'PO-0775', cc: 'Plant Hire', submitter: 'Sarah Chen',
+    billNo: 'AAA-3318', date: '15/05/2026', due: '14/06/2026', dueDays: 20,
+    po: 'PO-0775', docket: '77332420260514110042', submitter: 'Sarah Chen',
     status: 'pending', assignedAgo: '10 days ago',
     chips: [{type:'po', label:'PO-0775 linked'}, {type:'grey', label:'Plant hire'}],
+    approvers: [
+      { name: 'Prashant Manandhar', role: 'First Approver', email: 'prashant@varicon.com.au', status: 'done', date: '15/05/2026' },
+      { name: 'George Carpenter', role: 'Second Approver', email: 'george@varicon.com.au', status: 'done', date: '16/05/2026' },
+      { ...YOU, status: 'current' }
+    ],
     lines: [
-      {desc: 'Crane truck 8T (4 days)', meta: '@ $1,150/day', amt: 4600.00},
-      {desc: 'Travel', meta: '2 hrs @ $135', amt: 270.00},
-      {desc: 'After hours callout', meta: '', amt: 420.00}
+      L('Crane truck 8T', '8 Tonne Crane Truck Wet Hire', '(010) Plant Hire', '700-PH - Plant Hire', 'Day', 4, 1150.00),
+      L('Travel', 'Mobilisation', '(010) Plant Hire', '700-PH - Plant Hire', 'Hour', 2, 135.00),
+      L('After hours callout', 'Out-of-hours callout fee', '(010) Plant Hire', '700-PH - Plant Hire', 'Each', 1, 420.00)
     ],
     attachments: ['aaa-invoice-3318.pdf']
   },
-  // Approved (history)
+  // Approved (history) — you approved
   {
     id: 'B-4498', vendor: 'Westbuild Materials', logo: 'W',
-    billNo: 'WB-22018', amount: 6240.00, gst: 567.27,
-    date: '10/05/2026', due: '09/06/2026', dueDays: 15,
-    po: 'PO-0752', cc: 'Site Setup', submitter: 'Mike Rodriguez',
+    billNo: 'WB-22018', date: '10/05/2026', due: '09/06/2026', dueDays: 15,
+    po: 'PO-0752', docket: '22018520260510084712', submitter: 'Mike Rodriguez',
     status: 'approved', approvedDate: '12/05/2026', approvedNote: 'OK to pay — matches PO',
     chips: [{type:'po', label:'PO-0752 linked'}, {type:'green', label:'Approved'}],
+    approvers: [
+      { name: 'Prashant Manandhar', role: 'First Approver', email: 'prashant@varicon.com.au', status: 'done', date: '10/05/2026' },
+      { name: 'George Carpenter', role: 'Second Approver', email: 'george@varicon.com.au', status: 'done', date: '11/05/2026' },
+      { ...YOU, status: 'done', date: '12/05/2026', note: 'OK to pay — matches PO' }
+    ],
     lines: [
-      {desc: 'Roadbase 20mm', meta: '40 t @ $128', amt: 5120.00},
-      {desc: 'Geofabric 4m roll', meta: '50m', amt: 580.00},
-      {desc: 'Delivery', meta: '2 loads', amt: 540.00}
+      L('Roadbase 20mm', '20mm Class 2 Roadbase', '(006) Site Setup', '500-M - Materials', 't', 40, 128.00),
+      L('Geofabric', 'Geofabric 4m wide bidim A24', '(006) Site Setup', '500-M - Materials', 'm', 50, 11.60),
+      L('Delivery', 'Truck delivery (2 loads)', '(006) Site Setup', '500-M - Materials', 'Load', 2, 270.00)
     ],
     attachments: ['westbuild-invoice.pdf', 'weighbridge-docket.jpg']
   },
   {
     id: 'B-4485', vendor: 'BlueScope Steel', logo: 'B',
-    billNo: 'BSS-67711', amount: 12480.00, gst: 1134.55,
-    date: '04/05/2026', due: '03/06/2026', dueDays: 9,
-    po: 'PO-0741', cc: 'Structural Steel', submitter: 'James Wilson',
+    billNo: 'BSS-67711', date: '04/05/2026', due: '03/06/2026', dueDays: 9,
+    po: 'PO-0741', docket: '67711420260504143218', submitter: 'James Wilson',
     status: 'approved', approvedDate: '05/05/2026', approvedNote: '',
     chips: [{type:'po', label:'PO-0741 linked'}, {type:'green', label:'Approved'}],
+    approvers: [
+      { name: 'Prashant Manandhar', role: 'First Approver', email: 'prashant@varicon.com.au', status: 'done', date: '04/05/2026' },
+      { name: 'George Carpenter', role: 'Second Approver', email: 'george@varicon.com.au', status: 'done', date: '04/05/2026' },
+      { ...YOU, status: 'done', date: '05/05/2026' }
+    ],
     lines: [
-      {desc: 'Galv. purlins C200', meta: '24 lengths', amt: 8640.00},
-      {desc: 'Top hat sections', meta: '32 lengths', amt: 3120.00},
-      {desc: 'Delivery', meta: '', amt: 720.00}
+      L('Galv. purlins C200', 'Z200 Galvanised Purlins (12m)', '(008) Structural Steel', '600-M - Materials', 'Length', 24, 360.00),
+      L('Top hat sections', 'Top hat TH40 galvanised', '(008) Structural Steel', '600-M - Materials', 'Length', 32, 97.50),
+      L('Delivery', 'Semi-trailer delivery', '(008) Structural Steel', '600-M - Materials', 'Each', 1, 720.00)
     ],
     attachments: ['bluescope-invoice.pdf']
   },
-  // Rejected (history)
+  // Rejected (history) — you rejected
   {
     id: 'B-4490', vendor: 'Quickfix Trades', logo: 'Q',
-    billNo: 'QF-1180', amount: 4250.00, gst: 386.36,
-    date: '08/05/2026', due: '07/06/2026', dueDays: 13,
-    po: null, cc: 'Concrete Works', submitter: 'Mike Rodriguez',
+    billNo: 'QF-1180', date: '08/05/2026', due: '07/06/2026', dueDays: 13,
+    po: null, docket: null, submitter: 'Mike Rodriguez',
     status: 'rejected', rejectedDate: '09/05/2026',
     rejectedReason: 'Missing PO link',
     rejectedNote: 'No PO has been raised for this work. Please raise a PO first.',
     chips: [{type:'amber', label:'No PO'}, {type:'red', label:'Rejected'}],
+    approvers: [
+      { name: 'Prashant Manandhar', role: 'First Approver', email: 'prashant@varicon.com.au', status: 'done', date: '08/05/2026' },
+      { name: 'George Carpenter', role: 'Second Approver', email: 'george@varicon.com.au', status: 'done', date: '09/05/2026' },
+      { ...YOU, status: 'rejected', date: '09/05/2026', note: 'Missing PO link — No PO has been raised for this work. Please raise a PO first.' }
+    ],
     lines: [
-      {desc: 'Form-up labour', meta: '2 days · 2 workers', amt: 3200.00},
-      {desc: 'Materials', meta: '', amt: 1050.00}
+      L('Form-up labour', 'Carpenter — formwork', '(004) Concrete Works', '410-L - Labour', 'Day', 4, 800.00),
+      L('Materials', 'Formply 17mm 1200x2400', '(004) Concrete Works', '410-M - Materials', 'Sheet', 15, 70.00)
     ],
     attachments: ['quickfix-inv.pdf']
   }
 ];
+
+/* Set amount field on each bill from summed lines */
+bills.forEach(b => { b.amount = sumLines(b.lines).inc; });
 
 /* ============================================ */
 /* State                                          */
