@@ -1411,6 +1411,90 @@ function openBill(id) {
     </div>
   `;
 
+  // Match Check
+  const mcRows = [];
+  mcRows.push(`
+    <div class="mc-row bill-row-mc">
+      <div class="mc-icon">$</div>
+      <div class="mc-body">
+        <div class="mc-label">Bill total (exc GST)</div>
+        <div class="mc-sub">${b.billNo} · ${b.vendor}</div>
+      </div>
+      <div class="mc-amt">${fmt(b.excTotal)}</div>
+    </div>
+  `);
+
+  // PO row
+  if (b.po) {
+    const m = matchStatus(b.excTotal, b.poTotal);
+    const state = m === 'exact' ? 'matched' : m === 'over' ? 'alert' : 'warn';
+    const icon = m === 'exact' ? '✓' : m === 'over' ? '⚠' : 'i';
+    const tag = m === 'exact'
+      ? 'Matches'
+      : m === 'over'
+        ? `Over PO by ${fmt(b.excTotal - b.poTotal)}`
+        : `${Math.round((b.excTotal / b.poTotal) * 100)}% of PO · ${fmt(b.poTotal - b.excTotal)} remaining`;
+    mcRows.push(`
+      <div class="mc-row ${state}">
+        <div class="mc-icon">${icon}</div>
+        <div class="mc-body">
+          <div class="mc-label">Purchase Order ${b.po}</div>
+          <div class="mc-sub">Authorised amount</div>
+          <span class="mc-tag">${tag}</span>
+        </div>
+        <div class="mc-amt">${fmt(b.poTotal)}</div>
+      </div>
+    `);
+  } else {
+    mcRows.push(`
+      <div class="mc-row empty">
+        <div class="mc-icon">—</div>
+        <div class="mc-body">
+          <div class="mc-label">Purchase Order</div>
+          <div class="mc-sub">No PO linked to this bill</div>
+          <span class="mc-tag">Missing</span>
+        </div>
+        <div class="mc-amt">—</div>
+      </div>
+    `);
+  }
+
+  // Docket row
+  if (b.docket) {
+    const m = matchStatus(b.excTotal, b.docketTotal);
+    const state = m === 'exact' ? 'matched' : m === 'over' ? 'alert' : 'warn';
+    const icon = m === 'exact' ? '✓' : m === 'over' ? '⚠' : 'i';
+    const tag = m === 'exact'
+      ? 'Matches'
+      : m === 'over'
+        ? `Bill exceeds delivered by ${fmt(b.excTotal - b.docketTotal)}`
+        : `Partial — ${fmt(b.docketTotal - b.excTotal)} more delivered than billed`;
+    mcRows.push(`
+      <div class="mc-row ${state}">
+        <div class="mc-icon">${icon}</div>
+        <div class="mc-body">
+          <div class="mc-label">Site Docket …${b.docket.slice(-6)}</div>
+          <div class="mc-sub">Delivered / received</div>
+          <span class="mc-tag">${tag}</span>
+        </div>
+        <div class="mc-amt">${fmt(b.docketTotal)}</div>
+      </div>
+    `);
+  } else {
+    mcRows.push(`
+      <div class="mc-row empty">
+        <div class="mc-icon">—</div>
+        <div class="mc-body">
+          <div class="mc-label">Site Docket</div>
+          <div class="mc-sub">No delivery check on file</div>
+          <span class="mc-tag">Missing</span>
+        </div>
+        <div class="mc-amt">—</div>
+      </div>
+    `);
+  }
+  document.getElementById('bd-match-check').innerHTML = mcRows.join('');
+
   // Approvers
   document.getElementById('bd-approvers').innerHTML = b.approvers.map(a => {
     const initials = a.isYou ? 'You' : a.name.split(' ').map(p => p[0]).slice(0,2).join('');
