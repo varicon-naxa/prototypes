@@ -1468,74 +1468,46 @@
     let clockedTotalMin = 480;    // gross minus break
     let allocs = { wbs: [], cc: [] };
     let assignType = 'wbs';
-    let wfScreenType = null;
+    let chosenClockoutType = 'wbs';
     let roleOn = false, fillOn = false;
 
-    function activeWorkflow() {
-      if (allocs.wbs.length) return 'wbs';
-      if (allocs.cc.length) return 'cc';
-      return null;
-    }
     function clearAllocations() { allocs = { wbs: [], cc: [] }; }
+
+    /* Clock out → choose workflow first (separate clock-outs) */
+    function openClockoutChoose() {
+      document.getElementById('screenClockoutChoose').classList.add('open');
+    }
+
+    function chooseClockout(type) {
+      chosenClockoutType = type;
+      clearAllocations();
+      closeSheet('screenClockoutChoose');
+      openClockOut();
+    }
 
     function openClockOut() {
       recalcDuration();
       renderCoEquip();
-      renderWorkflowChoice();
+      renderCoAlloc();
       document.getElementById('screenClockOut').classList.add('open');
     }
 
-    /* Two separate workflow screens — one at a time, no mixing */
-    function renderWorkflowChoice() {
-      const aw = activeWorkflow();
-      [['wbs', 'wfWbs', 'wfWbsStatus'], ['cc', 'wfCc', 'wfCcStatus']].forEach(([type, tileId, statusId]) => {
-        const tile = document.getElementById(tileId);
-        const status = document.getElementById(statusId);
-        tile.classList.remove('selected', 'locked');
-        if (allocs[type].length) {
-          tile.classList.add('selected');
-          status.textContent = `✓ ${fmt(allocatedMin(type))} allocated`;
-        } else if (aw && aw !== type) {
-          tile.classList.add('locked');
-          status.textContent = 'Locked';
-        } else {
-          status.textContent = '';
-        }
-      });
-    }
-
-    function openWorkflow(type) {
-      const aw = activeWorkflow();
-      if (aw && aw !== type) {
-        showToast(`Clear your ${aw === 'wbs' ? 'WBS' : 'Cost Centre'} allocation to switch`);
-        return;
-      }
-      wfScreenType = type;
-      document.getElementById('wfTitle').textContent = type === 'wbs' ? 'WBS allocation' : 'Cost Centre allocation';
-      renderWorkflow();
-      document.getElementById('screenWorkflow').classList.add('open');
-    }
-
-    function closeWorkflow() {
-      document.getElementById('screenWorkflow').classList.remove('open');
-      wfScreenType = null;
-      renderWorkflowChoice();
-    }
-
-    function renderWorkflow() {
-      if (!wfScreenType) return;
-      const type = wfScreenType;
+    /* Single chosen workflow rendered inline on the clock-out screen */
+    function renderCoAlloc() {
+      const type = chosenClockoutType;
       const isWbs = type === 'wbs';
-      document.getElementById('wfDurationValue').textContent = fmt(clockedTotalMin);
-      document.getElementById('wfPanelLabel').textContent = isWbs ? 'WBS tasks' : 'Cost centres';
-      document.getElementById('wfAssignLabel').textContent = isWbs ? 'Assign WBS task' : 'Assign cost centre';
+      document.getElementById('coAllocLabel').innerHTML =
+        `${isWbs ? 'WBS allocation' : 'Cost Centre allocation'} <span class="req">*</span>`;
+      document.getElementById('coAllocHint').textContent =
+        isWbs ? 'Allocate your clocked time against WBS tasks.' : 'Allocate your clocked time against cost centres.';
+      document.getElementById('coAssignLabel').textContent = isWbs ? 'Assign WBS task' : 'Assign cost centre';
 
       const alloc = allocatedMin(type), remain = remainingMin(type);
-      document.getElementById('wfSummary').innerHTML = `
+      document.getElementById('coSummary').innerHTML = `
         <div class="alloc-stat done"><div class="as-label">Assigned</div><div class="as-value">${fmt(alloc)}</div></div>
         <div class="alloc-stat ${remain > 0 ? 'warn' : 'done'}"><div class="as-label">Unassigned</div><div class="as-value">${fmt(remain)}</div></div>`;
 
-      document.getElementById('wfList').innerHTML = allocs[type].map((a, i) => `
+      document.getElementById('coList').innerHTML = allocs[type].map((a, i) => `
         <div class="alloc-card">
           <div class="alloc-card-top">
             <div class="alloc-card-body">
@@ -1549,7 +1521,7 @@
           </div>
         </div>`).join('');
 
-      document.getElementById('wfAssignBtn').classList.toggle('disabled', remain === 0);
+      document.getElementById('coAssignBtn').classList.toggle('disabled', remain === 0);
     }
 
     function fmt(min) {
