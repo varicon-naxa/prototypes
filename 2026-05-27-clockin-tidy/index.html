@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Clock in — tidied</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #143666;
+      --accent: #F2AD3E;
+      --bg: #ffffff;
+      --muted: #6b7280;
+      --border: rgba(0,0,0,0.08);
+      --field-border: #d8dce3;
+      --green-bg: #e8f5e9;
+      --green-text: #2e7d32;
+      --amber-bg: #fff8ec;
+      --amber-text: #b86e00;
+      --red: #d4183d;
+      --surface: #f6f7f9;
+    }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: #e8eaf0;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 24px 0;
+    }
+
+    /* ── Phone frame ── */
+    .phone {
+      width: 390px;
+      height: 824px;
+      background: var(--bg);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-radius: 28px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+    }
+
+    /* ── Header ── */
+    .ci-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      background: #fff;
+      flex-shrink: 0;
+    }
+    .icon-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--primary);
+      display: flex; align-items: center; justify-content: center;
+      padding: 2px;
+    }
+    .ci-header-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    /* ── Scroll body ── */
+    .ci-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 12px calc(env(safe-area-inset-bottom) + 12px);
+    }
+
+    /* ── Section card ── */
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 1px 3px rgba(16,24,40,0.06);
+    }
+    .card-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.7px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .req { color: var(--red); }
+    .card-hint {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+      margin-bottom: 12px;
+    }
+
+    /* ── Shift context strip ── */
+    .shift-strip {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: linear-gradient(135deg, #1c4179, #143666);
+      border-radius: 14px;
+      padding: 14px 16px;
+      color: #fff;
+    }
+    .shift-time-box {
+      flex-shrink: 0;
+      text-align: center;
+      background: rgba(255,255,255,0.14);
+      border-radius: 10px;
+      padding: 8px 10px;
+      min-width: 58px;
+    }
+    .shift-time-box .t { font-size: 15px; font-weight: 700; line-height: 1.15; }
+    .shift-time-box .sub { font-size: 10px; opacity: 0.8; letter-spacing: 0.4px; }
+    .shift-meta { flex: 1; min-width: 0; }
+    .shift-meta .label { font-size: 10px; letter-spacing: 0.6px; text-transform: uppercase; opacity: 0.75; }
+    .shift-meta .proj {
+      font-size: 14px; font-weight: 500; margin: 1px 0 3px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .shift-meta .addr {
+      font-size: 11px; opacity: 0.82;
+      display: flex; align-items: center; gap: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .shift-change {
+      flex-shrink: 0;
+      background: rgba(255,255,255,0.16);
+      border: none; cursor: pointer;
+      color: #fff;
+      font-family: 'Roboto', sans-serif;
+      font-size: 12px; font-weight: 500;
+      border-radius: 18px;
+      padding: 7px 12px;
+    }
+    .shift-change:active { background: rgba(255,255,255,0.28); }
+
+    /* ── Project field ── */
+    .select-field {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1.5px solid var(--field-border);
+      border-radius: 10px;
+      padding: 13px 14px;
+      background: #fff;
+      cursor: pointer;
+      font-family: 'Roboto', sans-serif;
+      font-size: 14px;
+      color: var(--primary);
+      text-align: left;
+    }
+    .select-field:active { border-color: var(--primary); }
+    .select-field .sf-main { min-width: 0; flex: 1; }
+    .select-field .sf-placeholder { color: #9ca3af; }
+    .select-field .sf-code {
+      display: inline-block;
+      font-size: 11px; font-weight: 700;
+      color: var(--accent);
+      background: var(--amber-bg);
+      border-radius: 5px;
+      padding: 1px 6px;
+      margin-right: 6px;
+    }
+    .select-field .sf-name {
+      font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .chev { color: var(--primary); opacity: 0.5; flex-shrink: 0; }
+    .project-addr {
+      display: none;
+      align-items: center; gap: 5px;
+      font-size: 12px; color: var(--muted);
+      margin-top: 8px; padding: 0 2px;
+    }
+    .project-addr svg { flex-shrink: 0; color: var(--accent); }
+
+    /* ── Equipment ── */
+    .equip-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+    .equip-list:empty { margin-bottom: 0; }
+
+    .equip-item {
+      border: 1.5px solid #e6e8ee;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .equip-item-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+    }
+    .equip-code {
+      flex-shrink: 0;
+      font-size: 11px; font-weight: 700;
+      color: var(--primary);
+      background: #eef1f7;
+      border-radius: 6px;
+      padding: 4px 8px;
+    }
+    .equip-name {
+      flex: 1; min-width: 0;
+      font-size: 14px; font-weight: 500; color: var(--primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .equip-remove {
+      flex-shrink: 0;
+      background: none; border: none; cursor: pointer;
+      color: var(--muted);
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 8px;
+    }
+    .equip-remove:active { background: #f1f2f5; color: var(--red); }
+
+    .equip-attachments {
+      border-top: 1px dashed #e6e8ee;
+      padding: 10px 14px 12px;
+    }
+    .equip-attachments-label {
+      font-size: 11px; color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .chip-toggle-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1.5px solid var(--field-border);
+      border-radius: 20px;
+      padding: 6px 12px 6px 9px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px; font-weight: 500;
+      color: var(--primary);
+      font-family: 'Roboto', sans-serif;
+    }
+    .chip-toggle .tick {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      border: 1.5px solid #c4cad6;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      color: #fff;
+    }
+    .chip-toggle.on { border-color: var(--accent); background: var(--amber-bg); }
+    .chip-toggle.on .tick { background: var(--accent); border-color: var(--accent); }
+
+    .add-equip-btn {
+      width: 100%;
+      border: 1.5px dashed #c4cad6;
+      border-radius: 10px;
+      padding: 13px;
+      background: transparent;
+      color: var(--primary);
+      font-size: 14px; font-weight: 500;
+      font-family: 'Roboto', sans-serif;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+    }
+    .add-equip-btn:active { background: var(--surface); }
+
+    /* ── Forms ── */
+    .form-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border: 1.5px solid #e6e8ee;
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: #fff;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+    .form-card:last-child { margin-bottom: 0; }
+    .form-card:active { background: var(--surface); }
+    .form-card-icon {
+      width: 38px; height: 38px; flex-shrink: 0;
+      border-radius: 10px;
+      background: #eef1f7;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--primary);
+    }
+    .form-card-body { flex: 1; min-width: 0; }
+    .form-card-title {
+      font-size: 14px; font-weight: 500; color: var(--primary);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .form-card-title .req-dot { color: var(--red); font-size: 13px; }
+    .form-card-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .form-status {
+      font-size: 11px; font-weight: 500;
+      padding: 4px 10px; border-radius: 20px;
+      flex-shrink: 0;
+    }
+    .form-status.todo { background: #f1f2f5; color: var(--muted); }
+    .form-status.done { background: var(--green-bg); color: var(--green-text); }
+
+    /* ── Footer ── */
+    .ci-footer {
+      flex-shrink: 0;
+      padding: 12px 16px max(env(safe-area-inset-bottom), 14px);
+      background: #fff;
+      border-top: 1px solid var(--border);
+    }
+    .summary-row {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 12px; color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .summary-row strong { color: var(--primary); font-weight: 500; }
+    .btn-clockin {
+      width: 100%;
+      background: var(--accent);
+      color: #233759;
+      border: none;
+      border-radius: 12px;
+      padding: 15px;
+      font-size: 16px; font-weight: 700;
+      font-family: 'Roboto', sans-serif;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-clockin:active { opacity: 0.9; }
+    .btn-clockin.inactive { opacity: 0.4; pointer-events: none; }
+
+    /* ── Full-screen picker sheet ── */
+    .sheet {
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.26s cubic-bezier(0.4,0,0.2,1);
+    }
+    .sheet.open { transform: translateX(0); }
+    .sheet-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sheet-search {
+      flex: 1;
+      border: none; outline: none;
+      font-size: 15px;
+      font-family: 'Roboto', sans-serif;
+      color: var(--primary);
+      padding: 8px 4px;
+    }
+    .sheet-search::placeholder { color: #9ca3af; }
+    .sheet-tabs { display: flex; border-bottom: 1px solid var(--border); }
+    .sheet-tab {
+      flex: 1; padding: 13px 0; text-align: center;
+      font-size: 13px; font-weight: 500; letter-spacing: 0.3px;
+      color: var(--muted); border: none; background: none;
+      cursor: pointer; border-bottom: 2px solid transparent;
+      font-family: 'Roboto', sans-serif;
+    }
+    .sheet-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .sheet-list { flex: 1; overflow-y: auto; }
+    .sheet-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 15px 16px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .sheet-item:active { background: var(--surface); }
+    .sheet-item.selected { background: #f0f4ff; }
+    .sheet-item-main { flex: 1; min-width: 0; }
+    .sheet-item-name { font-size: 14px; color: var(--primary); }
+    .sheet-item-addr { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .hire-tag {
+      font-size: 11px; color: var(--green-text);
+      background: var(--green-bg); border-radius: 5px;
+      padding: 3px 9px; white-space: nowrap; flex-shrink: 0;
+    }
+    .sheet-check {
+      width: 20px; height: 20px; flex-shrink: 0;
+      border-radius: 6px; border: 1.5px solid #c4cad6;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff;
+    }
+    .sheet-item.selected .sheet-check { background: var(--accent); border-color: var(--accent); }
+
+    /* ── Toast ── */
+    .toast {
+      position: absolute;
+      left: 50%; bottom: 90px;
+      transform: translateX(-50%) translateY(20px);
+      background: #143666;
+      color: #fff;
+      font-size: 13px;
+      padding: 12px 18px;
+      border-radius: 24px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 700;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+  <div class="phone">
+
+    <!-- Header -->
+    <div class="ci-header">
+      <button class="icon-btn" title="Back">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="ci-header-title">Clock in</span>
+    </div>
+
+    <!-- Body -->
+    <div class="ci-body">
+
+      <!-- Shift context -->
+      <div class="shift-strip">
+        <div class="shift-time-box">
+          <div class="t">7:00</div>
+          <div class="sub">START</div>
+        </div>
+        <div class="shift-meta">
+          <div class="label">Today's shift · Morning</div>
+          <div class="proj">Barton</div>
+          <div class="addr">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span>10 Boileau St, Keysborough VIC</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Project -->
+      <div class="card">
+        <div class="card-label">Project <span class="req">*</span></div>
+        <button class="select-field" id="btnProject" onclick="openSheet('sheetProject')">
+          <span class="sf-main" id="projectValue"><span class="sf-code">C100</span><span class="sf-name" style="display:inline">Barton</span></span>
+          <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
+        <div class="project-addr" id="projectAddr" style="display:flex">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <span id="projectAddrText">10 Boileau Street, Keysborough VIC 3173</span>
+        </div>
+      </div>
+
+      <!-- Equipment -->
+      <div class="card">
+        <div class="card-label">Equipment</div>
+        <p class="card-hint">Select the equipment you'll be operating, plus any attachments in use.</p>
+        <div class="equip-list" id="equipList"></div>
+        <button class="add-equip-btn" onclick="openSheet('sheetEquipment')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add equipment
+        </button>
+      </div>
+
+      <!-- Forms -->
+      <div class="card" id="formsCard" style="display:none">
+        <div class="card-label">Forms</div>
+        <p class="card-hint">Complete the required pre-start checks for your equipment.</p>
+        <div id="formsList"></div>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="ci-footer">
+      <div class="summary-row">
+        <span>Clocking in to <strong id="footerProject">Barton</strong></span>
+        <span id="footerEquip">No equipment</span>
+      </div>
+      <button class="btn-clockin" id="btnClockIn" onclick="doClockIn()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+        Clock in
+      </button>
+    </div>
+
+    <!-- ── Project picker sheet ── -->
+    <div class="sheet" id="sheetProject">
+      <div class="sheet-header">
+        <button class="icon-btn" onclick="closeSheet('sheetProject')">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <input class="sheet-search" id="projectSearch" placeholder="Search project" oninput="renderProjects()" />
+      </div>
+      <div class="sheet-tabs">
+        <button class="sheet-tab active" id="tabAssigned" onclick="setProjectTab('assigned')">Assigned</button>
+        <button class="sheet-tab" id="tabOther" onclick="setProjectTab('other')">Other projects</button>
+      </div>
+      <div class="sheet-list" id="projectList"></div>
+    </div>
+
+    <!-- ── Equipment picker sheet ── -->
+    <div class="sheet" id="sheetEquipment">
+      <div class="sheet-header">
+        <button class="icon-btn" onclick="closeSheet('sheetEquipment')">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <input class="sheet-search" id="equipSearch" placeholder="Search equipment" oninput="renderEquipSheet()" />
+      </div>
+      <div class="sheet-tabs">
+        <button class="sheet-tab active" id="tabEquipProject" onclick="setEquipTab('project')">On project</button>
+        <button class="sheet-tab" id="tabEquipUnassigned" onclick="setEquipTab('unassigned')">Unassigned</button>
+      </div>
+      <div class="sheet-list" id="equipSheetList"></div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script>
+    /* ── Data ── */
+    const projects = {
+      assigned: [
+        { code: 'C100', name: 'Barton',                       address: '10 Boileau Street, Keysborough VIC 3173' },
+        { code: 'EFX-07', name: 'Eastern Freeway Extension',  address: '201 Eastern Freeway, Doncaster VIC 3108' },
+        { code: 'NRR-03', name: 'Northcote Road Rehab',       address: '23 Station St, Northcote VIC 3070' },
+      ],
+      other: [
+        { code: 'CPB-01', name: 'CBD Pedestrian Bridge',      address: '1 Collins St, Melbourne VIC 3000' },
+        { code: 'MAT-05', name: 'Melbourne Airport Taxiway',  address: 'Melbourne Airport VIC 3045' },
+      ]
+    };
+
+    const equipment = {
+      project: [
+        { code: 'DOZ001', name: 'Dozer', tag: 'Wet Hire',
+          attachments: ['Float Charge', 'Dozer Fuel p/h'],
+          form: 'Dozer Pre-Start Check' },
+        { code: 'EXC014', name: 'Excavator 14T', tag: 'Wet Hire',
+          attachments: ['Hydraulic Hammer', 'Tilt Bucket'],
+          form: 'Excavator Pre-Start Check' },
+        { code: 'ROL-09', name: 'Smooth Drum Roller', tag: 'Dry Hire',
+          attachments: [], form: null },
+      ],
+      unassigned: [
+        { code: 'GRD-M160', name: 'Grader M160', tag: 'Dry Hire',
+          attachments: [], form: 'Grader Pre-Start Check' },
+        { code: 'TRK-22', name: 'Tipper Truck', tag: 'Wet Hire',
+          attachments: ['Trailer'], form: null },
+      ]
+    };
+
+    /* ── State ── */
+    let selectedProject = projects.assigned[0];
+    let selected = [];            // [{ code, name, tag, attachments:[], form, chosenAttachments:Set, formDone:bool }]
+    let projectTab = 'assigned';
+    let equipTab = 'project';
+
+    /* ── Sheet helpers ── */
+    function openSheet(id) {
+      const s = document.getElementById(id);
+      s.classList.add('open');
+      if (id === 'sheetProject') { document.getElementById('projectSearch').value = ''; renderProjects(); }
+      if (id === 'sheetEquipment') { document.getElementById('equipSearch').value = ''; renderEquipSheet(); }
+    }
+    function closeSheet(id) { document.getElementById(id).classList.remove('open'); }
+
+    /* ── Project picker ── */
+    function setProjectTab(tab) {
+      projectTab = tab;
+      document.getElementById('tabAssigned').classList.toggle('active', tab === 'assigned');
+      document.getElementById('tabOther').classList.toggle('active', tab === 'other');
+      renderProjects();
+    }
+    function renderProjects() {
+      const q = document.getElementById('projectSearch').value.toLowerCase();
+      const list = document.getElementById('projectList');
+      const items = projects[projectTab].filter(p =>
+        (p.name + ' ' + p.code).toLowerCase().includes(q));
+      if (!items.length) { list.innerHTML = '<div style="padding:24px 16px;color:#6b7280;font-size:13px">No projects found</div>'; return; }
+      list.innerHTML = items.map(p => `
+        <div class="sheet-item ${p.code === selectedProject.code ? 'selected' : ''}" onclick='selectProject(${JSON.stringify(p)})'>
+          <div class="sheet-check">${p.code === selectedProject.code ? tickSvg() : ''}</div>
+          <div class="sheet-item-main">
+            <div class="sheet-item-name"><b>(${p.code})</b> ${p.name}</div>
+            <div class="sheet-item-addr">${p.address}</div>
+          </div>
+        </div>`).join('');
+    }
+    function selectProject(p) {
+      selectedProject = p;
+      document.getElementById('projectValue').innerHTML =
+        `<span class="sf-code">${p.code}</span><span class="sf-name" style="display:inline">${p.name}</span>`;
+      document.getElementById('projectAddrText').textContent = p.address;
+      document.getElementById('projectAddr').style.display = 'flex';
+      document.getElementById('footerProject').textContent = p.name;
+      closeSheet('sheetProject');
+    }
+
+    /* ── Equipment picker ── */
+    function setEquipTab(tab) {
+      equipTab = tab;
+      document.getElementById('tabEquipProject').classList.toggle('active', tab === 'project');
+      document.getElementById('tabEquipUnassigned').classList.toggle('active', tab === 'unassigned');
+      renderEquipSheet();
+    }
+    function renderEquipSheet() {
+      const q = document.getElementById('equipSearch').value.toLowerCase();
+      const list = document.getElementById('equipSheetList');
+      const items = equipment[equipTab].filter(e =>
+        (e.name + ' ' + e.code).toLowerCase().includes(q));
+      if (!items.length) { list.innerHTML = '<div style="padding:24px 16px;color:#6b7280;font-size:13px">No equipment found</div>'; return; }
+      list.innerHTML = items.map(e => {
+        const on = selected.some(s => s.code === e.code);
+        return `
+        <div class="sheet-item ${on ? 'selected' : ''}" onclick='toggleEquip(${JSON.stringify(e)})'>
+          <div class="sheet-check">${on ? tickSvg() : ''}</div>
+          <div class="sheet-item-main">
+            <div class="sheet-item-name"><b>(${e.code})</b> ${e.name}</div>
+          </div>
+          <span class="hire-tag">${e.tag}</span>
+        </div>`;
+      }).join('');
+    }
+    function toggleEquip(e) {
+      const i = selected.findIndex(s => s.code === e.code);
+      if (i >= 0) selected.splice(i, 1);
+      else selected.push({ ...e, chosenAttachments: [], formDone: false });
+      renderEquipList();
+      renderForms();
+      renderEquipSheet();
+      updateFooter();
+    }
+    function removeEquip(code) {
+      selected = selected.filter(s => s.code !== code);
+      renderEquipList();
+      renderForms();
+      updateFooter();
+    }
+    function toggleAttachment(code, att) {
+      const eq = selected.find(s => s.code === code);
+      if (!eq) return;
+      const i = eq.chosenAttachments.indexOf(att);
+      if (i >= 0) eq.chosenAttachments.splice(i, 1);
+      else eq.chosenAttachments.push(att);
+      renderEquipList();
+    }
+
+    function renderEquipList() {
+      const c = document.getElementById('equipList');
+      c.innerHTML = selected.map(e => `
+        <div class="equip-item">
+          <div class="equip-item-head">
+            <span class="equip-code">${e.code}</span>
+            <span class="equip-name">${e.name}</span>
+            <button class="equip-remove" onclick="removeEquip('${e.code}')" title="Remove">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          ${e.attachments.length ? `
+          <div class="equip-attachments">
+            <div class="equip-attachments-label">Attachments</div>
+            <div class="chip-toggle-row">
+              ${e.attachments.map(a => {
+                const on = e.chosenAttachments.includes(a);
+                return `<button class="chip-toggle ${on ? 'on' : ''}" onclick="toggleAttachment('${e.code}', '${a.replace(/'/g, "\\'")}')">
+                  <span class="tick">${on ? tickSvgSm() : ''}</span>${a}
+                </button>`;
+              }).join('')}
+            </div>
+          </div>` : ''}
+        </div>`).join('');
+    }
+
+    /* ── Forms ── */
+    function renderForms() {
+      const withForms = selected.filter(e => e.form);
+      const card = document.getElementById('formsCard');
+      const list = document.getElementById('formsList');
+      if (!withForms.length) { card.style.display = 'none'; list.innerHTML = ''; return; }
+      card.style.display = 'block';
+      list.innerHTML = withForms.map(e => `
+        <div class="form-card" onclick="completeForm('${e.code}')">
+          <div class="form-card-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
+          </div>
+          <div class="form-card-body">
+            <div class="form-card-title">${e.form} <span class="req-dot">*</span></div>
+            <div class="form-card-sub">${e.code} · ${e.name}</div>
+          </div>
+          <span class="form-status ${e.formDone ? 'done' : 'todo'}">${e.formDone ? 'Completed' : 'Required'}</span>
+        </div>`).join('');
+    }
+    function completeForm(code) {
+      const eq = selected.find(s => s.code === code);
+      if (!eq) return;
+      eq.formDone = !eq.formDone;
+      renderForms();
+      showToast(eq.formDone ? `${eq.form} marked complete` : `${eq.form} reopened`);
+    }
+
+    /* ── Footer / clock in ── */
+    function updateFooter() {
+      const el = document.getElementById('footerEquip');
+      el.textContent = selected.length
+        ? `${selected.length} item${selected.length > 1 ? 's' : ''}`
+        : 'No equipment';
+    }
+    function doClockIn() {
+      const pending = selected.filter(e => e.form && !e.formDone);
+      if (pending.length) { showToast(`Complete ${pending.length} required form${pending.length > 1 ? 's' : ''} first`); return; }
+      showToast('Clocked in to ' + selectedProject.name);
+    }
+
+    /* ── Misc ── */
+    function tickSvg()   { return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'; }
+    function tickSvgSm() { return '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'; }
+
+    let toastTimer;
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+    }
+
+    /* ── Init ── */
+    updateFooter();
+  </script>
+</body>
+</html>
