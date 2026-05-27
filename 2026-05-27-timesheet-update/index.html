@@ -1483,32 +1483,88 @@
     let clockedTotalMin = 480;    // gross minus break
     let allocs = { wbs: [], cc: [] };
     let assignType = 'wbs';
-    let activeWorkflow = null;
+    let wfScreenType = null;
     let roleOn = false, fillOn = false;
+
+    function activeWorkflow() {
+      if (allocs.wbs.length) return 'wbs';
+      if (allocs.cc.length) return 'cc';
+      return null;
+    }
+    function clearAllocations() { allocs = { wbs: [], cc: [] }; }
 
     function openClockOut() {
       recalcDuration();
       renderCoEquip();
-      resetWorkflowChoice();
+      renderWorkflowChoice();
       document.getElementById('screenClockOut').classList.add('open');
     }
 
-    function resetWorkflowChoice() {
-      activeWorkflow = null;
-      document.getElementById('wfWbs').classList.remove('selected');
-      document.getElementById('wfCc').classList.remove('selected');
-      document.getElementById('wbsWorkflow').style.display = 'none';
-      document.getElementById('ccWorkflow').style.display = 'none';
+    /* Two separate workflow screens — one at a time, no mixing */
+    function renderWorkflowChoice() {
+      const aw = activeWorkflow();
+      [['wbs', 'wfWbs', 'wfWbsStatus'], ['cc', 'wfCc', 'wfCcStatus']].forEach(([type, tileId, statusId]) => {
+        const tile = document.getElementById(tileId);
+        const status = document.getElementById(statusId);
+        tile.classList.remove('selected', 'locked');
+        if (allocs[type].length) {
+          tile.classList.add('selected');
+          status.textContent = `✓ ${fmt(allocatedMin(type))} allocated`;
+        } else if (aw && aw !== type) {
+          tile.classList.add('locked');
+          status.textContent = 'Locked';
+        } else {
+          status.textContent = '';
+        }
+      });
     }
 
-    function selectWorkflow(type) {
-      activeWorkflow = type;
+    function openWorkflow(type) {
+      const aw = activeWorkflow();
+      if (aw && aw !== type) {
+        showToast(`Clear your ${aw === 'wbs' ? 'WBS' : 'Cost Centre'} allocation to switch`);
+        return;
+      }
+      wfScreenType = type;
+      document.getElementById('wfTitle').textContent = type === 'wbs' ? 'WBS allocation' : 'Cost Centre allocation';
+      renderWorkflow();
+      document.getElementById('screenWorkflow').classList.add('open');
+    }
+
+    function closeWorkflow() {
+      document.getElementById('screenWorkflow').classList.remove('open');
+      wfScreenType = null;
+      renderWorkflowChoice();
+    }
+
+    function renderWorkflow() {
+      if (!wfScreenType) return;
+      const type = wfScreenType;
       const isWbs = type === 'wbs';
-      document.getElementById('wfWbs').classList.toggle('selected', isWbs);
-      document.getElementById('wfCc').classList.toggle('selected', !isWbs);
-      document.getElementById('wbsWorkflow').style.display = isWbs ? 'block' : 'none';
-      document.getElementById('ccWorkflow').style.display = isWbs ? 'none' : 'block';
-      renderAlloc(type);
+      document.getElementById('wfDurationValue').textContent = fmt(clockedTotalMin);
+      document.getElementById('wfPanelLabel').textContent = isWbs ? 'WBS tasks' : 'Cost centres';
+      document.getElementById('wfAssignLabel').textContent = isWbs ? 'Assign WBS task' : 'Assign cost centre';
+
+      const alloc = allocatedMin(type), remain = remainingMin(type);
+      document.getElementById('wfSummary').innerHTML = `
+        <div class="alloc-stat done"><div class="as-label">Assigned</div><div class="as-value">${fmt(alloc)}</div></div>
+        <div class="alloc-stat ${remain > 0 ? 'warn' : 'done'}"><div class="as-label">Unassigned</div><div class="as-value">${fmt(remain)}</div></div>`;
+
+      document.getElementById('wfList').innerHTML = allocs[type].map((a, i) => `
+        <div class="alloc-card">
+          <div class="alloc-card-top">
+            <div class="alloc-card-body">
+              <div class="alloc-card-title">${a.label}</div>
+              ${a.resource ? `<div class="alloc-card-sub">${a.resource}</div>` : ''}
+            </div>
+            <span class="alloc-card-dur">${fmt(a.min)}</span>
+            <button class="alloc-remove" onclick="removeAlloc('${type}', ${i})">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>`).join('');
+
+      document.getElementById('wfAssignBtn').classList.toggle('disabled', remain === 0);
     }
 
     function fmt(min) {
