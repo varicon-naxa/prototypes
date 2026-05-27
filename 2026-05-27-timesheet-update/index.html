@@ -1305,8 +1305,108 @@
         ? `${selected.length} item${selected.length > 1 ? 's' : ''}`
         : 'No equipment';
     }
+    /* ── Clocked-in session ── */
+    let isClockedIn = false;
+    let clockedEquip = [];
+    let sessionSeconds = 0;
+    let prestartSeconds = 3600;
+    let prestartDone = false;
+    let sessionInterval = null;
+
     function doClockIn() {
-      openClockOut();
+      isClockedIn = true;
+      clockedEquip = [...selected];
+      sessionSeconds = 0;
+      prestartSeconds = 3600;
+      prestartDone = false;
+      renderClockedState();
+      clearInterval(sessionInterval);
+      sessionInterval = setInterval(sessionTick, 1000);
+      closeSheet('screenClockIn');
+      showToast('Clocked in to ' + selectedProject.name);
+    }
+
+    function prestartLabel() {
+      if (clockedEquip.length === 1) return `your ${clockedEquip[0].name} pre-start`;
+      if (clockedEquip.length > 1)  return `${clockedEquip.length} equipment pre-starts`;
+      return 'your pre-start form';
+    }
+
+    function renderClockedState() {
+      document.getElementById('welcomeDefault').style.display = 'none';
+      document.getElementById('welcomeClocked').style.display = 'block';
+      document.getElementById('lpAddBtn').style.display = 'none';
+      document.getElementById('clockedProjName').textContent = `(${selectedProject.code}) ${selectedProject.name}`;
+      const btn = document.getElementById('lpPrimaryBtn');
+      btn.textContent = 'Clock out';
+      btn.onclick = openClockOut;
+      // banner
+      const b = document.getElementById('clockedBanner');
+      b.style.display = 'flex';
+      b.classList.remove('done', 'urgent');
+      document.getElementById('cbIcon').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>';
+      document.getElementById('cbTitle').textContent = `Complete ${prestartLabel()}`;
+      document.getElementById('cbAction').style.display = 'block';
+      updateCountdown();
+    }
+
+    function renderClockedOut() {
+      document.getElementById('welcomeDefault').style.display = 'block';
+      document.getElementById('welcomeClocked').style.display = 'none';
+      document.getElementById('lpAddBtn').style.display = 'flex';
+      document.getElementById('clockedBanner').style.display = 'none';
+      const btn = document.getElementById('lpPrimaryBtn');
+      btn.textContent = 'Clock in';
+      btn.onclick = () => openSheet('screenClockIn');
+    }
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function updateCountdown() {
+      const m = Math.floor(Math.max(0, prestartSeconds) / 60);
+      const s = Math.max(0, prestartSeconds) % 60;
+      document.getElementById('cbCountdown').textContent = `${pad(m)}:${pad(s)}`;
+      document.getElementById('clockedBanner').classList.toggle('urgent', !prestartDone && prestartSeconds <= 300);
+    }
+
+    function sessionTick() {
+      sessionSeconds++;
+      const h = Math.floor(sessionSeconds / 3600);
+      const m = Math.floor((sessionSeconds % 3600) / 60);
+      const s = sessionSeconds % 60;
+      document.getElementById('clockedTimer').textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
+      if (!prestartDone) {
+        prestartSeconds--;
+        if (prestartSeconds <= 0) { autoClockOut(); return; }
+        updateCountdown();
+      }
+    }
+
+    function completePrestart() {
+      prestartDone = true;
+      const b = document.getElementById('clockedBanner');
+      b.classList.remove('urgent');
+      b.classList.add('done');
+      document.getElementById('cbIcon').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      document.getElementById('cbTitle').textContent = 'Pre-start completed';
+      document.getElementById('cbSub').innerHTML = `${clockedEquip.length === 1 ? clockedEquip[0].name + ' pre-start' : 'Pre-start'} submitted — you're all set.`;
+      document.getElementById('cbAction').style.display = 'none';
+      showToast('Pre-start form completed');
+    }
+
+    function autoClockOut() {
+      clearInterval(sessionInterval);
+      isClockedIn = false;
+      renderClockedOut();
+      closeSheet('screenClockOut');
+      showToast('Automatically clocked out — pre-start not completed');
+    }
+
+    function endSession(msg) {
+      clearInterval(sessionInterval);
+      isClockedIn = false;
+      renderClockedOut();
+      closeSheet('screenClockOut');
+      showToast(msg);
     }
 
     /* ════════ Clock-out / allocation ════════ */
