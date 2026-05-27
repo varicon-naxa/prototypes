@@ -1082,7 +1082,171 @@
     function doClockIn() {
       const pending = selected.filter(e => e.form && !e.formDone);
       if (pending.length) { showToast(`Complete ${pending.length} required form${pending.length > 1 ? 's' : ''} first`); return; }
-      showToast('Clocked in to ' + selectedProject.name);
+      openClockOut();
+    }
+
+    /* ════════ Clock-out / allocation ════════ */
+    const wbsTasks = [
+      '1.1 Earthworks — Bulk excavation',
+      '1.2 Earthworks — Trim & batter',
+      '2.1 Drainage — Pipe laying',
+      '3.1 Pavement — Base course',
+    ];
+    const costCentres = [
+      'CC-100 — Labour',
+      'CC-200 — Plant & Equipment',
+      'CC-300 — Materials',
+      'CC-400 — Subcontractors',
+    ];
+
+    const GROSS_MIN = 510;        // 7:00 AM → 3:30 PM
+    let clockedTotalMin = 480;    // gross minus break
+    let allocs = { wbs: [], cc: [] };
+    let assignType = 'wbs';
+    let roleOn = false, fillOn = false;
+
+    function openClockOut() {
+      recalcDuration();
+      renderCoEquip();
+      document.getElementById('screenClockOut').classList.add('open');
+    }
+
+    function fmt(min) {
+      const h = Math.floor(Math.max(0, min) / 60);
+      const m = Math.max(0, min) % 60;
+      return `${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m`;
+    }
+    function allocatedMin(type) { return allocs[type].reduce((s, a) => s + a.min, 0); }
+    function remainingMin(type) { return Math.max(0, clockedTotalMin - allocatedMin(type)); }
+
+    function recalcDuration() {
+      const brk = parseInt(document.getElementById('breakInput').value, 10) || 0;
+      clockedTotalMin = Math.max(0, GROSS_MIN - brk);
+      document.getElementById('durationValue').textContent = fmt(clockedTotalMin);
+      renderAlloc('wbs');
+      renderAlloc('cc');
+    }
+
+    function renderAlloc(type) {
+      const alloc = allocatedMin(type);
+      const remain = remainingMin(type);
+      const summary = document.getElementById(type === 'wbs' ? 'wbsSummary' : 'ccSummary');
+      summary.innerHTML = `
+        <div class="alloc-stat done"><div class="as-label">Assigned</div><div class="as-value">${fmt(alloc)}</div></div>
+        <div class="alloc-stat ${remain > 0 ? 'warn' : 'done'}"><div class="as-label">Unassigned</div><div class="as-value">${fmt(remain)}</div></div>`;
+
+      const list = document.getElementById(type === 'wbs' ? 'wbsList' : 'ccList');
+      list.innerHTML = allocs[type].map((a, i) => `
+        <div class="alloc-card">
+          <div class="alloc-card-top">
+            <div class="alloc-card-body">
+              <div class="alloc-card-title">${a.label}</div>
+              ${a.resource ? `<div class="alloc-card-sub">${a.resource}</div>` : ''}
+            </div>
+            <span class="alloc-card-dur">${fmt(a.min)}</span>
+            <button class="alloc-remove" onclick="removeAlloc('${type}', ${i})">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>`).join('');
+
+      const btn = document.getElementById(type === 'wbs' ? 'wbsAssignBtn' : 'ccAssignBtn');
+      btn.classList.toggle('disabled', remain === 0);
+    }
+
+    function removeAlloc(type, idx) {
+      allocs[type].splice(idx, 1);
+      renderAlloc(type);
+    }
+
+    function openAssign(type) {
+      if (remainingMin(type) === 0) return;
+      assignType = type;
+      const isWbs = type === 'wbs';
+      document.getElementById('assignTitle').textContent = isWbs ? 'Assign WBS task' : 'Assign cost centre';
+      document.getElementById('assignFieldLabel').textContent = isWbs ? 'WBS task' : 'Cost centre';
+      const sel = document.getElementById('assignSelect');
+      const opts = isWbs ? wbsTasks : costCentres;
+      sel.innerHTML = `<option value="">Select ${isWbs ? 'WBS task' : 'cost centre'}</option>` +
+        opts.map(o => `<option>${o}</option>`).join('');
+      // reset form
+      roleOn = false; fillOn = false;
+      document.getElementById('roleCheck').classList.remove('on');
+      document.getElementById('roleCheckBox').innerHTML = '';
+      document.getElementById('fillCheck').classList.remove('on');
+      document.getElementById('fillCheckBox').innerHTML = '';
+      document.getElementById('resourceSelect').value = '';
+      document.getElementById('assignHour').value = '0';
+      document.getElementById('assignMin').value = '15';
+      openSheet('sheetAssign');
+    }
+
+    function toggleRole() {
+      roleOn = !roleOn;
+      document.getElementById('roleCheck').classList.toggle('on', roleOn);
+      document.getElementById('roleCheckBox').innerHTML = roleOn ? tickSvgSm() : '';
+      if (roleOn) document.getElementById('resourceSelect').value = 'Engineer';
+    }
+
+    function toggleFillRemaining() {
+      fillOn = !fillOn;
+      document.getElementById('fillCheck').classList.toggle('on', fillOn);
+      document.getElementById('fillCheckBox').innerHTML = fillOn ? tickSvgSm() : '';
+      if (fillOn) {
+        const r = remainingMin(assignType);
+        document.getElementById('assignHour').value = Math.floor(r / 60);
+        document.getElementById('assignMin').value = r % 60;
+      }
+    }
+    function uncheckFill() {
+      if (!fillOn) return;
+      fillOn = false;
+      document.getElementById('fillCheck').classList.remove('on');
+      document.getElementById('fillCheckBox').innerHTML = '';
+    }
+
+    function addAllocation() {
+      const label = document.getElementById('assignSelect').value;
+      if (!label) { showToast(assignType === 'wbs' ? 'Select a WBS task' : 'Select a cost centre'); return; }
+      const h = parseInt(document.getElementById('assignHour').value, 10) || 0;
+      const m = parseInt(document.getElementById('assignMin').value, 10) || 0;
+      const min = h * 60 + m;
+      if (min <= 0) { showToast('Enter a duration'); return; }
+      if (min > remainingMin(assignType)) { showToast(`Only ${fmt(remainingMin(assignType))} unassigned`); return; }
+      allocs[assignType].push({ label, resource: document.getElementById('resourceSelect').value, min });
+      renderAlloc(assignType);
+      closeSheet('sheetAssign');
+      showToast('Allocation added');
+    }
+
+    function renderCoEquip() {
+      const c = document.getElementById('coEquipList');
+      if (!selected.length) {
+        c.innerHTML = '<p class="card-hint" style="margin:0 0 10px;">No equipment added.</p>';
+        return;
+      }
+      c.innerHTML = selected.map(e => `
+        <div class="co-equip-card">
+          <div class="co-equip-head">
+            <span class="equip-code">${e.code}</span>
+            <span class="co-equip-name">${e.name}</span>
+            <span class="hire-tag" style="color:#1565c0;background:#e3f2fd;">${e.tag}</span>
+          </div>
+          <div class="co-equip-row">
+            <span class="equip-warn-chip">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Task not assigned
+            </span>
+            <span class="equip-dur-pill" onclick="showToast('Assign equipment time')">
+              ${fmt(clockedTotalMin)}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </span>
+          </div>
+        </div>`).join('');
+    }
+
+    function confirmClockOut() {
+      showToast('Timesheet updated successfully');
     }
 
     /* ── Misc ── */
