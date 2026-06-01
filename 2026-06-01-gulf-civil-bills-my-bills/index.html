@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Bills (All Bills / My Bills toggle)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 210px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 16px; }
+  .sidebar-logo .v-icon { width: 30px; height: 30px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 16px; }
+  .sidebar-org { display:flex; align-items:center; gap:8px; padding: 10px 16px; font-size: 13px; color: #fff; font-weight: 600; border-top:1px solid rgba(255,255,255,0.08); border-bottom:1px solid rgba(255,255,255,0.08); margin-bottom: 6px; }
+  .sidebar-org .dot { width:18px;height:18px;border-radius:50%;background:#f7941d; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; font-size: 13px; cursor: pointer; transition: background 0.15s; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.75; }
+
+  /* Main */
+  .main { flex: 1; padding: 20px 28px; overflow-y: auto; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .page-header h1 { font-size: 22px; font-weight: 600; }
+
+  /* Overdue alert */
+  .overdue-banner { display: flex; align-items: center; gap: 14px; padding: 12px 18px; background: #fde8e8; border: 1px solid #e53935; border-radius: 10px; margin-bottom: 16px; }
+  .overdue-icon { width: 40px; height: 40px; border-radius: 50%; background: #e53935; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; flex-shrink: 0; }
+  .overdue-title { font-size: 15px; font-weight: 700; color: #c62828; }
+  .overdue-detail { font-size: 12px; color: #555; margin-top: 2px; }
+
+  /* Summary row */
+  .summary { display:flex; gap:36px; padding: 6px 2px 16px; flex-wrap:wrap; }
+  .summary .item .label { font-size:12px; color:#888; }
+  .summary .item .val { font-size:15px; font-weight:700; color:#333; margin-top:2px; }
+
+  /* Toolbar */
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .toolbar-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; color: #444; cursor: pointer; }
+  .toolbar-btn.accent { background: #f7941d; border-color: #f7941d; color: #fff; font-weight: 600; }
+  .toolbar-search { display: flex; align-items: center; border: 1px solid #d0d0d0; border-radius: 6px; padding: 0 10px; background: #fff; margin-left: auto; }
+  .toolbar-search input { border: none; outline: none; padding: 8px 6px; font-size: 13px; width: 180px; }
+
+  /* === NEW: All Bills / My Bills segmented toggle (mirrors Purchase Order screen) === */
+  .scope-toggle { display:flex; width:100%; border:1px solid #f7941d; border-radius:8px; overflow:hidden; margin-bottom:16px; }
+  .scope-toggle .seg { flex:1; display:flex; align-items:center; justify-content:center; gap:8px; padding:13px 16px; font-size:14px; font-weight:600; cursor:pointer; background:#fff; color:#f7941d; transition:all .15s; }
+  .scope-toggle .seg.active { background:#f7941d; color:#fff; }
+  .scope-toggle .seg .cnt { font-size:12px; background:rgba(0,0,0,0.08); padding:1px 9px; border-radius:10px; }
+  .scope-toggle .seg.active .cnt { background:rgba(255,255,255,0.25); }
+  .scope-toggle .seg .star { font-size:14px; }
+
+  /* Filters */
+  .filters-row { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .filter-select { padding: 8px 30px 8px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 13px; background: #fff; appearance:none;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; margin-bottom: 14px; border-bottom: 2px solid #e0e0e0; flex-wrap:wrap; }
+  .tab { padding: 10px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #888; }
+  .tab.active { color: #f7941d; border-bottom-color: #f7941d; }
+  .tab .count { font-weight: 400; color: #999; margin-left: 4px; }
+  .tab .badge { background: #f7941d; color:#fff; font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; margin-left:4px; }
+  .tab .badge-red { background: #e53935; color:#fff; font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; margin-left:4px; }
+
+  /* Table */
+  .table-wrapper { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: #fafafa; }
+  th { text-align: left; padding: 11px 14px; font-size: 12px; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; white-space: nowrap; }
+  td { padding: 11px 14px; font-size: 13px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover { background: #fafafa; }
+  td a { color: #1a1a2e; text-decoration: none; font-weight: 500; }
+
+  /* Approver avatars */
+  .approvers { display:flex; gap:-6px; }
+  .avatar { width:26px; height:26px; border-radius:50%; background:#dfe3e8; color:#445; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; border:2px solid #fff; margin-left:-6px; }
+  .avatar:first-child { margin-left:0; }
+  .avatar.me { background:#f7941d; color:#fff; box-shadow:0 0 0 2px #ffe3bf; }
+  .pending-pill { display:inline-block; background:#fff3e0; color:#e65100; font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; }
+
+  .amount { font-weight: 600; text-align: right; }
+  .amount-overdue { color:#e53935; font-weight:700; }
+  .actions-btn { background:none; border:none; cursor:pointer; font-size:18px; color:#999; }
+
+  .annotation { margin-top: 22px; padding: 16px 20px; background: #fff8f0; border: 1px solid #f7941d; border-radius: 8px; font-size: 13px; color: #333; line-height: 1.6; }
+  .annotation h3 { color: #f7941d; font-size: 14px; margin-bottom: 8px; }
+  .annotation ul { margin-left: 20px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span style="color:#fff;font-weight:600;font-size:14px;">Varicon</span></div>
+    <div class="sidebar-org"><span class="dot"></span> Gulf Civil Pty Ltd</div>
+    <div class="sidebar-item"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">🖼</span> Gallery</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Record</div>
+    <div class="sidebar-item"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">🧾</span> Site Docket</div>
+    <div class="sidebar-item active"><span class="icon">💰</span> Bills</div>
+    <div class="sidebar-item"><span class="icon">📝</span> Forms</div>
+    <div class="sidebar-item"><span class="icon">🚜</span> Plant &amp; Equipment</div>
+    <div class="sidebar-item"><span class="icon">👷</span> Resource Assigner</div>
+    <div class="sidebar-item"><span class="icon">🏷</span> Suppliers</div>
+    <div class="sidebar-item"><span class="icon">📂</span> File Manager</div>
+    <div class="sidebar-item"><span class="icon">👤</span> User Management</div>
+    <div class="sidebar-item"><span class="icon">💲</span> Payroll Settings</div>
+    <div class="sidebar-item"><span class="icon">⚙️</span> Settings</div>
+  </div>
+
+  <div class="main">
+    <div class="page-header"><h1>Bills</h1></div>
+
+    <div class="overdue-banner">
+      <div class="overdue-icon">41</div>
+      <div>
+        <div class="overdue-title">41 bills are overdue — totalling $82,387.21</div>
+        <div class="overdue-detail">Oldest overdue bill: Torres Strait Island Regional Council — $381.00 (32 days overdue)</div>
+      </div>
+    </div>
+
+    <div class="summary">
+      <div class="item"><div class="label">Total</div><div class="val">$475,822.99</div></div>
+      <div class="item"><div class="label">Awaiting Credit</div><div class="val">$0.00</div></div>
+      <div class="item"><div class="label">Awaiting approval</div><div class="val">$56,166.72</div></div>
+      <div class="item"><div class="label">Partially approved</div><div class="val">$273,190.09</div></div>
+      <div class="item"><div class="label">Awaiting payment</div><div class="val">$7,200.85</div></div>
+      <div class="item"><div class="label">Paid</div><div class="val">$139,265.33</div></div>
+    </div>
+
+    <div class="toolbar">
+      <button class="toolbar-btn">❓ Need Help?</button>
+      <button class="toolbar-btn">✉️ Email bill entry</button>
+      <button class="toolbar-btn">🕘 Scan log</button>
+      <button class="toolbar-btn accent">+ Add bill manually</button>
+      <div class="toolbar-search">🔍<input type="text" placeholder="Search"></div>
+    </div>
+
+    <!-- NEW: All Bills / My Bills toggle (mirrors the Purchase Order screen) -->
+    <div class="scope-toggle">
+      <div class="seg" id="segAll" onclick="setScope('all')">All Bills <span class="cnt">135</span></div>
+      <div class="seg active" id="segMine" onclick="setScope('mine')"><span class="star">★</span> My Bills <span class="cnt">12</span></div>
+    </div>
+
+    <div id="earlierWrap" onclick="toggleEarlier()" style="display:flex; align-items:center; gap:9px; margin:-2px 12px 14px; padding:10px 14px; border:1px solid #b9a6e0; background:#f6f2fc; border-radius:8px; cursor:pointer; user-select:none;">
+      <span id="earlierChev" style="color:#4527a0; font-size:12px; width:12px; display:inline-block;">▸</span>
+      <span id="earlierLabel" style="font-size:13px; font-weight:700; color:#4527a0;">Show bills pending an earlier approver</span>
+      <span style="background:#ede7f6; color:#4527a0; font-size:11px; font-weight:700; padding:2px 9px; border-radius:10px;">3</span>
+      <span style="font-size:11.5px; color:#777;">— approve ahead of an earlier step (you become accountable)</span>
+      <span style="margin-left:auto; font-size:11px; color:#999;">🟢 approved&nbsp;·&nbsp;🟠 you&nbsp;·&nbsp;⚪ waiting</span>
+    </div>
+
+    <div class="filters-row">
+      <select class="filter-select"><option>Date Type</option></select>
+      <select class="filter-select"><option>Date Range</option></select>
+      <button class="toolbar-btn">⚙️ Filter</button>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active">ALL <span class="count">135</span></div>
+      <div class="tab">DRAFT <span class="count">0</span></div>
+      <div class="tab">AWAITING CREDIT <span class="count">0</span></div>
+      <div class="tab">AWAITING APPROVAL <span class="badge">15</span></div>
+      <div class="tab">PARTIALLY APPROVED <span class="count">36</span></div>
+      <div class="tab">AWAITING PAYMENT <span class="count">12</span></div>
+      <div class="tab">PAID <span class="count">72</span></div>
+      <div class="tab">OVERDUE <span class="badge-red">41</span></div>
+      <div class="tab">REJECTED <span class="count">0</span></div>
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Supplier</th><th>Ref.</th><th>Project</th><th>PO ref.</th>
+            <th>Approvers</th><th>Date</th><th>Due Date</th><th style="text-align:right">Amount</th><th style="width:50px">Action</th>
+          </tr>
+        </thead>
+        <tbody id="billsBody">
+          <!-- AT MY STEP: earlier approver(s) done (green), now awaiting SD. data-step="mine" -->
+          <tr data-mine="true" data-step="mine"><td><a href="#">Seek</a> <span class="pending-pill">Pending you</span></td><td>701907625</td><td>(1) Office : Brisbane</td><td>—</td>
+            <td><div class="approvers"><span class="avatar me" title="You — pending">SD</span><span class="avatar" title="Waiting">RP</span></div></td><td>Sun, 31/05/2026</td><td>Sun, 14/06/2026</td><td class="amount">$1,320.50</td><td><button class="actions-btn">⋮</button></td></tr>
+
+          <tr data-mine="true" data-step="mine"><td><a href="#">Work Metrics</a> <span class="pending-pill">Pending you</span></td><td>00049832</td><td>(1) Office : Brisbane</td><td>—</td>
+            <td><div class="approvers"><span class="avatar me" title="You — pending">SD</span><span class="avatar" title="Waiting">MM</span><span class="avatar" title="Waiting">RP</span></div></td><td>Sun, 31/05/2026</td><td>Sun, 14/06/2026</td><td class="amount">$190.50</td><td><button class="actions-btn">⋮</button></td></tr>
+
+          <tr data-mine="true" data-step="mine"><td><a href="#">Hastings Deering Australia Ltd</a> <span class="pending-pill">Pending you</span></td><td>2018580237</td><td>(GC25001) TSIRC Warraber Co…</td><td>—</td>
+            <td><div class="approvers"><span class="avatar" style="background:#2e7d32;color:#fff;" title="Mitch — approved">MM</span><span class="avatar me" title="You — pending">SD</span><span class="avatar" title="Waiting">RP</span></div></td><td>Wed, 27/05/2026</td><td style="color:#e53935;font-weight:600;">Tue, 30/06/2026</td><td class="amount">$7,041.00</td><td><button class="actions-btn">⋮</button></td></tr>
+
+          <tr data-mine="true" data-step="mine"><td><a href="#">Hastings Deering Australia Ltd</a> <span class="pending-pill">Pending you</span></td><td>2018580241</td><td>(GC25001) TSIRC Warraber Co…</td><td>—</td>
+            <td><div class="approvers"><span class="avatar" style="background:#2e7d32;color:#fff;" title="Mitch — approved">MM</span><span class="avatar me" title="You — pending">SD</span><span class="avatar" title="Waiting">RP</span></div></td><td>Wed, 27/05/2026</td><td>Tue, 30/06/2026</td><td class="amount">$22,814.00</td><td><button class="actions-btn">⋮</button></td></tr>
+
+          <tr data-mine="true" data-step="mine"><td><a href="#">Flexihire Pty Ltd</a> <span class="pending-pill">Pending you</span></td><td>1028047</td><td>(1) Office : Brisbane</td><td>—</td>
+            <td><div class="approvers"><span class="avatar" style="background:#2e7d32;color:#fff;" title="Mitch — approved">MM</span><span class="avatar me" title="You — pending">SD</span><span class="avatar" title="Waiting">RP</span></div></td><td>Sun, 31/05/2026</td><td style="color:#e53935;font-weight:600;">Sun, 31/05/2026</td><td class="amount">$1,420.00</td><td><button class="actions-btn">⋮</button></td></tr>
+
+          <tr data-mine="true" data-step="mine"><td><a href="#">Uber</a> <span class="pending-pill">Pending you</span></td><td>Paid via Sanil's C…</td><td>(4) Office : Charters Tower</td><td>—</td>
+            <td><div class="approvers"><span class="avatar me" title="You — pending">SD</span></div></td><td>Fri, 29/05/2026</td><td style="color:#e53935;font-weight:600;">Fri, 29/05/2026</td><td class="amount">$88.30</td><td><button class="actions-btn">⋮</button></td></tr>
+
+          <!-- PENDING AN EARLIER APPROVER: SD is 2nd, but Mitch (1st) hasn't approved. Hidden unless "include earlier" is on. Force-approve. data-step="earlier" -->
+          <tr data-mine="true" data-step="earlier" style="display:none; background:#faf7ff;"><td><a href="#">Palm Island Barge Co</a> <span style="display:inline-block;background:#ede7f6;color:#4527a0;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">⤴ Force approve</span></td><td>SO51982</td><td>(1) Office : Brisbane</td><td>—</td>
+            <td><div class="approvers"><span class="avatar" title="Mitch — not yet approved">MM</span><span class="avatar me" title="You — can approve ahead">SD</span><span class="avatar" title="Waiting">RP</span></div></td><td>Fri, 29/05/2026</td><td>Mon, 30/06/2026</td><td class="amount">$487.11</td><td><button class="actions-btn">⋮</button></td></tr>
+
+          <tr data-mine="true" data-step="earlier" style="display:none; background:#faf7ff;"><td><a href="#">CEQ Community Enterprises</a> <span style="display:inline-block;background:#ede7f6;color:#4527a0;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">⤴ Force approve</span></td><td>INV-0921</td><td>(GC25001) TSIRC Warraber Co…</td><td>—</td>
+            <td><div class="approvers"><span class="avatar" title="Mitch — not yet approved">MM</span><span class="avatar me" title="You — can approve ahead">SD</span></div></td><td>Thu, 28/05/2026</td><td>Thu, 25/06/2026</td><td class="amount">$454.55</td><td><button class="actions-btn">⋮</button></td></tr>
+
+          <tr data-mine="true" data-step="earlier" style="display:none; background:#faf7ff;"><td><a href="#">Daly Carpentry &amp; Civil</a> <span style="display:inline-block;background:#ede7f6;color:#4527a0;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">⤴ Force approve</span></td><td>INV-128</td><td>(GC25001) TSIRC Warraber Co…</td><td>—</td>
+            <td><div class="approvers"><span class="avatar" title="Mitch — not yet approved">MM</span><span class="avatar me" title="You — can approve ahead">SD</span><span class="avatar" title="Waiting">RP</span></div></td><td>Tue, 25/02/2026</td><td>Tue, 25/03/2026</td><td class="amount">$3,210.00</td><td><button class="actions-btn">⋮</button></td></tr>
+
+          <!-- Bills NOT assigned to current user — only in "All Bills" view -->
+          <tr data-mine="false" data-step="other"><td><a href="#">SeaSwift</a></td><td>SS-44120</td><td>(GC25001) TSIRC Warraber Co…</td><td>PO-GC25001-0001</td>
+            <td><div class="approvers"><span class="avatar">MM</span><span class="avatar">RP</span></div></td><td>Thu, 28/05/2026</td><td>Thu, 25/06/2026</td><td class="amount">$60,862.00</td><td><button class="actions-btn">⋮</button></td></tr>
+
+          <tr data-mine="false" data-step="other"><td><a href="#">Geofabrics Australasia</a></td><td>T73881</td><td>(GC25001) TSIRC Warraber Co…</td><td>PO-GC25001-0002</td>
+            <td><div class="approvers"><span class="avatar">MM</span><span class="avatar">RP</span></div></td><td>Fri, 15/05/2026</td><td>Fri, 29/05/2026</td><td class="amount">$43,347.31</td><td><button class="actions-btn">⋮</button></td></tr>
+
+          <tr data-mine="false" data-step="other"><td><a href="#">InkStation</a></td><td>00041992</td><td>(1) Office : Brisbane</td><td>PO-1-0002</td>
+            <td><div class="approvers"><span class="avatar">RP</span></div></td><td>Wed, 27/05/2026</td><td>Fri, 26/06/2026</td><td class="amount">$226.36</td><td><button class="actions-btn">⋮</button></td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex; justify-content:flex-end; gap:16px; padding:12px 16px; font-size:13px; color:#888; border-top:1px solid #e0e0e0;">
+        <span id="rowcount">Showing <strong>6</strong> bills awaiting your action</span>
+        <span>‹ ›</span>
+      </div>
+    </div>
+
+    <div class="annotation">
+      <h3>What's new in this mock-up</h3>
+      <ul>
+        <li><strong>Added:</strong> an <strong>All Bills / My Bills</strong> toggle above the tabs — the same control already on the Purchase Order screen ("All Purchase Orders / My Purchase Orders").</li>
+        <li><strong>My Bills</strong> filters to bills where the logged-in user (here, <strong>SD — Sanil</strong>, shown as the highlighted avatar) is an assigned approver, surfacing the ones <em>Pending you</em> first.</li>
+        <li><strong>My Bills defaults to bills at your step</strong> — i.e. earlier approvers have already approved and it's now awaiting you (e.g. as 2nd approver, Mitch has approved — shown green). Keeps the list to "what I can action right now".</li>
+        <li><strong>Force / approve-ahead (item A3):</strong> the checkbox <em>"Also show bills pending an earlier approver"</em> reveals bills where you're in the chain but an earlier approver hasn't approved yet — letting you <strong>approve ahead</strong> (force approve) with accountability on you. Today only the 3rd approver can do this; this lets the 2nd (any approver) do it too.</li>
+        <li><strong>Why:</strong> today approvers scan the full Awaiting Approval (15) and Partially Approved (36) lists to find their own — so bills get missed (<strong>41 overdue, $82,387.21</strong>). And when an earlier approver is away, the bill stalls. This fixes both.</li>
+      </ul>
+      <p style="margin-top:8px; color:#888; font-size:12px;">Prototype for Gulf Civil product feedback · items A2 + A3</p>
+    </div>
+  </div>
+</div>
+<script>
+let scope = 'mine', inclEarlier = false;
+function setScope(s) { scope = s; apply(); }
+function toggleEarlier() { inclEarlier = !inclEarlier; apply(); }
+function apply() {
+  document.getElementById('segAll').classList.toggle('active', scope === 'all');
+  document.getElementById('segMine').classList.toggle('active', scope === 'mine');
+  document.getElementById('earlierWrap').style.display = scope === 'mine' ? 'flex' : 'none';
+  document.getElementById('earlierChev').textContent = inclEarlier ? '▾' : '▸';
+  document.getElementById('earlierLabel').textContent = inclEarlier ? 'Hide bills pending an earlier approver' : 'Show bills pending an earlier approver';
+  document.getElementById('earlierWrap').style.background = inclEarlier ? '#ece2fb' : '#f6f2fc';
+  let atStep = 0, earlier = 0;
+  document.querySelectorAll('#billsBody tr').forEach(row => {
+    const mine = row.dataset.mine === 'true';
+    const step = row.dataset.step;
+    let show;
+    if (scope === 'all') { show = true; }
+    else if (!mine) { show = false; }
+    else if (step === 'earlier') { show = inclEarlier; }
+    else { show = true; }
+    row.style.display = show ? '' : 'none';
+    if (show && mine && step === 'mine') atStep++;
+    if (show && mine && step === 'earlier') earlier++;
+  });
+  const rc = document.getElementById('rowcount');
+  if (scope === 'all') rc.innerHTML = 'Showing <strong>135</strong> bills';
+  else if (inclEarlier) rc.innerHTML = 'Showing <strong>' + atStep + '</strong> awaiting you + <strong>' + earlier + '</strong> pending an earlier approver';
+  else rc.innerHTML = 'Showing <strong>' + atStep + '</strong> bills awaiting you';
+}
+apply();
+</script>
+</body>
+</html>

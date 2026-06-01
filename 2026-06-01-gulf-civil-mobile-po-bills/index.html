@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon Mobile — POs &amp; Bills (all projects, see &amp; approve)</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#e9ebef; color:#2b2b2b; padding:28px; }
+  h1.title { font-size:20px; color:#33425e; margin-bottom:4px; }
+  p.sub { font-size:13px; color:#666; margin-bottom:22px; }
+  .rail { display:flex; gap:26px; flex-wrap:wrap; align-items:flex-start; }
+  .col { width:300px; }
+  .col > .cap { font-size:13px; font-weight:700; color:#33425e; margin-bottom:8px; text-align:center; }
+  .col > .cap small { display:block; font-weight:400; color:#888; font-size:11px; }
+
+  /* Phone frame */
+  .phone { width:300px; height:640px; background:#fff; border-radius:34px; border:10px solid #11151f; overflow:hidden; position:relative; box-shadow:0 10px 30px rgba(0,0,0,.18); display:flex; flex-direction:column; }
+  .statusbar { background:#33425e; color:#fff; font-size:12px; display:flex; justify-content:space-between; align-items:center; padding:8px 16px 4px; }
+  .statusbar .r { letter-spacing:2px; }
+  .apphdr { background:#33425e; color:#fff; display:flex; align-items:center; gap:12px; padding:10px 14px 14px; font-size:17px; font-weight:600; }
+  .apphdr .ic { font-size:16px; opacity:.9; }
+  .apphdr .spacer { flex:1; }
+  .body { flex:1; overflow-y:auto; background:#eef0f3; }
+  .body.white { background:#fff; }
+
+  /* bottom nav */
+  .bottomnav { display:flex; background:#fff; border-top:1px solid #e2e2e2; }
+  .bn { flex:1; text-align:center; padding:7px 2px 9px; font-size:9.5px; color:#9aa0aa; }
+  .bn .i { font-size:18px; display:block; margin-bottom:2px; }
+  .bn.active { color:#ea9534; }
+  .bn.new { position:relative; }
+  .bn.new::after { content:'NEW'; position:absolute; top:2px; left:50%; transform:translateX(-50%); background:#ea9534; color:#fff; font-size:7px; font-weight:700; padding:1px 4px; border-radius:6px; }
+
+  /* approval banner */
+  .appr-banner { margin:12px; background:#fff4e3; border:1px solid #ea9534; border-radius:10px; padding:12px 14px; display:flex; align-items:center; gap:10px; }
+  .appr-banner .big { font-size:13px; font-weight:700; color:#a85e00; }
+  .appr-banner .arrow { margin-left:auto; color:#ea9534; font-weight:700; }
+
+  /* project cards */
+  .pcard { background:#fff; border:1px solid #e4e6ea; border-radius:10px; margin:10px 12px; padding:12px 14px; }
+  .pcard .code { font-size:12px; color:#ea9534; font-weight:600; }
+  .pcard .name { font-size:15px; font-weight:700; color:#33425e; margin:4px 0 8px; }
+  .pill-active { display:inline-block; background:#e8f5e9; color:#2e7d32; font-size:11px; padding:2px 10px; border-radius:10px; }
+
+  /* sub-scope header (All Projects) */
+  .scopehdr { background:#fff; padding:12px 14px 6px; border-bottom:1px solid #eee; }
+  .scopehdr .proj { font-size:15px; font-weight:700; color:#33425e; }
+  .scopehdr .allproj { font-size:12px; color:#2e7d32; background:#e8f5e9; padding:2px 8px; border-radius:8px; display:inline-block; margin-top:3px; }
+
+  /* segmented My/All */
+  .seg2 { display:flex; margin:10px 12px; border:1px solid #ea9534; border-radius:8px; overflow:hidden; }
+  .seg2 div { flex:1; text-align:center; padding:8px; font-size:12px; font-weight:600; color:#ea9534; }
+  .seg2 div.on { background:#ea9534; color:#fff; }
+
+  /* filter pills */
+  .pills { display:flex; gap:8px; padding:4px 12px 10px; overflow-x:auto; }
+  .pill { white-space:nowrap; font-size:11px; padding:6px 12px; border-radius:16px; background:#e6e8ec; color:#555; }
+  .pill.on { background:#33425e; color:#fff; }
+  .pill .c { opacity:.8; }
+
+  /* list rows */
+  .row { background:#fff; border:1px solid #e4e6ea; border-radius:10px; margin:8px 12px; padding:11px 13px; }
+  .row .top { display:flex; justify-content:space-between; align-items:flex-start; }
+  .row .sup { font-size:14px; font-weight:700; color:#33425e; }
+  .row .amt { font-size:14px; font-weight:700; color:#33425e; }
+  .row .meta { font-size:11px; color:#777; margin-top:3px; }
+  .row .botline { display:flex; justify-content:space-between; align-items:center; margin-top:9px; }
+  .pendyou { background:#fff3e0; color:#e65100; font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; }
+  .due-red { color:#d2281b; font-weight:600; }
+  .avs { display:flex; }
+  .av { width:24px; height:24px; border-radius:50%; background:#dfe3e8; color:#445; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; border:2px solid #fff; margin-left:-6px; }
+  .av:first-child { margin-left:0; }
+  .av.me { background:#ea9534; color:#fff; box-shadow:0 0 0 2px #ffe3bf; }
+  .av.done { background:#2e7d32; color:#fff; }
+
+  /* bill detail */
+  .bd-head { background:#fff; padding:14px; border-bottom:1px solid #eee; }
+  .bd-status { display:inline-block; background:#fff3e0; color:#e65100; font-size:11px; font-weight:700; padding:3px 10px; border-radius:10px; }
+  .bd-amt { font-size:26px; font-weight:800; color:#33425e; margin:8px 0 2px; }
+  .kv { display:flex; justify-content:space-between; font-size:12px; padding:7px 14px; border-bottom:1px solid #f1f1f1; background:#fff; }
+  .kv .k { color:#888; } .kv .v { color:#333; font-weight:600; }
+  .chain { background:#fff; padding:12px 14px; }
+  .chain h4 { font-size:11px; color:#888; text-transform:uppercase; letter-spacing:.4px; margin-bottom:10px; }
+  .appr { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .appr .nm { font-size:12.5px; font-weight:600; color:#33425e; }
+  .appr .st { font-size:11px; margin-left:auto; font-weight:600; }
+  .st.ok { color:#2e7d32; } .st.now { color:#ea9534; } .st.wait { color:#aaa; }
+  .viewbtn { display:block; text-align:center; margin:12px 14px; padding:10px; border:1px solid #33425e; color:#33425e; border-radius:8px; font-size:13px; font-weight:600; }
+  .lineitems { background:#fff; margin:0 0 10px; }
+  .li { display:flex; justify-content:space-between; font-size:12px; padding:9px 14px; border-bottom:1px solid #f3f3f3; }
+  .li .d { color:#444; } .li .v { font-weight:600; color:#33425e; }
+  .approve-bar { display:flex; gap:8px; padding:10px 12px; background:#fff; border-top:1px solid #eee; }
+  .btn { flex:1; text-align:center; padding:12px; border-radius:8px; font-size:13px; font-weight:700; }
+  .btn.reject { border:1px solid #d2281b; color:#d2281b; }
+  .btn.approve { background:#ea9534; color:#fff; }
+  .approve-next { text-align:center; font-size:12px; color:#ea9534; font-weight:600; padding:0 12px 12px; background:#fff; }
+
+  /* lock screen */
+  .lockscreen { height:100%; background:linear-gradient(165deg,#1b2540 0%,#33425e 55%,#4a5570 100%); color:#fff; display:flex; flex-direction:column; padding:10px 0 16px; }
+  .lock-statusbar { display:flex; justify-content:space-between; font-size:12px; padding:2px 18px 0; opacity:.95; }
+  .lock-lock { text-align:center; font-size:14px; margin-top:14px; opacity:.85; }
+  .lock-time { text-align:center; font-size:60px; font-weight:300; line-height:1; margin-top:6px; letter-spacing:1px; }
+  .lock-date { text-align:center; font-size:14px; opacity:.9; margin-bottom:22px; }
+  .notif { background:rgba(255,255,255,0.94); color:#222; margin:7px 11px; border-radius:16px; padding:10px 12px; box-shadow:0 2px 8px rgba(0,0,0,.12); }
+  .notif .nhead { display:flex; align-items:center; gap:7px; font-size:11px; color:#666; margin-bottom:4px; }
+  .notif .nicon { width:18px; height:18px; border-radius:4px; background:linear-gradient(135deg,#f7941d,#f15a24); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .notif .napp { font-weight:700; letter-spacing:.4px; }
+  .notif .ntime { margin-left:auto; }
+  .notif .ntitle { font-size:13px; font-weight:700; color:#1c2540; }
+  .notif .nbody { font-size:12px; color:#444; margin-top:2px; }
+  .lock-foot { margin-top:auto; display:flex; justify-content:space-between; padding:0 34px; font-size:20px; opacity:.85; }
+  .lock-bar { width:120px; height:5px; background:rgba(255,255,255,.6); border-radius:3px; margin:14px auto 2px; }
+
+  .annotation { margin-top:24px; max-width:960px; padding:16px 20px; background:#fff8f0; border:1px solid #ea9534; border-radius:8px; font-size:13px; line-height:1.6; }
+  .annotation h3 { color:#c87800; font-size:14px; margin-bottom:8px; }
+  .annotation ul { margin-left:20px; } .annotation li { margin-bottom:5px; }
+</style>
+</head>
+<body>
+  <h1 class="title">Varicon Mobile — Purchase Orders &amp; Bills (all projects · see &amp; approve)</h1>
+  <p class="sub">Gulf Civil product feedback · items A1 + A4 — for senior people / owners who work mostly on the mobile app. Tap-flow: lock-screen notification → Home → Bills (all projects) → approve.</p>
+
+  <div class="rail">
+
+    <!-- SCREEN 0: LOCK SCREEN NOTIFICATIONS -->
+    <div class="col">
+      <div class="cap">0 · Lock screen <small>push: new PO &amp; new bill to approve</small></div>
+      <div class="phone">
+        <div class="lockscreen">
+          <div class="lock-statusbar"><span>‎</span><span>📶 🔋66</span></div>
+          <div class="lock-lock">🔒</div>
+          <div class="lock-time">9:41</div>
+          <div class="lock-date">Monday, 1 June</div>
+
+          <div class="notif">
+            <div class="nhead"><span class="nicon">V</span><span class="napp">VARICON</span><span class="ntime">now</span></div>
+            <div class="ntitle">New bill awaiting your approval</div>
+            <div class="nbody">Flexihire Pty Ltd · $1,420.00 — (1) Office : Brisbane. Tap to review.</div>
+          </div>
+
+          <div class="notif">
+            <div class="nhead"><span class="nicon">V</span><span class="napp">VARICON</span><span class="ntime">9m ago</span></div>
+            <div class="ntitle">New purchase order to approve</div>
+            <div class="nbody">SeaSwift · $60,862.00 — (GC25001) TSIRC Warraber. Tap to review.</div>
+          </div>
+
+          <div class="notif">
+            <div class="nhead"><span class="nicon">V</span><span class="napp">VARICON</span><span class="ntime">1h ago</span></div>
+            <div class="ntitle">Comment on a bill you approve</div>
+            <div class="nbody">Sandy commented on Hastings Deering $7,041.00. Tap to view.</div>
+          </div>
+
+          <div class="lock-foot"><span>🔦</span><span>📷</span></div>
+          <div class="lock-bar"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 1: HOME with new bottom nav -->
+    <div class="col">
+      <div class="cap">1 · Home <small>new bottom nav: Purchase Orders + Bills</small></div>
+      <div class="phone">
+        <div class="statusbar"><span>15:02</span><span class="r">📶 🔋66</span></div>
+        <div class="apphdr"><span class="ic">☰</span> Projects <span class="spacer"></span><span class="ic">🔍</span><span class="ic">🔔</span><span class="ic">▾</span></div>
+        <div class="body">
+          <div class="appr-banner">
+            <span style="font-size:18px;">📥</span>
+            <span class="big">6 bills &amp; 2 POs awaiting your approval</span>
+            <span class="arrow">→</span>
+          </div>
+          <div class="pcard"><div class="code">TBA • Civil</div><div class="name">Caravonica</div><span class="pill-active">Active</span></div>
+          <div class="pcard"><div class="code">GC25003 • Civil</div><div class="name">Metro Mining</div><span class="pill-active">Active</span></div>
+          <div class="pcard"><div class="code">GC25001 • Civil</div><div class="name">TSIRC Warraber Coastal Defences</div><span class="pill-active">Active</span></div>
+        </div>
+        <div class="bottomnav">
+          <div class="bn active"><span class="i">📁</span>Projects</div>
+          <div class="bn new"><span class="i">🛒</span>POs</div>
+          <div class="bn new"><span class="i">💰</span>Bills</div>
+          <div class="bn"><span class="i">⋯</span>More</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: Purchase Orders (all projects) -->
+    <div class="col">
+      <div class="cap">2 · Purchase Orders <small>ALL projects (today: per-project only)</small></div>
+      <div class="phone">
+        <div class="statusbar"><span>15:03</span><span class="r">📶 🔋64</span></div>
+        <div class="apphdr"><span class="ic">←</span> Purchase Orders <span class="spacer"></span><span class="ic">🔍</span></div>
+        <div class="body">
+          <div class="scopehdr"><span class="allproj">★ All Projects</span></div>
+          <div class="seg2"><div>All POs</div><div class="on">Awaiting you · 2</div></div>
+          <div class="row"><div class="top"><span class="sup">SeaSwift</span><span class="amt">$60,862.00</span></div>
+            <div class="meta">PO-GC25001-0004 · (GC25001) TSIRC Warraber</div>
+            <div class="botline"><span class="pendyou">Pending you</span><div class="avs"><span class="av done">MM</span><span class="av me">SD</span><span class="av">RP</span></div></div></div>
+          <div class="row"><div class="top"><span class="sup">Geofabrics Australasia</span><span class="amt">$43,347.31</span></div>
+            <div class="meta">PO-GC25001-0002 · (GC25001) TSIRC Warraber</div>
+            <div class="botline"><span class="pendyou">Pending you</span><div class="avs"><span class="av done">MM</span><span class="av me">SD</span><span class="av">RP</span></div></div></div>
+        </div>
+        <div class="bottomnav">
+          <div class="bn"><span class="i">📁</span>Projects</div>
+          <div class="bn active"><span class="i">🛒</span>POs</div>
+          <div class="bn"><span class="i">💰</span>Bills</div>
+          <div class="bn"><span class="i">⋯</span>More</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 3: Bills (all projects) -->
+    <div class="col">
+      <div class="cap">3 · Bills <small>ALL projects (today: not on mobile at all)</small></div>
+      <div class="phone">
+        <div class="statusbar"><span>15:04</span><span class="r">📶 🔋63</span></div>
+        <div class="apphdr"><span class="ic">←</span> Bills <span class="spacer"></span><span class="ic">🔍</span></div>
+        <div class="body">
+          <div class="scopehdr"><span class="allproj">★ All Projects</span></div>
+          <div class="seg2"><div>All Bills</div><div class="on">My Bills · 6</div></div>
+          <div style="display:flex; gap:8px; padding:0 12px 6px;">
+            <div style="background:#33425e;color:#fff;font-size:11px;font-weight:600;padding:5px 11px;border-radius:14px;">Awaiting me · 6</div>
+            <div style="background:#ede7f6;color:#4527a0;font-size:11px;font-weight:600;padding:5px 11px;border-radius:14px;">+ Pending earlier · 3</div>
+          </div>
+          <div class="row"><div class="top"><span class="sup">Flexihire Pty Ltd</span><span class="amt">$1,420.00</span></div>
+            <div class="meta">1028047 · (1) Office : Brisbane · due <span class="due-red">31/05</span></div>
+            <div class="botline"><span class="pendyou">Pending you</span><div class="avs"><span class="av done">MM</span><span class="av me">SD</span><span class="av">RP</span></div></div></div>
+          <div class="row"><div class="top"><span class="sup">Hastings Deering</span><span class="amt">$7,041.00</span></div>
+            <div class="meta">2018580237 · (GC25001) TSIRC Warraber</div>
+            <div class="botline"><span class="pendyou">Pending you</span><div class="avs"><span class="av done">MM</span><span class="av me">SD</span><span class="av">RP</span></div></div></div>
+          <div class="row"><div class="top"><span class="sup">Seek</span><span class="amt">$1,320.50</span></div>
+            <div class="meta">701907625 · (1) Office : Brisbane</div>
+            <div class="botline"><span class="pendyou">Pending you</span><div class="avs"><span class="av me">SD</span><span class="av">RP</span></div></div></div>
+          <div class="row"><div class="top"><span class="sup">Uber</span><span class="amt">$88.30</span></div>
+            <div class="meta">(4) Office : Charters Tower · due <span class="due-red">29/05</span></div>
+            <div class="botline"><span class="pendyou">Pending you</span><div class="avs"><span class="av me">SD</span></div></div></div>
+        </div>
+        <div class="bottomnav">
+          <div class="bn"><span class="i">📁</span>Projects</div>
+          <div class="bn"><span class="i">🛒</span>POs</div>
+          <div class="bn active"><span class="i">💰</span>Bills</div>
+          <div class="bn"><span class="i">⋯</span>More</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 4: Bill detail + approve -->
+    <div class="col">
+      <div class="cap">4 · Bill — see &amp; approve <small>mirrors desktop approver flow</small></div>
+      <div class="phone">
+        <div class="statusbar"><span>15:04</span><span class="r">📶 🔋63</span></div>
+        <div class="apphdr"><span class="ic">←</span> Bill 1028047</div>
+        <div class="body white" style="display:flex; flex-direction:column;">
+          <div style="flex:1; overflow-y:auto;">
+            <div class="bd-head">
+              <span class="bd-status">Awaiting Approval</span>
+              <div class="bd-amt">$1,420.00</div>
+              <div style="font-size:13px; color:#555;">Flexihire Pty Ltd</div>
+            </div>
+            <div class="kv"><span class="k">Project</span><span class="v">(1) Office : Brisbane</span></div>
+            <div class="kv"><span class="k">Invoice ref</span><span class="v">1028047</span></div>
+            <div class="kv"><span class="k">Transaction date</span><span class="v">31/05/2026</span></div>
+            <div class="kv"><span class="k">Due date</span><span class="v due-red">31/05/2026</span></div>
+            <a class="viewbtn">📄 View attached invoice</a>
+            <div class="chain">
+              <h4>Approvers</h4>
+              <div class="appr"><span class="av done">MM</span><span class="nm">Mitch McMullen</span><span class="st ok">✓ Approved</span></div>
+              <div class="appr"><span class="av me">SD</span><span class="nm">Sanil Deoji (you)</span><span class="st now">Pending</span></div>
+              <div class="appr"><span class="av">RP</span><span class="nm">Ramesh Patel</span><span class="st wait">Waiting</span></div>
+            </div>
+            <div class="lineitems">
+              <div class="li"><span class="d">XH Dangerous Goods Container</span><span class="v">$584.57</span></div>
+              <div class="li"><span class="d">XH Building 12M x 3M</span><span class="v">$720.51</span></div>
+              <div class="li"><span class="d">Environmental Levy</span><span class="v">$19.58</span></div>
+            </div>
+          </div>
+          <div class="approve-bar">
+            <div class="btn reject">Reject</div>
+            <div class="btn approve">Approve</div>
+          </div>
+          <div class="approve-next">Approve &amp; next bill →</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 5: Force approve (approve ahead of an earlier approver) -->
+    <div class="col">
+      <div class="cap">5 · Force approve <small>approve ahead when an earlier approver is away (item A3)</small></div>
+      <div class="phone">
+        <div class="statusbar"><span>15:05</span><span class="r">📶 🔋62</span></div>
+        <div class="apphdr"><span class="ic">←</span> Bill SO51982</div>
+        <div class="body white" style="display:flex; flex-direction:column;">
+          <div style="flex:1; overflow-y:auto;">
+            <div class="bd-head">
+              <span class="bd-status">Awaiting Approval</span>
+              <div class="bd-amt">$487.11</div>
+              <div style="font-size:13px; color:#555;">Palm Island Barge Co</div>
+            </div>
+            <div class="kv"><span class="k">Project</span><span class="v">(1) Office : Brisbane</span></div>
+            <div class="kv"><span class="k">Invoice ref</span><span class="v">SO51982</span></div>
+            <div class="kv"><span class="k">Due date</span><span class="v">30/06/2026</span></div>
+            <a class="viewbtn">📄 View attached invoice</a>
+            <div class="chain">
+              <h4>Approvers</h4>
+              <div class="appr"><span class="av">MM</span><span class="nm">Mitch McMullen</span><span class="st wait">Not yet approved</span></div>
+              <div class="appr"><span class="av me">SD</span><span class="nm">Sanil Deoji (you)</span><span class="st now">2nd approver</span></div>
+              <div class="appr"><span class="av">RP</span><span class="nm">Ramesh Patel</span><span class="st wait">Waiting</span></div>
+            </div>
+            <div style="margin:0 14px 12px; background:#fff7ec; border:1px solid #ea9534; border-radius:8px; padding:10px 12px; font-size:12px; color:#8a5300;">
+              ⚠ Mitch (1st approver) hasn't approved yet. As a later approver you can <strong>approve ahead</strong> — accountability for skipping the earlier step stays with you.
+            </div>
+          </div>
+          <div class="approve-bar">
+            <div class="btn reject">Reject</div>
+            <div class="btn approve" style="background:#4527a0;">⤴ Force approve</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="annotation">
+    <h3>What's new in this mock-up</h3>
+    <ul>
+      <li><strong>Bottom nav — Purchase Orders &amp; Bills added</strong> (marked NEW). Today the admin/owner bottom nav is Projects · Forms · Leave · Gallery · Files — neither POs nor Bills are there.</li>
+      <li><strong>Purchase Orders — across ALL projects.</strong> Today POs on mobile are reachable only <em>inside a single project</em> (e.g. Caravonica → Purchase Order). Screen 2 shows an all-projects view with an "Awaiting you" filter.</li>
+      <li><strong>Bills — now on mobile at all.</strong> Bills approval doesn't exist on mobile today. Screens 3–4 add an all-projects bills list and a basic see-&amp;-approve detail that mirrors the desktop approver flow (approver chain Mitch → Sanil → Ramesh, view invoice, line items, Approve / Reject / Approve &amp; next).</li>
+      <li><strong>Lock-screen push notifications (item A4):</strong> Screen 0 — a new bill or PO awaiting approval (and comments on bills they approve) pushes to the lock screen; tap straight into the approval. So nothing waits on someone manually opening the app.</li>
+      <li><strong>Owner-first:</strong> open the app → banner shows "6 bills &amp; 2 POs awaiting your approval" → tap → approve from the phone. Built for Romesh, who is mobile-first and often overseas.</li>
+      <li><strong>Approval step + force-approve (item A3):</strong> "My Bills" defaults to <em>Awaiting me</em> — bills at your step (earlier approver already done, shown green). The <em>+ Pending earlier</em> chip shows bills where an earlier approver hasn't approved yet; Screen 5 lets you <strong>approve ahead / force approve</strong> with accountability on you. Today only the 3rd approver can do this — this lets the 2nd (any approver) do it too.</li>
+      <li><strong>Scope:</strong> basic functionality — see + approve/reject. Not full bill editing on mobile.</li>
+    </ul>
+    <p style="margin-top:8px; color:#888; font-size:12px;">Prototype for Gulf Civil product feedback · items A1 + A4 + A3 (mobile POs &amp; Bills)</p>
+  </div>
+</body>
+</html>

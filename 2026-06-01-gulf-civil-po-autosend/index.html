@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — PO auto-send to supplier (default workflow)</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#e9ebef; color:#2b2b2b; padding:28px; }
+  h1.title { font-size:20px; color:#33425e; margin-bottom:4px; }
+  p.sub { font-size:13px; color:#666; margin-bottom:22px; max-width:980px; }
+  .rail { display:flex; gap:26px; flex-wrap:wrap; align-items:flex-start; }
+  .col .cap { font-size:13px; font-weight:700; color:#33425e; margin-bottom:8px; }
+  .col .cap small { display:block; font-weight:400; color:#888; font-size:11px; }
+
+  .modal { width:460px; background:#fff; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.16); overflow:hidden; }
+  .modal-hd { display:flex; align-items:center; justify-content:space-between; padding:18px 20px 12px; }
+  .modal-hd h2 { font-size:18px; color:#1c2540; }
+  .modal-hd .x { color:#999; font-size:18px; }
+  .modal-bd { padding:4px 20px 18px; }
+  .modal-ft { display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid #eee; }
+
+  .sect-label { font-size:14px; font-weight:700; color:#1c2540; margin:14px 0 4px; }
+  .sect-help { font-size:12px; color:#777; margin-bottom:10px; line-height:1.5; }
+  .twocol { display:flex; gap:14px; }
+  .twocol > div { flex:1; }
+  .ddl { width:100%; padding:9px 12px; border:1px solid #d6d9de; border-radius:7px; font-size:12px; color:#999; background:#fafafa; }
+  .chip { display:inline-flex; align-items:center; gap:6px; background:#eef0f3; border-radius:14px; padding:4px 10px; font-size:12px; margin-top:8px; }
+  .chip .av { width:20px;height:20px;border-radius:50%;background:#c9cedb;color:#445;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center; }
+  .chip .x { color:#aaa; }
+
+  /* the new auto-send block */
+  .autosend { border:1px solid #ea9534; background:#fff7ec; border-radius:10px; padding:14px; margin-top:6px; }
+  .toggle-row { display:flex; align-items:center; gap:10px; }
+  .switch { width:40px; height:23px; background:#2e7d32; border-radius:14px; position:relative; flex-shrink:0; }
+  .switch::after { content:''; position:absolute; width:18px; height:18px; background:#fff; border-radius:50%; top:2.5px; right:2.5px; }
+  .switch.off { background:#c4c8cf; }
+  .switch.off::after { right:auto; left:2.5px; }
+  .toggle-row .t { font-size:13.5px; font-weight:700; color:#1c2540; }
+  .recipient { margin-top:12px; background:#fff; border:1px solid #e2e5ea; border-radius:8px; padding:10px 12px; display:flex; align-items:center; gap:10px; }
+  .recipient .who { font-size:13px; font-weight:600; color:#1c2540; }
+  .recipient .em { font-size:12px; color:#555; }
+  .src-badge { margin-left:auto; display:inline-flex; align-items:center; gap:5px; background:#e7f0ff; color:#1559b8; font-size:11px; font-weight:700; padding:3px 9px; border-radius:10px; }
+  .pulled-note { font-size:11.5px; color:#777; margin-top:8px; }
+
+  textarea, input.txt { width:100%; border:1px solid #d6d9de; border-radius:7px; font-size:13px; padding:9px 11px; font-family:inherit; }
+  .field-label { font-size:12px; font-weight:700; color:#1c2540; margin:12px 0 5px; }
+  .row-kv { display:flex; font-size:13px; padding:5px 0; }
+  .row-kv .k { width:80px; color:#888; } .row-kv .v { color:#1c2540; font-weight:600; }
+
+  /* prefilled To with source badge */
+  .to-box { border:1px solid #2e7d32; border-radius:7px; padding:8px 10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:#f3faf3; }
+  .to-chip { display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid #cfe0cf; border-radius:14px; padding:3px 9px; font-size:12px; }
+  .green-banner { background:#e8f5e9; border:1px solid #2e7d32; color:#1b5e20; border-radius:8px; padding:10px 12px; font-size:12.5px; margin-bottom:14px; }
+
+  .btn { padding:10px 18px; border-radius:7px; font-size:13px; font-weight:700; cursor:pointer; border:none; }
+  .btn.cancel { background:#fff; border:1px solid #d0d0d0; color:#444; }
+  .btn.primary { background:#ea9534; color:#fff; }
+
+  .copy { display:flex; align-items:center; gap:8px; font-size:12px; color:#444; margin-top:12px; }
+  .copy .cb { width:16px;height:16px;background:#ea9534;border-radius:3px;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center; }
+
+  .settings { width:460px; background:#fff; border:1px solid #e2e5ea; border-radius:12px; padding:18px 20px; }
+  .settings h2 { font-size:15px; color:#1c2540; margin-bottom:4px; }
+  .settings .grp { padding:12px 0; border-bottom:1px solid #f1f1f1; }
+  .settings .grp:last-child { border-bottom:none; }
+
+  /* split button + dropdown */
+  .splitbtn { position:relative; display:inline-flex; }
+  .splitbtn .main { background:#ea9534; color:#fff; border:none; padding:10px 14px; border-radius:7px 0 0 7px; font-size:13px; font-weight:700; cursor:pointer; }
+  .splitbtn .caret { background:#d6831f; color:#fff; border:none; border-left:1px solid rgba(255,255,255,.35); padding:10px 11px; border-radius:0 7px 7px 0; font-weight:700; cursor:pointer; }
+  .dropmenu { position:absolute; bottom:48px; right:0; width:268px; background:#fff; border:1px solid #e2e5ea; border-radius:9px; box-shadow:0 8px 22px rgba(0,0,0,.16); overflow:hidden; }
+  .dropmenu .item { padding:10px 14px; border-bottom:1px solid #f3f3f3; display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .dropmenu .item:last-child { border-bottom:none; }
+  .dropmenu .item.active { background:#fff7ec; }
+  .dropmenu .item .t2 { font-size:13px; font-weight:700; color:#1c2540; }
+  .dropmenu .item .desc { font-size:11px; color:#888; font-weight:400; margin-top:2px; }
+  .dropmenu .item .tick { color:#ea9534; font-weight:800; }
+
+  .annotation { margin-top:24px; max-width:980px; padding:16px 20px; background:#fff8f0; border:1px solid #ea9534; border-radius:8px; font-size:13px; line-height:1.6; }
+  .annotation h3 { color:#c87800; font-size:14px; margin-bottom:8px; }
+  .annotation ul { margin-left:20px; } .annotation li { margin-bottom:5px; }
+</style>
+</head>
+<body>
+  <h1 class="title">Varicon — Purchase Orders auto-send to supplier (default workflow)</h1>
+  <p class="sub">Gulf Civil product feedback · item B7. Today: after approval you must click <strong>Send Email</strong> and the <strong>To field is blank</strong> — manual, every PO. Proposed: <strong>approving a PO sends it to the supplier by default</strong>, with the supplier's email <strong>pulled from the connected accounting system</strong> (MYOB / Xero / QuickBooks).</p>
+
+  <div class="rail">
+
+    <!-- PANEL 1: Approve PO modal (enhanced) -->
+    <div class="col">
+      <div class="cap">1 · Approve Purchase Order <small>auto-send default + supplier email from accounting system</small></div>
+      <div class="modal">
+        <div class="modal-hd"><h2>Approve Purchase Order</h2><span class="x">✕</span></div>
+        <div class="modal-bd">
+          <div class="sect-label">Select approver</div>
+          <div class="sect-help">Users selected under 'Can Approve' and 'Can Close' will receive an email notification for the approval request.</div>
+          <div class="twocol">
+            <div><div class="ddl">Nominate Approver ▾</div><div class="chip"><span class="av">VI</span> Varicon Info <span class="x">✕</span></div></div>
+            <div><div class="ddl">Nominate Approver ▾</div><div class="chip"><span class="av">VI</span> Varicon Info <span class="x">✕</span></div></div>
+          </div>
+
+          <!-- NEW -->
+          <div class="sect-label">Send to supplier</div>
+          <div class="autosend">
+            <div class="toggle-row"><div class="switch"></div><div class="t">Email this PO to the supplier on approval</div></div>
+            <div class="recipient">
+              <div>
+                <div class="who">Hard As Concrete Pty Ltd</div>
+                <div class="em">accounts@hardasconcrete.com.au</div>
+              </div>
+              <span class="src-badge">⟳ from MYOB</span>
+            </div>
+            <div class="pulled-note">Recipient pulled automatically from your accounting system (MYOB). Edit on the next step if needed.</div>
+          </div>
+
+          <div class="field-label">Comment</div>
+          <textarea rows="2" placeholder="Add a comment"></textarea>
+        </div>
+        <div class="modal-ft">
+          <button class="btn cancel">Cancel</button>
+          <div class="splitbtn">
+            <div class="dropmenu">
+              <div class="item active"><div><div class="t2">Approve &amp; Send</div><div class="desc">Approve and email the PO to the supplier</div></div><span class="tick">✓</span></div>
+              <div class="item"><div><div class="t2">Approve only</div><div class="desc">Approve without sending to the supplier</div></div></div>
+              <div class="item"><div><div class="t2">Save as draft</div><div class="desc">Keep editing — don't approve yet</div></div></div>
+            </div>
+            <button class="main">Approve &amp; Send</button><button class="caret">▾</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL 2: Send Email (auto-prefilled) -->
+    <div class="col">
+      <div class="cap">2 · The email that goes out <small>To pre-filled from accounting system</small></div>
+      <div class="modal">
+        <div class="modal-hd"><h2>Send Email</h2><span class="x">✕</span></div>
+        <div class="modal-bd">
+          <div class="green-banner">✓ Default workflow — this PO is sent to the supplier automatically on approval. Recipient pulled from your accounting system; review or edit before it goes.</div>
+          <div class="row-kv"><span class="k">From</span><span class="v">Cookie's Civil (Varicon)</span></div>
+          <div class="row-kv"><span class="k">Reply to</span><span class="v">info@cookiescivil.com.au</span></div>
+          <div class="field-label">To *</div>
+          <div class="to-box">
+            <span class="to-chip">Hard As Concrete Pty Ltd &lt;accounts@hardasconcrete.com.au&gt; ✕</span>
+            <span class="src-badge">⟳ Auto-filled from MYOB</span>
+          </div>
+          <div class="field-label">Subject *</div>
+          <input class="txt" value="Purchase Order PO-VAR006-0001 from Cookie's Civil Pty for Hard As Concrete Pty Ltd">
+          <div class="field-label">Message</div>
+          <textarea rows="5">Hi,
+
+Here's purchase order PO-VAR006-0001 for $6,875.00.
+
+Delivery due date, address and details are included in the attached purchase order.
+
+If you have any questions, please let us know.
+
+Thanks,
+Cookie's Civil Pty</textarea>
+          <div class="copy"><span class="cb">✓</span> Send me a copy — info@cookiescivil.com.au</div>
+        </div>
+        <div class="modal-ft"><button class="btn cancel">Cancel</button><button class="btn primary">Send</button></div>
+      </div>
+    </div>
+
+    <!-- PANEL 3: Settings -->
+    <div class="col">
+      <div class="cap">3 · Org default (set once) <small>Settings → Purchase Order</small></div>
+      <div class="settings">
+        <h2>Purchase Order — sending defaults</h2>
+        <div class="grp">
+          <div class="toggle-row"><div class="switch"></div><div class="t">Automatically send approved POs to the supplier</div></div>
+          <div class="pulled-note">When on, approving a PO emails it to the supplier without the extra Send Email step. Approvers can still review/edit before it sends.</div>
+        </div>
+        <div class="grp">
+          <div class="t" style="font-size:13.5px; color:#1c2540; margin-bottom:8px;">Supplier email source</div>
+          <div class="recipient" style="margin-top:0;">
+            <div class="who">Connected accounting system</div>
+            <span class="src-badge">⟳ MYOB connected</span>
+          </div>
+          <div class="pulled-note">Supplier email addresses sync from your accounting system — <strong>MYOB · Xero · QuickBooks</strong>. Falls back to the supplier record in Varicon if none is set.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="annotation">
+    <h3>What's new in this mock-up</h3>
+    <ul>
+      <li><strong>Default workflow = send to supplier.</strong> Approving a PO now emails it to the supplier automatically (the Approve button becomes <em>Approve &amp; Send</em>). No separate manual Send Email step.</li>
+      <li><strong>Supplier email pulled from the accounting system.</strong> The recipient is auto-filled from the connected MYOB / Xero / QuickBooks supplier record (badge shows the source) — today the To field is blank and typed in by hand each time.</li>
+      <li><strong>Approve button is a split control.</strong> Default <em>Approve &amp; Send</em>, with a dropdown for <em>Approve only</em> (don't send to supplier) and <em>Save as draft</em> — so the auto-send default is easy to override per PO.</li>
+      <li><strong>Still reviewable.</strong> Approver can see/edit the recipient and message before it goes; falls back to the Varicon supplier record if the accounting system has no email.</li>
+      <li><strong>Set once.</strong> Org-level setting (Settings → Purchase Order) turns the auto-send default on and points the email source at the accounting system.</li>
+      <li><strong>Why:</strong> Gulf Civil — "if the POs don't go out, things don't get ordered in time." Removes a manual step that causes missed/late orders.</li>
+    </ul>
+    <p style="margin-top:8px; color:#888; font-size:12px;">Prototype for Gulf Civil product feedback · item B7 (auto-send PO + supplier email from accounting system)</p>
+  </div>
+</body>
+</html>
