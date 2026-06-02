@@ -339,7 +339,32 @@ function renderLabour(){
 function hoursNum(h){var m=(h||'').match(/(\d+)\s*h(?:\s*(\d+))?/);if(!m)return 0;return parseInt(m[1],10)+(m[2]?parseInt(m[2],10)/60:0);}
 function money(n){return '$'+n.toLocaleString('en-AU',{minimumFractionDigits:0,maximumFractionDigits:0});}
 function renderPlant(){var h='';rows.plant.forEach(function(r){var rateLine=r.rate?'<div class="feed-note" style="color:var(--navy)"><i class="fa-solid fa-dollar-sign"></i> '+money(r.rate)+'/hr · hire cost <b>'+money(r.rate*hoursNum(r.hrs))+'</b></div>':'';h+='<div class="ecard"><div class="row1"><div class="av"><i class="fa-solid fa-truck-monster"></i></div><div><div class="nm">'+r.nm+'</div><div class="sub"><span style="font-family:monospace">'+r.no+'</span> · '+r.sup+' · '+r.by+'</div></div><div class="hrs"><div class="big">'+r.hrs+'</div><div class="lbl">operating</div></div></div><div class="allocs">'+chips(r.alloc)+'</div>'+rateLine+'</div>';});document.getElementById('list-plant').innerHTML=h;}
-function renderMaterials(){var h='';rows.materials.forEach(function(r){h+='<div class="ecard"><div class="row1"><div class="av"><i class="fa-solid fa-box"></i></div><div><div class="nm">'+r.nm+'</div><div class="sub">'+r.src+' · '+r.sup+'</div></div><div class="hrs"><div class="big">'+r.qty+'</div><div class="lbl">used</div></div></div><div class="allocs">'+chips(r.alloc)+'</div></div>';});document.getElementById('list-materials').innerHTML=h;}
+function fmtQty(n,unit){return n.toLocaleString('en-AU')+' '+unit;}
+function renderMaterials(){
+  var h='',onLines=0,delLines=0;
+  rows.materials.forEach(function(r){
+    var remDeliver=Math.max(0,r.ordered-r.delivered);
+    var remInstall=Math.max(0,r.ordered-r.used);
+    var onSite=Math.max(0,r.delivered-r.used);
+    if(onSite>0)onLines++;if(remDeliver>0)delLines++;
+    var dPct=Math.min(100,r.delivered/r.ordered*100),uPct=Math.min(100,r.used/r.ordered*100);
+    h+='<div class="ecard">'+
+      '<div class="row1"><div class="av"><i class="fa-solid fa-box"></i></div>'+
+      '<div><div class="nm">'+r.nm+'</div><div class="sub"><span style="font-family:monospace">'+r.po+'</span> · '+r.sup+'</div></div>'+
+      '<div class="hrs"><div class="big">'+fmtQty(onSite,r.unit)+'</div><div class="lbl">on site</div></div></div>'+
+      '<div class="mqty">'+
+        '<div><span>'+fmtQty(r.ordered,r.unit)+'</span><label>Ordered</label></div>'+
+        '<div><span>'+fmtQty(r.delivered,r.unit)+'</span><label>Delivered</label></div>'+
+        '<div><span>'+fmtQty(r.used,r.unit)+'</span><label>Used</label></div></div>'+
+      '<div class="mbar"><i style="width:'+dPct+'%"></i><b style="width:'+uPct+'%"></b></div>'+
+      '<div class="mrem"><span class="'+(remDeliver?'deliver':'zero')+'">To deliver '+fmtQty(remDeliver,r.unit)+'</span><span class="'+(remInstall?'install':'zero')+'">To install '+fmtQty(remInstall,r.unit)+'</span></div>'+
+      '</div>';
+  });
+  document.getElementById('list-materials').innerHTML=h;
+  document.getElementById('sPoCount').textContent=rows.materials.length;
+  document.getElementById('sOnSite').textContent=onLines;
+  document.getElementById('sToDeliver').textContent=delLines;
+}
 function renderMisc(){var h='';rows.misc.forEach(function(r){h+='<div class="ecard"><div class="row1"><div class="av"><i class="fa-solid fa-tag"></i></div><div><div class="nm">'+r.nm+'</div><div class="sub">'+r.co+' · '+r.qty+'</div></div></div><div class="allocs">'+chips(r.alloc)+'</div></div>';});if(!rows.misc.length)h='<div class="empty"><i class="fa-solid fa-comment-dots"></i>No items yet</div>';document.getElementById('list-misc').innerHTML=h;}
 function renderAll(){renderLabour();renderPlant();renderMaterials();renderMisc();}
 
