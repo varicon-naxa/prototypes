@@ -740,43 +740,76 @@ var MAT_EDIT=null;
 function editMaterial(id){
   var r=rows.materials.filter(function(x){return x.id===id})[0];if(!r)return;
   MAT_EDIT=id;
+  document.getElementById('meTitle').textContent='Edit material line';
   document.getElementById('meSub').textContent=r.src+' · '+r.sup;
   document.getElementById('meType').value=r.srcType||'PO';
   document.getElementById('meSrc').value=r.src;
   document.getElementById('meName').value=r.nm;
   document.getElementById('meSup').value=r.sup;
   document.getElementById('meUnit').value=r.unit;
+  document.getElementById('meRate').value=r.rate||0;
   document.getElementById('meOrdered').value=r.ordered;
   document.getElementById('meDelivered').value=r.delivered;
   document.getElementById('meUsed').value=r.used;
+  document.getElementById('meDelBtn').style.display='';
+  document.getElementById('saveMatBtn').innerHTML='Save changes <i class="fa-solid fa-check"></i>';
+  meSyncType();mePreview();
+  document.getElementById('matScrim').classList.add('show');
+  document.getElementById('matDrawer').classList.add('show');
+}
+function openMatNew(){
+  MAT_EDIT=null;
+  document.getElementById('meTitle').textContent='Add material manually';
+  document.getElementById('meSub').textContent='New line';
+  document.getElementById('meType').value='Manual';
+  document.getElementById('meSrc').value='';
+  document.getElementById('meName').value='';
+  document.getElementById('meSup').value='';
+  document.getElementById('meUnit').value='';
+  document.getElementById('meRate').value='';
+  document.getElementById('meOrdered').value='';
+  document.getElementById('meDelivered').value='';
+  document.getElementById('meUsed').value='';
+  document.getElementById('meDelBtn').style.display='none';
+  document.getElementById('saveMatBtn').innerHTML='Add material <i class="fa-solid fa-check"></i>';
   meSyncType();mePreview();
   document.getElementById('matScrim').classList.add('show');
   document.getElementById('matDrawer').classList.add('show');
 }
 function closeMatEdit(){MAT_EDIT=null;document.getElementById('matScrim').classList.remove('show');document.getElementById('matDrawer').classList.remove('show');}
 function meSyncType(){
-  // a Bill is for goods already received, so its "order qty" is the billed/received qty
-  document.getElementById('meOrderedLbl').textContent=(document.getElementById('meType').value==='Bill')?'Billed qty':'Order qty';
+  var t=document.getElementById('meType').value;
+  // a Bill is for goods already received, so its "order qty" is the billed/received qty;
+  // a Manual entry has no upstream order, so we just track quantity on hand
+  document.getElementById('meOrderedLbl').textContent=(t==='Bill')?'Billed qty':(t==='Manual')?'Qty':'Order qty';
   mePreview();
 }
 function mePreview(){
-  var o=parseFloat(document.getElementById('meOrdered').value)||0,d=parseFloat(document.getElementById('meDelivered').value)||0,u=parseFloat(document.getElementById('meUsed').value)||0,unit=document.getElementById('meUnit').value||'';
+  var o=parseFloat(document.getElementById('meOrdered').value)||0,d=parseFloat(document.getElementById('meDelivered').value)||0,u=parseFloat(document.getElementById('meUsed').value)||0,rate=parseFloat(document.getElementById('meRate').value)||0,unit=document.getElementById('meUnit').value||'';
   var onSite=Math.max(0,d-u),toDeliver=Math.max(0,o-d),toInstall=Math.max(0,o-u);
   var warn='';if(d>o)warn=' <span style="color:#dc2626">· delivered exceeds order</span>';else if(u>d)warn=' <span style="color:#dc2626">· used exceeds delivered</span>';
-  document.querySelector('#mePreview div').innerHTML='On site <b>'+onSite.toLocaleString('en-AU')+' '+unit+'</b> · To deliver <b>'+toDeliver.toLocaleString('en-AU')+' '+unit+'</b> · To install <b>'+toInstall.toLocaleString('en-AU')+' '+unit+'</b>'+warn;
+  document.querySelector('#mePreview div').innerHTML='On site <b>'+onSite.toLocaleString('en-AU')+' '+unit+'</b> · To deliver <b>'+toDeliver.toLocaleString('en-AU')+' '+unit+'</b> · To install <b>'+toInstall.toLocaleString('en-AU')+' '+unit+'</b><br>Used cost <b>'+money(rate*u)+'</b> ('+money(rate)+'/'+(unit||'unit')+' × '+u.toLocaleString('en-AU')+')'+warn;
 }
 function saveMatEdit(){
-  if(!MAT_EDIT)return;
-  var r=rows.materials.filter(function(x){return x.id===MAT_EDIT})[0];if(!r)return;
+  var nm=document.getElementById('meName').value;
+  if(!nm){toast('Enter a material name');return;}
+  var r;
+  if(MAT_EDIT){
+    r=rows.materials.filter(function(x){return x.id===MAT_EDIT})[0];if(!r)return;
+  }else{
+    r={id:'M-'+Date.now()};rows.materials.push(r);
+  }
   r.srcType=document.getElementById('meType').value;
-  r.src=document.getElementById('meSrc').value||r.src;
-  r.nm=document.getElementById('meName').value||r.nm;
-  r.sup=document.getElementById('meSup').value||r.sup;
-  r.unit=document.getElementById('meUnit').value||r.unit;
+  r.src=document.getElementById('meSrc').value||(r.srcType==='Manual'?'Manual entry':r.id);
+  r.nm=nm;
+  r.sup=document.getElementById('meSup').value||'—';
+  r.unit=document.getElementById('meUnit').value||'';
+  r.rate=parseFloat(document.getElementById('meRate').value)||0;
   r.ordered=parseFloat(document.getElementById('meOrdered').value)||0;
   r.delivered=parseFloat(document.getElementById('meDelivered').value)||0;
   r.used=parseFloat(document.getElementById('meUsed').value)||0;
-  closeMatEdit();renderMaterials();toast(r.nm+' updated');
+  var isNew=!MAT_EDIT;
+  closeMatEdit();renderMaterials();toast(r.nm+(isNew?' added':' updated'));
 }
 function deleteMaterial(){
   if(!MAT_EDIT)return;
