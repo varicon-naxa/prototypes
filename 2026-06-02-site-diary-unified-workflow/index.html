@@ -723,6 +723,55 @@ function renderMaterials(){
   document.getElementById('sOnSite').textContent=summarise(onSiteByUnit);
   document.getElementById('sToDeliver').textContent=summarise(toDeliverByUnit);
 }
+
+/* ---- Edit a material line directly from the overview (click a row) ---- */
+var MAT_EDIT=null;
+function editMaterial(id){
+  var r=rows.materials.filter(function(x){return x.id===id})[0];if(!r)return;
+  MAT_EDIT=id;
+  document.getElementById('meSub').textContent=r.src+' · '+r.sup;
+  document.getElementById('meType').value=r.srcType||'PO';
+  document.getElementById('meSrc').value=r.src;
+  document.getElementById('meName').value=r.nm;
+  document.getElementById('meSup').value=r.sup;
+  document.getElementById('meUnit').value=r.unit;
+  document.getElementById('meOrdered').value=r.ordered;
+  document.getElementById('meDelivered').value=r.delivered;
+  document.getElementById('meUsed').value=r.used;
+  meSyncType();mePreview();
+  document.getElementById('matScrim').classList.add('show');
+  document.getElementById('matDrawer').classList.add('show');
+}
+function closeMatEdit(){MAT_EDIT=null;document.getElementById('matScrim').classList.remove('show');document.getElementById('matDrawer').classList.remove('show');}
+function meSyncType(){
+  // a Bill is for goods already received, so its "order qty" is the billed/received qty
+  document.getElementById('meOrderedLbl').textContent=(document.getElementById('meType').value==='Bill')?'Billed qty':'Order qty';
+  mePreview();
+}
+function mePreview(){
+  var o=parseFloat(document.getElementById('meOrdered').value)||0,d=parseFloat(document.getElementById('meDelivered').value)||0,u=parseFloat(document.getElementById('meUsed').value)||0,unit=document.getElementById('meUnit').value||'';
+  var onSite=Math.max(0,d-u),toDeliver=Math.max(0,o-d),toInstall=Math.max(0,o-u);
+  var warn='';if(d>o)warn=' <span style="color:#dc2626">· delivered exceeds order</span>';else if(u>d)warn=' <span style="color:#dc2626">· used exceeds delivered</span>';
+  document.querySelector('#mePreview div').innerHTML='On site <b>'+onSite.toLocaleString('en-AU')+' '+unit+'</b> · To deliver <b>'+toDeliver.toLocaleString('en-AU')+' '+unit+'</b> · To install <b>'+toInstall.toLocaleString('en-AU')+' '+unit+'</b>'+warn;
+}
+function saveMatEdit(){
+  if(!MAT_EDIT)return;
+  var r=rows.materials.filter(function(x){return x.id===MAT_EDIT})[0];if(!r)return;
+  r.srcType=document.getElementById('meType').value;
+  r.src=document.getElementById('meSrc').value||r.src;
+  r.nm=document.getElementById('meName').value||r.nm;
+  r.sup=document.getElementById('meSup').value||r.sup;
+  r.unit=document.getElementById('meUnit').value||r.unit;
+  r.ordered=parseFloat(document.getElementById('meOrdered').value)||0;
+  r.delivered=parseFloat(document.getElementById('meDelivered').value)||0;
+  r.used=parseFloat(document.getElementById('meUsed').value)||0;
+  closeMatEdit();renderMaterials();toast(r.nm+' updated');
+}
+function deleteMaterial(){
+  if(!MAT_EDIT)return;
+  rows.materials=rows.materials.filter(function(x){return x.id!==MAT_EDIT});
+  closeMatEdit();renderMaterials();toast('Material line removed');
+}
 function renderMisc(){
   var b=document.getElementById('tbody-misc');b.innerHTML='';
   rows.misc.forEach(function(r){
