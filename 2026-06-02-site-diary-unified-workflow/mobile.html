@@ -405,6 +405,48 @@ function renderMaterials(){
   document.getElementById('sOnSite').textContent=onLines;
   document.getElementById('sToDeliver').textContent=delLines;
 }
+/* tap a material card to edit it directly */
+function showToast(msg){var t=document.getElementById('toast');document.getElementById('toastTxt').textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show')},2400);}
+var MAT_EDIT=null;
+function editMaterial(id){
+  var r=rows.materials.filter(function(x){return x.id===id})[0];if(!r)return;
+  MAT_EDIT=id;
+  document.getElementById('meSub').textContent=r.src+' · '+r.sup;
+  document.getElementById('meType').value=r.srcType||'PO';
+  document.getElementById('meSrc').value=r.src;
+  document.getElementById('meName').value=r.nm;
+  document.getElementById('meSup').value=r.sup;
+  document.getElementById('meUnit').value=r.unit;
+  document.getElementById('meOrdered').value=r.ordered;
+  document.getElementById('meDelivered').value=r.delivered;
+  document.getElementById('meUsed').value=r.used;
+  meSyncType();mePreview();
+  document.getElementById('matScrim').classList.add('show');document.getElementById('matSheet').classList.add('show');
+}
+function closeMatEdit(){MAT_EDIT=null;document.getElementById('matScrim').classList.remove('show');document.getElementById('matSheet').classList.remove('show');}
+function meSyncType(){document.getElementById('meOrderedLbl').textContent=(document.getElementById('meType').value==='Bill')?'Billed':'Order qty';mePreview();}
+function mePreview(){
+  var o=parseFloat(document.getElementById('meOrdered').value)||0,d=parseFloat(document.getElementById('meDelivered').value)||0,u=parseFloat(document.getElementById('meUsed').value)||0,unit=document.getElementById('meUnit').value||'';
+  var onSite=Math.max(0,d-u),toDeliver=Math.max(0,o-d),toInstall=Math.max(0,o-u);
+  var warn='';if(d>o)warn=' · <span style="color:#dc2626">delivered &gt; order</span>';else if(u>d)warn=' · <span style="color:#dc2626">used &gt; delivered</span>';
+  document.querySelector('#mePreview div').innerHTML='On site <b>'+onSite.toLocaleString('en-AU')+' '+unit+'</b> · To deliver <b>'+toDeliver.toLocaleString('en-AU')+' '+unit+'</b> · To install <b>'+toInstall.toLocaleString('en-AU')+' '+unit+'</b>'+warn;
+}
+function saveMatEdit(){
+  if(!MAT_EDIT)return;var r=rows.materials.filter(function(x){return x.id===MAT_EDIT})[0];if(!r)return;
+  r.srcType=document.getElementById('meType').value;
+  r.src=document.getElementById('meSrc').value||r.src;
+  r.nm=document.getElementById('meName').value||r.nm;
+  r.sup=document.getElementById('meSup').value||r.sup;
+  r.unit=document.getElementById('meUnit').value||r.unit;
+  r.ordered=parseFloat(document.getElementById('meOrdered').value)||0;
+  r.delivered=parseFloat(document.getElementById('meDelivered').value)||0;
+  r.used=parseFloat(document.getElementById('meUsed').value)||0;
+  closeMatEdit();renderMaterials();showToast(r.nm+' updated');
+}
+function deleteMaterial(){
+  if(!MAT_EDIT)return;rows.materials=rows.materials.filter(function(x){return x.id!==MAT_EDIT});
+  closeMatEdit();renderMaterials();showToast('Material line removed');
+}
 function renderMisc(){var h='';rows.misc.forEach(function(r){h+='<div class="ecard"><div class="row1"><div class="av"><i class="fa-solid fa-tag"></i></div><div><div class="nm">'+r.nm+'</div><div class="sub">'+r.co+' · '+r.qty+'</div></div></div><div class="allocs">'+chips(r.alloc)+'</div></div>';});if(!rows.misc.length)h='<div class="empty"><i class="fa-solid fa-comment-dots"></i>No items yet</div>';document.getElementById('list-misc').innerHTML=h;}
 function renderAll(){renderLabour();renderPlant();renderMaterials();renderMisc();}
 
