@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Cost Centre Assignment Prompt</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f3f4f6; color: #222; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar — match app navy */
+  .sidebar { width: 200px; background: #143666; color: #cdd5e3; flex-shrink: 0; padding-top: 14px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 16px; }
+  .sidebar-logo .v-icon { width: 30px; height: 30px; background: #fff; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #0F8A0F; font-weight: 800; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 13px; color: #fff; font-weight: 600; border-top: 1px solid rgba(255,255,255,0.08); border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 6px; }
+  .sidebar-org .org-badge { width: 26px; height: 26px; border-radius: 50%; background: #2a4d80; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #F19100; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.8; }
+
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Project header */
+  .proj-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+  .proj-header-left { display: flex; align-items: center; gap: 12px; }
+  .proj-header-left .back { color: #555; font-size: 20px; text-decoration: none; }
+  .proj-header-left h1 { font-size: 17px; font-weight: 700; color: #143666; }
+  .proj-header-left .caret { color: #888; font-size: 12px; }
+  .proj-header-right { display: flex; align-items: center; gap: 10px; }
+  .btn-outline { padding: 9px 16px; border: 1px solid #d0d5dd; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; color: #344054; }
+  .btn-outline:hover { background: #f5f5f5; }
+  .pill-plus { width: 34px; height: 34px; border: 1px solid #d0d5dd; border-radius: 6px; background: #fff; font-size: 18px; color: #344054; cursor: pointer; }
+  .org-select { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: #143666; cursor: pointer; }
+  .org-select .v { color: #0F8A0F; font-weight: 800; }
+
+  /* Tabs */
+  .tabs { display: flex; align-items: center; gap: 4px; padding: 0 16px; background: #fff; border-bottom: 1px solid #e5e7eb; overflow-x: auto; }
+  .tab { padding: 14px 18px; font-size: 14px; font-weight: 600; color: #667085; cursor: pointer; white-space: nowrap; border-bottom: 3px solid transparent; }
+  .tab:hover { color: #143666; }
+  .tab.active { color: #fff; background: #143666; border-radius: 6px 6px 0 0; }
+  .tab-arrow { color: #98a2b3; padding: 0 6px; cursor: pointer; }
+
+  .content { flex: 1; overflow-y: auto; padding: 20px 24px 60px; }
+
+  /* No cost centre alert banner */
+  .cc-alert { display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: #fff8f0; border: 1px solid #F19100; border-left: 4px solid #F19100; border-radius: 8px; margin-bottom: 18px; }
+  .cc-alert .warn-icon { flex-shrink: 0; width: 26px; height: 26px; background: #F19100; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; }
+  .cc-alert-text { flex: 1; }
+  .cc-alert-text strong { display: block; font-size: 14px; color: #8a4b00; margin-bottom: 2px; }
+  .cc-alert-text p { font-size: 13px; color: #7a5b34; line-height: 1.4; }
+  .cc-alert .btn-assign { padding: 9px 18px; border: none; border-radius: 6px; background: #F19100; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .cc-alert .btn-assign:hover { background: #d97f00; }
+  .cc-alert .btn-dismiss { background: none; border: none; color: #b08440; font-size: 20px; cursor: pointer; padding: 0 4px; }
+
+  /* Summary cards */
+  .summary-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: #e5e7eb; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
+  .summary-card { background: #fff; padding: 14px 16px; }
+  .summary-card .label { font-size: 12px; color: #667085; margin-bottom: 4px; }
+  .summary-card .value { font-size: 18px; font-weight: 700; color: #143666; }
+
+  /* Toolbar */
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .filter-select { padding: 9px 12px; border: 1px solid #d0d5dd; border-radius: 6px; font-size: 13px; color: #98a2b3; background: #fff; min-width: 150px; }
+  .toolbar .spacer { flex: 1; }
+  .toolbar .link { color: #667085; font-size: 13px; cursor: pointer; }
+  .search-box { padding: 9px 12px 9px 32px; border: 1px solid #d0d5dd; border-radius: 6px; font-size: 13px; min-width: 200px; }
+
+  /* WBS table */
+  .wbs-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+  .wbs-table thead th { background: #143666; color: #fff; font-size: 13px; font-weight: 600; padding: 14px 16px; text-align: left; }
+  .wbs-table .subhead td { background: #1d4476; color: #cdd5e3; font-size: 12px; padding: 10px 16px; }
+  .wbs-empty { text-align: center; color: #98a2b3; font-size: 13px; padding: 60px 0; }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(20, 54, 102, 0.45); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 12px; width: 100%; max-width: 540px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
+  .modal-head { padding: 22px 24px 16px; border-bottom: 1px solid #f0f0f0; }
+  .modal-head .modal-icon { width: 44px; height: 44px; background: #fff8f0; border: 1px solid #F19100; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; margin-bottom: 12px; }
+  .modal-head h2 { font-size: 18px; font-weight: 700; color: #143666; margin-bottom: 6px; }
+  .modal-head p { font-size: 13px; color: #667085; line-height: 1.5; }
+  .modal-body { padding: 20px 24px; overflow-y: auto; }
+  .modal-body .field-label { font-size: 13px; font-weight: 600; color: #344054; margin-bottom: 8px; }
+
+  /* Multi-select (from Edit Project) */
+  .cc-multi-wrap { position: relative; }
+  .cc-trigger { padding: 11px 14px; border: 1px solid #d0d5dd; border-radius: 6px; font-size: 13px; background: #fff; cursor: pointer; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 46px; }
+  .cc-trigger .placeholder { color: #98a2b3; }
+  .cc-trigger .chevron { margin-left: auto; color: #98a2b3; font-size: 11px; }
+  .cc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #e8f5e9; border: 1px solid #0F8A0F; border-radius: 16px; font-size: 12px; color: #0c6b0c; font-weight: 500; }
+  .cc-chip .x { cursor: pointer; color: #6b9a6b; font-size: 14px; }
+  .cc-chip .x:hover { color: #d2281b; }
+  .cc-dropdown { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: #fff; border: 1px solid #d0d5dd; border-radius: 8px; z-index: 30; box-shadow: 0 8px 24px rgba(0,0,0,0.12); max-height: 260px; overflow-y: auto; }
+  .cc-dropdown.open { display: block; }
+  .cc-dropdown .group-label { padding: 10px 14px; font-size: 12px; font-weight: 700; color: #667085; background: #f9fafb; border-bottom: 1px solid #f0f0f0; }
+  .cc-option { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; border-bottom: 1px solid #f4f4f4; font-size: 13px; color: #344054; }
+  .cc-option:hover { background: #f7f8fa; }
+  .cc-option input { width: 16px; height: 16px; accent-color: #0F8A0F; }
+  .cc-add-new { display: flex; align-items: center; gap: 8px; padding: 12px 14px; color: #F19100; font-weight: 700; font-size: 13px; cursor: pointer; }
+  .cc-add-new:hover { background: #fff8f0; }
+
+  .modal-hint { font-size: 12px; color: #98a2b3; margin-top: 8px; }
+  .modal-defaults { margin-top: 16px; padding: 12px 14px; background: #f7f8fa; border: 1px solid #eef0f3; border-radius: 8px; }
+  .modal-defaults label { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: #344054; cursor: pointer; }
+  .modal-defaults label input { margin-top: 2px; accent-color: #F19100; }
+  .modal-defaults .sub { font-size: 12px; color: #98a2b3; margin-top: 2px; }
+
+  .modal-foot { padding: 16px 24px; border-top: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .btn-text { background: none; border: none; color: #667085; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-text:hover { color: #344054; }
+  .modal-foot-right { display: flex; gap: 10px; }
+  .btn-primary { padding: 11px 22px; border: none; border-radius: 6px; background: #F19100; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .btn-primary:hover { background: #d97f00; }
+  .btn-primary:disabled { background: #f0c98a; cursor: not-allowed; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120px); background: #0F8A0F; color: #fff; padding: 12px 22px; border-radius: 8px; font-size: 14px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,0.2); transition: transform 0.3s; z-index: 200; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Demo control panel */
+  .demo-panel { position: fixed; top: 14px; right: 14px; background: #143666; color: #fff; border-radius: 10px; padding: 14px 16px; font-size: 12px; z-index: 90; box-shadow: 0 6px 20px rgba(0,0,0,0.25); width: 230px; }
+  .demo-panel h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; margin-bottom: 10px; }
+  .demo-panel .demo-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .demo-panel button { width: 100%; padding: 8px; border: none; border-radius: 6px; background: #F19100; color: #fff; font-weight: 700; font-size: 12px; cursor: pointer; margin-top: 4px; }
+  .demo-panel .demo-toggle { width: 40px; height: 22px; border-radius: 11px; background: rgba(255,255,255,0.25); position: relative; cursor: pointer; flex-shrink: 0; }
+  .demo-panel .demo-toggle.on { background: #0F8A0F; }
+  .demo-panel .demo-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left 0.2s; }
+  .demo-panel .demo-toggle.on::after { left: 20px; }
+  .demo-panel .note { opacity: 0.6; font-size: 11px; line-height: 1.4; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<!-- Demo control panel -->
+<div class="demo-panel">
+  <h4>Prototype Controls</h4>
+  <div class="demo-row">
+    <span>Budget uploaded</span>
+    <div class="demo-toggle" id="budgetToggle" onclick="toggleBudgetUploaded()"></div>
+  </div>
+  <button onclick="openModal()">Re-open prompt</button>
+  <div class="note">When a budget is uploaded, cost centres come from the budget — so the prompt and alert are suppressed.</div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org"><span class="org-badge">F</span> Finn Valley</div>
+    <div class="sidebar-item active"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">🖼</span> Gallery</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Record</div>
+    <div class="sidebar-item"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">🚚</span> Site Docket</div>
+    <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+  </div>
+
+  <div class="main">
+    <!-- Project header -->
+    <div class="proj-header">
+      <div class="proj-header-left">
+        <a class="back" href="#">←</a>
+        <h1>(FV26-028) TSC White Swamp Rd Culvert</h1>
+        <span class="caret">▾</span>
+      </div>
+      <div class="proj-header-right">
+        <button class="btn-outline">Initial Data Upload</button>
+        <button class="pill-plus">+</button>
+        <div class="org-select"><span class="v">V</span> Varicon Info <span style="color:#888; font-size:11px;">▾</span></div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <span class="tab-arrow">‹</span>
+      <div class="tab">Dashboard</div>
+      <div class="tab active">Budget Overview</div>
+      <div class="tab">Daily Cost Tracking</div>
+      <div class="tab">Claim</div>
+      <div class="tab">Variation Register</div>
+      <div class="tab">Report</div>
+      <div class="tab">File Manager</div>
+      <div class="tab">Site Diary</div>
+      <div class="tab">Daywork Record</div>
+      <span class="tab-arrow">›</span>
+    </div>
+
+    <div class="content">
+
+      <!-- NO COST CENTRE ALERT -->
+      <div class="cc-alert" id="ccAlert">
+        <div class="warn-icon">!</div>
+        <div class="cc-alert-text">
+          <strong>No cost centres assigned to this project</strong>
+          <p>Cost centres weren't set during the bulk upload. Assign them now so your team can record costs, purchase orders and timesheets against this project.</p>
+        </div>
+        <button class="btn-assign" onclick="openModal()">Assign cost centres</button>
+        <button class="btn-dismiss" onclick="dismissAlert()" title="Dismiss">&times;</button>
+      </div>
+
+      <!-- Summary cards -->
+      <div class="summary-row">
+        <div class="summary-card"><div class="label">Estimated Budget Cost</div><div class="value">$ 0.00</div></div>
+        <div class="summary-card"><div class="label">Construction Budget Cost</div><div class="value">$ 0.00</div></div>
+        <div class="summary-card"><div class="label">Total Contract Sum</div><div class="value">$ 0.00</div></div>
+        <div class="summary-card"><div class="label">Original Contract Sum</div><div class="value">$ 0.00</div></div>
+        <div class="summary-card"><div class="label">Variation Contract Sum</div><div class="value">$ 0.00</div></div>
+        <div class="summary-card"><div class="label">Estimated Budget Margin</div><div class="value">0.00%</div></div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <select class="filter-select"><option>Filter by Task</option></select>
+        <select class="filter-select"><option>Filter by SubTask</option></select>
+        <select class="filter-select"><option>Filter by Sub SubTask</option></select>
+        <span class="link">More</span>
+        <div class="spacer"></div>
+        <span class="link">Expand all</span>
+        <input class="search-box" placeholder="Search">
+      </div>
+
+      <!-- WBS table -->
+      <table class="wbs-table">
+        <thead>
+          <tr>
+            <th style="width:90px;">WBS ID</th>
+            <th>Description</th>
+            <th>Contract</th>
+            <th>Estimated Budget</th>
+            <th>Construction Budget</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="subhead"><td></td><td>Task</td><td>Contract Sum</td><td>Estimated Budget Cost</td><td>Construction Budget Cost</td></tr>
+          <tr><td colspan="5" class="wbs-empty">No tasks yet — add a task or upload a budget to get started.</td></tr>
+        </tbody>
+      </table>
+
+    </div>
+  </div>
+</div>
+
+<!-- COST CENTRE ASSIGNMENT MODAL -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-icon">🏷️</div>
+      <h2>Assign cost centres to this project</h2>
+      <p>This project was created without any cost centres. Assign the cost centres your team will use to track costs, POs and timesheets. You can change these later in Project Settings.</p>
+    </div>
+    <div class="modal-body">
+      <div class="field-label">Cost Centres</div>
+      <div class="cc-multi-wrap" id="ccWrap">
+        <div class="cc-trigger" id="ccTrigger" onclick="toggleDropdown()">
+          <span class="placeholder" id="ccPlaceholder">Select cost centres…</span>
+          <span class="chevron">▼</span>
+        </div>
+        <div class="cc-dropdown" id="ccDropdown">
+          <div class="group-label">Other Cost Centres</div>
+          <label class="cc-option"><input type="checkbox" onchange="toggleCC(this,'Bridge Works')"> (Bridge Works) Bridge Works</label>
+          <label class="cc-option"><input type="checkbox" onchange="toggleCC(this,'Building Works')"> (Building Works) Building Works</label>
+          <label class="cc-option"><input type="checkbox" onchange="toggleCC(this,'Concrete Blockwall')"> (Concrete Blockwall) Concrete Blockwall</label>
+          <label class="cc-option"><input type="checkbox" onchange="toggleCC(this,'Drainage')"> (Drainage) Drainage</label>
+          <label class="cc-option"><input type="checkbox" onchange="toggleCC(this,'Earthworks')"> (Earthworks) Earthworks</label>
+          <label class="cc-option"><input type="checkbox" onchange="toggleCC(this,'Preliminaries')"> (Preliminaries) Preliminaries</label>
+          <label class="cc-option"><input type="checkbox" onchange="toggleCC(this,'Roadworks')"> (Roadworks) Roadworks</label>
+          <div class="cc-add-new" onclick="addNewCC()">＋ Add New Cost Centre</div>
+        </div>
+      </div>
+      <div class="modal-hint">Select one or more cost centres for this project.</div>
+
+      <div class="modal-defaults">
+        <label>
+          <input type="checkbox" id="setDefaultCC">
+          <span>
+            Set these as the project's default cost centres
+            <span class="sub">Pre-selects them on new POs, dockets and timesheets for this project.</span>
+          </span>
+        </label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-text" onclick="remindLater()">Remind me later</button>
+      <div class="modal-foot-right">
+        <button class="btn-primary" id="saveBtn" onclick="saveCC()" disabled>Assign cost centres</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Cost centres assigned</div>
+
+<script>
+  let selected = [];
+  let budgetUploaded = false;
+
+  // Show modal automatically on load when there are no cost centres and no budget
+  window.addEventListener('DOMContentLoaded', () => {
+    if (!budgetUploaded) openModal();
+  });
+
+  function openModal() {
+    if (budgetUploaded) return;
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+  function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+    document.getElementById('ccDropdown').classList.remove('open');
+  }
+
+  function toggleDropdown() {
+    document.getElementById('ccDropdown').classList.toggle('open');
+  }
+
+  function renderChips() {
+    const trigger = document.getElementById('ccTrigger');
+    const placeholder = document.getElementById('ccPlaceholder');
+    // remove existing chips
+    trigger.querySelectorAll('.cc-chip').forEach(c => c.remove());
+    if (selected.length === 0) {
+      placeholder.style.display = 'inline';
+    } else {
+      placeholder.style.display = 'none';
+      const chevron = trigger.querySelector('.chevron');
+      selected.forEach(name => {
+        const chip = document.createElement('span');
+        chip.className = 'cc-chip';
+        chip.innerHTML = name + '<span class="x" onclick="event.stopPropagation(); removeCC(\'' + name.replace(/'/g, "\\'") + '\')">&times;</span>';
+        trigger.insertBefore(chip, chevron);
+      });
+    }
+    document.getElementById('saveBtn').disabled = selected.length === 0;
+  }
+
+  function toggleCC(cb, name) {
+    if (cb.checked) {
+      if (!selected.includes(name)) selected.push(name);
+    } else {
+      selected = selected.filter(n => n !== name);
+    }
+    renderChips();
+  }
+
+  function removeCC(name) {
+    selected = selected.filter(n => n !== name);
+    // uncheck in dropdown
+    document.querySelectorAll('#ccDropdown .cc-option').forEach(opt => {
+      if (opt.textContent.includes(name)) opt.querySelector('input').checked = false;
+    });
+    renderChips();
+  }
+
+  function addNewCC() {
+    const name = prompt('New cost centre name:');
+    if (!name) return;
+    const dd = document.getElementById('ccDropdown');
+    const addBtn = dd.querySelector('.cc-add-new');
+    const label = document.createElement('label');
+    label.className = 'cc-option';
+    label.innerHTML = '<input type="checkbox" checked> (' + name + ') ' + name;
+    label.querySelector('input').addEventListener('change', function(){ toggleCC(this, name); });
+    dd.insertBefore(label, addBtn);
+    if (!selected.includes(name)) selected.push(name);
+    renderChips();
+  }
+
+  function saveCC() {
+    closeModal();
+    document.getElementById('ccAlert').style.display = 'none';
+    const t = document.getElementById('toast');
+    t.textContent = selected.length + ' cost centre' + (selected.length > 1 ? 's' : '') + ' assigned' +
+      (document.getElementById('setDefaultCC').checked ? ' (set as default)' : '');
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  function remindLater() {
+    closeModal();
+    // alert banner stays visible as the persistent prompt
+  }
+
+  function dismissAlert() {
+    document.getElementById('ccAlert').style.display = 'none';
+  }
+
+  function toggleBudgetUploaded() {
+    budgetUploaded = !budgetUploaded;
+    document.getElementById('budgetToggle').classList.toggle('on', budgetUploaded);
+    if (budgetUploaded) {
+      // budget uploaded -> cost centres come from budget, suppress prompt + alert
+      closeModal();
+      document.getElementById('ccAlert').style.display = 'none';
+    } else {
+      document.getElementById('ccAlert').style.display = 'flex';
+      openModal();
+    }
+  }
+
+  // close dropdown on outside click
+  document.addEventListener('click', (e) => {
+    const wrap = document.getElementById('ccWrap');
+    if (wrap && !wrap.contains(e.target)) {
+      document.getElementById('ccDropdown').classList.remove('open');
+    }
+  });
+</script>
+</body>
+</html>
