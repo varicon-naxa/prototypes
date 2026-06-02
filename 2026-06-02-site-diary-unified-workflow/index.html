@@ -630,11 +630,40 @@ function renderPlant(){
     b.innerHTML+='<tr><td><b style="color:var(--navy)">'+r.nm+'</b></td><td><span style="font-family:monospace;font-size:12px;color:var(--muted)">'+r.no+'</span></td><td>'+r.sup+'</td><td>'+r.by+'</td><td class="hrs">'+r.hrs+'</td><td>'+rateCell+'</td><td>'+costCell+'</td><td>'+allocChips(r.alloc)+'</td><td><span class="row-act"><i class="fa-solid fa-pen"></i></span></td></tr>';
   });
 }
+function fmtQty(n,unit){return '<span class="qty-main">'+(+n).toLocaleString('en-AU',{maximumFractionDigits:1})+'</span><span class="qty-unit">'+unit+'</span>';}
+function bar(value,total,cls){var pct=total>0?Math.min(100,Math.round(value/total*100)):0;return '<div class="qty-bar '+(cls||'')+'"><span style="width:'+pct+'%"></span></div>';}
 function renderMaterials(){
   var b=document.getElementById('tbody-materials');b.innerHTML='';
+  if(!rows.materials.length){
+    b.innerHTML='<tr><td colspan="8"><div class="empty"><i class="fa-solid fa-boxes-stacked"></i>No Purchase Orders raised for this project yet.</div></td></tr>';
+    document.getElementById('sPoCount').textContent='0';
+    document.getElementById('sOnSite').textContent='—';
+    document.getElementById('sToDeliver').textContent='—';
+    return;
+  }
+  var onSiteByUnit={},toDeliverByUnit={};
   rows.materials.forEach(function(r){
-    b.innerHTML+='<tr><td><b style="color:var(--navy)">'+r.nm+'</b></td><td>'+r.src+'</td><td>'+r.sup+'</td><td class="hrs">'+r.qty+'</td><td>'+allocChips(r.alloc)+'</td><td><span class="row-act"><i class="fa-solid fa-pen"></i></span></td></tr>';
+    var remDeliver=Math.max(0,r.ordered-r.delivered); // still to be delivered by supplier
+    var remInstall=Math.max(0,r.ordered-r.used);       // still to install against the whole PO
+    var onSite=Math.max(0,r.delivered-r.used);          // delivered but not yet used
+    onSiteByUnit[r.unit]=(onSiteByUnit[r.unit]||0)+onSite;
+    toDeliverByUnit[r.unit]=(toDeliverByUnit[r.unit]||0)+remDeliver;
+    b.innerHTML+=
+      '<tr>'+
+        '<td><div class="po-cell"><span class="po-num">'+r.po+'</span><span class="po-mat">'+r.nm+'</span></div></td>'+
+        '<td>'+r.sup+'</td>'+
+        '<td class="num">'+fmtQty(r.ordered,r.unit)+'</td>'+
+        '<td class="num">'+fmtQty(r.delivered,r.unit)+bar(r.delivered,r.ordered)+'</td>'+
+        '<td class="num">'+fmtQty(r.used,r.unit)+bar(r.used,r.ordered,'used')+'</td>'+
+        '<td class="num"><span class="qty-rem '+(remDeliver===0?'zero':'deliver')+'">'+remDeliver.toLocaleString('en-AU')+'</span><span class="qty-unit">'+r.unit+'</span></td>'+
+        '<td class="num"><span class="qty-rem '+(remInstall===0?'zero':'install')+'">'+remInstall.toLocaleString('en-AU')+'</span><span class="qty-unit">'+r.unit+'</span></td>'+
+        '<td><span class="row-act" title="Log usage against this PO" onclick="openDrawer(\'materials\')"><i class="fa-solid fa-pen"></i></span></td>'+
+      '</tr>';
   });
+  document.getElementById('sPoCount').textContent=rows.materials.length;
+  function summarise(map){var parts=Object.keys(map).filter(function(u){return map[u]>0}).map(function(u){return map[u].toLocaleString('en-AU')+' '+u});return parts.length?parts.join(' · '):'—';}
+  document.getElementById('sOnSite').textContent=summarise(onSiteByUnit);
+  document.getElementById('sToDeliver').textContent=summarise(toDeliverByUnit);
 }
 function renderMisc(){
   var b=document.getElementById('tbody-misc');b.innerHTML='';
