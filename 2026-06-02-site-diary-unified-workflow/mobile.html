@@ -671,6 +671,31 @@ function renderDockets(){
       '<button class="close" onclick="deleteDocket(\''+d.no+'\')" style="color:#dc2626;margin-left:8px"><i class="fa-solid fa-trash"></i></button></div>';
   }).join('');
 }
+/* ===== ADD LABOUR BY RESOURCE TYPE ===== */
+var ROLE_RATES=[{role:'Foreman',rate:78},{role:'Site Engineer',rate:92},{role:'Plant Operator',rate:68},{role:'Labourer',rate:55},{role:'Pipelayer',rate:62},{role:'Traffic Controller',rate:52},{role:'Concreter',rate:60},{role:'Steel Fixer',rate:64}];
+function openByType(){
+  document.getElementById('btRole').innerHTML=ROLE_RATES.map(function(r,i){return '<option value="'+i+'">'+r.role+'</option>';}).join('');
+  document.getElementById('btRate').value=ROLE_RATES[0].rate;
+  document.getElementById('btCount').value=1;document.getElementById('btHrs').value=8;document.getElementById('btAllow').value=0;
+  document.getElementById('btAlloc').innerHTML=ALLOC_OPTIONS.map(function(o,i){return '<option value="'+i+'">'+o.l+'</option>';}).join('');
+  btPreview();
+  document.getElementById('btScrim').classList.add('show');document.getElementById('btSheet').classList.add('show');
+}
+function closeByType(){document.getElementById('btScrim').classList.remove('show');document.getElementById('btSheet').classList.remove('show');}
+function btRoleChange(){document.getElementById('btRate').value=ROLE_RATES[parseInt(document.getElementById('btRole').value,10)||0].rate;btPreview();}
+function btPreview(){
+  var role=ROLE_RATES[parseInt(document.getElementById('btRole').value,10)||0].role;
+  var rate=parseFloat(document.getElementById('btRate').value)||0,cnt=parseInt(document.getElementById('btCount').value,10)||1,hrs=parseFloat(document.getElementById('btHrs').value)||0,allow=parseFloat(document.getElementById('btAllow').value)||0;
+  document.querySelector('#btPreview div').innerHTML='<b>'+role+' ×'+cnt+'</b> · '+money(rate)+'/hr × '+hrs+'h'+(allow?' + '+money(allow)+' allow':'')+' × '+cnt+' = <b>'+money((rate*hrs+allow)*cnt)+'</b>';
+}
+function saveByType(){
+  var role=ROLE_RATES[parseInt(document.getElementById('btRole').value,10)||0].role;
+  var rate=parseFloat(document.getElementById('btRate').value)||0,cnt=parseInt(document.getElementById('btCount').value,10)||1,hrs=parseFloat(document.getElementById('btHrs').value)||0,allow=parseFloat(document.getElementById('btAllow').value)||0;
+  var alloc=[Object.assign({p:100},ALLOC_OPTIONS[parseInt(document.getElementById('btAlloc').value,10)||0])];
+  rows.labour.push({who:role+' ×'+cnt,role:role+' (resource type)',rate:rate,allow:allow,count:cnt,byType:true,in:'—',out:'—',brk:'0',hrs:hrsStr(hrs),alloc:alloc,status:'pend'});
+  closeByType();renderLabour();showToast(role+' ×'+cnt+' added');
+}
+
 function renderMisc(){var h='';rows.misc.forEach(function(r){h+='<div class="ecard"><div class="row1"><div class="av"><i class="fa-solid fa-tag"></i></div><div><div class="nm">'+r.nm+dktChip(r)+'</div><div class="sub">'+r.co+' · '+r.qty+'</div></div></div><div class="allocs">'+chips(r.alloc)+'</div></div>';});if(!rows.misc.length)h='<div class="empty"><i class="fa-solid fa-comment-dots"></i>No items yet</div>';document.getElementById('list-misc').innerHTML=h;}
 function renderAll(){renderLabour();renderPlant();renderMaterials();renderDeliveries();renderMisc();renderDockets();}
 
