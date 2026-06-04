@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Daily Cost Tracking (Calendar)</title>
+<!--
+  PROTOTYPE: Daily Cost Tracking — Calendar view
+  Problem: The current Daily Cost Tracking grid groups entries by cost centre in a flat table.
+  It's hard to see how spend is distributed across days, or what's driving a given day's cost.
+  Idea: A month calendar where each day shows its total cost, broken down into the five cost
+  types — Labour, Plant & Equipment, Material, Subcontract, Miscellaneous — as a stacked bar +
+  line items. Click a day to drill into the entries that make up that day.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f3f4f6; color: #222; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Category colour tokens */
+  :root {
+    --labour: #2563eb;        /* blue   */
+    --plant: #F19100;         /* orange */
+    --material: #0F8A0F;      /* green  */
+    --subcontract: #7c3aed;   /* purple */
+    --misc: #64748b;          /* slate  */
+  }
+
+  /* Sidebar */
+  .sidebar { width: 200px; background: #143666; color: #cdd5e3; flex-shrink: 0; padding-top: 14px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 16px; }
+  .sidebar-logo .v-icon { width: 30px; height: 30px; background: #fff; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #0F8A0F; font-weight: 800; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 13px; color: #fff; font-weight: 600; border-top: 1px solid rgba(255,255,255,0.08); border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 6px; }
+  .sidebar-org .org-badge { width: 26px; height: 26px; border-radius: 50%; background: #2a4d80; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #F19100; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.85; }
+
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Project header */
+  .proj-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+  .proj-header-left { display: flex; align-items: center; gap: 12px; }
+  .proj-header-left .back { color: #555; font-size: 20px; text-decoration: none; }
+  .proj-header-left h1 { font-size: 17px; font-weight: 700; color: #143666; }
+  .proj-header-left .caret { color: #888; font-size: 12px; }
+  .proj-header-right { display: flex; align-items: center; gap: 10px; }
+  .btn-outline { padding: 9px 16px; border: 1px solid #d0d5dd; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; color: #344054; }
+  .btn-outline:hover { background: #f5f5f5; }
+  .pill-plus { width: 34px; height: 34px; border: 1px solid #d0d5dd; border-radius: 6px; background: #fff; font-size: 18px; color: #344054; cursor: pointer; }
+  .org-select { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: #143666; cursor: pointer; }
+  .org-select .v { color: #0F8A0F; font-weight: 800; }
+
+  /* Tabs */
+  .tabs { display: flex; align-items: center; gap: 4px; padding: 0 16px; background: #fff; border-bottom: 1px solid #e5e7eb; overflow-x: auto; }
+  .tab { padding: 14px 18px; font-size: 14px; font-weight: 600; color: #667085; cursor: pointer; white-space: nowrap; border-bottom: 3px solid transparent; }
+  .tab:hover { color: #143666; }
+  .tab.active { color: #fff; background: #143666; border-radius: 6px 6px 0 0; }
+  .tab-arrow { color: #98a2b3; padding: 0 6px; cursor: pointer; }
+
+  .content { flex: 1; overflow-y: auto; padding: 18px 24px 60px; }
+
+  /* Sub-tabs (All / Assigned / Unassigned) */
+  .subtabs { display: flex; gap: 26px; border-bottom: 1px solid #e5e7eb; margin-bottom: 16px; }
+  .subtab { padding: 0 2px 12px; font-size: 14px; font-weight: 600; color: #667085; cursor: pointer; border-bottom: 2px solid transparent; }
+  .subtab.active { color: #F19100; border-bottom-color: #F19100; }
+  .subtab .badge { background: #fde2e1; color: #d2281b; border-radius: 10px; font-size: 11px; font-weight: 700; padding: 1px 7px; margin-left: 6px; }
+
+  /* Toolbar row */
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .month-nav { display: flex; align-items: center; gap: 6px; }
+  .month-nav button { width: 32px; height: 32px; border: 1px solid #d0d5dd; background: #fff; border-radius: 6px; cursor: pointer; font-size: 15px; color: #344054; }
+  .month-nav button:hover { background: #f5f5f5; }
+  .month-nav .month-label { font-size: 17px; font-weight: 700; color: #143666; min-width: 168px; text-align: center; }
+  .today-btn { padding: 8px 14px; border: 1px solid #d0d5dd; background: #fff; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; color: #344054; }
+  .today-btn:hover { background: #f5f5f5; }
+  .toolbar .spacer { flex: 1; }
+  .view-toggle { display: flex; border: 1px solid #d0d5dd; border-radius: 6px; overflow: hidden; }
+  .view-toggle button { padding: 8px 14px; border: none; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; color: #667085; }
+  .view-toggle button.active { background: #143666; color: #fff; }
+  .btn-primary { padding: 9px 16px; border: none; border-radius: 6px; background: #F19100; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary:hover { background: #d97f00; }
+
+  /* Legend */
+  .legend { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; padding: 12px 16px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; }
+  .legend .legend-item { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #344054; cursor: pointer; user-select: none; }
+  .legend .legend-item.muted { opacity: 0.35; }
+  .legend .swatch { width: 13px; height: 13px; border-radius: 3px; }
+  .legend .legend-total { margin-left: auto; font-size: 13px; color: #667085; }
+  .legend .legend-total b { color: #143666; font-size: 16px; }
+
+  /* Calendar */
+  .cal { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; }
+  .cal-dow { display: grid; grid-template-columns: repeat(7, 1fr); background: #143666; }
+  .cal-dow div { padding: 10px 12px; font-size: 12px; font-weight: 600; color: #cdd5e3; text-transform: uppercase; letter-spacing: 0.4px; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .cal-cell { min-height: 132px; border-right: 1px solid #eef0f3; border-bottom: 1px solid #eef0f3; padding: 8px 9px; position: relative; cursor: pointer; transition: background 0.12s; display: flex; flex-direction: column; }
+  .cal-cell:nth-child(7n) { border-right: none; }
+  .cal-cell.empty { background: #fafbfc; cursor: default; }
+  .cal-cell:not(.empty):hover { background: #f7f9fc; }
+  .cal-cell.weekend { background: #fcfcfd; }
+  .cal-cell.today { background: #fff8f0; }
+  .cal-cell.today .daynum { background: #F19100; color: #fff; }
+  .cal-cell .daynum { font-size: 13px; font-weight: 600; color: #667085; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+  .cal-cell .day-total { font-size: 15px; font-weight: 800; color: #143666; margin: 4px 0 7px; }
+  .cal-cell .day-total.zero { color: #c4cad4; font-weight: 600; }
+
+  /* Stacked proportion bar */
+  .stackbar { display: flex; height: 7px; border-radius: 4px; overflow: hidden; background: #f0f1f4; margin-bottom: 8px; }
+  .stackbar span { display: block; height: 100%; }
+
+  /* Mini breakdown lines */
+  .breakdown { display: flex; flex-direction: column; gap: 3px; margin-top: auto; }
+  .bd-row { display: flex; align-items: center; gap: 6px; font-size: 11px; line-height: 1.3; }
+  .bd-row .dot { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+  .bd-row .bd-label { color: #667085; }
+  .bd-row .bd-amt { margin-left: auto; color: #344054; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cal-cell .more-link { font-size: 11px; color: #2563eb; font-weight: 600; margin-top: 4px; }
+
+  /* Drawer */
+  .drawer-overlay { position: fixed; inset: 0; background: rgba(20,54,102,0.4); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  .drawer-overlay.open { opacity: 1; pointer-events: auto; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 460px; max-width: 92vw; background: #fff; z-index: 101; box-shadow: -10px 0 40px rgba(0,0,0,0.18); transform: translateX(100%); transition: transform 0.25s ease; display: flex; flex-direction: column; }
+  .drawer.open { transform: translateX(0); }
+  .drawer-head { padding: 20px 22px 16px; border-bottom: 1px solid #eef0f3; }
+  .drawer-head .dh-top { display: flex; align-items: flex-start; justify-content: space-between; }
+  .drawer-head .dh-date { font-size: 13px; color: #667085; font-weight: 600; }
+  .drawer-head h2 { font-size: 26px; font-weight: 800; color: #143666; margin-top: 2px; }
+  .drawer-head .close { background: none; border: none; font-size: 24px; color: #98a2b3; cursor: pointer; line-height: 1; }
+  .drawer-head .dh-sub { font-size: 13px; color: #667085; margin-top: 4px; }
+  .drawer-body { flex: 1; overflow-y: auto; padding: 18px 22px 30px; }
+
+  .cat-summary { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+  .cat-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid #eef0f3; border-radius: 8px; }
+  .cat-card .cat-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+  .cat-card .cat-name { font-size: 14px; font-weight: 600; color: #344054; }
+  .cat-card .cat-bar-wrap { flex: 1; height: 6px; background: #f0f1f4; border-radius: 3px; overflow: hidden; }
+  .cat-card .cat-bar { height: 100%; border-radius: 3px; }
+  .cat-card .cat-amt { font-size: 14px; font-weight: 700; color: #143666; min-width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .entries-title { font-size: 13px; font-weight: 700; color: #143666; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 12px; }
+  .entry { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f4f4f4; }
+  .entry .e-icon { width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .entry .e-main { flex: 1; }
+  .entry .e-resource { font-size: 14px; font-weight: 600; color: #1f2937; }
+  .entry .e-meta { font-size: 12px; color: #667085; margin-top: 2px; }
+  .entry .e-cc { display: inline-block; font-size: 11px; color: #475569; background: #eef2f7; border-radius: 4px; padding: 1px 7px; margin-top: 4px; }
+  .entry .e-amt { font-size: 14px; font-weight: 700; color: #143666; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .drawer-foot { padding: 14px 22px; border-top: 1px solid #eef0f3; display: flex; justify-content: space-between; align-items: center; }
+  .drawer-foot .df-total { font-size: 13px; color: #667085; }
+  .drawer-foot .df-total b { font-size: 20px; color: #143666; }
+
+  .empty-day { text-align: center; color: #98a2b3; padding: 50px 20px; font-size: 14px; }
+  .empty-day .big { font-size: 34px; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org"><span class="org-badge">C</span> Cookie's Civil</div>
+    <div class="sidebar-item active"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">🖼</span> Gallery</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Record</div>
+    <div class="sidebar-item"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">🚚</span> Site Docket</div>
+    <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+  </div>
+
+  <div class="main">
+    <div class="proj-header">
+      <div class="proj-header-left">
+        <a class="back" href="#">←</a>
+        <h1>(VAR011) Residential House Foundation</h1>
+        <span class="caret">▾</span>
+      </div>
+      <div class="proj-header-right">
+        <button class="btn-outline">Initial Data Upload</button>
+        <button class="pill-plus">+</button>
+        <div class="org-select"><span class="v">V</span> Varicon Info <span style="color:#888; font-size:11px;">▾</span></div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <span class="tab-arrow">‹</span>
+      <div class="tab">Dashboard</div>
+      <div class="tab">Budget Overview</div>
+      <div class="tab active">Daily Cost Tracking</div>
+      <div class="tab">Claim</div>
+      <div class="tab">Variation Register</div>
+      <div class="tab">Report</div>
+      <div class="tab">File Manager</div>
+      <div class="tab">Site Diary</div>
+      <div class="tab">Daywork Record</div>
+      <span class="tab-arrow">›</span>
+    </div>
+
+    <div class="content">
+      <div class="subtabs">
+        <div class="subtab active">All</div>
+        <div class="subtab">Assigned</div>
+        <div class="subtab">Unassigned <span class="badge">24</span></div>
+      </div>
+
+      <div class="toolbar">
+        <div class="month-nav">
+          <button onclick="changeMonth(-1)">‹</button>
+          <span class="month-label" id="monthLabel">June 2026</span>
+          <button onclick="changeMonth(1)">›</button>
+        </div>
+        <button class="today-btn" onclick="goToday()">Today</button>
+        <div class="spacer"></div>
+        <div class="view-toggle">
+          <button class="active">Calendar</button>
+          <button onclick="alert('List view = the existing grouped grid. This prototype focuses on the Calendar view.')">List</button>
+        </div>
+        <button class="btn-primary">⊕ Add New Daily Cost</button>
+      </div>
+
+      <div class="legend" id="legend"></div>
+
+      <div class="cal">
+        <div class="cal-dow">
+          <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Day detail drawer -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <div class="dh-top">
+      <div>
+        <div class="dh-date" id="drawerDow">Tuesday</div>
+        <h2 id="drawerDate">June 2</h2>
+        <div class="dh-sub" id="drawerSub">5 entries · 3 cost centres</div>
+      </div>
+      <button class="close" onclick="closeDrawer()">&times;</button>
+    </div>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+  <div class="drawer-foot">
+    <div class="df-total">Total for day &nbsp; <b id="drawerTotal">$0.00</b></div>
+    <button class="btn-primary">⊕ Add cost to this day</button>
+  </div>
+</aside>
+
+<script>
+/* ---- Category model ---- */
+const CATS = [
+  { key: 'labour',      name: 'Labour',            color: '#2563eb', icon: '👷' },
+  { key: 'plant',       name: 'Plant & Equipment', color: '#F19100', icon: '🚜' },
+  { key: 'material',    name: 'Material',          color: '#0F8A0F', icon: '🧱' },
+  { key: 'subcontract', name: 'Subcontract',       color: '#7c3aed', icon: '🤝' },
+  { key: 'misc',        name: 'Miscellaneous',     color: '#64748b', icon: '📦' },
+];
+const CAT = Object.fromEntries(CATS.map(c => [c.key, c]));
+const hidden = new Set();   // categories toggled off in legend
+
+/* ---- Mock data: entries keyed by ISO date (2026-06) ---- */
+/* Each entry: {cat, resource, cc, qty, cost} */
+const DATA = {
+  '2026-06-01': [
+    { cat:'labour', resource:'Site Crew (3 labourers)', cc:'(001) Preliminaries', meta:'24 hrs @ $65/hr', cost:1560 },
+    { cat:'plant', resource:'Excavator 20t', cc:'(002) Bulk Earthworks', meta:'8 hrs @ $185/hr', cost:1480 },
+    { cat:'material', resource:'Road base — 40t', cc:'(002) Bulk Earthworks', meta:'40 t @ $38/t', cost:1520 },
+  ],
+  '2026-06-02': [
+    { cat:'labour', resource:'Site Crew (3 labourers)', cc:'(001) Preliminaries', meta:'24 hrs @ $65/hr', cost:1560 },
+    { cat:'plant', resource:'Excavator 20t', cc:'(002) Bulk Earthworks', meta:'9 hrs @ $185/hr', cost:1665 },
+    { cat:'plant', resource:'Dump Truck', cc:'(002) Bulk Earthworks', meta:'6 hrs @ $140/hr', cost:840 },
+    { cat:'misc', resource:'Fuel & consumables', cc:'(001) Preliminaries', meta:'Diesel top-up', cost:320 },
+  ],
+  '2026-06-03': [
+    { cat:'subcontract', resource:'ABC Demolition Pty Ltd', cc:'(004) Demolition', meta:'Slab removal — progress claim', cost:6400 },
+    { cat:'labour', resource:'Supervisor', cc:'(001) Preliminaries', meta:'8 hrs @ $95/hr', cost:760 },
+  ],
+  '2026-06-04': [
+    { cat:'labour', resource:'Site Crew (4 labourers)', cc:'(001) Preliminaries', meta:'32 hrs @ $65/hr', cost:2080 },
+    { cat:'plant', resource:'Excavator 20t', cc:'(002) Bulk Earthworks', meta:'8 hrs @ $185/hr', cost:1480 },
+    { cat:'material', resource:'Concrete N32 — 12m³', cc:'(005) Footings', meta:'12 m³ @ $245/m³', cost:2940 },
+    { cat:'material', resource:'Reo mesh SL82', cc:'(005) Footings', meta:'18 sheets', cost:1260 },
+    { cat:'misc', resource:'Pump hire', cc:'(005) Footings', meta:'Concrete pump — half day', cost:650 },
+  ],
+  '2026-06-05': [
+    { cat:'labour', resource:'Site Crew (4 labourers)', cc:'(005) Footings', meta:'32 hrs @ $65/hr', cost:2080 },
+    { cat:'subcontract', resource:'FormRight Formwork', cc:'(005) Footings', meta:'Footing formwork', cost:3200 },
+  ],
+  '2026-06-08': [
+    { cat:'material', resource:'Concrete N32 — 24m³', cc:'(006) Slab', meta:'24 m³ @ $245/m³', cost:5880 },
+    { cat:'labour', resource:'Concrete crew (5)', cc:'(006) Slab', meta:'40 hrs @ $70/hr', cost:2800 },
+    { cat:'plant', resource:'Concrete pump', cc:'(006) Slab', meta:'Full day', cost:1350 },
+    { cat:'misc', resource:'Curing compound', cc:'(006) Slab', meta:'Materials', cost:280 },
+  ],
+  '2026-06-09': [
+    { cat:'labour', resource:'Site Crew (2 labourers)', cc:'(001) Preliminaries', meta:'16 hrs @ $65/hr', cost:1040 },
+  ],
+  '2026-06-10': [
+    { cat:'subcontract', resource:'Apex Plumbing', cc:'(007) Services', meta:'Under-slab rough-in', cost:4150 },
+    { cat:'subcontract', resource:'VoltX Electrical', cc:'(007) Services', meta:'Conduit rough-in', cost:2380 },
+    { cat:'labour', resource:'Supervisor', cc:'(001) Preliminaries', meta:'8 hrs @ $95/hr', cost:760 },
+  ],
+  '2026-06-11': [
+    { cat:'plant', resource:'Compactor plate', cc:'(002) Bulk Earthworks', meta:'Day hire', cost:240 },
+    { cat:'labour', resource:'Site Crew (3 labourers)', cc:'(002) Bulk Earthworks', meta:'24 hrs @ $65/hr', cost:1560 },
+    { cat:'material', resource:'Sand bedding — 15t', cc:'(002) Bulk Earthworks', meta:'15 t @ $42/t', cost:630 },
+  ],
+  '2026-06-12': [
+    { cat:'labour', resource:'Site Crew (3 labourers)', cc:'(001) Preliminaries', meta:'24 hrs @ $65/hr', cost:1560 },
+    { cat:'misc', resource:'Site amenities', cc:'(001) Preliminaries', meta:'Weekly toilet hire', cost:180 },
+  ],
+  '2026-06-15': [
+    { cat:'material', resource:'Brick delivery', cc:'(008) Masonry', meta:'4,500 bricks', cost:3825 },
+    { cat:'subcontract', resource:'Solid Bricklaying Co', cc:'(008) Masonry', meta:'Progress claim 1', cost:5200 },
+    { cat:'labour', resource:'Hoist operator', cc:'(008) Masonry', meta:'8 hrs @ $72/hr', cost:576 },
+    { cat:'plant', resource:'Telehandler', cc:'(008) Masonry', meta:'Day hire', cost:520 },
+  ],
+  '2026-06-16': [
+    { cat:'subcontract', resource:'Solid Bricklaying Co', cc:'(008) Masonry', meta:'Continued', cost:4800 },
+    { cat:'material', resource:'Mortar & sand', cc:'(008) Masonry', meta:'Materials', cost:740 },
+  ],
+  '2026-06-17': [
+    { cat:'labour', resource:'Site Crew (3 labourers)', cc:'(001) Preliminaries', meta:'24 hrs @ $65/hr', cost:1560 },
+    { cat:'misc', resource:'Waste removal', cc:'(001) Preliminaries', meta:'2 bins', cost:560 },
+  ],
+  '2026-06-18': [
+    { cat:'plant', resource:'Scaffold hire', cc:'(008) Masonry', meta:'Weekly', cost:890 },
+    { cat:'labour', resource:'Site Crew (2 labourers)', cc:'(008) Masonry', meta:'16 hrs @ $65/hr', cost:1040 },
+  ],
+  '2026-06-22': [
+    { cat:'labour', resource:'Site Crew (4 labourers)', cc:'(001) Preliminaries', meta:'32 hrs @ $65/hr', cost:2080 },
+    { cat:'material', resource:'Timber framing pack', cc:'(009) Framing', meta:'Delivery', cost:6200 },
+    { cat:'plant', resource:'Crane truck', cc:'(009) Framing', meta:'Unload — 3 hrs', cost:540 },
+  ],
+  '2026-06-23': [
+    { cat:'subcontract', resource:'TrueLine Carpentry', cc:'(009) Framing', meta:'Wall frames', cost:7400 },
+    { cat:'misc', resource:'Fixings & brackets', cc:'(009) Framing', meta:'Materials', cost:430 },
+  ],
+  '2026-06-24': [
+    { cat:'labour', resource:'Site Crew (3 labourers)', cc:'(001) Preliminaries', meta:'24 hrs @ $65/hr', cost:1560 },
+  ],
+  '2026-06-25': [
+    { cat:'subcontract', resource:'TrueLine Carpentry', cc:'(009) Framing', meta:'Roof trusses', cost:6900 },
+    { cat:'plant', resource:'Crane hire', cc:'(009) Framing', meta:'Truss lift — half day', cost:1450 },
+    { cat:'labour', resource:'Dogger / spotter', cc:'(009) Framing', meta:'8 hrs @ $78/hr', cost:624 },
+  ],
+  '2026-06-29': [
+    { cat:'labour', resource:'Site Crew (3 labourers)', cc:'(001) Preliminaries', meta:'24 hrs @ $65/hr', cost:1560 },
+    { cat:'misc', resource:'Fuel & consumables', cc:'(001) Preliminaries', meta:'Diesel', cost:295 },
+  ],
+  '2026-06-30': [
+    { cat:'material', resource:'Roof sheeting', cc:'(010) Roofing', meta:'Colorbond delivery', cost:4380 },
+    { cat:'subcontract', resource:'Peak Roofing', cc:'(010) Roofing', meta:'Progress claim 1', cost:3600 },
+  ],
+};
+
+/* ---- Helpers ---- */
+const fmt = n => '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const fmt2 = n => '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DOW = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const TODAY = '2026-06-04';
+
+let viewYear = 2026, viewMonth = 5; // June (0-indexed)
+
+function dayTotals(iso) {
+  const entries = DATA[iso] || [];
+  const t = { labour:0, plant:0, material:0, subcontract:0, misc:0, total:0 };
+  entries.forEach(e => { t[e.cat] += e.cost; t.total += e.cost; });
+  return t;
+}
+
+/* ---- Legend ---- */
+function renderLegend() {
+  let monthTotal = 0;
+  Object.keys(DATA).forEach(iso => {
+    if (iso.startsWith(`${viewYear}-${String(viewMonth+1).padStart(2,'0')}`)) {
+      const t = dayTotals(iso);
+      CATS.forEach(c => { if (!hidden.has(c.key)) monthTotal += t[c.key]; });
+    }
+  });
+  const el = document.getElementById('legend');
+  el.innerHTML = CATS.map(c =>
+    `<div class="legend-item ${hidden.has(c.key)?'muted':''}" onclick="toggleCat('${c.key}')">
+       <span class="swatch" style="background:${c.color}"></span>${c.name}
+     </div>`
+  ).join('') +
+  `<div class="legend-total">Month total (visible) &nbsp; <b>${fmt(monthTotal)}</b></div>`;
+}
+function toggleCat(key) {
+  hidden.has(key) ? hidden.delete(key) : hidden.add(key);
+  renderLegend(); renderCalendar();
+}
+
+/* ---- Calendar ---- */
+function renderCalendar() {
+  document.getElementById('monthLabel').textContent = `${MONTHS[viewMonth]} ${viewYear}`;
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = '';
+
+  const first = new Date(viewYear, viewMonth, 1);
+  // Monday-first offset
+  let offset = (first.getDay() + 6) % 7;
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+  for (let i = 0; i < offset; i++) {
+    const c = document.createElement('div');
+    c.className = 'cal-cell empty';
+    grid.appendChild(c);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dow = new Date(viewYear, viewMonth, d).getDay();
+    const isWeekend = dow === 0 || dow === 6;
+    const t = dayTotals(iso);
+    const visTotal = CATS.reduce((s,c)=> s + (hidden.has(c.key)?0:t[c.key]), 0);
+
+    const cell = document.createElement('div');
+    cell.className = 'cal-cell' + (isWeekend ? ' weekend' : '') + (iso === TODAY ? ' today' : '');
+    cell.onclick = () => openDrawer(iso);
+
+    let html = `<div class="daynum">${d}</div>`;
+    if (visTotal > 0) {
+      html += `<div class="day-total">${fmt(visTotal)}</div>`;
+      // stacked bar
+      html += '<div class="stackbar">';
+      CATS.forEach(c => {
+        if (hidden.has(c.key) || !t[c.key]) return;
+        html += `<span style="width:${(t[c.key]/visTotal*100)}%;background:${c.color}"></span>`;
+      });
+      html += '</div>';
+      // breakdown — show present categories (max 3 lines + "more")
+      const present = CATS.filter(c => !hidden.has(c.key) && t[c.key] > 0);
+      const shown = present.slice(0, 3);
+      html += '<div class="breakdown">';
+      shown.forEach(c => {
+        html += `<div class="bd-row"><span class="dot" style="background:${c.color}"></span>
+                 <span class="bd-label">${c.name}</span><span class="bd-amt">${fmt(t[c.key])}</span></div>`;
+      });
+      html += '</div>';
+      if (present.length > 3) html += `<div class="more-link">+${present.length-3} more</div>`;
+    } else {
+      html += `<div class="day-total zero">—</div>`;
+    }
+    cell.innerHTML = html;
+    grid.appendChild(cell);
+  }
+  renderLegend();
+}
+
+function changeMonth(delta) {
+  viewMonth += delta;
+  if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+  if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+  renderCalendar();
+}
+function goToday() { viewYear = 2026; viewMonth = 5; renderCalendar(); }
+
+/* ---- Drawer ---- */
+function openDrawer(iso) {
+  const entries = DATA[iso] || [];
+  const t = dayTotals(iso);
+  const dt = new Date(iso + 'T00:00:00');
+  document.getElementById('drawerDow').textContent = DOW[dt.getDay()];
+  document.getElementById('drawerDate').textContent = `${MONTHS[dt.getMonth()]} ${dt.getDate()}`;
+
+  const ccs = new Set(entries.map(e => e.cc));
+  document.getElementById('drawerSub').textContent =
+    `${entries.length} ${entries.length===1?'entry':'entries'} · ${ccs.size} cost ${ccs.size===1?'centre':'centres'}`;
+  document.getElementById('drawerTotal').textContent = fmt2(t.total);
+
+  const body = document.getElementById('drawerBody');
+  if (!entries.length) {
+    body.innerHTML = `<div class="empty-day"><div class="big">🗓️</div>No costs recorded for this day.<br>Click “Add cost to this day” to start.</div>`;
+  } else {
+    // category summary
+    let html = '<div class="cat-summary">';
+    CATS.forEach(c => {
+      if (!t[c.key]) return;
+      html += `<div class="cat-card">
+        <span class="cat-dot" style="background:${c.color}"></span>
+        <span class="cat-name">${c.name}</span>
+        <span class="cat-bar-wrap"><span class="cat-bar" style="width:${(t[c.key]/t.total*100)}%;background:${c.color}"></span></span>
+        <span class="cat-amt">${fmt2(t[c.key])}</span>
+      </div>`;
+    });
+    html += '</div>';
+    // entries (sorted by category order then cost desc)
+    html += '<div class="entries-title">Cost entries</div>';
+    const ordered = [...entries].sort((a,b) =>
+      CATS.findIndex(c=>c.key===a.cat) - CATS.findIndex(c=>c.key===b.cat) || b.cost - a.cost);
+    ordered.forEach(e => {
+      const c = CAT[e.cat];
+      html += `<div class="entry">
+        <div class="e-icon" style="background:${c.color}1a">${c.icon}</div>
+        <div class="e-main">
+          <div class="e-resource">${e.resource}</div>
+          <div class="e-meta">${c.name} · ${e.meta}</div>
+          <span class="e-cc">${e.cc}</span>
+        </div>
+        <div class="e-amt">${fmt2(e.cost)}</div>
+      </div>`;
+    });
+    body.innerHTML = html;
+  }
+
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+}
+function closeDrawer() {
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+renderCalendar();
+</script>
+</body>
+</html>
