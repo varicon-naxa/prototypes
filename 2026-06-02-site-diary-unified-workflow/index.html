@@ -926,6 +926,111 @@ function deleteMaterial(){
   rows.materials=rows.materials.filter(function(x){return x.id!==MAT_EDIT});
   closeMatEdit();renderMaterials();toast('Material line removed');
 }
+
+/* ================= SITE DOCKETS — unified manual-entry capture ================= */
+function hrsStr(dec){var h=Math.floor(dec);var m=Math.round((dec-h)*60);if(m===60){h++;m=0;}return h+'h '+(m<10?'0'+m:m)+'m';}
+var DKT_TYPES={
+  Material:{supLbl:'Supplier',feed:'Materials'},
+  Labour:{supLbl:'Labour hire / company',feed:'Labour & Time'},
+  Plant:{supLbl:'Plant hire / supplier',feed:'Plant & Equipment'},
+  Misc:{supLbl:'Company',feed:'Miscellaneous'}
+};
+function openDocket(type){
+  type=type||'Material';
+  document.getElementById('dkType').value=type;
+  document.getElementById('dkNo').value='DKT-'+('000'+(DKT_SEQ+1)).slice(-4);
+  document.getElementById('dkDate').value='2026-06-05';
+  document.getElementById('dkSup').value='';
+  // reset all type fields
+  ['dkmName','dkmUnit','dkmRate','dkmDel','dklName','dklRole','dklRate','dklHrs','dkpName','dkpNo','dkpRate','dkpHrs','dkpBy','dkxName','dkxQty','dkxDur'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+  document.getElementById('dkmUsed').value='0';document.getElementById('dklAllow').value='0';document.getElementById('dkxAmt').value='0';
+  document.getElementById('dkAlloc').innerHTML=ALLOC_OPTIONS.map(function(o,i){return '<option value="'+i+'">'+o.l+'  ·  '+o.c+'</option>';}).join('');
+  dkSyncType();
+  document.getElementById('dktScrim').classList.add('show');
+  document.getElementById('dktDrawer').classList.add('show');
+}
+function closeDocket(){document.getElementById('dktScrim').classList.remove('show');document.getElementById('dktDrawer').classList.remove('show');}
+function dkSyncType(){
+  var t=document.getElementById('dkType').value;
+  ['Material','Labour','Plant','Misc'].forEach(function(k){document.getElementById('dkg-'+k).style.display=(k===t)?'block':'none';});
+  document.getElementById('dkSupLbl').textContent=DKT_TYPES[t].supLbl;
+  dkPreview();
+}
+function dkVal(id){return parseFloat(document.getElementById(id).value)||0;}
+function dkComputeValue(t){
+  if(t==='Material')return dkVal('dkmRate')*dkVal('dkmDel');
+  if(t==='Labour')return dkVal('dklRate')*dkVal('dklHrs')+dkVal('dklAllow');
+  if(t==='Plant')return dkVal('dkpRate')*dkVal('dkpHrs');
+  if(t==='Misc')return dkVal('dkxAmt');
+  return 0;
+}
+function dkPreview(){
+  var t=document.getElementById('dkType').value,v=dkComputeValue(t),html='';
+  if(t==='Material'){var u=document.getElementById('dkmUnit').value||'unit';html='Delivered cost <b>'+money(v)+'</b> ('+money(dkVal('dkmRate'))+'/'+u+' × '+dkVal('dkmDel').toLocaleString('en-AU')+') · feeds <b>Materials</b>';}
+  else if(t==='Labour'){html='Labour cost <b>'+money(v)+'</b> ('+money(dkVal('dklRate'))+'/hr × '+dkVal('dklHrs')+'h'+(dkVal('dklAllow')?' + '+money(dkVal('dklAllow'))+' allow':'')+') · feeds <b>Labour</b>';}
+  else if(t==='Plant'){html='Plant cost <b>'+money(v)+'</b> ('+money(dkVal('dkpRate'))+'/hr × '+dkVal('dkpHrs')+'h) · feeds <b>Plant</b>';}
+  else{html='Amount <b>'+money(v)+'</b> · feeds <b>Misc</b>';}
+  document.querySelector('#dkPreview div').innerHTML=html;
+}
+function saveDocket(){
+  var t=document.getElementById('dkType').value;
+  var no=document.getElementById('dkNo').value||('DKT-'+('000'+(DKT_SEQ+1)).slice(-4));
+  var date=document.getElementById('dkDate').value||'2026-06-05';
+  var sup=document.getElementById('dkSup').value||'—';
+  var alloc=[Object.assign({p:100},ALLOC_OPTIONS[parseInt(document.getElementById('dkAlloc').value,10)||0])];
+  var value=dkComputeValue(t),feedLabel='';
+  if(t==='Material'){
+    var nm=document.getElementById('dkmName').value;if(!nm){toast('Enter a material name');return;}
+    rows.materials.push({id:no,srcType:'Docket',src:no,nm:nm,sup:sup,unit:document.getElementById('dkmUnit').value||'',rate:dkVal('dkmRate'),ordered:dkVal('dkmDel'),delivered:dkVal('dkmDel'),used:dkVal('dkmUsed'),srcDocket:no});
+    feedLabel=nm;renderMaterials();
+  }else if(t==='Labour'){
+    var who=document.getElementById('dklName').value;if(!who){toast('Enter a worker name');return;}
+    rows.labour.push({who:who,role:document.getElementById('dklRole').value||'—',rate:dkVal('dklRate'),allow:dkVal('dklAllow'),in:'—',out:'—',brk:'0',hrs:hrsStr(dkVal('dklHrs')),alloc:alloc,status:'pend',srcDocket:no});
+    feedLabel=who;renderLabour();
+  }else if(t==='Plant'){
+    var pnm=document.getElementById('dkpName').value;if(!pnm){toast('Enter equipment');return;}
+    rows.plant.push({nm:pnm,no:document.getElementById('dkpNo').value||'—',sup:sup,rate:dkVal('dkpRate'),by:document.getElementById('dkpBy').value||'—',hrs:hrsStr(dkVal('dkpHrs')),alloc:alloc,srcDocket:no});
+    feedLabel=pnm;renderPlant();
+  }else{
+    var xnm=document.getElementById('dkxName').value;if(!xnm){toast('Enter an item');return;}
+    rows.misc.push({nm:xnm,co:sup,qty:document.getElementById('dkxQty').value||'—',dur:document.getElementById('dkxDur').value||'—',alloc:alloc,srcDocket:no});
+    feedLabel=xnm;renderMisc();
+  }
+  rows.dockets.push({no:no,type:t,sup:sup,date:date,feed:feedLabel,value:value});
+  if(no.indexOf('DKT-')===0){var n=parseInt(no.slice(4),10);if(!isNaN(n)&&n>DKT_SEQ)DKT_SEQ=n;}
+  closeDocket();renderDockets();toast(no+' added to '+DKT_TYPES[t].feed);
+}
+function deleteDocket(no){
+  var d=rows.dockets.filter(function(x){return x.no===no})[0];if(!d)return;
+  rows.dockets=rows.dockets.filter(function(x){return x.no!==no});
+  // remove the linked section row
+  if(d.type==='Material')rows.materials=rows.materials.filter(function(x){return x.srcDocket!==no});
+  else if(d.type==='Labour')rows.labour=rows.labour.filter(function(x){return x.srcDocket!==no});
+  else if(d.type==='Plant')rows.plant=rows.plant.filter(function(x){return x.srcDocket!==no});
+  else rows.misc=rows.misc.filter(function(x){return x.srcDocket!==no});
+  renderAll();toast(no+' removed');
+}
+function renderDockets(){
+  var b=document.getElementById('tbody-dockets');if(!b)return;
+  var cD=document.getElementById('cDockets');if(cD)cD.textContent=rows.dockets.length;
+  document.getElementById('sDktCount').textContent=rows.dockets.length;
+  var total=rows.dockets.reduce(function(s,d){return s+(d.value||0);},0);
+  document.getElementById('sDktValue').textContent=money(total);
+  if(!rows.dockets.length){b.innerHTML='<tr><td colspan="7"><div class="empty"><i class="fa-solid fa-receipt"></i>No dockets yet. Click “Add docket”, or use “Add via docket” from any section.</div></td></tr>';return;}
+  b.innerHTML='';
+  var tagMap={Material:'docket',Labour:'po',Plant:'bill',Misc:'manual'};
+  rows.dockets.forEach(function(d){
+    b.innerHTML+='<tr>'+
+      '<td><span style="font-family:monospace;font-weight:700;color:var(--navy)">'+d.no+'</span></td>'+
+      '<td><span class="src-tag '+(tagMap[d.type]||'docket')+'">'+d.type+'</span></td>'+
+      '<td>'+d.sup+'</td>'+
+      '<td>'+d.date+'</td>'+
+      '<td><i class="fa-solid fa-arrow-right-long" style="color:var(--muted);font-size:11px;margin-right:6px"></i>'+d.feed+'</td>'+
+      '<td class="num"><b style="color:var(--navy)">'+money(d.value||0)+'</b></td>'+
+      '<td><span class="row-act" onclick="deleteDocket(\''+d.no+'\')" style="cursor:pointer;color:#dc2626"><i class="fa-solid fa-trash"></i></span></td>'+
+    '</tr>';
+  });
+}
 function renderMisc(){
   var b=document.getElementById('tbody-misc');b.innerHTML='';
   rows.misc.forEach(function(r){
