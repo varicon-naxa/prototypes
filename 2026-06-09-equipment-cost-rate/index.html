@@ -100,6 +100,11 @@ select.field-select{appearance:none;background-image:url("data:image/svg+xml,%3C
 .info-box i{color:#f5a623;font-size:15px;margin-top:1px}
 .info-box .ib-title{font-size:12.5px;font-weight:600;color:#1b2a4a;margin-bottom:2px}
 .info-box .ib-text{font-size:12.5px;color:#7a6a4a;line-height:1.5}
+/* Hired recommendation note (blue) */
+.info-box.hired{background:#eff6ff;border-color:#bfdbfe}
+.info-box.hired i{color:#3b82f6}
+.info-box.hired .ib-text{color:#475c78}
+.wip-tag{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;color:#3b82f6;background:#dbeafe;padding:2px 8px;border-radius:10px;margin-top:6px}
 
 /* Cost rate row */
 .rate-label{font-size:12px;font-weight:600;color:#1b2a4a;margin-bottom:8px}
@@ -226,20 +231,31 @@ select.field-select{appearance:none;background-image:url("data:image/svg+xml,%3C
         <span>Allow this equipment to be used simultaneously on multiple projects</span>
       </div>
 
-      <!-- ── EQUIPMENT COST RATE (replaces wet/dry hire) ── -->
+      <!-- ── PLANT RATE CREATION (replaces wet/dry hire) ── -->
       <div class="section-box">
-        <div class="sec-head">Resource Mapping</div>
-        <div class="sec-sub">Link this equipment to a specific resource to calculate operating costs automatically.</div>
+        <div class="sec-head">Plant Rate</div>
+        <div class="sec-sub">Create a rate for this plant item to calculate operating costs automatically.</div>
 
-        <div class="info-box">
+        <!-- Default note: shown when Company Owned -->
+        <div class="info-box" id="ownedNote">
           <i class="fas fa-circle-info"></i>
           <div>
-            <div class="ib-title">What are these costs?</div>
-            <div class="ib-text">These are the costs incurred to you while using this piece of plant or equipment. It is different from the rates you charge to your clients.</div>
+            <div class="ib-title">What is this rate?</div>
+            <div class="ib-text">This is the rate used to calculate the operating cost of this plant item while it is in use. It is different from the rates you charge to your clients.</div>
           </div>
         </div>
 
-        <div class="rate-label">Equipment Cost Rate<span class="req" style="color:#ef4444">*</span></div>
+        <!-- Hired note: shown when Hired -->
+        <div class="info-box hired" id="hiredNote" style="display:none">
+          <i class="fas fa-circle-info"></i>
+          <div>
+            <div class="ib-title">Hired plant — we recommend a $0 rate</div>
+            <div class="ib-text">The cost of hired plant is already captured against the supplier's purchase order / invoice. Adding a rate here would double up your cost tracking, so we recommend leaving the rate at $0.</div>
+            <span class="wip-tag"><i class="fas fa-screwdriver-wrench"></i> We're actively working on a solution for hired plant costs</span>
+          </div>
+        </div>
+
+        <div class="rate-label">Plant Rate<span class="req" style="color:#ef4444">*</span></div>
         <div class="rate-row">
           <div class="field">
             <select class="field-select"><option>Select resource</option><option>Excavator 20T</option><option>Dozer D6</option><option>Water Cart</option></select>
@@ -250,11 +266,10 @@ select.field-select{appearance:none;background-image:url("data:image/svg+xml,%3C
           <div class="field">
             <div class="input-prefix">
               <span class="prefix">$</span>
-              <input type="number" placeholder="Rate">
+              <input type="number" placeholder="Rate" id="rateInput">
             </div>
           </div>
         </div>
-        <div class="rate-note"><i class="far fa-lightbulb" style="color:#f5a623"></i> A single cost rate applies whenever this equipment is used — no wet/dry hire distinction.</div>
       </div>
 
       <!-- Meter readings -->
@@ -273,10 +288,18 @@ select.field-select{appearance:none;background-image:url("data:image/svg+xml,%3C
 
 <script>
 // Ownership toggle
+const ownedNote=document.getElementById('ownedNote');
+const hiredNote=document.getElementById('hiredNote');
+const rateInput=document.getElementById('rateInput');
 document.querySelectorAll('.own-card').forEach(c=>{
   c.addEventListener('click',()=>{
     document.querySelectorAll('.own-card').forEach(x=>x.classList.remove('selected'));
     c.classList.add('selected');
+    const hired=c.dataset.own==='hired';
+    ownedNote.style.display=hired?'none':'flex';
+    hiredNote.style.display=hired?'flex':'none';
+    // Pre-fill recommended $0 rate for hired plant
+    if(hired && !rateInput.value) rateInput.value='0';
   });
 });
 // Multi-project checkbox
