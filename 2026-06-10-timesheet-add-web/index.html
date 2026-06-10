@@ -1288,25 +1288,83 @@
       document.getElementById('wfCc').classList.toggle('selected', !isWbs);
       document.getElementById('allocBlock').style.display = 'block';
       document.getElementById('allocCardHint').textContent = isWbs
-        ? 'Split your clocked time across one or more WBS tasks.'
+        ? 'Drill in: Task → Sub-task → Sub-sub-task, then assign hours. Only the lowest level is chargeable.'
         : 'Split your clocked time across one or more cost centres.';
       document.getElementById('wbsInfoBtn').style.display = isWbs ? 'inline-flex' : 'none';
       document.getElementById('wbsInfoNote').classList.remove('show');
-      document.getElementById('addLabelEl').textContent = isWbs ? 'Add WBS task' : 'Add cost centre';
 
-      const opts = isWbs ? wbsTasks : costCentres;
-      const placeholder = `Select ${isWbs ? 'WBS task' : 'cost centre'}…`;
-      const optionHtml = `<option value="">${placeholder}</option>` + opts.map(o => `<option>${o}</option>`).join('');
-      document.getElementById('addSelect').innerHTML = optionHtml;
-      document.getElementById('equipTask').innerHTML = optionHtml;
-      document.getElementById('allowTask').innerHTML = optionHtml;
-      document.getElementById('equipTaskLabel').textContent = isWbs ? 'WBS task' : 'Cost centre';
-      document.getElementById('allowTaskLabel').textContent = isWbs ? 'WBS task' : 'Cost centre';
+      // Show cascade (WBS) or single (Cost Centre) picker
+      document.getElementById('taskCascadeWbs').style.display = isWbs ? 'grid' : 'none';
+      document.getElementById('taskSingleCc').style.display = isWbs ? 'none' : 'grid';
+
+      if (isWbs) {
+        const lvl1 = document.getElementById('addLvl1');
+        lvl1.innerHTML = '<option value="">Select task…</option>' +
+          wbsTree.map(t => `<option value="${t.code}">${t.code}. ${t.name}</option>`).join('');
+        resetWbsCascade();
+      } else {
+        document.getElementById('addLabelEl').textContent = 'Cost centre';
+        document.getElementById('addSelect').innerHTML = '<option value="">Select cost centre…</option>' +
+          costCentres.map(o => `<option>${o}</option>`).join('');
+        document.getElementById('addSelect').value = '';
+      }
+
+      // Equipment + Allowance Task dropdowns are populated from this timesheet's allocations only
+      document.getElementById('equipTaskLabel').textContent = isWbs ? 'WBS sub-sub-task' : 'Cost centre';
+      document.getElementById('allowTaskLabel').textContent = isWbs ? 'WBS sub-sub-task' : 'Cost centre';
+      refreshEquipAllowTaskOptions();
 
       renderAllocs();
       renderEquipTable();
       renderAllowTable();
       prefillTaskSelects();
+    }
+
+    /* WBS cascade handlers */
+    function resetWbsCascade() {
+      const l1 = document.getElementById('addLvl1');
+      const l2 = document.getElementById('addLvl2');
+      const l3 = document.getElementById('addLvl3');
+      l1.value = '';
+      l2.innerHTML = '<option value="">Select sub-task…</option>'; l2.disabled = true;
+      l3.innerHTML = '<option value="">Select sub-sub-task…</option>'; l3.disabled = true;
+    }
+    function onWbsLvl1() {
+      const code = document.getElementById('addLvl1').value;
+      const node = wbsTree.find(t => t.code === code);
+      const l2 = document.getElementById('addLvl2');
+      const l3 = document.getElementById('addLvl3');
+      if (!node || !node.children) { l2.innerHTML = '<option value="">Select sub-task…</option>'; l2.disabled = true; l3.innerHTML = '<option value="">Select sub-sub-task…</option>'; l3.disabled = true; return; }
+      l2.innerHTML = '<option value="">Select sub-task…</option>' +
+        node.children.map(c => `<option value="${c.code}">${c.code} ${c.name}</option>`).join('');
+      l2.disabled = false;
+      l3.innerHTML = '<option value="">Select sub-sub-task…</option>'; l3.disabled = true;
+    }
+    function onWbsLvl2() {
+      const l1code = document.getElementById('addLvl1').value;
+      const l2code = document.getElementById('addLvl2').value;
+      const parent = wbsTree.find(t => t.code === l1code);
+      const node = parent && parent.children && parent.children.find(c => c.code === l2code);
+      const l3 = document.getElementById('addLvl3');
+      if (!node || !node.children) { l3.innerHTML = '<option value="">Select sub-sub-task…</option>'; l3.disabled = true; return; }
+      l3.innerHTML = '<option value="">Select sub-sub-task…</option>' +
+        node.children.map(c => `<option value="${c.code} ${c.name}">${c.code} ${c.name}</option>`).join('');
+      l3.disabled = false;
+    }
+
+    /* Equipment + Allowance Task dropdowns reflect this timesheet's allocations only */
+    function refreshEquipAllowTaskOptions() {
+      const labels = [...new Set(allocs.map(a => a.label))];
+      const placeholder = allocs.length
+        ? `Select ${workflow === 'wbs' ? 'sub-sub-task' : 'cost centre'}…`
+        : `Allocate time first…`;
+      const html = `<option value="">${placeholder}</option>` + labels.map(l => `<option>${l}</option>`).join('');
+      ['equipTask', 'allowTask'].forEach(id => {
+        const el = document.getElementById(id);
+        const prev = el.value;
+        el.innerHTML = html;
+        if (labels.includes(prev)) el.value = prev;
+      });
     }
 
     function toggleWbsInfo() {
