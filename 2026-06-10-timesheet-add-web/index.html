@@ -1352,18 +1352,25 @@
       l3.disabled = false;
     }
 
-    /* Equipment + Allowance Task dropdowns reflect this timesheet's allocations only */
+    /* All WBS leaves (level 3) for Equipment + Allowance Task dropdowns */
+    function wbsLeaves() {
+      const out = [];
+      wbsTree.forEach(t1 => (t1.children || []).forEach(t2 => (t2.children || []).forEach(t3 => out.push(`${t3.code} ${t3.name}`))));
+      return out;
+    }
+    /* Populate Equipment + Allowance Task dropdowns with all available options for the workflow.
+       Prefilling sets the most recently picked sub-sub-task (or cost centre) as the default. */
     function refreshEquipAllowTaskOptions() {
-      const labels = [...new Set(allocs.map(a => a.label))];
-      const placeholder = allocs.length
+      const opts = workflow === 'wbs' ? wbsLeaves() : (workflow === 'cc' ? costCentres : []);
+      const placeholder = workflow
         ? `Select ${workflow === 'wbs' ? 'sub-sub-task' : 'cost centre'}…`
-        : `Allocate time first…`;
-      const html = `<option value="">${placeholder}</option>` + labels.map(l => `<option>${l}</option>`).join('');
+        : 'Pick a workflow first…';
+      const html = `<option value="">${placeholder}</option>` + opts.map(l => `<option>${l}</option>`).join('');
       ['equipTask', 'allowTask'].forEach(id => {
         const el = document.getElementById(id);
         const prev = el.value;
         el.innerHTML = html;
-        if (labels.includes(prev)) el.value = prev;
+        if (opts.includes(prev)) el.value = prev;
       });
     }
 
