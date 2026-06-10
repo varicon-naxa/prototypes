@@ -1399,8 +1399,16 @@
       document.getElementById('fillCheckbox').innerHTML = '';
     }
     function addAllocation() {
-      const label = document.getElementById('addSelect').value;
-      if (!label) { showToast(workflow === 'wbs' ? 'Select a WBS task' : 'Select a cost centre'); return; }
+      let label = '';
+      if (workflow === 'wbs') {
+        label = document.getElementById('addLvl3').value;
+        if (!label) { showToast('Pick down to the sub-sub-task'); return; }
+      } else if (workflow === 'cc') {
+        label = document.getElementById('addSelect').value;
+        if (!label) { showToast('Select a cost centre'); return; }
+      } else {
+        showToast('Pick a workflow first'); return;
+      }
       const h = parseInt(document.getElementById('addHour').value, 10) || 0;
       const m = parseInt(document.getElementById('addMin').value, 10) || 0;
       const min = h * 60 + m;
@@ -1409,16 +1417,22 @@
       allocs.push({ label, min });
       renderAllocs();
       // reset add row
-      document.getElementById('addSelect').value = '';
+      if (workflow === 'wbs') resetWbsCascade();
+      else document.getElementById('addSelect').value = '';
       document.getElementById('addHour').value = '0';
       document.getElementById('addMin').value = '15';
       fillOn = false;
       document.getElementById('fillCheckbox').classList.remove('on');
       document.getElementById('fillCheckbox').innerHTML = '';
+      refreshEquipAllowTaskOptions();
       prefillTaskSelects();
       showToast('Added to timesheet');
     }
-    function removeAllocation(i) { allocs.splice(i, 1); renderAllocs(); }
+    function removeAllocation(i) {
+      allocs.splice(i, 1);
+      renderAllocs();
+      refreshEquipAllowTaskOptions();
+    }
 
     function renderAllocs() {
       const a = allocated(), r = remaining();
