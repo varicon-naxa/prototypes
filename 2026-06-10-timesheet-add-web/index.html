@@ -1123,25 +1123,71 @@
       updateSummary();
     }
 
-    /* ──────────── Workers (chip multi-select) ──────────── */
-    function addWorker(name) {
-      const initials = name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
-      const id = name.toLowerCase().replace(/\s+/g, '-') + '-' + Math.random().toString(36).slice(2, 5);
-      workers.push(id);
-      const chip = document.createElement('span');
-      chip.className = 'chip';
-      chip.innerHTML = `<span class="av">${initials}</span> ${name} <button class="x" onclick="removeWorker(event,'${id}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
-      const inputEl = document.getElementById('workerInput');
-      inputEl.parentElement.insertBefore(chip, inputEl);
+    /* ──────────── Workers (multi-select dropdown) ──────────── */
+    function initials(name) {
+      return name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    }
+    function renderWorkerTrigger() {
+      const trig = document.getElementById('workersTrigger');
+      const sel = WORKERS.filter(w => workers.includes(w.id));
+      if (!sel.length) {
+        trig.innerHTML = '<span class="ph">Select workers…</span>';
+      } else {
+        trig.innerHTML = sel.map(w =>
+          `<span class="chip"><span class="av">${initials(w.name)}</span> ${w.name} <button class="x" onclick="toggleWorker(event,'${w.id}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></span>`
+        ).join('');
+      }
+      document.getElementById('workerCount').textContent = `${sel.length} of ${WORKERS.length} selected`;
+    }
+    function renderWorkerList() {
+      const q = (document.getElementById('workerSearch').value || '').toLowerCase();
+      const c = document.getElementById('workerList');
+      const items = WORKERS.filter(w => (w.name + ' ' + w.role).toLowerCase().includes(q));
+      if (!items.length) {
+        c.innerHTML = '<div style="padding:18px 14px;color:var(--muted);font-size:13px;">No workers match</div>';
+        return;
+      }
+      c.innerHTML = items.map(w => `
+        <div class="ms-item ${workers.includes(w.id) ? 'on' : ''}" onclick="toggleWorker(event, '${w.id}')">
+          <span class="checkbox ${workers.includes(w.id) ? 'on' : ''}">${workers.includes(w.id) ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</span>
+          <span class="av">${initials(w.name)}</span>
+          <span class="nm">${w.name}</span>
+          <span class="role">${w.role}</span>
+        </div>`).join('');
+    }
+    function toggleWorker(e, id) {
+      if (e) e.stopPropagation();
+      const i = workers.indexOf(id);
+      if (i >= 0) workers.splice(i, 1); else workers.push(id);
+      renderWorkerTrigger();
+      renderWorkerList();
       updateSummary();
     }
-    function removeWorker(e, id) {
-      e.stopPropagation();
-      const chip = e.target.closest('.chip');
-      if (chip) chip.remove();
-      workers = workers.filter(w => w !== id);
+    function clearWorkers() {
+      workers = [];
+      renderWorkerTrigger();
+      renderWorkerList();
       updateSummary();
     }
+    function toggleWorkersDropdown(e) {
+      e && e.stopPropagation();
+      const panel = document.getElementById('workersPanel');
+      const trig = document.getElementById('workersTrigger');
+      const open = panel.classList.toggle('open');
+      trig.classList.toggle('open', open);
+      if (open) {
+        document.getElementById('workerSearch').value = '';
+        renderWorkerList();
+        setTimeout(() => document.getElementById('workerSearch').focus(), 50);
+      }
+    }
+    document.addEventListener('click', e => {
+      const wrap = document.getElementById('workersWrapper');
+      if (!wrap.contains(e.target)) {
+        document.getElementById('workersPanel').classList.remove('open');
+        document.getElementById('workersTrigger').classList.remove('open');
+      }
+    });
 
     /* ──────────── Multi-project ──────────── */
     function toggleMultiProj() {
