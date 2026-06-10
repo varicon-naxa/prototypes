@@ -857,19 +857,17 @@ function bar(value,total,cls){var pct=total>0?Math.min(100,Math.round(value/tota
 function renderMaterials(){
   var b=document.getElementById('tbody-materials');b.innerHTML='';
   if(!rows.materials.length){
-    b.innerHTML='<tr><td colspan="10"><div class="empty"><i class="fa-solid fa-boxes-stacked"></i>No material lines yet. Log usage against a PO/bill or add one manually.</div></td></tr>';
+    b.innerHTML='<tr><td colspan="8"><div class="empty"><i class="fa-solid fa-boxes-stacked"></i>No material lines yet. Add one via a site docket.</div></td></tr>';
     document.getElementById('sPoCount').textContent='0';
     document.getElementById('sOnSite').textContent='—';
     document.getElementById('sToDeliver').textContent='—';
     document.getElementById('sMatCost').textContent='$0';
     return;
   }
-  var onSiteByUnit={},toDeliverByUnit={},totalCost=0;
+  var deliveredByUnit={},toDeliverByUnit={},totalCost=0;
   rows.materials.forEach(function(r){
     var remDeliver=Math.max(0,r.ordered-r.delivered); // still to be delivered by supplier
-    var remInstall=Math.max(0,r.ordered-r.used);       // still to install against the whole order
-    var onSite=Math.max(0,r.delivered-r.used);          // delivered but not yet used
-    onSiteByUnit[r.unit]=(onSiteByUnit[r.unit]||0)+onSite;
+    deliveredByUnit[r.unit]=(deliveredByUnit[r.unit]||0)+r.delivered;
     toDeliverByUnit[r.unit]=(toDeliverByUnit[r.unit]||0)+remDeliver;
     var delCost=(r.rate||0)*r.delivered;totalCost+=delCost;
     var tag=(r.srcType==='Bill')?'bill':(r.srcType==='Docket')?'docket':(r.srcType==='Manual')?'manual':'po';
@@ -881,9 +879,7 @@ function renderMaterials(){
         '<td>'+r.sup+'</td>'+
         '<td class="num">'+fmtQty(r.ordered,r.unit)+'</td>'+
         '<td class="num">'+fmtQty(r.delivered,r.unit)+bar(r.delivered,r.ordered)+'</td>'+
-        '<td class="num">'+fmtQty(r.used,r.unit)+bar(r.used,r.ordered,'used')+'</td>'+
         '<td class="num"><span class="qty-rem '+(remDeliver===0?'zero':'deliver')+'">'+remDeliver.toLocaleString('en-AU')+'</span><span class="qty-unit">'+r.unit+'</span></td>'+
-        '<td class="num"><span class="qty-rem '+(remInstall===0?'zero':'install')+'">'+remInstall.toLocaleString('en-AU')+'</span><span class="qty-unit">'+r.unit+'</span></td>'+
         '<td class="num">'+rateCell+'</td>'+
         '<td class="num">'+costCell+'</td>'+
         '<td><span class="row-go"><i class="fa-solid fa-chevron-right"></i></span></td>'+
@@ -892,7 +888,7 @@ function renderMaterials(){
   document.getElementById('sPoCount').textContent=rows.materials.length;
   var cm=document.getElementById('cMat');if(cm)cm.textContent=rows.materials.length;
   function summarise(map){var parts=Object.keys(map).filter(function(u){return map[u]>0}).map(function(u){return map[u].toLocaleString('en-AU')+' '+u});return parts.length?parts.join(' · '):'—';}
-  document.getElementById('sOnSite').textContent=summarise(onSiteByUnit);
+  document.getElementById('sOnSite').textContent=summarise(deliveredByUnit);
   document.getElementById('sToDeliver').textContent=summarise(toDeliverByUnit);
   document.getElementById('sMatCost').textContent=money(totalCost);
 }
