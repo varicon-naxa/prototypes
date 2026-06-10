@@ -729,8 +729,88 @@ function saveByType(){
   closeByType();renderLabour();showToast(role+' ×'+cnt+' added');
 }
 
-function renderMisc(){var h='';rows.misc.forEach(function(r){h+='<div class="ecard"><div class="row1"><div class="av"><i class="fa-solid fa-tag"></i></div><div><div class="nm">'+r.nm+dktChip(r)+'</div><div class="sub">'+r.co+' · '+r.qty+'</div></div></div><div class="allocs">'+chips(r.alloc)+'</div></div>';});if(!rows.misc.length)h='<div class="empty"><i class="fa-solid fa-comment-dots"></i>No items yet</div>';document.getElementById('list-misc').innerHTML=h;}
-function renderAll(){renderLabour();renderPlant();renderMaterials();renderDeliveries();renderMisc();renderDockets();}
+function renderMisc(){
+  var h='',onLines=0,toDoLines=0,totalCost=0;
+  rows.misc.forEach(function(r){
+    var remDeliver=Math.max(0,r.ordered-r.delivered);
+    if(r.delivered>0)onLines++;if(remDeliver>0)toDoLines++;
+    var dPct=Math.min(100,r.delivered/r.ordered*100);
+    var tag=(r.srcType==='Bill')?'bill':(r.srcType==='Docket')?'docket':(r.srcType==='Manual')?'manual':'po';
+    var delCost=(r.rate||0)*r.delivered;totalCost+=delCost;
+    var rateLine=r.rate?'<div class="mrem" style="border-top:1px dashed var(--border);margin-top:8px;padding-top:8px"><span style="color:var(--muted)">'+money(r.rate)+'/'+r.unit+'</span><span style="color:var(--navy);font-weight:700">Delivered cost '+money(delCost)+'</span></div>':'';
+    h+='<div class="ecard" onclick="editMisc(\''+r.id+'\')" style="cursor:pointer">'+
+      '<div class="row1"><div class="av"><i class="fa-solid fa-tag"></i></div>'+
+      '<div><div class="nm">'+r.nm+'</div><div class="sub"><span style="font-family:monospace">'+r.src+'</span> <span class="src-tag '+tag+'">'+(r.srcType||'PO')+'</span> · '+r.sup+'</div></div>'+
+      '<div class="hrs"><div class="big">'+fmtQty(r.delivered,r.unit)+'</div><div class="lbl">delivered</div></div></div>'+
+      '<div class="mqty">'+
+        '<div><span>'+fmtQty(r.ordered,r.unit)+'</span><label>Ordered</label></div>'+
+        '<div><span>'+fmtQty(r.delivered,r.unit)+'</span><label>Delivered</label></div>'+
+        '<div><span>'+fmtQty(remDeliver,r.unit)+'</span><label>To deliver</label></div></div>'+
+      '<div class="mbar"><i style="width:'+dPct+'%"></i></div>'+
+      '<div class="mrem"><span class="'+(remDeliver?'deliver':'zero')+'">To deliver '+fmtQty(remDeliver,r.unit)+'</span></div>'+
+      rateLine+
+      '</div>';
+  });
+  if(!rows.misc.length)h='<div class="empty"><i class="fa-solid fa-comment-dots"></i>No misc lines yet. Add one via a site docket.</div>';
+  document.getElementById('list-misc').innerHTML=h;
+  document.getElementById('sMiscCount').textContent=rows.misc.length;
+  document.getElementById('sMiscDone').textContent=onLines;
+  document.getElementById('sMiscToDo').textContent=toDoLines;
+}
+function renderMiscEntries(){
+  var b=document.getElementById('list-miscentries');if(!b)return;
+  document.getElementById('sMiscEntCount').textContent=rows.miscEntries.length;
+  if(!rows.miscEntries.length){b.innerHTML='<div class="empty"><i class="fa-solid fa-clipboard-check"></i>No entries logged today yet.</div>';return;}
+  var tag2=function(t){return (t==='Bill')?'bill':(t==='Docket')?'docket':(t==='Manual')?'manual':'po';};
+  b.innerHTML=rows.miscEntries.map(function(dv){
+    return '<div class="dcard"><span class="dt">'+dv.time+'</span>'+
+      '<div><div class="nm" style="font-weight:600;color:var(--navy)">'+dv.mat+'</div>'+
+      '<div class="sub" style="color:var(--muted);font-size:12px"><span style="font-family:monospace">'+dv.src+'</span> <span class="src-tag '+tag2(dv.srcType)+'">'+(dv.srcType||'PO')+'</span> · '+dv.sup+'</div></div>'+
+      '<span class="dq">+'+(+dv.qty).toLocaleString('en-AU')+' '+dv.unit+'</span></div>';
+  }).join('');
+}
+/* tap a misc line to edit (mirrors editMaterial) */
+var MISC_EDIT=null;
+function editMisc(id){
+  var r=rows.misc.filter(function(x){return x.id===id})[0];if(!r)return;
+  MISC_EDIT=id;
+  document.getElementById('mxSub').textContent=r.src+' · '+r.sup;
+  document.getElementById('mxType').value=r.srcType||'PO';
+  document.getElementById('mxSrc').value=r.src;
+  document.getElementById('mxName').value=r.nm;
+  document.getElementById('mxSup').value=r.sup;
+  document.getElementById('mxUnit').value=r.unit;
+  document.getElementById('mxRate').value=r.rate||0;
+  document.getElementById('mxOrdered').value=r.ordered;
+  document.getElementById('mxDelivered').value=r.delivered;
+  mxSyncType();mxPreview();
+  document.getElementById('mxScrim').classList.add('show');document.getElementById('mxSheet').classList.add('show');
+}
+function closeMiscEdit(){MISC_EDIT=null;document.getElementById('mxScrim').classList.remove('show');document.getElementById('mxSheet').classList.remove('show');}
+function mxSyncType(){var t=document.getElementById('mxType').value;document.getElementById('mxOrderedLbl').textContent=(t==='Bill')?'Billed':(t==='Docket')?'Docket qty':'Order qty';mxPreview();}
+function mxPreview(){
+  var o=parseFloat(document.getElementById('mxOrdered').value)||0,d=parseFloat(document.getElementById('mxDelivered').value)||0,rate=parseFloat(document.getElementById('mxRate').value)||0,unit=document.getElementById('mxUnit').value||'';
+  var toDeliver=Math.max(0,o-d);
+  var warn='';if(d>o)warn=' · <span style="color:#dc2626">delivered &gt; order</span>';
+  document.querySelector('#mxPreview div').innerHTML='To deliver <b>'+toDeliver.toLocaleString('en-AU')+' '+unit+'</b><br>Delivered cost <b>'+money(rate*d)+'</b> ('+money(rate)+'/'+(unit||'unit')+' × '+d.toLocaleString('en-AU')+')'+warn;
+}
+function saveMiscEdit(){
+  if(!MISC_EDIT)return;var r=rows.misc.filter(function(x){return x.id===MISC_EDIT})[0];if(!r)return;
+  r.srcType=document.getElementById('mxType').value;
+  r.src=document.getElementById('mxSrc').value||r.id;
+  r.nm=document.getElementById('mxName').value||r.nm;
+  r.sup=document.getElementById('mxSup').value||'—';
+  r.unit=document.getElementById('mxUnit').value||'';
+  r.rate=parseFloat(document.getElementById('mxRate').value)||0;
+  r.ordered=parseFloat(document.getElementById('mxOrdered').value)||0;
+  r.delivered=parseFloat(document.getElementById('mxDelivered').value)||0;
+  closeMiscEdit();renderMisc();showToast(r.nm+' updated');
+}
+function deleteMisc(){
+  if(!MISC_EDIT)return;rows.misc=rows.misc.filter(function(x){return x.id!==MISC_EDIT});
+  closeMiscEdit();renderMisc();showToast('Misc line removed');
+}
+function renderAll(){renderLabour();renderPlant();renderMaterials();renderDeliveries();renderMisc();renderMiscEntries();renderDockets();}
 
 function setMode(m){
   MODE=m;
