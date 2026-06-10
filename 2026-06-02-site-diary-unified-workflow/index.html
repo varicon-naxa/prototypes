@@ -1158,12 +1158,107 @@ function saveByType(){
 }
 
 function renderMisc(){
-  var b=document.getElementById('tbody-misc');b.innerHTML='';
+  var b=document.getElementById('tbody-misc');if(!b)return;
+  if(!rows.misc.length){
+    b.innerHTML='<tr><td colspan="8"><div class="empty"><i class="fa-solid fa-comment-dots"></i>No misc lines yet. Add one via a site docket.</div></td></tr>';
+    document.getElementById('sMiscCount').textContent='0';document.getElementById('sMiscDone').textContent='—';
+    document.getElementById('sMiscToDo').textContent='—';document.getElementById('sMiscCost').textContent='$0';return;
+  }
+  var doneByUnit={},toDoByUnit={},totalCost=0;
+  b.innerHTML='';
   rows.misc.forEach(function(r){
-    b.innerHTML+='<tr><td><b style="color:var(--navy)">'+r.nm+'</b>'+dktChip(r)+'</td><td>'+r.co+'</td><td>'+r.qty+'</td><td>'+r.dur+'</td><td>'+allocChips(r.alloc)+'</td><td><span class="row-act"><i class="fa-solid fa-pen"></i></span></td></tr>';
+    var remDeliver=Math.max(0,r.ordered-r.delivered);
+    doneByUnit[r.unit]=(doneByUnit[r.unit]||0)+r.delivered;
+    toDoByUnit[r.unit]=(toDoByUnit[r.unit]||0)+remDeliver;
+    var delCost=(r.rate||0)*r.delivered;totalCost+=delCost;
+    var tag=(r.srcType==='Bill')?'bill':(r.srcType==='Docket')?'docket':(r.srcType==='Manual')?'manual':'po';
+    var rateCell=r.rate?money(r.rate)+'<span class="qty-unit">/'+r.unit+'</span>':'<span style="color:var(--muted)">—</span>';
+    var costCell=r.rate?'<b style="color:var(--navy)">'+money(delCost)+'</b>':'<span style="color:var(--muted)">—</span>';
+    b.innerHTML+=
+      '<tr onclick="editMisc(\''+r.id+'\')" title="Click to edit this misc line">'+
+        '<td><div class="po-cell"><span class="po-num">'+r.src+' <span class="src-tag '+tag+'">'+(r.srcType||'PO')+'</span></span><span class="po-mat">'+r.nm+'</span></div></td>'+
+        '<td>'+r.sup+'</td>'+
+        '<td class="num">'+fmtQty(r.ordered,r.unit)+'</td>'+
+        '<td class="num">'+fmtQty(r.delivered,r.unit)+bar(r.delivered,r.ordered)+'</td>'+
+        '<td class="num"><span class="qty-rem '+(remDeliver===0?'zero':'deliver')+'">'+remDeliver.toLocaleString('en-AU')+'</span><span class="qty-unit">'+r.unit+'</span></td>'+
+        '<td class="num">'+rateCell+'</td>'+
+        '<td class="num">'+costCell+'</td>'+
+        '<td><span class="row-go"><i class="fa-solid fa-chevron-right"></i></span></td>'+
+      '</tr>';
+  });
+  document.getElementById('sMiscCount').textContent=rows.misc.length;
+  var cx=document.getElementById('cMisc');if(cx)cx.textContent=rows.misc.length;
+  function summarise(map){var parts=Object.keys(map).filter(function(u){return map[u]>0}).map(function(u){return map[u].toLocaleString('en-AU')+' '+u});return parts.length?parts.join(' · '):'—';}
+  document.getElementById('sMiscDone').textContent=summarise(doneByUnit);
+  document.getElementById('sMiscToDo').textContent=summarise(toDoByUnit);
+  document.getElementById('sMiscCost').textContent=money(totalCost);
+}
+function renderMiscEntries(){
+  var b=document.getElementById('tbody-miscentries');if(!b)return;
+  document.getElementById('sMiscEntCount').textContent=rows.miscEntries.length;
+  if(!rows.miscEntries.length){b.innerHTML='<tr><td colspan="5"><div class="empty"><i class="fa-solid fa-clipboard-check"></i>No entries logged today yet.</div></td></tr>';return;}
+  b.innerHTML='';
+  rows.miscEntries.forEach(function(dv){
+    var tag=(dv.srcType==='Bill')?'bill':(dv.srcType==='Docket')?'docket':(dv.srcType==='Manual')?'manual':'po';
+    b.innerHTML+='<tr>'+
+      '<td><span style="font-family:monospace;color:var(--muted)">'+dv.time+'</span></td>'+
+      '<td><b style="color:var(--navy)">'+dv.mat+'</b></td>'+
+      '<td><span style="font-family:monospace;font-size:12px">'+dv.src+'</span> <span class="src-tag '+tag+'">'+(dv.srcType||'PO')+'</span></td>'+
+      '<td>'+dv.sup+'</td>'+
+      '<td class="num deliv-today">+'+(+dv.qty).toLocaleString('en-AU')+' '+dv.unit+'</td>'+
+    '</tr>';
   });
 }
-function renderAll(){renderLabour();renderPlant();renderMaterials();renderDeliveries();renderMisc();renderDockets();}
+
+/* ---- Edit a misc line directly (mirrors editMaterial) ---- */
+var MISC_EDIT=null;
+function editMisc(id){
+  var r=rows.misc.filter(function(x){return x.id===id})[0];if(!r)return;
+  MISC_EDIT=id;
+  document.getElementById('mxSub').textContent=r.src+' · '+r.sup;
+  document.getElementById('mxType').value=r.srcType||'PO';
+  document.getElementById('mxSrc').value=r.src;
+  document.getElementById('mxName').value=r.nm;
+  document.getElementById('mxSup').value=r.sup;
+  document.getElementById('mxUnit').value=r.unit;
+  document.getElementById('mxRate').value=r.rate||0;
+  document.getElementById('mxOrdered').value=r.ordered;
+  document.getElementById('mxDelivered').value=r.delivered;
+  mxSyncType();mxPreview();
+  document.getElementById('mxScrim').classList.add('show');
+  document.getElementById('mxDrawer').classList.add('show');
+}
+function closeMiscEdit(){MISC_EDIT=null;document.getElementById('mxScrim').classList.remove('show');document.getElementById('mxDrawer').classList.remove('show');}
+function mxSyncType(){
+  var t=document.getElementById('mxType').value;
+  document.getElementById('mxOrderedLbl').textContent=(t==='Bill')?'Billed qty':(t==='Docket')?'Docket qty':'Order qty';
+  mxPreview();
+}
+function mxPreview(){
+  var o=parseFloat(document.getElementById('mxOrdered').value)||0,d=parseFloat(document.getElementById('mxDelivered').value)||0,rate=parseFloat(document.getElementById('mxRate').value)||0,unit=document.getElementById('mxUnit').value||'';
+  var toDeliver=Math.max(0,o-d);
+  var warn='';if(d>o)warn=' <span style="color:#dc2626">· delivered exceeds order</span>';
+  document.querySelector('#mxPreview div').innerHTML='To deliver <b>'+toDeliver.toLocaleString('en-AU')+' '+unit+'</b><br>Delivered cost <b>'+money(rate*d)+'</b> ('+money(rate)+'/'+(unit||'unit')+' × '+d.toLocaleString('en-AU')+')'+warn;
+}
+function saveMiscEdit(){
+  if(!MISC_EDIT)return;
+  var r=rows.misc.filter(function(x){return x.id===MISC_EDIT})[0];if(!r)return;
+  r.srcType=document.getElementById('mxType').value;
+  r.src=document.getElementById('mxSrc').value||r.id;
+  r.nm=document.getElementById('mxName').value||r.nm;
+  r.sup=document.getElementById('mxSup').value||'—';
+  r.unit=document.getElementById('mxUnit').value||'';
+  r.rate=parseFloat(document.getElementById('mxRate').value)||0;
+  r.ordered=parseFloat(document.getElementById('mxOrdered').value)||0;
+  r.delivered=parseFloat(document.getElementById('mxDelivered').value)||0;
+  closeMiscEdit();renderMisc();toast(r.nm+' updated');
+}
+function deleteMisc(){
+  if(!MISC_EDIT)return;
+  rows.misc=rows.misc.filter(function(x){return x.id!==MISC_EDIT});
+  closeMiscEdit();renderMisc();toast('Misc line removed');
+}
+function renderAll(){renderLabour();renderPlant();renderMaterials();renderDeliveries();renderMisc();renderMiscEntries();renderDockets();}
 
 /* ---------------- PANELS ---------------- */
 function showPanel(id,el){
