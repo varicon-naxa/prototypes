@@ -1331,35 +1331,97 @@
       document.getElementById('wfWbs').classList.toggle('locked', workflow === 'cc' && allocs.length > 0);
       document.getElementById('wfCc').classList.toggle('locked', workflow === 'wbs' && allocs.length > 0);
 
-      mirrorEquipment();
       updateSummary();
     }
 
-    /* ──────────── Equipment mirrors allocation ──────────── */
-    function mirrorEquipment() {
-      const note = document.getElementById('autoEquipNote');
-      const noteText = document.getElementById('autoEquipNoteText');
-      const summary = allocs.length
-        ? `Plant auto-assigned from your ${workflow === 'wbs' ? 'WBS' : 'cost centre'} allocation.`
-        : (workflow ? 'Allocate your time to auto-assign plant.' : 'Pick a workflow to auto-assign plant.');
-      noteText.textContent = summary;
-      note.style.display = workflow ? 'flex' : 'none';
+    /* ──────────── Equipment (manual add) ──────────── */
+    function onEquipPick() {
+      const sel = document.getElementById('equipSelect');
+      const opt = sel.options[sel.selectedIndex];
+      document.getElementById('equipSupplier').value = opt && opt.dataset && opt.dataset.supplier ? opt.dataset.supplier : '';
+    }
+    function addEquipment() {
+      if (!workflow) { showToast('Pick a workflow first'); return; }
+      const sel = document.getElementById('equipSelect');
+      const label = sel.value;
+      if (!label) { showToast('Select equipment'); return; }
+      const task = document.getElementById('equipTask').value;
+      if (!task) { showToast(`Select a ${workflow === 'wbs' ? 'WBS task' : 'cost centre'}`); return; }
+      const h = parseInt(document.getElementById('equipHour').value, 10) || 0;
+      const m = parseInt(document.getElementById('equipMin').value, 10) || 0;
+      const min = h * 60 + m;
+      if (min <= 0) { showToast('Enter a duration'); return; }
+      const supplier = document.getElementById('equipSupplier').value || '—';
+      equipment.push({ label, supplier, task, min });
+      // reset add row
+      sel.value = '';
+      document.getElementById('equipSupplier').value = '';
+      document.getElementById('equipTask').value = '';
+      document.getElementById('equipHour').value = '0';
+      document.getElementById('equipMin').value = '0';
+      renderEquipTable();
+      updateSummary();
+      showToast('Equipment added');
+    }
+    function removeEquipment(i) {
+      equipment.splice(i, 1);
+      renderEquipTable();
+      updateSummary();
+    }
+    function renderEquipTable() {
+      const t = document.getElementById('equipTable');
+      const body = document.getElementById('equipBody');
+      if (!equipment.length) { t.style.display = 'none'; body.innerHTML = ''; return; }
+      t.style.display = 'table';
+      body.innerHTML = equipment.map((e, i) => `
+        <tr>
+          <td>${e.label}</td>
+          <td>${e.supplier}</td>
+          <td>${e.task}</td>
+          <td><strong>${fmt(e.min)}</strong></td>
+          <td class="col-act"><button class="row-remove" onclick="removeEquipment(${i})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></td>
+        </tr>`).join('');
+    }
 
-      ['DOZ001', 'EXC014'].forEach(code => {
-        const allocEl = document.getElementById('equipAlloc-' + code);
-        const durEl = document.getElementById('equipDur-' + code);
-        if (!allocEl) return;
-        if (!allocs.length) {
-          allocEl.innerHTML = '<span style="color:var(--muted);">—</span>';
-          durEl.innerHTML = '<span style="color:var(--muted);">—</span>';
-        } else if (allocs.length === 1) {
-          allocEl.innerHTML = allocs[0].label;
-          durEl.innerHTML = `<strong>${fmt(allocs[0].min)}</strong>`;
-        } else {
-          allocEl.innerHTML = allocs.map(a => a.label.split(' — ')[0]).join(', ') + ` <span style="color:var(--muted);">(${allocs.length} splits)</span>`;
-          durEl.innerHTML = `<strong>${fmt(allocated())}</strong>`;
-        }
-      });
+    /* ──────────── Allowance ──────────── */
+    function addAllowance() {
+      if (!workflow) { showToast('Pick a workflow first'); return; }
+      const type = document.getElementById('allowType').value;
+      if (!type) { showToast('Select an allowance type'); return; }
+      const totalRaw = (document.getElementById('allowTotal').value || '').replace(/[^0-9.]/g, '');
+      const total = parseFloat(totalRaw);
+      if (!total || total <= 0) { showToast('Enter a total amount'); return; }
+      const task = document.getElementById('allowTask').value;
+      if (!task) { showToast(`Select a ${workflow === 'wbs' ? 'WBS task' : 'cost centre'}`); return; }
+      const note = document.getElementById('allowNote').value;
+      allowances.push({ type, total, task, note });
+      // reset add row
+      document.getElementById('allowType').value = '';
+      document.getElementById('allowTotal').value = '';
+      document.getElementById('allowTask').value = '';
+      document.getElementById('allowNote').value = '';
+      renderAllowTable();
+      updateSummary();
+      showToast('Allowance added');
+    }
+    function removeAllowance(i) {
+      allowances.splice(i, 1);
+      renderAllowTable();
+      updateSummary();
+    }
+    function renderAllowTable() {
+      const t = document.getElementById('allowTable');
+      const body = document.getElementById('allowBody');
+      if (!allowances.length) { t.style.display = 'none'; body.innerHTML = ''; return; }
+      t.style.display = 'table';
+      body.innerHTML = allowances.map((a, i) => `
+        <tr>
+          <td>${a.type}</td>
+          <td><strong>$${a.total.toFixed(2)}</strong></td>
+          <td>${a.task}</td>
+          <td>${a.note || '<span style="color:var(--muted);">—</span>'}</td>
+          <td class="col-act"><button class="row-remove" onclick="removeAllowance(${i})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></td>
+        </tr>`).join('');
     }
 
     /* ──────────── Summary rail ──────────── */
