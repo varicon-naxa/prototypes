@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon Mobile — Scan Quote → PO</title>
+<!--
+  MOBILE PROTOTYPE: tapping the + (FAB) on the Purchase Order list now offers
+  two paths — "Enter manually" (the existing Add PO form) or "Scan a quote"
+  (upload/photograph a supplier quote → we OCR it → pre-filled PO to review).
+  Coding fields (category, accounting code, cost centre/task) are chosen by the
+  person; only what's on the quote is read by the scanner.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #2b2f36; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 20px; }
+
+  /* Phone frame */
+  .phone { width: 390px; height: 844px; background: #fff; border-radius: 38px; overflow: hidden; position: relative; box-shadow: 0 12px 50px rgba(0,0,0,0.5); border: 10px solid #0e0e12; }
+  .statusbar { height: 30px; background: #294a72; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+  .statusbar.light { background: #fff; color: #294a72; }
+  .statusbar .sb-right { letter-spacing: 2px; }
+
+  .screen { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  /* Headers */
+  .hdr { display: flex; align-items: center; gap: 14px; padding: 14px 18px; flex-shrink: 0; }
+  .hdr-dark { background: #294a72; color: #fff; }
+  .hdr-light { background: #fff; color: #1f3a5f; border-bottom: 1px solid #eee; }
+  .hdr .back { font-size: 22px; cursor: pointer; line-height: 1; }
+  .hdr h1 { font-size: 21px; font-weight: 700; flex: 1; }
+  .hdr .srch { font-size: 18px; cursor: pointer; }
+
+  .body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .body.pad { padding: 18px; }
+
+  /* ===== LIST ===== */
+  .proj-name { color: #1f3a5f; font-size: 19px; font-weight: 700; padding: 16px 18px 12px; }
+  .filter-row { display: flex; gap: 12px; padding: 0 18px 14px; }
+  .filter-pill { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #cfd6e0; border-radius: 8px; padding: 9px 14px; font-size: 14px; color: #46566e; font-weight: 600; background: #fff; }
+  .tabs { display: flex; gap: 10px; padding: 0 18px 14px; overflow-x: auto; }
+  .tab { white-space: nowrap; padding: 9px 16px; border-radius: 18px; font-size: 14px; font-weight: 600; background: #e9edf2; color: #5a6b80; }
+  .tab.active { background: #1f3a5f; color: #fff; }
+
+  .po-card { background: #fff; border-top: 1px solid #eef1f5; padding: 16px 18px; position: relative; }
+  .po-card .pc-top { display: flex; align-items: center; gap: 10px; }
+  .po-card .truck { color: #46566e; font-size: 17px; }
+  .po-card .pc-supplier { font-size: 17px; font-weight: 600; color: #2a2a2a; flex: 1; }
+  .po-card .scan-badge { width: 34px; height: 34px; border-radius: 9px; box-shadow: 0 1px 5px rgba(0,0,0,0.12); display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  .po-card .pc-meta { font-size: 13px; color: #8a93a0; margin: 8px 0 12px; }
+  .po-card .pc-bot { display: flex; align-items: center; justify-content: space-between; }
+  .pill-status { font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 7px; }
+  .pill-approved { background: #e6f4ea; color: #2e7d32; }
+  .pill-await { background: #fff3e0; color: #e8850f; }
+  .po-card .pc-amt { font-size: 19px; font-weight: 600; color: #2a2a2a; }
+
+  /* FAB */
+  .fab { position: absolute; right: 20px; bottom: 24px; width: 60px; height: 60px; border-radius: 50%; background: #f7a01d; border: none; color: #fff; font-size: 34px; cursor: pointer; box-shadow: 0 6px 18px rgba(247,160,29,0.5); display: flex; align-items: center; justify-content: center; z-index: 20; }
+  .fab:active { transform: scale(0.95); }
+
+  /* ===== BOTTOM SHEET ===== */
+  .sheet-overlay { display: none; position: absolute; inset: 0; background: rgba(20,25,40,0.5); z-index: 40; align-items: flex-end; }
+  .sheet-overlay.open { display: flex; }
+  .sheet { width: 100%; background: #fff; border-radius: 22px 22px 0 0; padding: 10px 18px 22px; animation: sheetUp 0.25s ease; }
+  @keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .sheet-handle { width: 44px; height: 5px; border-radius: 3px; background: #d6dae1; margin: 6px auto 14px; }
+  .sheet-title { font-size: 17px; font-weight: 700; color: #1f3a5f; margin-bottom: 14px; }
+  .sheet-opt { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; background: #fff; border: 1.5px solid #e6e9ef; border-radius: 14px; padding: 16px; margin-bottom: 12px; cursor: pointer; }
+  .sheet-opt:active { background: #f7f8fa; }
+  .sheet-opt .opt-ic { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .sheet-opt.manual .opt-ic { background: #eef1f6; color: #46566e; }
+  .sheet-opt.scan .opt-ic { background: linear-gradient(135deg, #2b3a67, #1a1a2e); color: #fff; }
+  .sheet-opt .opt-t { font-size: 16px; font-weight: 700; color: #222; display: flex; align-items: center; gap: 8px; }
+  .sheet-opt .opt-s { font-size: 13px; color: #8a93a0; margin-top: 2px; }
+  .sheet-opt .opt-arrow { margin-left: auto; color: #c2c8d2; font-size: 22px; }
+  .ai { font-size: 10px; font-weight: 700; background: #f1e6ff; color: #7a3df0; padding: 2px 7px; border-radius: 9px; }
+  .sheet-cancel { width: 100%; padding: 14px; border: none; background: #f0f2f5; border-radius: 12px; font-size: 15px; font-weight: 700; color: #5a6b80; cursor: pointer; margin-top: 2px; }
+
+  /* Scan upload sheet */
+  .scan-drop { border: 2px dashed #c9c9d6; border-radius: 14px; padding: 28px 18px; text-align: center; background: #fafafe; margin-bottom: 12px; cursor: pointer; }
+  .scan-drop .big { width: 52px; height: 52px; border-radius: 50%; background: #ecedf5; display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto 10px; }
+  .scan-drop h4 { font-size: 15px; color: #333; margin-bottom: 3px; }
+  .scan-drop p { font-size: 12px; color: #999; }
+  .scan-alt { display: flex; gap: 10px; }
+  .scan-alt button { flex: 1; padding: 13px; border: 1.5px solid #e6e9ef; border-radius: 12px; background: #fff; font-size: 13px; font-weight: 700; color: #46566e; cursor: pointer; }
+  .sample { text-align: center; font-size: 12px; color: #8a93a0; margin-top: 14px; }
+  .sample a { color: #f7941d; font-weight: 700; }
+
+  /* ===== SCANNING ===== */
+  .scanning { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; }
+  .doc { width: 130px; height: 168px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.12); position: relative; overflow: hidden; padding: 14px 12px; margin-bottom: 26px; }
+  .doc .ln { height: 6px; background: #e6e6ee; border-radius: 3px; margin-bottom: 8px; }
+  .doc .ln.t { height: 9px; width: 60%; background: #cdd0e0; margin-bottom: 12px; }
+  .doc .ln.s { width: 50%; } .doc .ln.m { width: 75%; }
+  .laser { position: absolute; left: 0; right: 0; height: 30px; background: linear-gradient(180deg, rgba(247,148,29,0) 0%, rgba(247,148,29,0.35) 100%); border-bottom: 2px solid #f7941d; animation: lz 1.4s ease-in-out infinite; }
+  @keyframes lz { 0%{top:-30px} 100%{top:168px} }
+  .scanning h3 { font-size: 17px; font-weight: 700; color: #1f3a5f; margin-bottom: 18px; }
+  .ssteps { list-style: none; width: 100%; max-width: 280px; }
+  .ssteps li { display: flex; align-items: center; gap: 11px; font-size: 14px; color: #aaa; padding: 7px 0; }
+  .ssteps li .d { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #ddd; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+  .ssteps li.done { color: #2e7d32; } .ssteps li.done .d { background: #4caf50; border-color: #4caf50; color: #fff; }
+  .ssteps li.active { color: #333; font-weight: 600; } .ssteps li.active .d { border-color: #f7941d; border-top-color: transparent; animation: sp 0.7s linear infinite; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+
+  /* ===== FORMS (manual + review) ===== */
+  .fld-l { font-size: 12px; font-weight: 600; color: #8a93a0; margin: 0 0 5px; display: block; }
+  .ipt, .sel { width: 100%; padding: 14px; border: 1px solid #cfd6e0; border-radius: 8px; font-size: 15px; background: #fff; color: #2a2a2a; margin-bottom: 16px; appearance: none; }
+  .sel { background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23667' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; }
+  .ipt::placeholder { color: #aab2bd; }
+  .show-more { color: #f7941d; font-size: 15px; font-weight: 700; padding: 6px 0 20px; cursor: pointer; }
+  .di-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .di-head h3 { font-size: 17px; font-weight: 700; color: #1f3a5f; }
+  .gst-pill { display: inline-flex; align-items: center; gap: 6px; background: #eef1f5; border-radius: 18px; padding: 8px 14px; font-size: 14px; font-weight: 600; color: #46566e; }
+  .add-di { border: 2px dashed #cfd6e0; border-radius: 10px; padding: 18px; text-align: center; color: #6a7889; font-size: 15px; font-weight: 600; margin-bottom: 22px; }
+
+  /* required (project/title) */
+  .req .ipt, .req .sel { border-color: #f7941d; background: #fff8f0; }
+  .req-tag { float: right; font-size: 10px; font-weight: 700; color: #b06b00; background: #fdecc8; padding: 2px 8px; border-radius: 8px; }
+
+  /* review banner + tip */
+  .rv-banner { display: flex; gap: 11px; background: #f0f7ff; border: 1px solid #b9d8ff; border-radius: 12px; padding: 13px; margin-bottom: 16px; }
+  .rv-banner .ic { width: 32px; height: 32px; border-radius: 50%; background: #1a73e8; color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; }
+  .rv-banner .tx { font-size: 12.5px; color: #33445c; line-height: 1.45; }
+  .rv-banner .tx strong { color: #1f3a5f; }
+  .tip { display: flex; gap: 9px; background: #fff8e6; border: 1px solid #f0d98c; border-radius: 12px; padding: 12px; margin-bottom: 18px; font-size: 12.5px; color: #7a5b00; line-height: 1.5; }
+  .tip a { color: #b06b00; font-weight: 700; white-space: nowrap; }
+
+  .track-by { background: #fff; border: 1px solid #e6e9ef; border-radius: 12px; padding: 14px; margin-bottom: 16px; }
+  .track-by .tb-l { font-size: 13px; font-weight: 700; color: #333; margin-bottom: 10px; }
+  .seg { display: flex; border: 2px solid #1f3a5f; border-radius: 9px; overflow: hidden; }
+  .seg-btn { flex: 1; padding: 10px; border: none; background: #fff; font-size: 14px; font-weight: 700; color: #8a93a0; cursor: pointer; }
+  .seg-btn.active { background: #1f3a5f; color: #fff; }
+  .tb-hint { font-size: 12px; color: #8a93a0; margin-top: 9px; }
+
+  /* line-item cards */
+  .li-card { border: 1px solid #e6e9ef; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+  .li-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .li-name { font-size: 15px; font-weight: 600; color: #222; }
+  .li-amt { font-size: 15px; font-weight: 700; color: #222; white-space: nowrap; }
+  .li-meta { font-size: 12.5px; color: #8a93a0; margin: 3px 0 12px; }
+  .li-read { font-size: 10px; font-weight: 700; color: #2e7d32; background: #e8f5e9; padding: 1px 7px; border-radius: 8px; margin-left: 6px; }
+  .li-card .fld-l { margin-top: 2px; }
+  .li-card .sel { margin-bottom: 12px; }
+  .li-card .sel.manual { border-color: #f7941d; background: #fff8f0; color: #b06b00; font-weight: 600; }
+  .li-card .sel.manual option { color: #333; font-weight: 400; }
+  .li-card .sel.resolved { border-color: #4caf50; background: #f5fff5; color: #333; font-weight: 400; }
+  .li-card .sel:last-child { margin-bottom: 0; }
+
+  .totals { padding: 6px 2px 4px; }
+  .totals .r { display: flex; justify-content: space-between; font-size: 14px; padding: 4px 0; color: #5a6b80; }
+  .totals .r.tot { font-size: 18px; font-weight: 700; color: #1f3a5f; border-top: 1px solid #e6e9ef; margin-top: 6px; padding-top: 10px; }
+
+  /* bottom action bar */
+  .actionbar { display: flex; gap: 12px; padding: 14px 18px; border-top: 1px solid #eee; background: #fff; flex-shrink: 0; }
+  .btn-draft { flex: 1; padding: 15px; border: 1.5px solid #1f3a5f; border-radius: 10px; background: #fff; color: #1f3a5f; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .btn-submit { flex: 1.3; padding: 15px; border: none; border-radius: 10px; background: #f7a01d; color: #1a1a1a; font-size: 15px; font-weight: 700; cursor: pointer; }
+
+  .navbar { height: 36px; background: #0e0e12; display: flex; align-items: center; justify-content: space-around; color: #cfcfcf; font-size: 16px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- ===================== LIST ===================== -->
+  <div class="screen active" id="scrList">
+    <div class="statusbar"><span>11:32</span><span class="sb-right">▮▮▮ 70</span></div>
+    <div class="hdr hdr-dark"><span class="back">←</span><h1>Purchase Order</h1><span class="srch">🔍</span></div>
+    <div class="body">
+      <div class="proj-name">Residential House Foundation</div>
+      <div class="filter-row">
+        <span class="filter-pill">📅 Date ▾</span>
+        <span class="filter-pill">🚚 Supplier ▾</span>
+      </div>
+      <div class="tabs">
+        <span class="tab active">All (4)</span>
+        <span class="tab">Draft (0)</span>
+        <span class="tab">Awaiting Approval (1)</span>
+        <span class="tab">Approved (3)</span>
+      </div>
+
+      <div class="po-card">
+        <div class="pc-top"><span class="truck">🚚</span><span class="pc-supplier">ABC construction supplier</span><span class="scan-badge">📄</span></div>
+        <div class="pc-meta">#(PO-VAR011-0004) Test • Ordered on Wed, 13-05</div>
+        <div class="pc-bot"><span class="pill-status pill-approved">Approved</span><span class="pc-amt">$ 20.00</span></div>
+      </div>
+      <div class="po-card">
+        <div class="pc-top"><span class="truck">🚚</span><span class="pc-supplier">Accurate Group</span><span class="scan-badge">📄</span></div>
+        <div class="pc-meta">#PO-VAR011-0003 • Ordered on Wed, 25-03</div>
+        <div class="pc-bot"><span class="pill-status pill-approved">Approved</span><span class="pc-amt">$ 2,000.00</span></div>
+      </div>
+      <div class="po-card">
+        <div class="pc-top"><span class="truck">🚚</span><span class="pc-supplier">Accurate Group</span><span class="scan-badge">📄</span></div>
+        <div class="pc-meta">#(PO-VAR011-0002) Labour hire • Ordered on Wed, 25-03</div>
+        <div class="pc-bot"><span class="pill-status pill-approved">Approved</span><span class="pc-amt">$ 2,000.00</span></div>
+      </div>
+      <div class="po-card">
+        <div class="pc-top"><span class="truck">🚚</span><span class="pc-supplier">A1 Asphalting Pty. Ltd.</span><span class="scan-badge">📄</span></div>
+        <div class="pc-meta">#PO-VAR011-0001 • Ordered on Wed, 26-11</div>
+        <div class="pc-bot"><span class="pill-status pill-await">Awaiting Approval</span><span class="pc-amt">$ 5,600.00</span></div>
+      </div>
+      <div style="height:90px"></div>
+    </div>
+    <button class="fab" onclick="openSheet('addSheet')">+</button>
+    <div class="navbar"><span>|||</span><span>○</span><span>‹</span></div>
+  </div>
+
+  <!-- ===================== MANUAL ADD PO ===================== -->
+  <div class="screen" id="scrManual">
+    <div class="statusbar light"><span>11:32</span><span class="sb-right">▮▮▮ 70</span></div>
+    <div class="hdr hdr-light"><span class="back" onclick="showScr('scrList')">←</span><h1>Add Purchase Order</h1></div>
+    <div class="body pad">
+      <div class="proj-name" style="padding:0 0 14px">Residential House Foundation</div>
+      <label class="fld-l">&nbsp;</label>
+      <select class="sel"><option>Supplier *</option><option>Boral</option><option>Accurate Group</option><option>A1 Asphalting Pty. Ltd.</option></select>
+      <label class="fld-l">PO Number</label>
+      <input class="ipt" value="PO-VAR011-0005" readonly>
+      <input class="ipt" placeholder="PO Title">
+      <div class="show-more">SHOW ADDITIONAL FIELDS ▾</div>
+      <div class="di-head"><h3>Delivery Items</h3><span class="gst-pill">GST - Exclusive ▾</span></div>
+      <div class="add-di">＋ ADD DELIVERY ITEMS</div>
+      <h3 style="font-size:17px;font-weight:700;color:#1f3a5f;margin-bottom:14px;">Additional Information</h3>
+      <label class="fld-l">Address</label>
+      <input class="ipt" placeholder="Address">
+    </div>
+    <div class="actionbar"><button class="btn-draft" onclick="showScr('scrList')">Save as draft</button><button class="btn-submit" onclick="submitPO()">Submit</button></div>
+    <div class="navbar"><span>|||</span><span>○</span><span>‹</span></div>
+  </div>
+
+  <!-- ===================== SCANNING ===================== -->
+  <div class="screen" id="scrScanning">
+    <div class="statusbar light"><span>11:32</span><span class="sb-right">▮▮▮ 70</span></div>
+    <div class="hdr hdr-light"><span class="back" onclick="showScr('scrList')">←</span><h1>Scan a Quote</h1></div>
+    <div class="scanning">
+      <div class="doc">
+        <div class="ln t"></div><div class="ln"></div><div class="ln m"></div><div class="ln s"></div>
+        <div class="ln"></div><div class="ln m"></div><div class="ln s"></div>
+        <div class="laser"></div>
+      </div>
+      <h3>Reading your quote…</h3>
+      <ul class="ssteps">
+        <li id="m1"><span class="d"></span> Detecting document &amp; text</li>
+        <li id="m2"><span class="d"></span> Identifying the supplier</li>
+        <li id="m3"><span class="d"></span> Extracting line items &amp; pricing</li>
+        <li id="m4"><span class="d"></span> Matching to your accounting codes</li>
+      </ul>
+    </div>
+    <div class="navbar"><span>|||</span><span>○</span><span>‹</span></div>
+  </div>
+
+  <!-- ===================== REVIEW (pre-filled) ===================== -->
+  <div class="screen" id="scrReview">
+    <div class="statusbar light"><span>11:32</span><span class="sb-right">▮▮▮ 70</span></div>
+    <div class="hdr hdr-light"><span class="back" onclick="showScr('scrList')">←</span><h1>Review PO</h1></div>
+    <div class="body pad">
+      <div class="rv-banner">
+        <div class="ic">✓</div>
+        <div class="tx">We filled this in from <strong>Boral-Quote-Q8842.pdf</strong>. Fields marked <span style="color:#2e7d32;font-weight:700;">read</span> came from the quote — the project, PO title and each line's <strong>category, code &amp; cost centre/task</strong> are yours to set.</div>
+      </div>
+
+      <label class="fld-l">Supplier <span class="li-read">read · 98%</span></label>
+      <select class="sel" style="border-color:#4caf50;background:#f5fff5;"><option>Boral</option><option>Hanson</option></select>
+
+      <div class="req">
+        <label class="fld-l">Project <span class="req-tag">Required</span></label>
+        <select class="sel"><option>Select project…</option><option>(VAR011) Residential House Foundation</option><option>(VAR004) Bourke Street Roadworks</option></select>
+      </div>
+      <div class="req">
+        <label class="fld-l">PO Title <span class="req-tag">Required</span></label>
+        <input class="ipt" placeholder="Enter a PO title…">
+      </div>
+
+      <div class="tip">
+        <span>💡</span>
+        <div>For ease of use, set default <strong>resource categories</strong> and <strong>accounting codes</strong> at the supplier level — we'll pre-fill them on every scanned quote from this supplier. <a onclick="alert('Opens Boral → Default coding settings (prototype).')">Set up Boral defaults →</a></div>
+      </div>
+
+      <div class="track-by">
+        <div class="tb-l">Track this PO by</div>
+        <div class="seg">
+          <button class="seg-btn active" id="segCC" onclick="setTrack('cc')">Cost Centre</button>
+          <button class="seg-btn" id="segWBS" onclick="setTrack('wbs')">WBS</button>
+        </div>
+        <div class="tb-hint" id="tbHint">Each line item is coded to a <strong>cost centre</strong>.</div>
+      </div>
+
+      <div class="di-head"><h3>Delivery Items</h3><span style="font-size:12px;color:#8a93a0;">4 read from quote</span></div>
+
+      <div id="liList"></div>
+
+      <div class="totals">
+        <div class="r"><span>Subtotal</span><span>$ 11,254.00</span></div>
+        <div class="r"><span>Total GST 10%</span><span>$ 1,125.40</span></div>
+        <div class="r tot"><span>Total</span><span>$ 12,379.40</span></div>
+      </div>
+      <div style="height:8px"></div>
+    </div>
+    <div class="actionbar"><button class="btn-draft" onclick="showScr('scrList')">Save draft</button><button class="btn-submit" onclick="submitPO()">Submit</button></div>
+    <div class="navbar"><span>|||</span><span>○</span><span>‹</span></div>
+  </div>
+
+  <!-- ===================== SHEETS ===================== -->
+  <div class="sheet-overlay" id="addSheet" onclick="if(event.target===this)closeSheet('addSheet')">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">New Purchase Order</div>
+      <button class="sheet-opt manual" onclick="goManual()">
+        <span class="opt-ic">✎</span>
+        <div><div class="opt-t">Enter manually</div><div class="opt-s">Fill in the PO yourself</div></div>
+        <span class="opt-arrow">›</span>
+      </button>
+      <button class="sheet-opt scan" onclick="openScanSheet()">
+        <span class="opt-ic">⛶</span>
+        <div><div class="opt-t">Scan a quote <span class="ai">✨ AI</span></div><div class="opt-s">Photograph or upload a supplier quote</div></div>
+        <span class="opt-arrow">›</span>
+      </button>
+      <button class="sheet-cancel" onclick="closeSheet('addSheet')">Cancel</button>
+    </div>
+  </div>
+
+  <div class="sheet-overlay" id="scanSheet" onclick="if(event.target===this)closeSheet('scanSheet')">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Scan a quote</div>
+      <div class="scan-drop" onclick="startScan()">
+        <div class="big">⬆</div>
+        <h4>Upload a file</h4>
+        <p>PDF, JPG or PNG</p>
+      </div>
+      <div class="scan-alt">
+        <button onclick="startScan()">📷 Take a photo</button>
+        <button onclick="startScan()">✉ From email</button>
+      </div>
+      <div class="sample">No quote handy? <a onclick="startScan()">Try a sample →</a></div>
+      <button class="sheet-cancel" style="margin-top:16px" onclick="closeSheet('scanSheet')">Cancel</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function showScr(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const b = document.getElementById(id).querySelector('.body');
+  if (b) b.scrollTop = 0;
+}
+function openSheet(id) { document.getElementById(id).classList.add('open'); }
+function closeSheet(id) { document.getElementById(id).classList.remove('open'); }
+function goManual() { closeSheet('addSheet'); showScr('scrManual'); }
+function openScanSheet() { closeSheet('addSheet'); openSheet('scanSheet'); }
+function submitPO() { alert('Submitted for approval (prototype).'); showScr('scrList'); }
+
+// ---- line items ----
+const CATS = ['Materials','Labour','Plant & Equipment','Subcontractor','Other'];
+const CODES = ['5200 · Concrete','5210 · Plant Hire','5900 · Other'];
+const CCS = ['CC-100 · Earthworks','CC-200 · Concrete','CC-300 · Drainage','CC-400 · Plant & Hire'];
+const TASKS = ['1.2 Bulk Earthworks','2.1 Slab Pour','2.3 Pump & Place','3.1 Site Delivery'];
+const LINES = [
+  { name: '32 MPa Concrete — N32', meta: '48 m³ × $198.00', amt: '$ 9,504.00' },
+  { name: 'Concrete pump hire — boom', meta: '1 day × $1,250.00', amt: '$ 1,250.00' },
+  { name: 'Saturday surcharge', meta: '1 ea × $320.00', amt: '$ 320.00' },
+  { name: 'Delivery / cartage', meta: '1 ea × $180.00', amt: '$ 180.00' },
+];
+function opts(arr, ph) { return ['<option>' + ph + '</option>'].concat(arr.map(o => '<option>' + o + '</option>')).join(''); }
+function renderLines() {
+  document.getElementById('liList').innerHTML = LINES.map(l => `
+    <div class="li-card">
+      <div class="li-top"><span class="li-name">${l.name} <span class="li-read">read</span></span><span class="li-amt">${l.amt}</span></div>
+      <div class="li-meta">${l.meta}</div>
+      <label class="fld-l">Resource Category</label>
+      <select class="sel manual" onchange="resolveManual(this)">${opts(CATS,'Select category')}</select>
+      <label class="fld-l">Accounting Code</label>
+      <select class="sel manual" onchange="resolveManual(this)">${opts(CODES,'Select code')}</select>
+      <label class="fld-l trkLabel">Cost Centre</label>
+      <select class="sel manual cc-field" onchange="resolveManual(this)">${opts(CCS,'Select cost centre')}</select>
+      <select class="sel manual wbs-field" style="display:none" onchange="resolveManual(this)">${opts(TASKS,'Select task')}</select>
+    </div>`).join('');
+}
+function resolveManual(sel) {
+  const chosen = sel.selectedIndex > 0;
+  sel.classList.toggle('manual', !chosen);
+  sel.classList.toggle('resolved', chosen);
+}
+function setTrack(mode) {
+  const cc = mode === 'cc';
+  document.getElementById('segCC').classList.toggle('active', cc);
+  document.getElementById('segWBS').classList.toggle('active', !cc);
+  document.getElementById('tbHint').innerHTML = cc
+    ? 'Each line item is coded to a <strong>cost centre</strong>.'
+    : 'Each line item is coded to a <strong>WBS task</strong>.';
+  document.querySelectorAll('.trkLabel').forEach(e => e.textContent = cc ? 'Cost Centre' : 'Task');
+  document.querySelectorAll('.cc-field').forEach(e => e.style.display = cc ? 'block' : 'none');
+  document.querySelectorAll('.wbs-field').forEach(e => e.style.display = cc ? 'none' : 'block');
+}
+
+// ---- scan animation ----
+function startScan() {
+  closeSheet('scanSheet');
+  showScr('scrScanning');
+  ['m1','m2','m3','m4'].forEach(id => { const li = document.getElementById(id); li.className = ''; li.querySelector('.d').innerHTML=''; });
+  const steps = ['m1','m2','m3','m4'];
+  let i = 0;
+  document.getElementById(steps[0]).classList.add('active');
+  const t = setInterval(() => {
+    const cur = document.getElementById(steps[i]);
+    cur.classList.remove('active'); cur.classList.add('done'); cur.querySelector('.d').innerHTML = '✓';
+    i++;
+    if (i < steps.length) document.getElementById(steps[i]).classList.add('active');
+    else { clearInterval(t); setTimeout(() => { renderLines(); setTrack('cc'); showScr('scrReview'); }, 450); }
+  }, 800);
+}
+renderLines();
+</script>
+</body>
+</html>
