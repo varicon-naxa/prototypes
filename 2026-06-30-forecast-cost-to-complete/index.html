@@ -1164,35 +1164,19 @@ function closeModal() {
 /* ═══════════════════════════════════════════
    FORECAST METHOD
    ═══════════════════════════════════════════ */
-function updateTaskPct(ti, val) {
-  wbsData[ti].percentComplete = Math.max(0, Math.min(100, parseFloat(val) || 0));
-  renderStatsBar('wbsStatsBar', wbsData);
-  const body = document.getElementById('wbsBody');
-  const foot = document.getElementById('wbsFoot');
-  const rows = body.querySelectorAll('.cc-parent-row');
-  rows.forEach((row, idx) => {
-    const task = wbsData[idx];
-    const ctc = calcTaskCTC(task);
-    const ff = task.actualToDate + ctc;
-    const v = task.estimatedBudget - ff;
-    const cells = row.querySelectorAll('td');
-    cells[5].innerHTML = `<span style="color:#f5a623;font-weight:700">${fmt(ctc)}</span>`;
-    cells[6].innerHTML = `<span style="font-weight:700">${fmt(ff)}</span>`;
-    cells[7].className = `right margin-cell ${v>=0?'positive':'negative'}`;
-    cells[7].textContent = fmt(v);
-  });
-  const t = computeTotals(wbsData);
-  const gV = t.tB - t.tF;
-  foot.innerHTML = `<tr><td style="font-weight:700">Total</td>
-    <td class="right" style="font-weight:700">${fmt(t.tC)}</td><td class="right" style="font-weight:700">${fmt(t.tB)}</td>
-    <td class="right" style="font-weight:700">${fmt(t.tA)}</td><td class="right" style="font-weight:700">-</td>
-    <td class="right" style="font-weight:700;color:#f5a623">${fmt(t.tCTC)}</td><td class="right" style="font-weight:700">${fmt(t.tF)}</td>
-    <td class="right margin-cell ${gV>=0?'positive':'negative'}" style="font-weight:700">${fmt(gV)}</td></tr>`;
+function updateBoq(ti, field, val) {
+  const v = Math.max(0, parseFloat(val) || 0);
+  if (field === 'qty') wbsData[ti].boqQty = v;
+  else wbsData[ti].boqDone = v;
+  if (wbsData[ti].boqQty > 0) {
+    wbsData[ti].percentComplete = Math.round(wbsData[ti].boqDone / wbsData[ti].boqQty * 100);
+  }
+  renderWBS();
 }
 
 function changeForecastMethod() {
   const m = getMethod();
-  const hints = { manual:'CTC entered manually per resource — click any amber cell to edit', percent:'Edit % complete per task — CTC auto-calculates from remaining budget' };
+  const hints = { manual:'CTC entered manually per resource — click any amber cell to edit', productivity:'CTC forecast from BOQ quantities and actual cost per unit' };
   document.getElementById('methodHint').textContent = hints[m];
   recalcAll();
 }
