@@ -818,11 +818,19 @@ function renderCCTable() {
    CTC EDIT MODAL
    ═══════════════════════════════════════════ */
 let editingTaskIdx = null;
+let modalLineItems = [];
 
 function openModal(taskIdx) {
   editingTaskIdx = taskIdx;
   const task = wbsData[taskIdx];
-  const ctc = calcTaskCTC(task);
+  modalLineItems = task.resources.map(r => (r.lineItems || []).map(li => ({...li})));
+  renderModal();
+  document.getElementById('ctcModal').classList.add('show');
+}
+
+function renderModal() {
+  const task = wbsData[editingTaskIdx];
+  const ctc = modalLineItems.reduce((s, lis) => s + lis.reduce((ss, li) => ss + (li.qty||0)*(li.rate||0), 0), 0);
 
   document.getElementById('modalTitle').innerHTML = `<i class="fas fa-pencil" style="color:#f5a623;margin-right:8px"></i>Edit Cost to Complete — Task ${task.num}: ${task.name}`;
 
@@ -830,64 +838,123 @@ function openModal(taskIdx) {
     <div class="modal-task-summary">
       <div class="mts-item"><div class="mts-label">Budget</div><div class="mts-value">${fmt(task.estimatedBudget)}</div></div>
       <div class="mts-item"><div class="mts-label">Actual to Date</div><div class="mts-value blue">${fmt(task.actualToDate)}</div></div>
-      <div class="mts-item"><div class="mts-label">Current CTC</div><div class="mts-value amber">${fmt(ctc)}</div></div>
+      <div class="mts-item"><div class="mts-label">Cost to Complete</div><div class="mts-value amber" id="modalCTCTotal">${fmt(ctc)}</div></div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <span style="font-size:14px;font-weight:600;color:#1b2a4a">Resource Breakdown</span>
-      <span style="font-size:12px;color:#64748b">— enter what's still needed to finish this task</span>
-    </div>
-    <table class="res-edit-table">
-      <thead><tr>
-        <th>Resource Type</th>
-        <th class="right">Budget</th>
-        <th class="right">Actual</th>
-        <th class="right">Remaining (Budget)</th>
-        <th class="right" style="color:#f5a623">Cost to Complete</th>
-        <th style="width:180px">Notes</th>
-      </tr></thead>
-      <tbody>`;
+      <span style="font-size:12px;color:#64748b">— add line items to detail what's needed to complete</span>
+    </div>`;
 
   task.resources.forEach((res, ri) => {
-    const budgetRemaining = Math.max(0, res.estimatedBudget - res.actualToDate);
-    html += `<tr>
-      <td><span class="res-icon ${res.type}"><i class="fas fa-${resIcon(res.type)}"></i></span>${res.label}</td>
-      <td class="right">${fmt(res.estimatedBudget)}</td>
-      <td class="right">${fmt(res.actualToDate)}</td>
-      <td class="right" style="color:#94a3b8">${fmt(budgetRemaining)}</td>
-      <td class="right"><input class="ctc-input" type="number" value="${res.manualCTC}" data-ri="${ri}" step="10" min="0" oninput="updateModalTotal()"></td>
-      <td><input class="notes-area" style="min-height:auto;height:32px;padding:6px 8px;resize:none" value="${res.notes}" data-notes-ri="${ri}" placeholder="Add note..."></td>
-    </tr>`;
+    const lis = modalLineItems[ri] || [];
+    const resTotal = lis.reduce((s, li) => s + (li.qty||0)*(li.rate||0), 0);
+    const budgetRem = Math.max(0, res.estimatedBudget - res.actualToDate);
+    const hasItems = lis.length > 0;
+    const openCls = hasItems ? ' open' : '';
+
+    html += `<div class="res-section${openCls}" id="resSection_${ri}">
+      <div class="res-section-header" onclick="toggleResSection(${ri})">
+        <div class="rsh-left">
+          <span class="rsh-expand"><i class="fas fa-chevron-right"></i></span>
+          <span class="res-icon ${res.type}"><i class="fas fa-${resIcon(res.type)}"></i></span>
+          <span style="font-size:13px;font-weight:600;color:#1b2a4a">${res.label}</span>
+          <span style="font-size:11px;color:#94a3b8;margin-left:4px">${lis.length} item${lis.length!==1?'s':''}</span>
+        </div>
+        <div class="rsh-right">
+          <span class="rsh-budget">Budget: ${fmt(res.estimatedBudget)} | Remaining: ${fmt(budgetRem)}</span>
+          <span class="rsh-ctc">${fmt(resTotal)}</span>
+        </div>
+      </div>
+      <div class="res-section-body">
+        <table class="line-items-table">
+          <thead><tr>
+            <th style="width:40%">Description</th>
+            <th class="right" style="width:12%">Qty</th>
+            <th style="width:12%;text-align:center">Unit</th>
+            <th class="right" style="width:15%">Rate ($)</th>
+            <th class="right" style="width:16%">Amount</th>
+            <th style="width:5%"></th>
+          </tr></thead>
+          <tbody>`;
+
+    lis.forEach((li, lii) => {
+      const amt = (li.qty||0) * (li.rate||0);
+      html += `<tr>
+        <td><input class="li-input desc" value="${escHtml(li.desc)}" data-ri="${ri}" data-lii="${lii}" data-field="desc" onchange="updateLineItem(this)"></td>
+        <td><input class="li-input num" type="number" value="${li.qty}" data-ri="${ri}" data-lii="${lii}" data-field="qty" step="0.5" min="0" oninput="updateLineItem(this)"></td>
+        <td><input class="li-input unit" value="${escHtml(li.unit)}" data-ri="${ri}" data-lii="${lii}" data-field="unit" onchange="updateLineItem(this)"></td>
+        <td><input class="li-input num" type="number" value="${li.rate}" data-ri="${ri}" data-lii="${lii}" data-field="rate" step="10" min="0" oninput="updateLineItem(this)"></td>
+        <td class="right"><span class="li-amount">${fmt(amt)}</span></td>
+        <td><button class="remove-line-btn" onclick="removeLine(${ri},${lii})" title="Remove line"><i class="fas fa-times"></i></button></td>
+      </tr>`;
+    });
+
+    if (lis.length === 0) {
+      html += `<tr><td colspan="6" style="text-align:center;color:#94a3b8;font-size:12px;padding:12px">No line items — click Add Line below</td></tr>`;
+    }
+
+    html += `</tbody>
+      <tfoot><tr>
+        <td colspan="4" style="font-weight:700">Subtotal</td>
+        <td class="right" style="font-weight:700;color:#f5a623">${fmt(resTotal)}</td>
+        <td></td>
+      </tr></tfoot>
+    </table>
+    <button class="add-line-btn" onclick="addLine(${ri})"><i class="fas fa-plus"></i> Add Line</button>
+    </div></div>`;
   });
 
-  html += `</tbody><tfoot><tr>
-    <td style="font-weight:700">Total CTC</td><td></td><td></td><td></td>
-    <td class="right" style="font-weight:700;color:#f5a623;font-size:15px" id="modalCTCTotal">${fmt(ctc)}</td><td></td>
-  </tr></tfoot></table>
-
-  <div style="background:#f8fafc;border-radius:8px;padding:12px 16px;margin-top:8px">
+  const ff = task.actualToDate + ctc;
+  const v = task.estimatedBudget - ff;
+  html += `
+  <div style="background:#f8fafc;border-radius:8px;padding:12px 16px;margin-top:16px">
     <div style="display:flex;justify-content:space-between;font-size:13px">
+      <span style="color:#64748b">Total Cost to Complete:</span>
+      <span style="font-weight:700;color:#f5a623">${fmt(ctc)}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px">
       <span style="color:#64748b">Forecast Final Cost (Actual + CTC):</span>
-      <span style="font-weight:700;color:#1b2a4a" id="modalForecastFinal">${fmt(task.actualToDate + ctc)}</span>
+      <span style="font-weight:700;color:#1b2a4a" id="modalForecastFinal">${fmt(ff)}</span>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px">
       <span style="color:#64748b">Variance vs Budget:</span>
-      <span style="font-weight:700" id="modalVariance">${fmtVariance(task.estimatedBudget - (task.actualToDate + ctc))}</span>
+      <span style="font-weight:700" id="modalVariance">${fmtVariance(v)}</span>
     </div>
   </div>`;
 
   document.getElementById('modalBody').innerHTML = html;
-  document.getElementById('ctcModal').classList.add('show');
 }
 
-function updateModalTotal() {
-  const task = wbsData[editingTaskIdx];
-  let total = 0;
-  document.querySelectorAll('.ctc-input').forEach(inp => { total += parseFloat(inp.value) || 0; });
-  document.getElementById('modalCTCTotal').textContent = fmt(total);
-  const ff = task.actualToDate + total;
-  document.getElementById('modalForecastFinal').textContent = fmt(ff);
-  const v = task.estimatedBudget - ff;
-  document.getElementById('modalVariance').innerHTML = fmtVariance(v);
+function escHtml(s) { return (s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function toggleResSection(ri) {
+  document.getElementById('resSection_' + ri).classList.toggle('open');
+}
+
+function updateLineItem(el) {
+  const ri = parseInt(el.dataset.ri), lii = parseInt(el.dataset.lii), field = el.dataset.field;
+  if (field === 'qty' || field === 'rate') {
+    modalLineItems[ri][lii][field] = parseFloat(el.value) || 0;
+  } else {
+    modalLineItems[ri][lii][field] = el.value;
+  }
+  renderModal();
+}
+
+function addLine(ri) {
+  modalLineItems[ri].push({ desc: '', qty: 1, unit: 'days', rate: 0 });
+  renderModal();
+  const section = document.getElementById('resSection_' + ri);
+  if (!section.classList.contains('open')) section.classList.add('open');
+  setTimeout(() => {
+    const inputs = section.querySelectorAll('.li-input.desc');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  }, 50);
+}
+
+function removeLine(ri, lii) {
+  modalLineItems[ri].splice(lii, 1);
+  renderModal();
 }
 
 function fmtVariance(v) {
@@ -897,13 +964,8 @@ function fmtVariance(v) {
 
 function saveModal() {
   const task = wbsData[editingTaskIdx];
-  document.querySelectorAll('.ctc-input').forEach(inp => {
-    const ri = parseInt(inp.dataset.ri);
-    task.resources[ri].manualCTC = parseFloat(inp.value) || 0;
-  });
-  document.querySelectorAll('[data-notes-ri]').forEach(inp => {
-    const ri = parseInt(inp.dataset.notesRi);
-    task.resources[ri].notes = inp.value;
+  task.resources.forEach((res, ri) => {
+    res.lineItems = modalLineItems[ri].map(li => ({...li}));
   });
   closeModal();
   showToast(`Saved CTC for Task ${task.num}: ${task.name}`);
@@ -913,6 +975,7 @@ function saveModal() {
 function closeModal() {
   document.getElementById('ctcModal').classList.remove('show');
   editingTaskIdx = null;
+  modalLineItems = [];
 }
 
 /* ═══════════════════════════════════════════
