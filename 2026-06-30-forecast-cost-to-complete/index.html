@@ -1182,6 +1182,11 @@ function renderModal() {
     const budgetRem = Math.max(0, res.estimatedBudget - res.actualToDate);
     const hasItems = lis.length > 0;
     const openCls = hasItems ? ' open' : '';
+    const prevTotal = res.prevCTC || 0;
+    const prevLis = res.prevLineItems || [];
+    const delta = resTotal - prevTotal;
+    const deltaCls = delta > 0 ? 'up' : delta < 0 ? 'down' : 'same';
+    const deltaLabel = delta === 0 ? 'no change' : (delta > 0 ? '+' : '') + fmt(delta).replace('$ ','$');
 
     html += `<div class="res-section${openCls}" id="resSection_${ri}">
       <div class="res-section-header" onclick="toggleResSection(${ri})">
@@ -1193,10 +1198,25 @@ function renderModal() {
         </div>
         <div class="rsh-right">
           <span class="rsh-budget">Budget: ${fmt(res.estimatedBudget)} | Remaining: ${fmt(budgetRem)}</span>
-          <span class="rsh-ctc">${fmt(resTotal)}</span>
+          <span class="rsh-prev">Prev: ${fmt(prevTotal)}</span>
+          <span class="rsh-ctc">${fmt(resTotal)}<span class="prev-delta ${deltaCls}">${deltaLabel}</span></span>
         </div>
       </div>
       <div class="res-section-body">
+        ${prevLis.length > 0 ? `<div class="prev-ref">
+          <div class="prev-ref-header"><i class="fas fa-clock-rotate-left"></i> Previous Forecast</div>
+          <div class="prev-ref-items">
+            ${prevLis.map(li => {
+              const pAmt = (li.qty||0)*(li.rate||0);
+              return `<div class="prev-ref-row">
+                <span class="prev-desc">${escHtml(li.desc)}</span>
+                <span class="prev-detail">${li.qty} ${escHtml(li.unit)} × $${(li.rate||0).toLocaleString()}</span>
+                <span class="prev-amt">${fmt(pAmt)}</span>
+              </div>`;
+            }).join('')}
+          </div>
+          <div class="prev-ref-total"><span>Previous subtotal</span><span>${fmt(prevTotal)}</span></div>
+        </div>` : ''}
         <table class="line-items-table">
           <thead><tr>
             <th style="width:40%">Description</th>
