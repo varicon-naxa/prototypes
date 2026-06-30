@@ -943,6 +943,24 @@ function setTaskMethod(leafIdx, val) {
   renderWBS();
 }
 
+function getSnapshotCTCForTask(task) {
+  if (!compareSnapshot) return null;
+  if (task.children) {
+    let sum = 0;
+    for (const c of task.children) { const v = getSnapshotCTCForTask(c); if (v === null) return null; sum += v; }
+    return sum;
+  }
+  return compareSnapshot.taskCTC[task.num] ?? null;
+}
+
+function movementCell(ctc, prevCTC) {
+  if (prevCTC === null) return '<td class="right movement-cell same">—</td>';
+  const mov = ctc - prevCTC;
+  const cls = mov > 0 ? 'up' : mov < 0 ? 'down' : 'same';
+  const label = mov === 0 ? '—' : (mov > 0 ? '+' : '') + fmt(mov).replace('$ ','$');
+  return `<td class="right movement-cell ${cls}">${label}</td>`;
+}
+
 function renderWBSTask(task, depth, parentGroup) {
   const isParent = !!task.children;
   const groupId = 'wbs_' + task.num;
@@ -951,10 +969,13 @@ function renderWBSTask(task, depth, parentGroup) {
   const actual = isParent ? getTaskVal(task, 'actualToDate') : task.actualToDate;
   const ff = actual + ctc;
   const v = budget - ff;
+  const cmp = !!compareSnapshot;
+  const prevCTC = getSnapshotCTCForTask(task);
 
   const depthCls = depth === 0 ? 'cc-parent-row' : 'cc-child-row wbs-L' + Math.min(depth, 2);
   const groupAttr = parentGroup ? ` data-group="${parentGroup}"` : '';
   const rollupTag = isParent ? '<span class="wbs-rollup-tag">rollup</span>' : '';
+  const movCol = cmp ? movementCell(ctc, prevCTC) : '';
   let html = '';
 
   if (isParent) {
@@ -967,6 +988,7 @@ function renderWBSTask(task, depth, parentGroup) {
       <td class="right" style="color:#94a3b8;font-size:12px">—</td>
       <td class="right"><div class="progress-cell"><div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100,pctDone)}%"></div></div><span class="progress-text">${pctDone.toFixed(0)}%</span></div></td>
       <td class="right" style="color:#f5a623;font-weight:700">${fmt(ctc)}</td>
+      ${movCol}
       <td class="right" style="font-weight:700">${fmt(ff)}</td>
       <td class="right margin-cell ${v>=0?'positive':'negative'}">${fmt(v)}</td>
     </tr>`;
@@ -1002,6 +1024,7 @@ function renderWBSTask(task, depth, parentGroup) {
       ${trackingCell}
       <td class="right"><div class="progress-cell"><div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100,pctDone)}%"></div></div><span class="progress-text">${pctDone.toFixed(0)}%</span></div></td>
       ${ctcCell}
+      ${movCol}
       <td class="right" style="font-weight:700">${fmt(ff)}</td>
       <td class="right margin-cell ${v>=0?'positive':'negative'}">${fmt(v)}</td>
     </tr>`;
