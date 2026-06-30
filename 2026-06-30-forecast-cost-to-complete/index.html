@@ -671,12 +671,28 @@ function calcResCTC(res, task) {
 }
 
 function calcTaskCTC(task) {
+  if (task.children) return task.children.reduce((s, c) => s + calcTaskCTC(c), 0);
   return task.resources.reduce((s, r) => s + calcResCTC(r, task), 0);
 }
 
+function getTaskVal(task, field) {
+  if (task.children) return task.children.reduce((s, c) => s + getTaskVal(c, field), 0);
+  return task[field] || 0;
+}
+
+function getAllLeafTasks(tasks) {
+  const leaves = [];
+  function collect(list) {
+    list.forEach(t => { if (t.children) collect(t.children); else leaves.push(t); });
+  }
+  collect(tasks);
+  return leaves;
+}
+
 function computeTotals(tasks) {
+  const leaves = getAllLeafTasks(tasks);
   let tC=0, tB=0, tA=0, tCTC=0, tF=0;
-  tasks.forEach(t => { const ctc = calcTaskCTC(t); tC += t.contract; tB += t.estimatedBudget; tA += t.actualToDate; tCTC += ctc; tF += t.actualToDate + ctc; });
+  leaves.forEach(t => { const ctc = calcTaskCTC(t); tC += t.contract; tB += t.estimatedBudget; tA += t.actualToDate; tCTC += ctc; tF += t.actualToDate + ctc; });
   return { tC, tB, tA, tCTC, tF };
 }
 
