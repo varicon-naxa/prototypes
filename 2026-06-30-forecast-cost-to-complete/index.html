@@ -997,24 +997,24 @@ function renderWBSTask(task, depth, parentGroup) {
     const leafIdx = leafTaskList.indexOf(task);
     const m = task.method || 'manual';
     const isProd = m === 'productivity';
-    const pctDone = isProd && task.boqQty > 0 ? (task.boqDone / task.boqQty * 100) : task.percentComplete;
+    const pctDone = task.boqQty > 0 ? (task.boqDone / task.boqQty * 100) : task.percentComplete;
+    const budgetRate = task.boqQty > 0 ? task.estimatedBudget / task.boqQty : 0;
+    const actualRate = task.boqDone > 0 ? task.actualToDate / task.boqDone : 0;
+    const overBudgetRate = budgetRate > 0 && actualRate > budgetRate;
 
     const methodTag = `<span class="method-tag ${m}" onclick="event.stopPropagation()"><select onchange="setTaskMethod(${leafIdx},this.value)">
       <option value="manual"${m==='manual'?' selected':''}>Manual</option>
       <option value="productivity"${m==='productivity'?' selected':''}>Productivity</option>
     </select></span>`;
 
-    let trackingCell, ctcCell;
+    const trackingCell = `<td class="right" onclick="event.stopPropagation()">
+      <span class="boq-inline"><input class="pct-input" type="number" value="${task.boqQty}" min="0" step="1" oninput="updateBoqLeaf(${leafIdx},'qty',this.value)">
+      / <input class="pct-input" type="number" value="${task.boqDone}" min="0" step="1" oninput="updateBoqLeaf(${leafIdx},'done',this.value)"> ${task.boqUnit}</span>
+      ${task.boqDone > 0 ? `<div style="font-size:10px;margin-top:2px;${overBudgetRate?'color:#ef4444;font-weight:600':'color:#94a3b8'}">$${actualRate.toFixed(2)}/${task.boqUnit} ${overBudgetRate?'<i class="fas fa-triangle-exclamation" style="font-size:9px"></i>':''}<span style="color:#cbd5e1;margin:0 2px">vs</span><span style="color:#94a3b8;font-weight:400">$${budgetRate.toFixed(2)}</span></div>` : ''}</td>`;
 
-    if (isProd) {
-      trackingCell = `<td class="right" onclick="event.stopPropagation()">
-        <span class="boq-inline"><input class="pct-input" type="number" value="${task.boqQty}" min="0" step="1" oninput="updateBoqLeaf(${leafIdx},'qty',this.value)">
-        / <input class="pct-input" type="number" value="${task.boqDone}" min="0" step="1" oninput="updateBoqLeaf(${leafIdx},'done',this.value)"> ${task.boqUnit}</span></td>`;
-      ctcCell = `<td class="right" style="color:#f5a623;font-weight:700">${fmt(ctc)}</td>`;
-    } else {
-      trackingCell = `<td class="right" style="color:#94a3b8;font-size:12px">—</td>`;
-      ctcCell = `<td class="right ctc-clickable" style="color:#f5a623;font-weight:700" onclick="event.stopPropagation();openModal(${leafIdx})">${fmt(ctc)} <span class="edit-hint"><i class="fas fa-pencil"></i></span></td>`;
-    }
+    const ctcCell = isProd
+      ? `<td class="right" style="color:#f5a623;font-weight:700">${fmt(ctc)}</td>`
+      : `<td class="right ctc-clickable" style="color:#f5a623;font-weight:700" onclick="event.stopPropagation();openModal(${leafIdx})">${fmt(ctc)} <span class="edit-hint"><i class="fas fa-pencil"></i></span></td>`;
 
     html += `<tr class="${depthCls}"${groupAttr} onclick="toggleGroup('${groupId}',this)">
       <td><span class="row-num">${task.num}</span> <span class="expand-icon"><i class="fas fa-chevron-right"></i></span> ${task.name}${methodTag}
