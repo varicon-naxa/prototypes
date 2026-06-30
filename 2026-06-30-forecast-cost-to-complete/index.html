@@ -862,8 +862,18 @@ function renderWBS() {
   const head = document.getElementById('wbsHead');
   const body = document.getElementById('wbsBody');
   const foot = document.getElementById('wbsFoot');
+  const cmp = !!compareSnapshot;
 
   leafTaskList = getAllLeafTasks(wbsData);
+
+  // Populate compare selector
+  const sel = document.getElementById('compareSelect');
+  const curVal = sel.value;
+  sel.innerHTML = '<option value="">Current only</option>' +
+    forecastSnapshots.map(s => `<option value="${s.id}"${s.id===curVal?' selected':''}>${s.label} — ${s.date} (${s.author})</option>`).join('');
+
+  const movCol = cmp ? '<th class="right" style="width:100px">Movement</th>' : '';
+  const movSub = cmp ? `<th class="right" style="background:rgba(139,92,246,.08)">vs ${compareSnapshot.label}</th>` : '';
 
   head.innerHTML = `
     <tr class="cc-super-header">
@@ -873,6 +883,7 @@ function renderWBS() {
       <th class="right" style="width:150px">Tracking / BOQ</th>
       <th class="right" style="width:80px">% Done</th>
       <th class="right" style="width:120px">Cost to Complete</th>
+      ${movCol}
       <th class="right" style="width:110px">Forecast Final</th>
       <th class="right" style="width:100px">Variance</th>
     </tr>
@@ -881,6 +892,7 @@ function renderWBS() {
       <th class="right" style="background:rgba(59,130,246,.08)">Method · Qty</th>
       <th class="right">Progress</th>
       <th class="right" style="background:rgba(245,166,35,.15)">CTC</th>
+      ${movSub}
       <th class="right">Actual + CTC</th><th class="right">Budget − Forecast</th>
     </tr>`;
 
@@ -890,13 +902,40 @@ function renderWBS() {
 
   const t = computeTotals(wbsData);
   const gV = t.tB - t.tF;
+  let footMov = '';
+  if (cmp) {
+    const prevTotal = getSnapshotTotalCTC();
+    const mov = t.tCTC - prevTotal;
+    const mCls = mov > 0 ? 'up' : mov < 0 ? 'down' : 'same';
+    const mLabel = mov === 0 ? '—' : (mov > 0 ? '+' : '') + fmt(mov).replace('$ ','$');
+    footMov = `<td class="right movement-cell ${mCls}" style="font-weight:700">${mLabel}</td>`;
+  }
   foot.innerHTML = `<tr><td style="font-weight:700">Total</td>
     <td class="right" style="font-weight:700">${fmt(t.tB)}</td>
     <td class="right" style="font-weight:700">${fmt(t.tA)}</td>
     <td class="right">-</td><td class="right" style="font-weight:700">-</td>
     <td class="right" style="font-weight:700;color:#f5a623">${fmt(t.tCTC)}</td>
+    ${footMov}
     <td class="right" style="font-weight:700">${fmt(t.tF)}</td>
     <td class="right margin-cell ${gV>=0?'positive':'negative'}" style="font-weight:700">${fmt(gV)}</td></tr>`;
+
+  // Update compare summary
+  const summaryEl = document.getElementById('compareSummary');
+  if (cmp) {
+    const prevTotal = getSnapshotTotalCTC();
+    const mov = t.tCTC - prevTotal;
+    const dir = mov > 0 ? 'increased' : mov < 0 ? 'decreased' : 'unchanged';
+    const arrow = mov > 0 ? '<i class="fas fa-arrow-up" style="color:#ef4444"></i>' : mov < 0 ? '<i class="fas fa-arrow-down" style="color:#16a34a"></i>' : '';
+    summaryEl.innerHTML = `${arrow} Total CTC <strong>${dir}</strong> by <strong>${fmt(Math.abs(mov))}</strong> since ${compareSnapshot.label}`;
+  } else {
+    summaryEl.innerHTML = '';
+  }
+}
+
+function changeCompare() {
+  const val = document.getElementById('compareSelect').value;
+  compareSnapshot = forecastSnapshots.find(s => s.id === val) || null;
+  renderWBS();
 }
 
 function setTaskMethod(leafIdx, val) {
