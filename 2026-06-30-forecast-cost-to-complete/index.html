@@ -771,7 +771,19 @@ function renderCCTable() {
   const filterVal = document.getElementById('filterCC').value;
   const data = filterVal ? ccData.filter(cc => cc.id === filterVal) : ccData;
   const allTasks = data.flatMap(cc => cc.tasks);
-  renderStatsBar('ccStatsBar', allTasks);
+
+  const totals = computeTotals(allTasks);
+  const totalCommitted = data.reduce((s, cc) => s + (committedCosts[cc.id]?.committed || 0), 0);
+  const variance = totals.tB - totals.tF;
+  const margin = totals.tC > 0 ? ((totals.tC - totals.tF) / totals.tC * 100).toFixed(1) : '0.0';
+  document.getElementById('ccStatsBar').innerHTML = [
+    { label: 'Estimated Budget', value: fmt(totals.tB) },
+    { label: 'Committed (POs)', value: fmt(totalCommitted), cls: 'purple' },
+    { label: 'Actual to Date', value: fmt(totals.tA), cls: 'blue' },
+    { label: 'CTC (from WBS)', value: fmt(totals.tCTC), cls: 'amber' },
+    { label: 'Forecast Final', value: fmt(totals.tF) },
+    { label: 'Variance', value: fmt(variance), cls: variance >= 0 ? 'green' : 'red' },
+  ].map(s => `<div class="forecast-stat"><div class="fs-label">${s.label}</div><div class="fs-value ${s.cls||''}">${s.value}</div></div>`).join('');
 
   const head = document.getElementById('ccHead');
   const body = document.getElementById('ccBody');
@@ -780,34 +792,55 @@ function renderCCTable() {
   head.innerHTML = `
     <tr class="cc-super-header">
       <th style="min-width:240px">Cost Centre</th>
-      <th class="right" style="width:110px">Contract</th>
-      <th class="right" style="width:110px">Budget</th>
-      <th class="right" style="width:110px">Actual to Date</th>
-      <th class="right" style="width:130px">Cost to Complete</th>
-      <th class="right" style="width:120px">Forecast Final</th>
-      <th class="right" style="width:110px">Variance</th>
+      <th class="right" style="width:100px">Contract</th>
+      <th class="right" style="width:100px">Budget</th>
+      <th class="right" style="width:110px">Committed (POs)</th>
+      <th class="right" style="width:100px">Actual to Date</th>
+      <th class="right" style="width:110px">CTC (from WBS)</th>
+      <th class="right" style="width:110px">Forecast Final</th>
+      <th class="right" style="width:100px">Variance</th>
     </tr>
     <tr class="sub-header">
-      <th>CC / WBS Task (source)</th><th class="right">Sum</th><th class="right">Est. Budget</th><th class="right">Tracked</th>
+      <th>CC / WBS Task (source)</th><th class="right">Sum</th><th class="right">Est. Budget</th>
+      <th class="right" style="background:rgba(139,92,246,.08)">From POs</th>
+      <th class="right">Tracked</th>
       <th class="right" style="background:rgba(100,116,139,.1)">From WBS</th><th class="right">Actual + CTC</th><th class="right">Budget − Forecast</th>
     </tr>`;
 
-  let html = '', totC=0, totB=0, totA=0, totCTC=0, totF=0;
+  let html = '', totC=0, totB=0, totA=0, totCTC=0, totF=0, totComm=0;
   data.forEach((cc, ci) => {
     const ccTotals = computeTotals(cc.tasks);
     const ccV = ccTotals.tB - ccTotals.tF;
-    totC += ccTotals.tC; totB += ccTotals.tB; totA += ccTotals.tA; totCTC += ccTotals.tCTC; totF += ccTotals.tF;
+    const ccComm = committedCosts[cc.id]?.committed || 0;
+    const ccPOs = committedCosts[cc.id]?.pos || [];
+    const commPct = ccTotals.tB > 0 ? Math.min(100, ccComm / ccTotals.tB * 100) : 0;
+    totC += ccTotals.tC; totB += ccTotals.tB; totA += ccTotals.tA; totCTC += ccTotals.tCTC; totF += ccTotals.tF; totComm += ccComm;
 
     html += `<tr class="cc-parent-row" onclick="toggleGroup('cc_${ci}',this)">
       <td><span class="expand-icon"><i class="fas fa-chevron-right"></i></span> <strong>(${cc.id})</strong> ${cc.name}
         <span style="font-size:11px;color:#94a3b8;font-weight:400;margin-left:4px">${cc.tasks.length} task${cc.tasks.length>1?'s':''}</span></td>
       <td class="right">${fmt(ccTotals.tC)}</td>
       <td class="right">${fmt(ccTotals.tB)}</td>
+      <td class="right" style="color:#8b5cf6;font-weight:600">${fmt(ccComm)}
+        <div class="committed-bar"><div class="committed-fill-track"><div class="committed-fill" style="width:${commPct}%"></div></div><span class="committed-text">${Math.round(commPct)}%</span></div></td>
       <td class="right">${fmt(ccTotals.tA)}</td>
       <td class="right" style="color:#64748b">${fmt(ccTotals.tCTC)}</td>
       <td class="right" style="font-weight:700">${fmt(ccTotals.tF)}</td>
       <td class="right margin-cell ${ccV>=0?'positive':'negative'}">${fmt(ccV)}</td>
     </tr>`;
+
+    ccPOs.forEach(po => {
+      html += `<tr class="cc-child-row" data-group="cc_${ci}">
+        <td style="padding-left:40px"><i class="fas fa-file-invoice" style="color:#8b5cf6;font-size:11px;margin-right:6px"></i><span style="color:#8b5cf6;font-weight:500">${po.ref}</span> — ${po.desc}</td>
+        <td class="right" style="font-weight:400">-</td>
+        <td class="right" style="font-weight:400">-</td>
+        <td class="right" style="font-weight:400;color:#8b5cf6">${fmt(po.amount)}</td>
+        <td class="right" style="font-weight:400">-</td>
+        <td class="right" style="font-weight:400">-</td>
+        <td class="right" style="font-weight:400">-</td>
+        <td class="right" style="font-weight:400">-</td>
+      </tr>`;
+    });
 
     cc.tasks.forEach(task => {
       const ctc = calcTaskCTC(task);
@@ -817,6 +850,7 @@ function renderCCTable() {
         <td style="padding-left:40px"><i class="fas fa-sitemap" style="color:#3b82f6;font-size:11px;margin-right:6px"></i>${task.num}. ${task.name}</td>
         <td class="right" style="font-weight:400">${fmt(task.contract)}</td>
         <td class="right" style="font-weight:400">${fmt(task.estimatedBudget)}</td>
+        <td class="right" style="font-weight:400">-</td>
         <td class="right" style="font-weight:400">${fmt(task.actualToDate)}</td>
         <td class="right" style="font-weight:400;color:#64748b">${fmt(ctc)}</td>
         <td class="right" style="font-weight:400">${fmt(ff)}</td>
@@ -829,6 +863,7 @@ function renderCCTable() {
   const gV = totB - totF;
   foot.innerHTML = `<tr><td style="font-weight:700">Total</td>
     <td class="right" style="font-weight:700">${fmt(totC)}</td><td class="right" style="font-weight:700">${fmt(totB)}</td>
+    <td class="right" style="font-weight:700;color:#8b5cf6">${fmt(totComm)}</td>
     <td class="right" style="font-weight:700">${fmt(totA)}</td>
     <td class="right" style="font-weight:700;color:#64748b">${fmt(totCTC)}</td><td class="right" style="font-weight:700">${fmt(totF)}</td>
     <td class="right margin-cell ${gV>=0?'positive':'negative'}" style="font-weight:700">${fmt(gV)}</td></tr>`;
