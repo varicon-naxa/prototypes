@@ -908,13 +908,39 @@ function renderModal() {
 
   document.getElementById('modalTitle').innerHTML = `<i class="fas fa-pencil" style="color:#f5a623;margin-right:8px"></i>Edit Cost to Complete — Task ${task.num}: ${task.name}`;
 
+  const ccPO = committedCosts[task.ccId] || { committed: 0, pos: [] };
+  const hasPOs = ccPO.pos.length > 0;
+
   let html = `
     <div class="modal-task-summary">
       <div class="mts-item"><div class="mts-label">Budget</div><div class="mts-value">${fmt(task.estimatedBudget)}</div></div>
       <div class="mts-item"><div class="mts-label">Actual to Date</div><div class="mts-value blue">${fmt(task.actualToDate)}</div></div>
       <div class="mts-item"><div class="mts-label">Cost to Complete</div><div class="mts-value amber" id="modalCTCTotal">${fmt(ctc)}</div></div>
+    </div>`;
+
+  if (hasPOs) {
+    html += `<div class="po-overlap-warn">
+      <i class="fas fa-triangle-exclamation"></i>
+      <div><strong>Check for overlap:</strong> There are <strong>${ccPO.pos.length} active PO${ccPO.pos.length>1?'s':''}</strong> totalling <strong>${fmt(ccPO.committed)}</strong> raised against this task's cost centre <strong>(${task.ccId}) ${task.ccName}</strong>. Make sure your line items below don't duplicate costs already covered by these POs.</div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <div class="po-ref-banner open" id="poRefBanner">
+      <div class="po-ref-header" onclick="document.getElementById('poRefBanner').classList.toggle('open')">
+        <i class="fas fa-file-invoice"></i>
+        <span class="po-ref-title">Committed POs — (${task.ccId}) ${task.ccName}</span>
+        <span class="po-ref-total">${fmt(ccPO.committed)}</span>
+        <span class="po-ref-chevron"><i class="fas fa-chevron-right"></i></span>
+      </div>
+      <div class="po-ref-body">
+        ${ccPO.pos.map(po => `<div class="po-ref-item">
+          <span class="po-ref-label">${po.ref}</span>
+          <span class="po-ref-desc">${po.desc}</span>
+          <span class="po-ref-amt">${fmt(po.amount)}</span>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <span style="font-size:14px;font-weight:600;color:#1b2a4a">Resource Breakdown</span>
       <span style="font-size:12px;color:#64748b">— add line items to detail what's needed to complete</span>
     </div>`;
