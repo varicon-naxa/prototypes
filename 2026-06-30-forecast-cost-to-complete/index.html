@@ -663,7 +663,9 @@ function renderWBS() {
   const body = document.getElementById('wbsBody');
   const foot = document.getElementById('wbsFoot');
   const isManual = getMethod() === 'manual';
-  const ctcSub = isManual ? 'Click to edit' : getMethod() === 'percent' ? 'Auto: % Complete' : 'Auto: Productivity';
+  const isPct = getMethod() === 'percent';
+  const ctcSub = isManual ? 'Click to edit' : 'Auto: Budget × (1 − %)';
+  const pctSub = isPct ? 'Edit %' : 'Progress';
 
   head.innerHTML = `
     <tr class="cc-super-header">
@@ -671,13 +673,14 @@ function renderWBS() {
       <th class="right" style="width:110px">Contract</th>
       <th class="right" style="width:110px">Budget</th>
       <th class="right" style="width:110px">Actual to Date</th>
-      <th class="right" style="width:80px">% Done</th>
+      <th class="right" style="width:100px">% Complete</th>
       <th class="right" style="width:130px">Cost to Complete</th>
       <th class="right" style="width:120px">Forecast Final</th>
       <th class="right" style="width:110px">Variance</th>
     </tr>
     <tr class="sub-header">
-      <th>Task / Resource</th><th class="right">Sum</th><th class="right">Est. Budget</th><th class="right">Tracked</th><th class="right">Progress</th>
+      <th>Task / Resource</th><th class="right">Sum</th><th class="right">Est. Budget</th><th class="right">Tracked</th>
+      <th class="right" ${isPct ? 'style="background:rgba(59,130,246,.1)"' : ''}>${pctSub}</th>
       <th class="right" style="background:rgba(245,166,35,.15)">${ctcSub}</th><th class="right">Actual + CTC</th><th class="right">Budget − Forecast</th>
     </tr>`;
 
@@ -688,14 +691,22 @@ function renderWBS() {
     const v = task.estimatedBudget - ff;
     totC += task.contract; totB += task.estimatedBudget; totA += task.actualToDate; totCTC += ctc; totF += ff;
 
+    const pctCell = isPct
+      ? `<td class="right" onclick="event.stopPropagation()"><input class="pct-input" type="number" value="${task.percentComplete}" min="0" max="100" step="1" oninput="updateTaskPct(${ti}, this.value)">%</td>`
+      : `<td class="right"><div class="progress-cell"><div class="progress-bar"><div class="progress-fill" style="width:${task.percentComplete}%"></div></div><span class="progress-text">${task.percentComplete}%</span></div></td>`;
+
+    const ctcCell = isManual
+      ? `<td class="right ctc-clickable" style="color:#f5a623;font-weight:700" onclick="event.stopPropagation();openModal(${ti})">${fmt(ctc)} <span class="edit-hint"><i class="fas fa-pencil"></i></span></td>`
+      : `<td class="right" style="color:#f5a623;font-weight:700">${fmt(ctc)}</td>`;
+
     html += `<tr class="cc-parent-row" onclick="toggleGroup('wbs_${ti}',this)">
       <td><span class="row-num">${task.num}</span> <span class="expand-icon"><i class="fas fa-chevron-right"></i></span> ${task.name}
         <span style="font-size:11px;color:#94a3b8;font-weight:400;margin-left:6px">(${task.ccName})</span></td>
       <td class="right">${fmt(task.contract)}</td>
       <td class="right">${fmt(task.estimatedBudget)}</td>
       <td class="right">${fmt(task.actualToDate)}</td>
-      <td class="right"><div class="progress-cell"><div class="progress-bar"><div class="progress-fill" style="width:${task.percentComplete}%"></div></div><span class="progress-text">${task.percentComplete}%</span></div></td>
-      <td class="right ctc-clickable" style="color:#f5a623;font-weight:700" onclick="event.stopPropagation();openModal(${ti})">${fmt(ctc)} <span class="edit-hint"><i class="fas fa-pencil"></i></span></td>
+      ${pctCell}
+      ${ctcCell}
       <td class="right" style="font-weight:700">${fmt(ff)}</td>
       <td class="right margin-cell ${v>=0?'positive':'negative'}">${fmt(v)}</td>
     </tr>`;
