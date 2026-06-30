@@ -609,10 +609,15 @@ function lineItemTotal(res) {
   return (res.lineItems || []).reduce((s, li) => s + (li.qty || 0) * (li.rate || 0), 0);
 }
 
-function calcResCTC(res, pct) {
+function calcResCTC(res, task) {
   if (getMethod() === 'manual') return lineItemTotal(res);
-  const remaining = res.estimatedBudget * (1 - pct / 100);
-  return Math.round(remaining * 100) / 100;
+  if (!task.boqQty || !task.boqDone || task.boqDone <= 0) {
+    return res.estimatedBudget;
+  }
+  const pctDone = task.boqDone / task.boqQty;
+  const actualRate = res.actualToDate / pctDone;
+  const remaining = 1 - pctDone;
+  return Math.round(actualRate * remaining * 100) / 100;
 }
 
 function calcTaskCTC(task) {
