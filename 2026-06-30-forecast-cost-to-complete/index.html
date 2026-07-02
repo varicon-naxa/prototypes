@@ -758,23 +758,14 @@ function computeTotals(tasks) {
 }
 
 /* ═══════════════════════════════════════════
-   COMMITTED COSTS (POs) — at task level
+   COMMITTED COSTS (POs) — at CC level
    ═══════════════════════════════════════════ */
-const taskPOs = {
-  '1.1.1': [{ ref: 'PO-0043', desc: 'Gravel supply', amount: 1400, status: 'Approved' }],
-  '1.1.2': [{ ref: 'PO-0041', desc: 'Excavator hire — ABC Plant', amount: 1800, status: 'Approved' }],
-  '2':     [{ ref: 'PO-0038', desc: 'Concrete supply — Holcim', amount: 4200, status: 'Approved' }],
-  '3':     [{ ref: 'PO-0040', desc: 'Formwork panels hire', amount: 2300, status: 'Approved' }],
-  '4':     [{ ref: 'PO-0045', desc: 'Site shed rental Q3', amount: 1200, status: 'Approved' }],
+const committedCosts = {
+  '002': { committed: 3200, pos: [{ ref: 'PO-0041', desc: 'Excavator hire — ABC Plant', amount: 1800 }, { ref: 'PO-0043', desc: 'Gravel supply', amount: 1400 }] },
+  '011': { committed: 6500, pos: [{ ref: 'PO-0038', desc: 'Concrete supply — Holcim', amount: 4200 }, { ref: 'PO-0040', desc: 'Formwork panels hire', amount: 2300 }] },
+  '001': { committed: 1200, pos: [{ ref: 'PO-0045', desc: 'Site shed rental Q3', amount: 1200 }] },
+  'unassigned': { committed: 0, pos: [] }
 };
-function getTaskPOs(task) {
-  const key = String(task.num);
-  return taskPOs[key] || [];
-}
-function getTaskCommitted(task) {
-  if (task.children) return task.children.reduce((s, c) => s + getTaskCommitted(c), 0);
-  return getTaskPOs(task).reduce((s, po) => s + po.amount, 0);
-}
 
 /* ═══════════════════════════════════════════
    FORECAST SNAPSHOTS — historical comparisons
@@ -990,7 +981,8 @@ function renderWBSTask(task, depth, parentGroup) {
   if (isParent) {
     const pctDone = budget > 0 ? (actual / budget * 100) : 0;
     html += `<tr class="${depthCls}"${groupAttr} onclick="toggleGroup('${groupId}',this)">
-      <td><span class="row-num">${task.num}</span> <span class="expand-icon"><i class="fas fa-chevron-right"></i></span> ${task.name}${rollupTag}</td>
+      <td><span class="row-num">${task.num}</span> <span class="expand-icon"><i class="fas fa-chevron-right"></i></span> ${task.name}${rollupTag}
+        ${depth===0?`<span style="font-size:11px;color:#94a3b8;font-weight:400;margin-left:4px">(${task.ccName})</span>`:''}</td>
       <td class="right">${fmt(budget)}</td>
       <td class="right">${fmt(actual)}</td>
       <td class="right" style="color:#94a3b8;font-size:12px">—</td>
@@ -1157,13 +1149,14 @@ function renderCCTable() {
       const ctc = calcTaskCTC(task);
       const ff = task.actualToDate + ctc;
       const v = task.estimatedBudget - ff;
+      const leafIdx = leafTaskList.indexOf(task);
       html += `<tr class="cc-child-row" data-group="cc_${ci}">
         <td style="padding-left:40px"><i class="fas fa-sitemap" style="color:#3b82f6;font-size:11px;margin-right:6px"></i>${task.num}. ${task.name}</td>
         <td class="right" style="font-weight:400">${fmt(task.contract)}</td>
         <td class="right" style="font-weight:400">${fmt(task.estimatedBudget)}</td>
         <td class="right" style="font-weight:400">-</td>
         <td class="right" style="font-weight:400">${fmt(task.actualToDate)}</td>
-        <td class="right" style="font-weight:400;color:#64748b">${fmt(ctc)}</td>
+        <td class="right ctc-clickable" style="font-weight:500;color:#f5a623" onclick="event.stopPropagation();openModal(${leafIdx})">${fmt(ctc)} <span class="edit-hint"><i class="fas fa-pencil"></i></span></td>
         <td class="right" style="font-weight:400">${fmt(ff)}</td>
         <td class="right margin-cell ${v>=0?'positive':'negative'}" style="font-size:12px">${fmt(v)}</td>
       </tr>`;
