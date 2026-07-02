@@ -967,14 +967,10 @@ function renderWBSTask(task, depth, parentGroup) {
   let html = '';
 
   if (isParent) {
-    const pctDone = budget > 0 ? (actual / budget * 100) : 0;
-    html += `<tr class="${depthCls}"${groupAttr} onclick="toggleGroup('${groupId}',this)">
-      <td><span class="row-num">${task.num}</span> <span class="expand-icon"><i class="fas fa-chevron-right"></i></span> ${task.name}${rollupTag}
-        ${depth===0?`<span style="font-size:11px;color:#94a3b8;font-weight:400;margin-left:4px">(${task.ccName})</span>`:''}</td>
+    html += `<tr class="${depthCls} expanded"${groupAttr} onclick="toggleGroup('${groupId}',this)">
+      <td><span class="row-num">${task.num}</span> <span class="expand-icon"><i class="fas fa-chevron-right"></i></span> ${task.name}${rollupTag}</td>
       <td class="right">${fmt(budget)}</td>
       <td class="right">${fmt(actual)}</td>
-      <td class="right" style="color:#94a3b8;font-size:12px">—</td>
-      <td class="right"><div class="progress-cell"><div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100,pctDone)}%"></div></div><span class="progress-text">${pctDone.toFixed(0)}%</span></div></td>
       <td class="right" style="color:#f5a623;font-weight:700">${fmt(ctc)}</td>
       ${movCol}
       <td class="right" style="font-weight:700">${fmt(ff)}</td>
@@ -983,57 +979,16 @@ function renderWBSTask(task, depth, parentGroup) {
     task.children.forEach(child => { html += renderWBSTask(child, depth + 1, groupId); });
   } else {
     const leafIdx = leafTaskList.indexOf(task);
-    const m = task.method || 'manual';
-    const isProd = m === 'productivity';
-    const pctDone = task.boqQty > 0 ? (task.boqDone / task.boqQty * 100) : task.percentComplete;
-    const budgetRate = task.boqQty > 0 ? task.estimatedBudget / task.boqQty : 0;
-    const actualRate = task.boqDone > 0 ? task.actualToDate / task.boqDone : 0;
-    const overBudgetRate = budgetRate > 0 && actualRate > budgetRate;
 
-    const methodTag = `<span class="method-tag ${m}" onclick="event.stopPropagation()"><select onchange="setTaskMethod(${leafIdx},this.value)">
-      <option value="manual"${m==='manual'?' selected':''}>Manual</option>
-      <option value="productivity"${m==='productivity'?' selected':''}>Productivity</option>
-    </select></span>`;
-
-    const trackingCell = `<td class="right" onclick="event.stopPropagation()">
-      <span class="boq-inline"><input class="pct-input" type="number" value="${task.boqQty}" min="0" step="1" oninput="updateBoqLeaf(${leafIdx},'qty',this.value)">
-      / <input class="pct-input" type="number" value="${task.boqDone}" min="0" step="1" oninput="updateBoqLeaf(${leafIdx},'done',this.value)"> ${task.boqUnit}</span>
-      ${task.boqDone > 0 ? `<div style="font-size:10px;margin-top:2px;${overBudgetRate?'color:#ef4444;font-weight:600':'color:#94a3b8'}">$${actualRate.toFixed(2)}/${task.boqUnit} ${overBudgetRate?`<i class="fas fa-triangle-exclamation" style="font-size:9px;cursor:help" title="Actual cost per ${task.boqUnit} ($${actualRate.toFixed(2)}) exceeds the budget rate ($${budgetRate.toFixed(2)}). This task is trending over budget by ${((actualRate/budgetRate - 1)*100).toFixed(0)}%."></i>`:''}<span style="color:#cbd5e1;margin:0 2px">vs</span><span style="color:#94a3b8;font-weight:400">$${budgetRate.toFixed(2)}</span></div>` : ''}</td>`;
-
-    const ctcCell = isProd
-      ? `<td class="right" style="color:#f5a623;font-weight:700">${fmt(ctc)}</td>`
-      : `<td class="right ctc-clickable" style="color:#f5a623;font-weight:700" onclick="event.stopPropagation();openModal(${leafIdx})">${fmt(ctc)} <span class="edit-hint"><i class="fas fa-pencil"></i></span></td>`;
-
-    html += `<tr class="${depthCls}"${groupAttr} onclick="toggleGroup('${groupId}',this)">
-      <td><span class="row-num">${task.num}</span> <span class="expand-icon"><i class="fas fa-chevron-right"></i></span> ${task.name}${methodTag}
-        ${depth===0?`<span style="font-size:11px;color:#94a3b8;font-weight:400;margin-left:4px">(${task.ccName})</span>`:''}</td>
+    html += `<tr class="${depthCls} visible"${groupAttr}>
+      <td><span class="row-num">${task.num}</span> ${task.name}</td>
       <td class="right">${fmt(task.estimatedBudget)}</td>
       <td class="right">${fmt(task.actualToDate)}</td>
-      ${trackingCell}
-      <td class="right"><div class="progress-cell"><div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100,pctDone)}%"></div></div><span class="progress-text">${pctDone.toFixed(0)}%</span></div></td>
-      ${ctcCell}
+      <td class="right ctc-clickable" style="color:#f5a623;font-weight:700" onclick="event.stopPropagation();openModal(${leafIdx})">${fmt(ctc)} <span class="edit-hint"><i class="fas fa-pencil"></i></span></td>
       ${movCol}
       <td class="right" style="font-weight:700">${fmt(ff)}</td>
       <td class="right margin-cell ${v>=0?'positive':'negative'}">${fmt(v)}</td>
     </tr>`;
-
-    task.resources.forEach(res => {
-      const rCTC = calcResCTC(res, task);
-      const rFF = res.actualToDate + rCTC;
-      const rV = res.estimatedBudget - rFF;
-      const resMovCol = cmp ? '<td class="right" style="font-weight:400">-</td>' : '';
-      html += `<tr class="cc-child-row" data-group="${groupId}">
-        <td style="padding-left:${20+depth*24}px"><span class="res-icon ${res.type}"><i class="fas fa-${resIcon(res.type)}"></i></span>${res.label}</td>
-        <td class="right" style="font-weight:400">${fmt(res.estimatedBudget)}</td>
-        <td class="right" style="font-weight:400">${fmt(res.actualToDate)}</td>
-        <td class="right" style="font-weight:400">-</td>
-        <td class="right" style="font-weight:400">-</td>
-        <td class="right" style="font-weight:500;color:#f5a623">${fmt(rCTC)}</td>
-        ${resMovCol}
-        <td class="right" style="font-weight:400">${fmt(rFF)}</td>
-        <td class="right margin-cell ${rV>=0?'positive':'negative'}" style="font-size:12px">${fmt(rV)}</td>
-      </tr>`;
-    });
   }
   return html;
 }
