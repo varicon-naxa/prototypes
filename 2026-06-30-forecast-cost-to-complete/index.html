@@ -1070,22 +1070,31 @@ function renderCCFilter() {
 }
 
 function renderCCTable() {
+  leafTaskList = getAllLeafTasks(wbsData);
   const ccData = buildCCData();
   const filterVal = document.getElementById('filterCC').value;
   const data = filterVal ? ccData.filter(cc => cc.id === filterVal) : ccData;
-  const allTasks = data.flatMap(cc => cc.tasks);
 
-  const totals = computeTotals(allTasks);
-  const totalCommitted = data.reduce((s, cc) => s + (committedCosts[cc.id]?.committed || 0), 0);
-  const variance = totals.tB - totals.tF;
-  const margin = totals.tC > 0 ? ((totals.tC - totals.tF) / totals.tC * 100).toFixed(1) : '0.0';
+  let gB=0, gA=0, gCTC=0, gComm=0, gC=0;
+  data.forEach(cc => {
+    const ccInfo = committedCosts[cc.id] || { actualToDate: 0, committed: 0, pos: [] };
+    const ccCTC = cc.tasks.reduce((s, t) => s + calcTaskCTC(t), 0);
+    gB += cc.tasks.reduce((s, t) => s + t.estimatedBudget, 0);
+    gA += ccInfo.actualToDate;
+    gCTC += ccCTC;
+    gComm += ccInfo.committed;
+    gC += cc.tasks.reduce((s, t) => s + t.contract, 0);
+  });
+  const gF = gA + gCTC;
+  const gV = gB - gF;
+
   document.getElementById('ccStatsBar').innerHTML = [
-    { label: 'Estimated Budget', value: fmt(totals.tB) },
-    { label: 'Committed (POs)', value: fmt(totalCommitted), cls: 'purple' },
-    { label: 'Actual to Date', value: fmt(totals.tA), cls: 'blue' },
-    { label: 'CTC (from WBS)', value: fmt(totals.tCTC), cls: 'amber' },
-    { label: 'Forecast Final', value: fmt(totals.tF) },
-    { label: 'Variance', value: fmt(variance), cls: variance >= 0 ? 'green' : 'red' },
+    { label: 'Estimated Budget', value: fmt(gB) },
+    { label: 'Committed (POs)', value: fmt(gComm), cls: 'purple' },
+    { label: 'Actual to Date', value: fmt(gA), cls: 'blue' },
+    { label: 'Cost to Complete', value: fmt(gCTC), cls: 'amber' },
+    { label: 'Forecast Final', value: fmt(gF) },
+    { label: 'Variance', value: fmt(gV), cls: gV >= 0 ? 'green' : 'red' },
   ].map(s => `<div class="forecast-stat"><div class="fs-label">${s.label}</div><div class="fs-value ${s.cls||''}">${s.value}</div></div>`).join('');
 
   const head = document.getElementById('ccHead');
@@ -1099,36 +1108,41 @@ function renderCCTable() {
       <th class="right" style="width:100px">Budget</th>
       <th class="right" style="width:110px">Committed (POs)</th>
       <th class="right" style="width:100px">Actual to Date</th>
-      <th class="right" style="width:110px">CTC (from WBS)</th>
+      <th class="right" style="width:120px">Cost to Complete</th>
       <th class="right" style="width:110px">Forecast Final</th>
       <th class="right" style="width:100px">Variance</th>
     </tr>
     <tr class="sub-header">
-      <th>CC / WBS Task (source)</th><th class="right">Sum</th><th class="right">Est. Budget</th>
+      <th>CC / Task</th><th class="right">Sum</th><th class="right">Est. Budget</th>
       <th class="right" style="background:rgba(139,92,246,.08)">From POs</th>
-      <th class="right">Tracked</th>
-      <th class="right" style="background:rgba(100,116,139,.1)">From WBS</th><th class="right">Actual + CTC</th><th class="right">Budget − Forecast</th>
+      <th class="right">At CC level</th>
+      <th class="right" style="background:rgba(245,166,35,.15)">Per Task</th><th class="right">Actual + CTC</th><th class="right">Budget − Forecast</th>
     </tr>`;
 
   let html = '', totC=0, totB=0, totA=0, totCTC=0, totF=0, totComm=0;
   data.forEach((cc, ci) => {
-    const ccTotals = computeTotals(cc.tasks);
-    const ccV = ccTotals.tB - ccTotals.tF;
-    const ccComm = committedCosts[cc.id]?.committed || 0;
-    const ccPOs = committedCosts[cc.id]?.pos || [];
-    const commPct = ccTotals.tB > 0 ? Math.min(100, ccComm / ccTotals.tB * 100) : 0;
-    totC += ccTotals.tC; totB += ccTotals.tB; totA += ccTotals.tA; totCTC += ccTotals.tCTC; totF += ccTotals.tF; totComm += ccComm;
+    const ccInfo = committedCosts[cc.id] || { actualToDate: 0, committed: 0, pos: [] };
+    const ccActual = ccInfo.actualToDate;
+    const ccComm = ccInfo.committed;
+    const ccPOs = ccInfo.pos || [];
+    const ccBudget = cc.tasks.reduce((s, t) => s + t.estimatedBudget, 0);
+    const ccContract = cc.tasks.reduce((s, t) => s + t.contract, 0);
+    const ccCTC = cc.tasks.reduce((s, t) => s + calcTaskCTC(t), 0);
+    const ccFF = ccActual + ccCTC;
+    const ccV = ccBudget - ccFF;
+    const commPct = ccBudget > 0 ? Math.min(100, ccComm / ccBudget * 100) : 0;
+    totC += ccContract; totB += ccBudget; totA += ccActual; totCTC += ccCTC; totF += ccFF; totComm += ccComm;
 
     html += `<tr class="cc-parent-row" onclick="toggleGroup('cc_${ci}',this)">
       <td><span class="expand-icon"><i class="fas fa-chevron-right"></i></span> <strong>(${cc.id})</strong> ${cc.name}
         <span style="font-size:11px;color:#94a3b8;font-weight:400;margin-left:4px">${cc.tasks.length} task${cc.tasks.length>1?'s':''}</span></td>
-      <td class="right">${fmt(ccTotals.tC)}</td>
-      <td class="right">${fmt(ccTotals.tB)}</td>
+      <td class="right">${fmt(ccContract)}</td>
+      <td class="right">${fmt(ccBudget)}</td>
       <td class="right" style="color:#8b5cf6;font-weight:600">${fmt(ccComm)}
         <div class="committed-bar"><div class="committed-fill-track"><div class="committed-fill" style="width:${commPct}%"></div></div><span class="committed-text">${Math.round(commPct)}%</span></div></td>
-      <td class="right">${fmt(ccTotals.tA)}</td>
-      <td class="right" style="color:#64748b">${fmt(ccTotals.tCTC)}</td>
-      <td class="right" style="font-weight:700">${fmt(ccTotals.tF)}</td>
+      <td class="right">${fmt(ccActual)}</td>
+      <td class="right" style="color:#f5a623;font-weight:700">${fmt(ccCTC)}</td>
+      <td class="right" style="font-weight:700">${fmt(ccFF)}</td>
       <td class="right margin-cell ${ccV>=0?'positive':'negative'}">${fmt(ccV)}</td>
     </tr>`;
 
@@ -1147,29 +1161,27 @@ function renderCCTable() {
 
     cc.tasks.forEach(task => {
       const ctc = calcTaskCTC(task);
-      const ff = task.actualToDate + ctc;
-      const v = task.estimatedBudget - ff;
+      const leafIdx = leafTaskList.indexOf(task);
       html += `<tr class="cc-child-row" data-group="cc_${ci}">
         <td style="padding-left:40px"><i class="fas fa-sitemap" style="color:#3b82f6;font-size:11px;margin-right:6px"></i>${task.num}. ${task.name}</td>
         <td class="right" style="font-weight:400">${fmt(task.contract)}</td>
         <td class="right" style="font-weight:400">${fmt(task.estimatedBudget)}</td>
         <td class="right" style="font-weight:400">-</td>
-        <td class="right" style="font-weight:400">${fmt(task.actualToDate)}</td>
-        <td class="right" style="font-weight:400;color:#64748b">${fmt(ctc)}</td>
-        <td class="right" style="font-weight:400">${fmt(ff)}</td>
-        <td class="right margin-cell ${v>=0?'positive':'negative'}" style="font-size:12px">${fmt(v)}</td>
+        <td class="right" style="font-weight:400;color:#94a3b8">-</td>
+        <td class="right ctc-clickable" style="font-weight:500;color:#f5a623" onclick="event.stopPropagation();openModal(${leafIdx})">${fmt(ctc)} <span class="edit-hint"><i class="fas fa-pencil"></i></span></td>
+        <td class="right" style="font-weight:400">-</td>
+        <td class="right" style="font-weight:400">-</td>
       </tr>`;
     });
   });
   body.innerHTML = html;
 
-  const gV = totB - totF;
   foot.innerHTML = `<tr><td style="font-weight:700">Total</td>
     <td class="right" style="font-weight:700">${fmt(totC)}</td><td class="right" style="font-weight:700">${fmt(totB)}</td>
     <td class="right" style="font-weight:700;color:#8b5cf6">${fmt(totComm)}</td>
     <td class="right" style="font-weight:700">${fmt(totA)}</td>
-    <td class="right" style="font-weight:700;color:#64748b">${fmt(totCTC)}</td><td class="right" style="font-weight:700">${fmt(totF)}</td>
-    <td class="right margin-cell ${gV>=0?'positive':'negative'}" style="font-weight:700">${fmt(gV)}</td></tr>`;
+    <td class="right" style="font-weight:700;color:#f5a623">${fmt(totCTC)}</td><td class="right" style="font-weight:700">${fmt(totF)}</td>
+    <td class="right margin-cell ${(totB-totF)>=0?'positive':'negative'}" style="font-weight:700">${fmt(totB-totF)}</td></tr>`;
 }
 
 /* ═══════════════════════════════════════════
