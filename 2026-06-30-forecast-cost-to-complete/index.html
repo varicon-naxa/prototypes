@@ -1087,6 +1087,13 @@ function renderCCTable() {
   const ccData = buildCCData();
   const filterVal = document.getElementById('filterCC').value;
   const data = filterVal ? ccData.filter(cc => cc.id === filterVal) : ccData;
+  const cmp = !!ccCompareSnapshot;
+
+  // Populate compare selector
+  const csel = document.getElementById('ccCompareSelect');
+  const curVal = csel.value;
+  csel.innerHTML = '<option value="">Current only</option>' +
+    forecastSnapshots.map(s => `<option value="${s.id}"${s.id===curVal?' selected':''}>${s.label} — ${s.date} (${s.author})</option>`).join('');
 
   let gB=0, gA=0, gCTC=0, gComm=0, gC=0;
   data.forEach(cc => {
@@ -1114,6 +1121,9 @@ function renderCCTable() {
   const body = document.getElementById('ccBody');
   const foot = document.getElementById('ccFoot');
 
+  const movCol = cmp ? '<th class="right" style="width:100px">Movement</th>' : '';
+  const movSub = cmp ? `<th class="right" style="background:rgba(139,92,246,.08)">vs ${ccCompareSnapshot.label}</th>` : '';
+
   head.innerHTML = `
     <tr class="cc-super-header">
       <th style="min-width:240px">Cost Centre</th>
@@ -1122,6 +1132,7 @@ function renderCCTable() {
       <th class="right" style="width:110px">Committed (POs)</th>
       <th class="right" style="width:100px">Actual to Date</th>
       <th class="right" style="width:120px">Cost to Complete</th>
+      ${movCol}
       <th class="right" style="width:110px">Forecast Final</th>
       <th class="right" style="width:100px">Variance</th>
     </tr>
@@ -1129,7 +1140,9 @@ function renderCCTable() {
       <th>CC / Task</th><th class="right">Sum</th><th class="right">Est. Budget</th>
       <th class="right" style="background:rgba(139,92,246,.08)">From POs</th>
       <th class="right">At CC level</th>
-      <th class="right" style="background:rgba(245,166,35,.15)">Per Task</th><th class="right">Actual + CTC</th><th class="right">Budget − Forecast</th>
+      <th class="right" style="background:rgba(245,166,35,.15)">Per Task</th>
+      ${movSub}
+      <th class="right">Actual + CTC</th><th class="right">Budget − Forecast</th>
     </tr>`;
 
   let html = '', totC=0, totB=0, totA=0, totCTC=0, totF=0, totComm=0;
@@ -1146,6 +1159,13 @@ function renderCCTable() {
     const commPct = ccBudget > 0 ? Math.min(100, ccComm / ccBudget * 100) : 0;
     totC += ccContract; totB += ccBudget; totA += ccActual; totCTC += ccCTC; totF += ccFF; totComm += ccComm;
 
+    // CC-level movement: sum of task movements
+    let ccMovCell = '';
+    if (cmp) {
+      const prevCCCTC = cc.tasks.reduce((s, t) => s + (ccCompareSnapshot.taskCTC[t.num] ?? calcTaskCTC(t)), 0);
+      ccMovCell = movementCell(ccCTC, prevCCCTC);
+    }
+
     html += `<tr class="cc-parent-row" onclick="toggleGroup('cc_${ci}',this)">
       <td><span class="expand-icon"><i class="fas fa-chevron-right"></i></span> <strong>(${cc.id})</strong> ${cc.name}
         <span style="font-size:11px;color:#94a3b8;font-weight:400;margin-left:4px">${cc.tasks.length} task${cc.tasks.length>1?'s':''}</span></td>
@@ -1155,10 +1175,12 @@ function renderCCTable() {
         <div class="committed-bar"><div class="committed-fill-track"><div class="committed-fill" style="width:${commPct}%"></div></div><span class="committed-text">${Math.round(commPct)}%</span></div></td>
       <td class="right">${fmt(ccActual)}</td>
       <td class="right" style="color:#f5a623;font-weight:700">${fmt(ccCTC)}</td>
+      ${ccMovCell}
       <td class="right" style="font-weight:700">${fmt(ccFF)}</td>
       <td class="right margin-cell ${ccV>=0?'positive':'negative'}">${fmt(ccV)}</td>
     </tr>`;
 
+    const poMovCol = cmp ? '<td class="right" style="font-weight:400">-</td>' : '';
     ccPOs.forEach(po => {
       html += `<tr class="cc-child-row" data-group="cc_${ci}">
         <td style="padding-left:40px"><i class="fas fa-file-invoice" style="color:#8b5cf6;font-size:11px;margin-right:6px"></i><span style="color:#8b5cf6;font-weight:500">${po.ref}</span> — ${po.desc}</td>
@@ -1167,6 +1189,7 @@ function renderCCTable() {
         <td class="right" style="font-weight:400;color:#8b5cf6">${fmt(po.amount)}</td>
         <td class="right" style="font-weight:400">-</td>
         <td class="right" style="font-weight:400">-</td>
+        ${poMovCol}
         <td class="right" style="font-weight:400">-</td>
         <td class="right" style="font-weight:400">-</td>
       </tr>`;
@@ -1175,6 +1198,11 @@ function renderCCTable() {
     cc.tasks.forEach(task => {
       const ctc = calcTaskCTC(task);
       const leafIdx = leafTaskList.indexOf(task);
+      let taskMovCell = '';
+      if (cmp) {
+        const prevCTC = ccCompareSnapshot.taskCTC[task.num] ?? null;
+        taskMovCell = movementCell(ctc, prevCTC);
+      }
       html += `<tr class="cc-child-row" data-group="cc_${ci}">
         <td style="padding-left:40px"><i class="fas fa-sitemap" style="color:#3b82f6;font-size:11px;margin-right:6px"></i>${task.num}. ${task.name}</td>
         <td class="right" style="font-weight:400">${fmt(task.contract)}</td>
@@ -1182,6 +1210,7 @@ function renderCCTable() {
         <td class="right" style="font-weight:400">-</td>
         <td class="right" style="font-weight:400;color:#94a3b8">-</td>
         <td class="right ctc-clickable" style="font-weight:500;color:#f5a623" onclick="event.stopPropagation();openModal(${leafIdx})">${fmt(ctc)} <span class="edit-hint"><i class="fas fa-pencil"></i></span></td>
+        ${taskMovCell}
         <td class="right" style="font-weight:400">-</td>
         <td class="right" style="font-weight:400">-</td>
       </tr>`;
@@ -1189,12 +1218,31 @@ function renderCCTable() {
   });
   body.innerHTML = html;
 
+  let footMovCell = '';
+  if (cmp) {
+    const prevTotal = Object.values(ccCompareSnapshot.taskCTC).reduce((s, v) => s + v, 0);
+    footMovCell = movementCell(totCTC, prevTotal);
+  }
   foot.innerHTML = `<tr><td style="font-weight:700">Total</td>
     <td class="right" style="font-weight:700">${fmt(totC)}</td><td class="right" style="font-weight:700">${fmt(totB)}</td>
     <td class="right" style="font-weight:700;color:#8b5cf6">${fmt(totComm)}</td>
     <td class="right" style="font-weight:700">${fmt(totA)}</td>
-    <td class="right" style="font-weight:700;color:#f5a623">${fmt(totCTC)}</td><td class="right" style="font-weight:700">${fmt(totF)}</td>
+    <td class="right" style="font-weight:700;color:#f5a623">${fmt(totCTC)}</td>
+    ${footMovCell}
+    <td class="right" style="font-weight:700">${fmt(totF)}</td>
     <td class="right margin-cell ${(totB-totF)>=0?'positive':'negative'}" style="font-weight:700">${fmt(totB-totF)}</td></tr>`;
+
+  // Update compare summary
+  const summaryEl = document.getElementById('ccCompareSummary');
+  if (cmp) {
+    const prevTotal = Object.values(ccCompareSnapshot.taskCTC).reduce((s, v) => s + v, 0);
+    const mov = totCTC - prevTotal;
+    const dir = mov > 0 ? 'increased' : mov < 0 ? 'decreased' : 'unchanged';
+    const arrow = mov > 0 ? '<i class="fas fa-arrow-up" style="color:#ef4444"></i>' : mov < 0 ? '<i class="fas fa-arrow-down" style="color:#16a34a"></i>' : '';
+    summaryEl.innerHTML = `${arrow} Total CTC <strong>${dir}</strong> by <strong>${fmt(Math.abs(mov))}</strong> since ${ccCompareSnapshot.label}`;
+  } else {
+    summaryEl.innerHTML = '';
+  }
 }
 
 /* ═══════════════════════════════════════════
