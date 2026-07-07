@@ -4839,6 +4839,7 @@ function buildBVZoneTable() {
   var data = getActiveData('cc');
   var zoneMap = {};
 
+  // Group by zone \u2192 cost centre (not BOQ line items)
   data.forEach(function(r, i) {
     if (r.isHeader) return;
     var boqAmt = r.amount || 0;
@@ -4848,19 +4849,27 @@ function buildBVZoneTable() {
     var zoneSel = document.querySelector('[data-zone-select="' + i + '"]') || document.querySelector('[data-assign-zone="' + i + '"]');
     var zoneName = (zoneSel && zoneSel.value && zoneSel.value !== '__add') ? zoneSel.value : 'Project Wide';
 
-    if (!zoneMap[zoneName]) zoneMap[zoneName] = { contract: 0, budget: 0, items: [] };
+    var ccSel = document.querySelector('[data-cc-select="' + i + '"]') || document.querySelector('[data-assign-cc="' + i + '"]');
+    var ccName = (ccSel && ccSel.value && ccSel.value !== '__addcc') ? ccSel.value : 'Unassigned';
+
+    if (!zoneMap[zoneName]) zoneMap[zoneName] = { contract: 0, budget: 0, ccs: {} };
     zoneMap[zoneName].contract += boqAmt;
     zoneMap[zoneName].budget += budgetAmt;
-    zoneMap[zoneName].items.push({ desc: r.desc, code: r.code, contract: boqAmt, budget: budgetAmt });
+    if (!zoneMap[zoneName].ccs[ccName]) zoneMap[zoneName].ccs[ccName] = { contract: 0, budget: 0 };
+    zoneMap[zoneName].ccs[ccName].contract += boqAmt;
+    zoneMap[zoneName].ccs[ccName].budget += budgetAmt;
   });
 
+  // Additional (unmapped) cost centres \u2014 assigned to a zone via their own zone dropdown
   var unmapped = getUnmappedCCData();
   unmapped.forEach(function(u) {
-    if (u.amount === 0) return;
+    if (!u.amount) return;
     var zoneName = u.zone || 'Project Wide';
-    if (!zoneMap[zoneName]) zoneMap[zoneName] = { contract: 0, budget: 0, items: [] };
+    var ccName = u.cc || 'Other';
+    if (!zoneMap[zoneName]) zoneMap[zoneName] = { contract: 0, budget: 0, ccs: {} };
     zoneMap[zoneName].budget += u.amount;
-    zoneMap[zoneName].items.push({ desc: u.desc || u.cc + ' (non-BOQ)', code: '', contract: 0, budget: u.amount });
+    if (!zoneMap[zoneName].ccs[ccName]) zoneMap[zoneName].ccs[ccName] = { contract: 0, budget: 0 };
+    zoneMap[zoneName].ccs[ccName].budget += u.amount;
   });
 
   var grandContract = 0, grandBudget = 0;
@@ -4900,14 +4909,16 @@ function buildBVZoneTable() {
       '</tr>';
     });
 
-    d.items.forEach(function(item) {
-      var ip = item.contract - item.budget;
-      var im = item.contract > 0 ? ((ip / item.contract) * 100) : 0;
+    // Show cost centres under each zone (not BOQ line items)
+    Object.keys(d.ccs).forEach(function(ccName) {
+      var cc = d.ccs[ccName];
+      var ip = cc.contract - cc.budget;
+      var im = cc.contract > 0 ? ((ip / cc.contract) * 100) : 0;
       html += '<tr id="' + rid + 'child" style="display:none;background:#f8fafc">' +
         '<td></td>' +
-        '<td style="padding:8px 14px 8px 28px;color:#64748b;font-size:12px">' + (item.code ? '<span style="color:#94a3b8;margin-right:6px">' + item.code + '</span>' : '') + (item.desc || '\u2014') + '</td>' +
-        '<td class="right" style="padding:8px 14px;white-space:nowrap;font-size:12px">$' + item.contract.toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
-        '<td class="right" style="padding:8px 14px;white-space:nowrap;font-size:12px">$' + item.budget.toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
+        '<td style="padding:8px 14px 8px 32px;color:#1b2a4a;font-size:12px;font-weight:600"><i class="fas fa-layer-group" style="color:#f5a623;font-size:10px;margin-right:6px"></i>' + ccName + '</td>' +
+        '<td class="right" style="padding:8px 14px;white-space:nowrap;font-size:12px">$' + cc.contract.toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
+        '<td class="right" style="padding:8px 14px;white-space:nowrap;font-size:12px">$' + cc.budget.toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
         '<td class="right" style="padding:8px 14px;white-space:nowrap;font-size:12px;color:#94a3b8">$0.00</td>' +
         '<td class="right" style="padding:8px 14px;white-space:nowrap;font-size:12px;color:' + (ip >= 0 ? '#16a34a' : '#ef4444') + '">$' + ip.toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
         '<td class="right" style="padding:8px 14px;font-size:12px;color:' + (im >= 0 ? '#16a34a' : '#ef4444') + '">' + im.toFixed(2) + '%</td>' +
