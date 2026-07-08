@@ -863,6 +863,47 @@
     if (modalReturnTo === 'detail') showDetail(currentBill);
   }
 
+  /* ---------- reject modal (approver side) ---------- */
+  function openRejectModal() {
+    const b = currentBill;
+    const wf = b.workflow || DEFAULT_WORKFLOW;
+    const me = PEOPLE[wf[0]]; // the approver the bill is currently sitting with
+    document.getElementById('rj-sub').textContent = `${b.supplier} · Ref ${b.ref} · ${b.project} · ${fmt(b.credit ? b.total - b.credit.amount : b.total)}`;
+    document.getElementById('rj-as-av').textContent = me.init;
+    document.getElementById('rj-as-av').style.background = me.color;
+    document.getElementById('rj-as-name').textContent = `${me.name} (${me.role})`;
+    document.getElementById('rj-reason').value = '';
+    const sel = document.getElementById('rj-suggest');
+    sel.innerHTML = '<option value="">No suggestion</option>' +
+      Object.keys(PEOPLE).filter(k => k !== wf[0]).map(k => `<option value="${k}">${PEOPLE[k].name} — ${PEOPLE[k].role}</option>`).join('');
+    refreshRejectModal();
+    document.getElementById('reject-overlay').classList.add('open');
+  }
+  function closeRejectModal() { document.getElementById('reject-overlay').classList.remove('open'); }
+  function refreshRejectModal() {
+    document.getElementById('rj-submit').disabled = document.getElementById('rj-reason').value.trim().length === 0;
+  }
+  function submitReject() {
+    const b = currentBill;
+    const wf = b.workflow || DEFAULT_WORKFLOW;
+    const rejKey = wf[0];
+    const suggestKey = document.getElementById('rj-suggest').value;
+    b.resubmitted = false;
+    b.rejBy = PEOPLE[rejKey].name;
+    b.rejInit = rejKey;
+    b.rejDate = 'Today';
+    b.reason = document.getElementById('rj-reason').value.trim();
+    b.suggested = suggestKey ? { who: suggestKey, replace: rejKey } : null;
+    b.note = null;
+    b.workflowChanged = false;
+    b.newApprovers = [];
+    b.removedApprovers = [];
+    closeRejectModal();
+    renderList();
+    showDetail(b);
+    toast(`${b.supplier} ${b.ref} rejected — back on the Rejected tab${suggestKey ? ` with a suggestion to route to ${PEOPLE[suggestKey].name}` : ''}.`);
+  }
+
   /* ---------- approver chips (read-only) ---------- */
   function renderApprovers(el, keys, newKeys) {
     keys = keys || DEFAULT_WORKFLOW;
