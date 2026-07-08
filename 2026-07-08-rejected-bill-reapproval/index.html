@@ -739,6 +739,8 @@
 
   /* ---------- detail (approver view) ---------- */
   function showDetail(b) {
+    currentBill = b;
+    const isResub = !!b.resubmitted;
     document.getElementById('det-title').textContent = 'Bill: ' + b.ref;
     document.getElementById('det-supplier').textContent = b.supplier;
     document.getElementById('det-project').textContent = b.project;
@@ -746,17 +748,37 @@
     document.getElementById('det-date').textContent = b.date;
     document.getElementById('det-due').textContent = b.date;
 
-    const hasCredit = !!b.credit;
+    // status pill + chips
+    const pill = document.getElementById('det-status-pill');
+    pill.className = 'pill ' + (isResub ? 'awaiting' : 'rejected');
+    pill.textContent = isResub ? 'Awaiting Approval' : 'Rejected';
+    document.getElementById('det-attempt').style.display = isResub ? 'inline-flex' : 'none';
+
+    // banners + actions
+    document.getElementById('det-rej-banner').style.display = isResub ? 'none' : 'flex';
+    document.getElementById('det-resub-banner').style.display = isResub ? 'flex' : 'none';
+    document.getElementById('det-actions-rejected').style.display = isResub ? 'none' : 'flex';
+    document.getElementById('det-actions-resub').style.display = isResub ? 'flex' : 'none';
+    document.getElementById('det-workflow-hint').textContent = isResub
+      ? 'Approval restarts from the first approver on resubmission.'
+      : `Approval stopped at ${b.rejBy}. Resubmitting sends the bill back through the workflow from the first approver.`;
+
+    const hasCredit = isResub && !!b.credit;
     document.getElementById('det-credit-chip').style.display = hasCredit ? 'inline-flex' : 'none';
 
-    let bannerText = `Rejected by <b>${b.rejBy}</b> on ${b.rejDate}: “${b.reason}”`;
-    if (hasCredit) {
-      bannerText += `<br>Supplier credit <b>${b.credit.ref}</b> (${b.credit.reason.toLowerCase()}) of <b>${fmt(b.credit.amount)}</b> has been applied — the amount for approval is <b>${fmt(b.total - b.credit.amount)}</b>.`;
+    if (isResub) {
+      let bannerText = `Rejected by <b>${b.rejBy}</b> on ${b.rejDate}: “${b.reason}”`;
+      if (hasCredit) {
+        bannerText += `<br>Supplier credit <b>${b.credit.ref}</b> (${b.credit.reason.toLowerCase()}) of <b>${fmt(b.credit.amount)}</b> has been applied — the amount for approval is <b>${fmt(b.total - b.credit.amount)}</b>.`;
+      }
+      document.getElementById('det-banner-text').innerHTML = bannerText;
+      const noteEl = document.getElementById('det-banner-note');
+      if (b.note) { noteEl.style.display = 'block'; noteEl.textContent = '“' + b.note + '” — resubmission note'; }
+      else noteEl.style.display = 'none';
+    } else {
+      document.getElementById('det-rej-text').innerHTML =
+        `Rejected by <b>${b.rejBy}</b> on ${b.rejDate}: “${b.reason}”<br>Resolve the issue, then resubmit it into the approval workflow — as-is, or after applying a supplier credit.`;
     }
-    document.getElementById('det-banner-text').innerHTML = bannerText;
-    const noteEl = document.getElementById('det-banner-note');
-    if (b.note) { noteEl.style.display = 'block'; noteEl.textContent = '“' + b.note + '” — resubmission note'; }
-    else noteEl.style.display = 'none';
 
     // lines
     const lines = b.lines || [
