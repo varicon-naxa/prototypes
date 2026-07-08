@@ -1,0 +1,1795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Timesheet Update</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #143666;
+      --secondary: #F19100;
+      --accent: #F19100;
+      --bg: #ffffff;
+      --muted: rgba(0,5,10,0.60);
+      --text-primary: rgba(0,5,10,0.87);
+      --border: rgba(0,0,0,0.12);
+      --divider: #E0E0E0;
+      --field-border: #C4C4C4;
+      --green-bg: #DBF0DC;
+      --green-text: #0F8A0F;
+      --amber-bg: #FFF5E5;
+      --amber-text: #663D00;
+      --red: #D2281B;
+      --surface: #F5F5F5;
+    }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: #F2F7FD;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 24px 0;
+    }
+
+    /* ── Phone frame ── */
+    .phone {
+      width: 390px;
+      height: 824px;
+      background: var(--bg);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-radius: 28px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+    }
+
+    /* ── Header ── */
+    .ci-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      background: #fff;
+      flex-shrink: 0;
+    }
+    .icon-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--primary);
+      display: flex; align-items: center; justify-content: center;
+      padding: 2px;
+    }
+    .ci-header-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    /* ── Scroll body ── */
+    .ci-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px 12px calc(env(safe-area-inset-bottom) + 12px);
+    }
+
+    /* ── Section card ── */
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 1px 3px rgba(16,24,40,0.06);
+    }
+    .card-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.7px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .req { color: var(--red); }
+    .card-hint {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+      margin-bottom: 12px;
+    }
+
+    /* ── Shift context strip ── */
+    .shift-strip {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: linear-gradient(135deg, #1c4179, #143666);
+      border-radius: 14px;
+      padding: 14px 16px;
+      color: #fff;
+    }
+    .shift-time-box {
+      flex-shrink: 0;
+      text-align: center;
+      background: rgba(255,255,255,0.14);
+      border-radius: 10px;
+      padding: 8px 10px;
+      min-width: 58px;
+    }
+    .shift-time-box .t { font-size: 15px; font-weight: 700; line-height: 1.15; }
+    .shift-time-box .sub { font-size: 10px; opacity: 0.8; letter-spacing: 0.4px; }
+    .shift-meta { flex: 1; min-width: 0; }
+    .shift-meta .label { font-size: 10px; letter-spacing: 0.6px; text-transform: uppercase; opacity: 0.75; }
+    .shift-meta .proj {
+      font-size: 14px; font-weight: 500; margin: 1px 0 3px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .shift-meta .addr {
+      font-size: 11px; opacity: 0.82;
+      display: flex; align-items: center; gap: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .shift-change {
+      flex-shrink: 0;
+      background: rgba(255,255,255,0.16);
+      border: none; cursor: pointer;
+      color: #fff;
+      font-family: 'Roboto', sans-serif;
+      font-size: 12px; font-weight: 500;
+      border-radius: 18px;
+      padding: 7px 12px;
+    }
+    .shift-change:active { background: rgba(255,255,255,0.28); }
+
+    /* ── Project field ── */
+    .select-field {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1.5px solid var(--field-border);
+      border-radius: 10px;
+      padding: 13px 14px;
+      background: #fff;
+      cursor: pointer;
+      font-family: 'Roboto', sans-serif;
+      font-size: 14px;
+      color: var(--primary);
+      text-align: left;
+    }
+    .select-field:active { border-color: var(--primary); }
+    .select-field .sf-main { min-width: 0; flex: 1; }
+    .select-field .sf-placeholder { color: rgba(0,5,10,0.38); }
+    .select-field .sf-code {
+      display: inline-block;
+      font-size: 11px; font-weight: 700;
+      color: var(--accent);
+      background: var(--amber-bg);
+      border-radius: 5px;
+      padding: 1px 6px;
+      margin-right: 6px;
+    }
+    .select-field .sf-name {
+      font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .chev { color: var(--primary); opacity: 0.5; flex-shrink: 0; }
+    .project-addr {
+      display: none;
+      align-items: center; gap: 5px;
+      font-size: 12px; color: var(--muted);
+      margin-top: 8px; padding: 0 2px;
+    }
+    .project-addr svg { flex-shrink: 0; color: var(--accent); }
+
+    /* ── Equipment ── */
+    .equip-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+    .equip-list:empty { margin-bottom: 0; }
+
+    .equip-item {
+      border: 1.5px solid var(--divider);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .equip-item-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+    }
+    .equip-code {
+      flex-shrink: 0;
+      font-size: 11px; font-weight: 700;
+      color: var(--primary);
+      background: #EEEEEE;
+      border-radius: 6px;
+      padding: 4px 8px;
+    }
+    .equip-name {
+      flex: 1; min-width: 0;
+      font-size: 14px; font-weight: 500; color: var(--primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .equip-remove {
+      flex-shrink: 0;
+      background: none; border: none; cursor: pointer;
+      color: var(--muted);
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 8px;
+    }
+    .equip-remove:active { background: #f1f2f5; color: var(--red); }
+
+    .equip-attachments {
+      border-top: 1px dashed var(--divider);
+      padding: 10px 14px 12px;
+    }
+    .equip-attachments-label {
+      font-size: 11px; color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .chip-toggle-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1.5px solid var(--field-border);
+      border-radius: 20px;
+      padding: 6px 12px 6px 9px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px; font-weight: 500;
+      color: var(--primary);
+      font-family: 'Roboto', sans-serif;
+    }
+    .chip-toggle .tick {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      border: 1.5px solid var(--field-border);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      color: #fff;
+    }
+    .chip-toggle.on { border-color: var(--accent); background: var(--amber-bg); }
+    .chip-toggle.on .tick { background: var(--accent); border-color: var(--accent); }
+
+    .add-equip-btn {
+      width: 100%;
+      border: 1.5px dashed var(--field-border);
+      border-radius: 10px;
+      padding: 13px;
+      background: transparent;
+      color: var(--primary);
+      font-size: 14px; font-weight: 500;
+      font-family: 'Roboto', sans-serif;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+    }
+    .add-equip-btn:active { background: var(--surface); }
+
+    /* ── Footer ── */
+    .ci-footer {
+      flex-shrink: 0;
+      padding: 12px 16px max(env(safe-area-inset-bottom), 14px);
+      background: #fff;
+      border-top: 1px solid var(--border);
+    }
+    .summary-row {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 12px; color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .summary-row strong { color: var(--primary); font-weight: 500; }
+    .btn-clockin {
+      width: 100%;
+      background: var(--accent);
+      color: #143666;
+      border: none;
+      border-radius: 12px;
+      padding: 15px;
+      font-size: 16px; font-weight: 700;
+      font-family: 'Roboto', sans-serif;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-clockin:active { opacity: 0.9; }
+    .btn-clockin.inactive { opacity: 0.4; pointer-events: none; }
+
+    /* ── Full-screen picker sheet ── */
+    .sheet {
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.26s cubic-bezier(0.4,0,0.2,1);
+    }
+    .sheet.open { transform: translateX(0); }
+    .sheet-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sheet-search {
+      flex: 1;
+      border: none; outline: none;
+      font-size: 15px;
+      font-family: 'Roboto', sans-serif;
+      color: var(--primary);
+      padding: 8px 4px;
+    }
+    .sheet-search::placeholder { color: rgba(0,5,10,0.38); }
+    .sheet-tabs { display: flex; border-bottom: 1px solid var(--border); }
+    .sheet-tab {
+      flex: 1; padding: 13px 0; text-align: center;
+      font-size: 13px; font-weight: 500; letter-spacing: 0.3px;
+      color: var(--muted); border: none; background: none;
+      cursor: pointer; border-bottom: 2px solid transparent;
+      font-family: 'Roboto', sans-serif;
+    }
+    .sheet-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .sheet-list { flex: 1; overflow-y: auto; }
+    .sheet-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 15px 16px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .sheet-item:active { background: var(--surface); }
+    .sheet-item.selected { background: #f0f4ff; }
+    .sheet-item-main { flex: 1; min-width: 0; }
+    .sheet-item-name { font-size: 14px; color: var(--primary); }
+    .sheet-item-addr { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .hire-tag {
+      font-size: 11px; color: var(--green-text);
+      background: var(--green-bg); border-radius: 5px;
+      padding: 3px 9px; white-space: nowrap; flex-shrink: 0;
+    }
+    .sheet-check {
+      width: 20px; height: 20px; flex-shrink: 0;
+      border-radius: 6px; border: 1.5px solid var(--field-border);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff;
+    }
+    .sheet-item.selected .sheet-check { background: var(--accent); border-color: var(--accent); }
+    .sheet.layer-2 { z-index: 600; }
+    #screenClockOut { z-index: 450; }
+    #screenClockoutChoose { z-index: 460; }
+    .sheet.bottom {
+      top: auto; bottom: 0; left: 0; right: 0;
+      height: auto; max-height: 88vh;
+      border-radius: 20px 20px 0 0;
+      transform: translateY(100%);
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+    }
+    .sheet.bottom.open { transform: translateY(0); }
+    .dur-grid input:disabled { background: #f4f5f8; color: var(--muted); cursor: default; }
+    .bottom-sheet-handle {
+      width: 36px; height: 4px;
+      background: #E0E0E0; border-radius: 2px;
+      margin: 10px auto 4px; flex-shrink: 0;
+    }
+    #sheetAssignBackdrop {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 590;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.26s ease;
+    }
+    #sheetAssignBackdrop.visible { opacity: 1; pointer-events: auto; }
+
+    /* ════════════════════════════════════════
+       CLOCK-OUT (Clocked Timesheet) SCREEN
+    ════════════════════════════════════════ */
+    .co-overflow { margin-left: auto; }
+
+    /* "Worked on multiple projects" row */
+    .multi-row {
+      display: flex; align-items: center; gap: 10px;
+      background: #EEEEEE; border-radius: 10px;
+      padding: 12px 14px; margin-top: 10px;
+      cursor: pointer; border: none; width: 100%; text-align: left;
+      font-family: 'Roboto', sans-serif;
+    }
+    .multi-row:active { background: #e5e9f2; }
+    .multi-row .mr-body { flex: 1; min-width: 0; }
+    .multi-row .mr-title { font-size: 13px; font-weight: 500; color: var(--primary); }
+    .multi-row .mr-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+    .multi-row .chev { opacity: 0.5; }
+
+    /* Info / warning banners */
+    .info-banner, .warn-banner {
+      display: flex; gap: 10px; align-items: flex-start;
+      border-radius: 10px; padding: 11px 13px;
+      font-size: 12px; line-height: 1.45;
+    }
+    .info-banner { background: var(--amber-bg); border: 1px solid #f5d08a; color: #7c5200; }
+    .warn-banner { background: #fff4f4; border: 1px solid #f3c0c8; color: #9a2334; margin-top: 4px; }
+    .info-banner svg, .warn-banner svg { flex-shrink: 0; margin-top: 1px; }
+
+    /* Two-up field grid */
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .mini-field {
+      border: 1.5px solid var(--field-border);
+      border-radius: 10px; padding: 9px 12px; background: #fff;
+    }
+    .mini-field .mf-label { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+    .mini-field .mf-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .mini-field .mf-value { font-size: 16px; font-weight: 500; color: var(--primary); }
+    .mini-field input {
+      border: none; outline: none; background: transparent;
+      font-size: 16px; font-weight: 500; color: var(--primary);
+      font-family: 'Roboto', sans-serif; width: 100%; padding: 0;
+    }
+    .mf-clock { color: var(--primary); opacity: 0.4; flex-shrink: 0; }
+
+    .meta-line {
+      display: flex; gap: 7px; align-items: flex-start;
+      font-size: 11.5px; color: var(--muted); line-height: 1.4;
+      margin-top: 10px;
+    }
+    .meta-line svg { flex-shrink: 0; margin-top: 1px; opacity: 0.7; }
+    .meta-link { color: var(--accent); }
+
+    .duration-readout {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
+    }
+    .duration-readout .dr-label { font-size: 12px; color: var(--muted); }
+    .duration-readout .dr-value { font-size: 22px; font-weight: 700; color: var(--primary); }
+
+    /* Allocation summary + cards */
+    .alloc-summary {
+      display: flex; gap: 10px; margin-bottom: 12px;
+    }
+    .alloc-stat {
+      flex: 1; background: var(--surface); border-radius: 10px; padding: 10px 12px;
+    }
+    .alloc-stat .as-label { font-size: 10.5px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--muted); }
+    .alloc-stat .as-value { font-size: 16px; font-weight: 700; color: var(--primary); margin-top: 2px; }
+    .alloc-stat.warn .as-value { color: var(--amber-text); }
+    .alloc-stat.done .as-value { color: var(--green-text); }
+
+    .alloc-card {
+      border: 1.5px solid var(--divider); border-radius: 12px;
+      padding: 12px 14px; margin-bottom: 10px; background: #fff;
+    }
+    .alloc-card-top { display: flex; align-items: flex-start; gap: 10px; }
+    .alloc-card-body { flex: 1; min-width: 0; }
+    .alloc-card-title { font-size: 14px; font-weight: 500; color: var(--primary); }
+    .alloc-card-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .alloc-card-dur {
+      font-size: 13px; font-weight: 700; color: var(--primary);
+      background: #EEEEEE; border-radius: 7px; padding: 5px 9px; white-space: nowrap; flex-shrink: 0;
+    }
+    .alloc-remove {
+      background: none; border: none; cursor: pointer; color: var(--muted);
+      width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+      border-radius: 7px; flex-shrink: 0;
+    }
+    .alloc-remove:active { background: #f1f2f5; color: var(--red); }
+
+    .assign-btn {
+      width: 100%; border: 1.5px dashed var(--field-border); border-radius: 10px;
+      padding: 13px; background: transparent; color: var(--primary);
+      font-size: 14px; font-weight: 500; font-family: 'Roboto', sans-serif;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;
+    }
+    .assign-btn:active { background: var(--surface); }
+    .assign-btn.disabled { opacity: 0.45; pointer-events: none; }
+
+    /* Workflow chooser (WBS vs Cost Centre) */
+    .workflow-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .wf-tile {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; text-align: center; cursor: pointer;
+      border: 1.5px solid var(--field-border); border-radius: 14px;
+      background: #fff; padding: 18px 12px; font-family: 'Roboto', sans-serif;
+    }
+    .wf-tile:active { background: var(--surface); }
+    .wf-tile.selected { border-color: var(--accent); background: var(--amber-bg); box-shadow: inset 0 0 0 1px var(--accent); }
+    .wf-ic {
+      width: 46px; height: 46px; border-radius: 12px; background: #EEEEEE;
+      display: flex; align-items: center; justify-content: center; color: var(--primary);
+    }
+    .wf-tile.selected .wf-ic { background: var(--accent); color: #fff; }
+    .wf-title { font-size: 14px; font-weight: 700; color: var(--primary); }
+    .wf-sub { font-size: 11px; color: var(--muted); line-height: 1.3; }
+    .wf-status { font-size: 11px; font-weight: 700; margin-top: 2px; min-height: 14px; }
+    .wf-tile.selected .wf-status { color: var(--green-text); }
+    .wf-tile.locked { opacity: 0.5; pointer-events: none; }
+    .wf-tile.locked .wf-status { color: var(--muted); font-weight: 500; }
+
+    /* Equipment on clock-out */
+    .co-equip-card {
+      border: 1.5px solid var(--divider); border-radius: 12px;
+      padding: 12px 14px; margin-bottom: 10px; background: #fff;
+    }
+    .co-equip-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .co-equip-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 500; color: var(--primary); }
+    .co-equip-row { display: flex; align-items: center; gap: 8px; }
+    .equip-warn-chip {
+      display: inline-flex; align-items: center; gap: 5px; flex: 1;
+      font-size: 12px; color: var(--amber-text);
+    }
+    .equip-warn-chip svg { flex-shrink: 0; }
+    .equip-dur-pill {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 13px; font-weight: 700; color: var(--primary);
+      background: var(--surface); border-radius: 8px; padding: 6px 8px; cursor: pointer;
+    }
+
+    /* Remarks / attach */
+    .remarks-area {
+      width: 100%; min-height: 72px; resize: none;
+      border: 1.5px solid var(--field-border); border-radius: 10px;
+      padding: 11px 13px; font-size: 14px; font-family: 'Roboto', sans-serif;
+      color: var(--primary); outline: none;
+    }
+    .remarks-area:focus { border-color: var(--primary); }
+    .attach-row {
+      display: flex; align-items: center; gap: 8px; margin-top: 10px;
+      color: var(--accent); font-size: 13px; font-weight: 500; cursor: pointer;
+    }
+
+    /* Assign sheet form */
+    .assign-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .fld { display: flex; flex-direction: column; gap: 6px; }
+    .fld-label { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); }
+    .fld-select {
+      width: 100%; border: 1.5px solid var(--field-border); border-radius: 10px;
+      padding: 13px 14px; font-size: 14px; font-family: 'Roboto', sans-serif;
+      color: var(--primary); background: #fff; outline: none;
+      -webkit-appearance: none; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='%23143666'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 14px center;
+    }
+    .fld-select:focus { border-color: var(--primary); }
+    .check-row { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+    .check-box {
+      width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid var(--field-border);
+      display: flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0;
+    }
+    .check-row.on .check-box { background: var(--accent); border-color: var(--accent); }
+    .check-row .check-label { font-size: 14px; color: var(--primary); }
+    .dur-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .assign-footer {
+      flex-shrink: 0; display: flex; gap: 10px;
+      padding: 12px 16px max(env(safe-area-inset-bottom), 14px);
+      border-top: 1px solid var(--border); background: #fff;
+    }
+    .btn-secondary {
+      flex: 1; border: 1.5px solid var(--field-border); background: #fff;
+      color: var(--primary); border-radius: 12px; padding: 14px;
+      font-size: 14px; font-weight: 500; letter-spacing: 0.25px; font-family: 'Roboto', sans-serif; cursor: pointer;
+    }
+    .btn-secondary:active { background: var(--surface); }
+    .btn-primary {
+      flex: 1.4; border: none; background: var(--accent); color: #143666;
+      border-radius: 12px; padding: 14px; font-size: 14px; font-weight: 500; letter-spacing: 0.25px;
+      font-family: 'Roboto', sans-serif; cursor: pointer;
+    }
+    .btn-primary:active { opacity: 0.9; }
+
+    /* Info button + note (assign page) */
+    .add-label-row { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+    .info-btn { background: none; border: none; cursor: pointer; color: var(--muted); padding: 0; display: flex; align-items: center; }
+    .info-btn:active { color: var(--primary); }
+    .info-note {
+      display: flex; gap: 8px; align-items: flex-start;
+      background: #eef4ff; border: 1px solid #cfe0ff; color: #234a86;
+      border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.45; margin-bottom: 14px;
+    }
+    .info-note svg { flex-shrink: 0; margin-top: 1px; }
+
+    /* Auto-assigned plant (mirrors time allocation) */
+    .equip-auto-note {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 500; color: var(--green-text);
+      margin-bottom: 8px;
+    }
+    .equip-auto-note svg { flex-shrink: 0; }
+    .equip-auto-list { display: flex; flex-direction: column; gap: 6px; }
+    .equip-auto-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      background: var(--surface); border-radius: 8px; padding: 8px 11px;
+    }
+    .equip-auto-label { font-size: 13px; color: var(--primary); min-width: 0; }
+    .equip-auto-dur { font-size: 13px; font-weight: 700; color: var(--primary); white-space: nowrap; flex-shrink: 0; }
+
+    /* ════════════════════════════════════════
+       LANDING — My Timesheet
+    ════════════════════════════════════════ */
+    .lp-topbar {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 16px; background: #fff;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .lp-title { font-size: 20px; font-weight: 700; color: var(--primary); }
+    .lp-icons { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+
+    .lp-body {
+      flex: 1; min-height: 0; overflow-y: auto;
+      background: var(--surface);
+      display: flex; flex-direction: column; gap: 12px;
+      padding: 12px 12px 84px;
+    }
+
+    .faceid-banner {
+      display: flex; align-items: flex-start; gap: 12px;
+      background: var(--amber-bg); border: 1px solid #f5d08a;
+      border-radius: 12px; padding: 13px 14px;
+    }
+    .faceid-banner .fb-icon { color: var(--accent); flex-shrink: 0; }
+    .faceid-banner .fb-text { flex: 1; font-size: 13px; color: #7c5200; line-height: 1.45; }
+    .faceid-banner .fb-text b { color: #663D00; }
+    .faceid-banner .fb-close { background: none; border: none; cursor: pointer; color: #7c5200; flex-shrink: 0; padding: 2px; }
+
+    .welcome-h { font-size: 20px; font-weight: 700; color: var(--primary); }
+    .welcome-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-top: 10px; }
+    .prev-label { font-size: 12px; color: var(--muted); }
+    .prev-proj { font-size: 16px; font-weight: 500; color: var(--primary); margin-top: 2px; }
+    .prev-dates { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+    .today-date { font-size: 13px; color: var(--muted); white-space: nowrap; }
+
+    .lp-clockin {
+      width: 100%; background: var(--accent); color: #143666; border: none;
+      border-radius: 26px; padding: 15px; font-size: 16px; font-weight: 700;
+      font-family: 'Roboto', sans-serif; cursor: pointer; margin-top: 16px;
+    }
+    .lp-clockin:active { opacity: 0.9; }
+    .lp-add {
+      width: 100%; background: none; border: none; color: var(--accent);
+      font-size: 14px; font-weight: 500; font-family: 'Roboto', sans-serif;
+      cursor: pointer; padding: 12px 0 2px; display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+
+    .leave-row { display: flex; gap: 10px; }
+    .btn-leave-fill {
+      flex: 1; background: var(--accent); color: #143666; border: none;
+      border-radius: 10px; padding: 13px; font-size: 14px; font-weight: 700;
+      font-family: 'Roboto', sans-serif; cursor: pointer;
+    }
+    .btn-leave-outline {
+      flex: 1; background: #fff; color: var(--primary); border: 1.5px solid var(--field-border);
+      border-radius: 10px; padding: 13px; font-size: 14px; font-weight: 500;
+      font-family: 'Roboto', sans-serif; cursor: pointer;
+    }
+    .btn-leave-fill:active { opacity: 0.9; }
+    .btn-leave-outline:active { background: var(--surface); }
+
+    .hist-card {
+      display: flex; background: #fff; border-radius: 14px; overflow: hidden;
+      box-shadow: 0 1px 3px rgba(16,24,40,0.06);
+    }
+    .hist-datebox {
+      width: 62px; flex-shrink: 0; background: var(--green-bg);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+      color: var(--green-text);
+    }
+    .hd-day { font-size: 12px; font-weight: 500; }
+    .hd-num { font-size: 26px; font-weight: 700; line-height: 1; }
+    .hd-mon { font-size: 11px; font-weight: 500; }
+    .hist-main { flex: 1; min-width: 0; padding: 12px 14px; }
+    .hist-proj { font-size: 15px; font-weight: 700; color: var(--primary); margin-bottom: 8px; }
+    .hist-line { display: flex; align-items: center; gap: 6px; font-size: 12.5px; margin-bottom: 4px; }
+    .hist-line .hl-label { color: var(--muted); width: 78px; letter-spacing: 0.3px; }
+    .hist-line .hl-val { color: var(--primary); font-weight: 500; }
+    .hist-line .hl-break { color: var(--muted); display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
+    .hist-line.approved .hl-label,
+    .hist-line.approved .hl-val,
+    .hist-line.approved .hl-break { color: var(--green-text); }
+    .hist-chips { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+    .hist-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; padding: 3px 9px; border-radius: 8px; }
+    .hist-chip.pending { background: var(--amber-bg); color: var(--amber-text); }
+    .hist-chip.approved { background: var(--green-bg); color: var(--green-text); }
+    .hist-scan {
+      margin-left: auto; background: var(--accent); color: #143666; border: none;
+      border-radius: 20px; padding: 9px 15px; font-size: 14px; font-weight: 700;
+      font-family: 'Roboto', sans-serif; cursor: pointer;
+      display: flex; align-items: center; gap: 7px;
+    }
+    .hist-scan:active { opacity: 0.9; }
+
+    .lp-bottomnav {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 64px;
+      background: #fff; border-top: 1px solid var(--border);
+      display: flex; z-index: 50;
+    }
+    .lp-nav-item {
+      flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 3px; font-size: 10px; font-weight: 500; color: var(--muted); cursor: pointer;
+      background: none; border: none; font-family: 'Roboto', sans-serif;
+    }
+    .lp-nav-ic { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
+    .lp-nav-item.active { color: var(--accent); }
+    .lp-nav-item.active .lp-nav-ic { background: var(--accent); color: #fff; border-radius: 50%; }
+
+    /* Clocked-in banner */
+    .clocked-banner {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--amber-bg); border: 1px solid #f0c66a;
+      border-radius: 12px; padding: 12px 14px;
+    }
+    .clocked-banner.urgent { background: #fdecec; border-color: #f0b4ba; }
+    .clocked-banner.done { background: var(--green-bg); border-color: #b6ddb9; }
+    .clocked-banner .cb-icon { color: var(--amber-text); flex-shrink: 0; display: flex; }
+    .clocked-banner.urgent .cb-icon { color: var(--red); }
+    .clocked-banner.done .cb-icon { color: var(--green-text); }
+    .cb-text { flex: 1; min-width: 0; }
+    .cb-title { font-size: 13px; font-weight: 700; color: #663D00; }
+    .clocked-banner.urgent .cb-title { color: #8a1c28; }
+    .clocked-banner.done .cb-title { color: var(--green-text); }
+    .cb-sub { font-size: 12px; color: #7c5200; margin-top: 1px; line-height: 1.4; }
+    .clocked-banner.urgent .cb-sub { color: #9a2334; }
+    .clocked-banner.done .cb-sub { color: var(--green-text); }
+    .cb-sub b { font-variant-numeric: tabular-nums; }
+    .cb-action {
+      flex-shrink: 0; background: var(--accent); color: #143666; border: none;
+      border-radius: 18px; padding: 8px 14px; font-size: 13px; font-weight: 700;
+      font-family: 'Roboto', sans-serif; cursor: pointer;
+    }
+    .cb-action:active { opacity: 0.9; }
+
+    /* Clocked-in welcome state */
+    .clocked-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-top: 10px; }
+    .clocked-timer-wrap { display: flex; align-items: center; gap: 7px; }
+    .live-dot {
+      width: 9px; height: 9px; border-radius: 50%; background: #e53935;
+      box-shadow: 0 0 0 0 rgba(229,57,53,0.5); animation: livePulse 1.6s infinite;
+    }
+    @keyframes livePulse {
+      0% { box-shadow: 0 0 0 0 rgba(229,57,53,0.5); }
+      70% { box-shadow: 0 0 0 7px rgba(229,57,53,0); }
+      100% { box-shadow: 0 0 0 0 rgba(229,57,53,0); }
+    }
+    .clocked-timer { font-size: 17px; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; letter-spacing: 0.5px; }
+
+    #screenClockIn { z-index: 440; }
+
+    /* ── Toast ── */
+    .toast {
+      position: absolute;
+      left: 50%; bottom: 90px;
+      transform: translateX(-50%) translateY(20px);
+      background: #143666;
+      color: #fff;
+      font-size: 13px;
+      padding: 12px 18px;
+      border-radius: 24px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 700;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+  <div class="phone">
+
+    <!-- ══════════════════════════════════════
+         LANDING — My Timesheet (root)
+    ══════════════════════════════════════ -->
+    <div class="lp-topbar">
+      <button class="icon-btn" title="Menu">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="lp-title">My Timesheet</span>
+      <div class="lp-icons">
+        <button class="icon-btn" title="Refresh" onclick="showToast('Refreshed')">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+        <button class="icon-btn" title="Notifications" onclick="showToast('No new notifications')">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </button>
+        <button class="icon-btn" title="Filter" onclick="showToast('Filter timesheets')">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="lp-body">
+
+      <!-- Clocked-in pre-start banner -->
+      <div class="clocked-banner" id="clockedBanner" style="display:none">
+        <span class="cb-icon" id="cbIcon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+        </span>
+        <div class="cb-text">
+          <div class="cb-title" id="cbTitle">Complete your pre-start form</div>
+          <div class="cb-sub" id="cbSub">Auto clock-out in <b id="cbCountdown">60:00</b> if not completed.</div>
+        </div>
+        <button class="cb-action" id="cbAction" onclick="completePrestart()">Complete</button>
+      </div>
+
+      <!-- Face ID banner -->
+      <div class="faceid-banner">
+        <svg class="fb-icon" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 11c0 3-1 5-1 5"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 12 0c0 .67 0 1.34-.1 2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.24 18.5c.69-1.4 1.26-3.6 1.26-6.5"/><path d="M22 16a18.13 18.13 0 0 1-.49 4"/></svg>
+        <div class="fb-text">Enable <b>Face ID / Fingerprint</b> for faster login. Tap here to enable.</div>
+        <button class="fb-close" onclick="this.closest('.faceid-banner').style.display='none'" title="Dismiss">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Welcome / clock-in -->
+      <div class="card">
+        <div class="welcome-h">Welcome back, Alec!</div>
+
+        <!-- Default (clocked-out) state -->
+        <div id="welcomeDefault">
+          <div class="welcome-top">
+            <div>
+              <div class="prev-label">Previously worked on</div>
+              <div class="prev-proj">Barton</div>
+              <div class="prev-dates">Wed, 20 May 2026 – Thu, 28 May 2026</div>
+            </div>
+            <div class="today-date">Wed, 27 May 2026</div>
+          </div>
+        </div>
+
+        <!-- Clocked-in state -->
+        <div id="welcomeClocked" style="display:none">
+          <div class="clocked-top">
+            <div>
+              <div class="prev-label">Clocked in to</div>
+              <div class="prev-proj" id="clockedProjName">(C100) Barton</div>
+            </div>
+            <div class="clocked-timer-wrap">
+              <span class="live-dot"></span>
+              <span class="clocked-timer" id="clockedTimer">00:00:00</span>
+            </div>
+          </div>
+        </div>
+
+        <button class="lp-clockin" id="lpPrimaryBtn" onclick="openSheet('screenClockIn')">Clock in</button>
+        <button class="lp-add" id="lpAddBtn" onclick="openSheet('screenClockIn')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Timesheet
+        </button>
+      </div>
+
+      <!-- Leave actions -->
+      <div class="leave-row">
+        <button class="btn-leave-fill" onclick="showToast('Request leave')">Request leave</button>
+        <button class="btn-leave-outline" onclick="showToast('View all leave')">View all leave</button>
+      </div>
+
+      <!-- Timesheet history card -->
+      <div class="hist-card" onclick="openClockOut()">
+        <div class="hist-datebox">
+          <span class="hd-day">Thu</span>
+          <span class="hd-num">21</span>
+          <span class="hd-mon">MAY</span>
+        </div>
+        <div class="hist-main">
+          <div class="hist-proj">(C100) Barton</div>
+          <div class="hist-line">
+            <span class="hl-label">CLOCKED</span>
+            <span class="hl-val">—</span>
+            <span class="hl-break"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z"/></svg> 30m</span>
+          </div>
+          <div class="hist-line approved">
+            <span class="hl-label">APPROVED</span>
+            <span class="hl-val">12h 0m</span>
+            <span class="hl-break"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4z"/></svg> 30m</span>
+          </div>
+          <div class="hist-chips">
+            <span class="hist-chip pending"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14" stroke-linecap="round" stroke-linejoin="round"/></svg> 1</span>
+            <span class="hist-chip approved"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> 1</span>
+            <button class="hist-scan" onclick="event.stopPropagation(); showToast('Scan QR to clock in')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="18" y1="18" x2="21" y2="21"/></svg>
+              Scan QR
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom nav -->
+    <div class="lp-bottomnav">
+      <button class="lp-nav-item active">
+        <span class="lp-nav-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span>
+        Timesheet
+      </button>
+      <button class="lp-nav-item" onclick="showToast('Shifts')">
+        <span class="lp-nav-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+        Shifts
+      </button>
+      <button class="lp-nav-item" onclick="showToast('Forms')">
+        <span class="lp-nav-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+        Forms
+      </button>
+      <button class="lp-nav-item" onclick="showToast('Docket')">
+        <span class="lp-nav-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/></svg></span>
+        Docket
+      </button>
+      <button class="lp-nav-item" onclick="showToast('File')">
+        <span class="lp-nav-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+        File
+      </button>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         CLOCK-IN screen
+    ══════════════════════════════════════ -->
+    <div class="sheet" id="screenClockIn">
+
+    <!-- Header -->
+    <div class="ci-header">
+      <button class="icon-btn" title="Back" onclick="closeSheet('screenClockIn')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <span class="ci-header-title">Clock in</span>
+    </div>
+
+    <!-- Body -->
+    <div class="ci-body">
+
+      <!-- Shift context -->
+      <div class="shift-strip">
+        <div class="shift-time-box">
+          <div class="t">7:00</div>
+          <div class="sub">START</div>
+        </div>
+        <div class="shift-meta">
+          <div class="label">Today's shift · Morning</div>
+          <div class="proj">Barton</div>
+          <div class="addr">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span>10 Boileau St, Keysborough VIC</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Project -->
+      <div class="card">
+        <div class="card-label">Project <span class="req">*</span></div>
+        <button class="select-field" id="btnProject" onclick="openSheet('sheetProject')">
+          <span class="sf-main" id="projectValue"><span class="sf-code">C100</span><span class="sf-name" style="display:inline">Barton</span></span>
+          <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
+        <div class="project-addr" id="projectAddr" style="display:flex">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <span id="projectAddrText">10 Boileau Street, Keysborough VIC 3173</span>
+        </div>
+      </div>
+
+      <!-- Equipment -->
+      <div class="card">
+        <div class="card-label">Equipment</div>
+        <p class="card-hint">Select the equipment you'll be operating, plus any attachments in use.</p>
+        <div class="equip-list" id="equipList"></div>
+        <button class="add-equip-btn" onclick="openSheet('sheetEquipment')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add equipment
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="ci-footer">
+      <div class="summary-row">
+        <span>Clocking in to <strong id="footerProject">Barton</strong></span>
+        <span id="footerEquip">No equipment</span>
+      </div>
+      <button class="btn-clockin" id="btnClockIn" onclick="doClockIn()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+        Clock in
+      </button>
+    </div>
+
+    </div><!-- /screenClockIn -->
+
+    <!-- ── Project picker sheet ── -->
+    <div class="sheet" id="sheetProject">
+      <div class="sheet-header">
+        <button class="icon-btn" onclick="closeSheet('sheetProject')">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <input class="sheet-search" id="projectSearch" placeholder="Search project" oninput="renderProjects()" />
+      </div>
+      <div class="sheet-tabs">
+        <button class="sheet-tab active" id="tabAssigned" onclick="setProjectTab('assigned')">Assigned</button>
+        <button class="sheet-tab" id="tabOther" onclick="setProjectTab('other')">Other projects</button>
+      </div>
+      <div class="sheet-list" id="projectList"></div>
+    </div>
+
+    <!-- ── Equipment picker sheet ── -->
+    <div class="sheet" id="sheetEquipment">
+      <div class="sheet-header">
+        <button class="icon-btn" onclick="closeSheet('sheetEquipment')">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <input class="sheet-search" id="equipSearch" placeholder="Search equipment" oninput="renderEquipSheet()" />
+      </div>
+      <div class="sheet-tabs">
+        <button class="sheet-tab active" id="tabEquipProject" onclick="setEquipTab('project')">On project</button>
+        <button class="sheet-tab" id="tabEquipUnassigned" onclick="setEquipTab('unassigned')">Unassigned</button>
+      </div>
+      <div class="sheet-list" id="equipSheetList"></div>
+      <div class="ci-footer">
+        <button class="btn-clockin" onclick="confirmEquipment()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span id="equipDoneLabel">Done</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         CLOCK-OUT — Clocked Timesheet screen
+    ══════════════════════════════════════ -->
+    <div class="sheet" id="screenClockOut">
+      <div class="ci-header">
+        <button class="icon-btn" onclick="closeSheet('screenClockOut')">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span class="ci-header-title">Clocked Timesheet</span>
+        <button class="icon-btn co-overflow">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+        </button>
+      </div>
+
+      <div class="ci-body">
+
+        <!-- Project -->
+        <div class="card">
+          <div class="card-label">Project <span class="req">*</span></div>
+          <button class="select-field">
+            <span class="sf-main"><span class="sf-code">C100</span><span class="sf-name" style="display:inline">Barton</span></span>
+            <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+          </button>
+          <button class="multi-row" onclick="showToast('Split time across projects')">
+            <div class="mr-body">
+              <div class="mr-title">Worked on multiple projects?</div>
+              <div class="mr-sub">Split your time across projects</div>
+            </div>
+            <svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+
+        <!-- Clocked details -->
+        <div class="card">
+          <div class="card-label">Clocked details</div>
+          <div class="info-banner">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Clock-in and clock-out times are rounded to the nearest 15 minutes, as per company policy.</span>
+          </div>
+          <div class="field-grid" style="margin-top:12px;">
+            <div class="mini-field">
+              <div class="mf-label">Clock in</div>
+              <div class="mf-row"><span class="mf-value">7:00 AM</span>
+                <svg class="mf-clock" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </div>
+            <div class="mini-field">
+              <div class="mf-label">Clock out</div>
+              <div class="mf-row"><span class="mf-value">3:30 PM</span>
+                <svg class="mf-clock" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </div>
+          </div>
+          <div class="meta-line">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span>Originally clocked in at <b>7:06 AM</b> · Australia/Victoria</span>
+          </div>
+          <div class="meta-line">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span class="meta-link">10 Boileau St, Keysborough VIC 3173</span>
+          </div>
+          <div class="field-grid" style="margin-top:14px;">
+            <div class="mini-field">
+              <div class="mf-label">Break</div>
+              <div class="mf-row"><input id="breakInput" type="text" inputmode="numeric" value="30" oninput="recalcDuration()" /><span style="font-size:13px;color:var(--muted);">mins</span></div>
+            </div>
+            <div class="duration-readout" style="margin:0;padding:0;border:none;flex-direction:column;justify-content:center;align-items:flex-start;">
+              <div class="dr-label">Clocked duration</div>
+              <div class="dr-value" id="durationValue">08h 00m</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Time allocation — single workflow chosen before clock-out -->
+        <div class="card">
+          <div class="card-label" id="coAllocLabel">WBS allocation <span class="req">*</span></div>
+          <p class="card-hint" id="coAllocHint">Split your clocked time across one or more WBS tasks.</p>
+          <div class="alloc-summary" id="coSummary"></div>
+          <div id="coList"></div>
+          <button class="assign-btn" id="coAssignBtn" onclick="openAssign(chosenClockoutType)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <span id="coAssignLabel">Assign WBS task</span>
+          </button>
+        </div>
+
+        <!-- Equipment -->
+        <div class="card" id="coEquipCard">
+          <div class="card-label">Equipment</div>
+          <div id="coEquipList"></div>
+          <button class="assign-btn" onclick="openSheet('sheetEquipment')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Assign equipment
+          </button>
+        </div>
+
+        <!-- Remarks -->
+        <div class="card">
+          <div class="card-label">Remarks</div>
+          <textarea class="remarks-area" placeholder="Add a note about this shift…"></textarea>
+          <div class="attach-row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            Attach files
+          </div>
+        </div>
+
+      </div>
+
+      <div class="ci-footer">
+        <button class="btn-clockin" onclick="confirmClockOut()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Confirm
+        </button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         CLOCK-OUT WORKFLOW CHOOSER
+    ══════════════════════════════════════ -->
+    <div class="sheet" id="screenClockoutChoose">
+      <div class="ci-header">
+        <button class="icon-btn" onclick="closeSheet('screenClockoutChoose')">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span class="ci-header-title">Clock out</span>
+      </div>
+
+      <div class="ci-body">
+        <div class="card">
+          <div class="card-label">Choose your clock-out workflow</div>
+          <p class="card-hint">How do you want to allocate today's time? WBS and cost centres are separate clock-outs &mdash; pick one.</p>
+          <div class="workflow-choice">
+            <button class="wf-tile" onclick="chooseClockout('wbs')">
+              <span class="wf-ic">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              </span>
+              <span class="wf-title">WBS</span>
+              <span class="wf-sub">Work breakdown structure</span>
+            </button>
+            <button class="wf-tile" onclick="chooseClockout('cc')">
+              <span class="wf-ic">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+              </span>
+              <span class="wf-title">Cost Centre</span>
+              <span class="wf-sub">Cost centre codes</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Assign sheet (shared by WBS + Cost Centre) ── -->
+    <div id="sheetAssignBackdrop" onclick="closeAssign()"></div>
+    <div class="sheet layer-2 bottom" id="sheetAssign">
+      <div class="bottom-sheet-handle"></div>
+      <div class="sheet-header" style="padding-top:4px; justify-content:space-between;">
+        <span class="ci-header-title" id="assignTitle">Assign WBS task</span>
+        <button class="icon-btn" onclick="closeAssign()" aria-label="Close">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="assign-body" style="overflow-y:auto; flex:1;">
+
+        <div class="card" id="assignAddCard">
+          <div class="add-label-row">
+            <span class="card-label" id="assignAddLabel" style="margin:0;">Add WBS task</span>
+            <button class="info-btn" id="assignInfoBtn" onclick="toggleWbsInfo()" aria-label="WBS selection info" title="WBS selection info">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            </button>
+          </div>
+          <div class="info-note" id="wbsInfoNote" style="display:none">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Only the lowest level of the WBS can be selected.</span>
+          </div>
+          <div class="fld" style="margin-bottom:14px;">
+            <label class="fld-label" id="assignFieldLabel" style="text-transform:none;font-size:13px;">WBS task</label>
+            <select class="fld-select" id="assignSelect"></select>
+          </div>
+          <div class="fld" id="zoneField" style="margin-bottom:14px; display:none;">
+            <label class="fld-label" style="text-transform:none;font-size:13px;">Zone</label>
+            <select class="fld-select" id="assignZone">
+              <option value="">Select zone</option>
+              <option value="Zone A">Zone A</option>
+              <option value="Zone B">Zone B</option>
+              <option value="Zone C">Zone C</option>
+              <option value="Zone D">Zone D</option>
+              <option value="Zone E">Zone E</option>
+            </select>
+          </div>
+          <div class="fld">
+            <label class="fld-label" style="text-transform:none;font-size:13px;">Duration</label>
+            <div class="check-row" id="fillCheck" onclick="toggleFillRemaining()">
+              <span class="check-box" id="fillCheckBox"></span>
+              <span class="check-label">Fill with remaining duration</span>
+            </div>
+            <div class="dur-grid">
+              <div class="mini-field">
+                <div class="mf-label">Hour</div>
+                <input id="assignHour" type="text" inputmode="numeric" value="0" />
+              </div>
+              <div class="mini-field">
+                <div class="mf-label">Min</div>
+                <input id="assignMin" type="text" inputmode="numeric" value="15" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="assign-footer">
+        <button class="btn-primary" id="assignAddBtn" style="flex:1;" onclick="addAllocation()">Add</button>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script>
+    /* ── Data ── */
+    const projects = {
+      assigned: [
+        { code: 'C100', name: 'Barton',                       address: '10 Boileau Street, Keysborough VIC 3173' },
+        { code: 'EFX-07', name: 'Eastern Freeway Extension',  address: '201 Eastern Freeway, Doncaster VIC 3108' },
+        { code: 'NRR-03', name: 'Northcote Road Rehab',       address: '23 Station St, Northcote VIC 3070' },
+      ],
+      other: [
+        { code: 'CPB-01', name: 'CBD Pedestrian Bridge',      address: '1 Collins St, Melbourne VIC 3000' },
+        { code: 'MAT-05', name: 'Melbourne Airport Taxiway',  address: 'Melbourne Airport VIC 3045' },
+      ]
+    };
+
+    const equipment = {
+      project: [
+        { code: 'DOZ001', name: 'Dozer', tag: '',
+          attachments: ['Float Charge', 'Dozer Fuel p/h'] },
+        { code: 'EXC014', name: 'Excavator 14T', tag: '',
+          attachments: ['Hydraulic Hammer', 'Tilt Bucket'] },
+        { code: 'ROL-09', name: 'Smooth Drum Roller', tag: 'Dry Hire',
+          attachments: [] },
+      ],
+      unassigned: [
+        { code: 'GRD-M160', name: 'Grader M160', tag: 'Dry Hire',
+          attachments: [] },
+        { code: 'TRK-22', name: 'Tipper Truck', tag: '',
+          attachments: ['Trailer'] },
+      ]
+    };
+
+    /* ── State ── */
+    let selectedProject = projects.assigned[0];
+    let selected = [];            // [{ code, name, tag, attachments:[], chosenAttachments:[] }]
+    let projectTab = 'assigned';
+    let equipTab = 'project';
+
+    /* ── Sheet helpers ── */
+    function openSheet(id) {
+      const s = document.getElementById(id);
+      s.classList.add('open');
+      if (id === 'sheetProject') { document.getElementById('projectSearch').value = ''; renderProjects(); }
+      if (id === 'sheetEquipment') { document.getElementById('equipSearch').value = ''; renderEquipSheet(); }
+    }
+    function closeSheet(id) { document.getElementById(id).classList.remove('open'); }
+
+    /* ── Project picker ── */
+    function setProjectTab(tab) {
+      projectTab = tab;
+      document.getElementById('tabAssigned').classList.toggle('active', tab === 'assigned');
+      document.getElementById('tabOther').classList.toggle('active', tab === 'other');
+      renderProjects();
+    }
+    function renderProjects() {
+      const q = document.getElementById('projectSearch').value.toLowerCase();
+      const list = document.getElementById('projectList');
+      const items = projects[projectTab].filter(p =>
+        (p.name + ' ' + p.code).toLowerCase().includes(q));
+      if (!items.length) { list.innerHTML = '<div style="padding:24px 16px;color:rgba(0,5,10,0.60);font-size:13px">No projects found</div>'; return; }
+      list.innerHTML = items.map(p => `
+        <div class="sheet-item ${p.code === selectedProject.code ? 'selected' : ''}" onclick='selectProject(${JSON.stringify(p)})'>
+          <div class="sheet-check">${p.code === selectedProject.code ? tickSvg() : ''}</div>
+          <div class="sheet-item-main">
+            <div class="sheet-item-name"><b>(${p.code})</b> ${p.name}</div>
+            <div class="sheet-item-addr">${p.address}</div>
+          </div>
+        </div>`).join('');
+    }
+    function selectProject(p) {
+      selectedProject = p;
+      document.getElementById('projectValue').innerHTML =
+        `<span class="sf-code">${p.code}</span><span class="sf-name" style="display:inline">${p.name}</span>`;
+      document.getElementById('projectAddrText').textContent = p.address;
+      document.getElementById('projectAddr').style.display = 'flex';
+      document.getElementById('footerProject').textContent = p.name;
+      closeSheet('sheetProject');
+    }
+
+    /* ── Equipment picker ── */
+    function setEquipTab(tab) {
+      equipTab = tab;
+      document.getElementById('tabEquipProject').classList.toggle('active', tab === 'project');
+      document.getElementById('tabEquipUnassigned').classList.toggle('active', tab === 'unassigned');
+      renderEquipSheet();
+    }
+    function renderEquipSheet() {
+      const q = document.getElementById('equipSearch').value.toLowerCase();
+      const list = document.getElementById('equipSheetList');
+      const items = equipment[equipTab].filter(e =>
+        (e.name + ' ' + e.code).toLowerCase().includes(q));
+      if (!items.length) { list.innerHTML = '<div style="padding:24px 16px;color:rgba(0,5,10,0.60);font-size:13px">No equipment found</div>'; return; }
+      list.innerHTML = items.map(e => {
+        const on = selected.some(s => s.code === e.code);
+        return `
+        <div class="sheet-item ${on ? 'selected' : ''}" onclick='toggleEquip(${JSON.stringify(e)})'>
+          <div class="sheet-check">${on ? tickSvg() : ''}</div>
+          <div class="sheet-item-main">
+            <div class="sheet-item-name"><b>(${e.code})</b> ${e.name}</div>
+          </div>
+          ${e.tag ? `<span class="hire-tag">${e.tag}</span>` : ''}
+        </div>`;
+      }).join('');
+      updateEquipDoneLabel();
+    }
+    function updateEquipDoneLabel() {
+      const n = selected.length;
+      document.getElementById('equipDoneLabel').textContent = n ? `Done · ${n} selected` : 'Done';
+    }
+    function confirmEquipment() {
+      closeSheet('sheetEquipment');
+      renderEquipList();
+      renderCoEquip();
+      updateFooter();
+    }
+    function toggleEquip(e) {
+      const i = selected.findIndex(s => s.code === e.code);
+      if (i >= 0) selected.splice(i, 1);
+      else selected.push({ ...e, chosenAttachments: [] });
+      renderEquipList();
+      renderEquipSheet();
+      updateFooter();
+    }
+    function removeEquip(code) {
+      selected = selected.filter(s => s.code !== code);
+      renderEquipList();
+      updateFooter();
+    }
+    function toggleAttachment(code, att) {
+      const eq = selected.find(s => s.code === code);
+      if (!eq) return;
+      const i = eq.chosenAttachments.indexOf(att);
+      if (i >= 0) eq.chosenAttachments.splice(i, 1);
+      else eq.chosenAttachments.push(att);
+      renderEquipList();
+    }
+
+    function renderEquipList() {
+      const c = document.getElementById('equipList');
+      c.innerHTML = selected.map(e => `
+        <div class="equip-item">
+          <div class="equip-item-head">
+            <span class="equip-code">${e.code}</span>
+            <span class="equip-name">${e.name}</span>
+            <button class="equip-remove" onclick="removeEquip('${e.code}')" title="Remove">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          ${e.attachments.length ? `
+          <div class="equip-attachments">
+            <div class="equip-attachments-label">Attachments</div>
+            <div class="chip-toggle-row">
+              ${e.attachments.map(a => {
+                const on = e.chosenAttachments.includes(a);
+                return `<button class="chip-toggle ${on ? 'on' : ''}" onclick="toggleAttachment('${e.code}', '${a.replace(/'/g, "\\'")}')">
+                  <span class="tick">${on ? tickSvgSm() : ''}</span>${a}
+                </button>`;
+              }).join('')}
+            </div>
+          </div>` : ''}
+        </div>`).join('');
+    }
+
+    /* ── Footer / clock in ── */
+    function updateFooter() {
+      const el = document.getElementById('footerEquip');
+      el.textContent = selected.length
+        ? `${selected.length} item${selected.length > 1 ? 's' : ''}`
+        : 'No equipment';
+    }
+    /* ── Clocked-in session ── */
+    let isClockedIn = false;
+    let clockedEquip = [];
+    let sessionSeconds = 0;
+    let prestartSeconds = 3600;
+    let prestartDone = false;
+    let sessionInterval = null;
+
+    function doClockIn() {
+      isClockedIn = true;
+      clearAllocations();
+      clockedEquip = [...selected];
+      sessionSeconds = 0;
+      prestartSeconds = 3600;
+      prestartDone = false;
+      renderClockedState();
+      clearInterval(sessionInterval);
+      sessionInterval = setInterval(sessionTick, 1000);
+      closeSheet('screenClockIn');
+      showToast('Clocked in to ' + selectedProject.name);
+    }
+
+    function prestartLabel() {
+      if (clockedEquip.length === 1) return `your ${clockedEquip[0].name} pre-start`;
+      if (clockedEquip.length > 1)  return `${clockedEquip.length} equipment pre-starts`;
+      return 'your pre-start form';
+    }
+
+    function renderClockedState() {
+      document.getElementById('welcomeDefault').style.display = 'none';
+      document.getElementById('welcomeClocked').style.display = 'block';
+      document.getElementById('lpAddBtn').style.display = 'none';
+      document.getElementById('clockedProjName').textContent = `(${selectedProject.code}) ${selectedProject.name}`;
+      const btn = document.getElementById('lpPrimaryBtn');
+      btn.textContent = 'Clock out';
+      btn.onclick = openClockoutChoose;
+      // banner
+      const b = document.getElementById('clockedBanner');
+      b.style.display = 'flex';
+      b.classList.remove('done', 'urgent');
+      document.getElementById('cbIcon').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>';
+      document.getElementById('cbTitle').textContent = `Complete ${prestartLabel()}`;
+      document.getElementById('cbAction').style.display = 'block';
+      updateCountdown();
+    }
+
+    function renderClockedOut() {
+      document.getElementById('welcomeDefault').style.display = 'block';
+      document.getElementById('welcomeClocked').style.display = 'none';
+      document.getElementById('lpAddBtn').style.display = 'flex';
+      document.getElementById('clockedBanner').style.display = 'none';
+      const btn = document.getElementById('lpPrimaryBtn');
+      btn.textContent = 'Clock in';
+      btn.onclick = () => openSheet('screenClockIn');
+    }
+
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function updateCountdown() {
+      const m = Math.floor(Math.max(0, prestartSeconds) / 60);
+      const s = Math.max(0, prestartSeconds) % 60;
+      document.getElementById('cbCountdown').textContent = `${pad(m)}:${pad(s)}`;
+      document.getElementById('clockedBanner').classList.toggle('urgent', !prestartDone && prestartSeconds <= 300);
+    }
+
+    function sessionTick() {
+      sessionSeconds++;
+      const h = Math.floor(sessionSeconds / 3600);
+      const m = Math.floor((sessionSeconds % 3600) / 60);
+      const s = sessionSeconds % 60;
+      document.getElementById('clockedTimer').textContent = `${pad(h)}:${pad(m)}:${pad(s)}`;
+      if (!prestartDone) {
+        prestartSeconds--;
+        if (prestartSeconds <= 0) { autoClockOut(); return; }
+        updateCountdown();
+      }
+    }
+
+    function completePrestart() {
+      prestartDone = true;
+      const b = document.getElementById('clockedBanner');
+      b.classList.remove('urgent');
+      b.classList.add('done');
+      document.getElementById('cbIcon').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      document.getElementById('cbTitle').textContent = 'Pre-start completed';
+      document.getElementById('cbSub').innerHTML = `${clockedEquip.length === 1 ? clockedEquip[0].name + ' pre-start' : 'Pre-start'} submitted — you're all set.`;
+      document.getElementById('cbAction').style.display = 'none';
+      showToast('Pre-start form completed');
+    }
+
+    function autoClockOut() {
+      clearInterval(sessionInterval);
+      isClockedIn = false;
+      renderClockedOut();
+      closeSheet('screenClockOut');
+      showToast('Automatically clocked out — pre-start not completed');
+    }
+
+    function endSession(msg) {
+      clearInterval(sessionInterval);
+      isClockedIn = false;
+      renderClockedOut();
+      closeSheet('screenClockOut');
+      showToast(msg);
+    }
+
+    /* ════════ Clock-out / allocation ════════ */
+    const wbsTasks = [
+      '1.1 Earthworks — Bulk excavation',
+      '1.2 Earthworks — Trim & batter',
+      '2.1 Drainage — Pipe laying',
+      '3.1 Pavement — Base course',
+    ];
+    const costCentres = [
+      'CC-100 — Labour',
+      'CC-200 — Plant & Equipment',
+      'CC-300 — Materials',
+      'CC-400 — Subcontractors',
+    ];
+
+    const GROSS_MIN = 510;        // 7:00 AM → 3:30 PM
+    let clockedTotalMin = 240;    // 4h default for prototype
+    let allocs = { wbs: [], cc: [] };
+    let assignType = 'wbs';
+    let chosenClockoutType = 'wbs';
+    let fillOn = false;
+    let editAllocIndex = -1;
+
+    function clearAllocations() { allocs = { wbs: [], cc: [] }; }
+
+    /* Clock out → choose workflow first (separate clock-outs) */
+    function openClockoutChoose() {
+      document.getElementById('screenClockoutChoose').classList.add('open');
+    }
+
+    function chooseClockout(type) {
+      chosenClockoutType = type;
+      clearAllocations();
+      closeSheet('screenClockoutChoose');
+      openClockOut();
+    }
+
+    function openClockOut() {
+      recalcDuration();
+      renderCoEquip();
+      renderCoAlloc();
+      document.getElementById('screenClockOut').classList.add('open');
+    }
+
+    /* Single chosen workflow rendered inline on the clock-out screen */
+    function renderCoAlloc() {
+      const type = chosenClockoutType;
+      const isWbs = type === 'wbs';
+      document.getElementById('coAllocLabel').innerHTML =
+        `${isWbs ? 'WBS allocation' : 'Cost Centre allocation'} <span class="req">*</span>`;
+      document.getElementById('coAllocHint').textContent =
+        isWbs ? 'Split your clocked time across one or more WBS tasks.' : 'Split your clocked time across one or more cost centres.';
+      document.getElementById('coAssignLabel').textContent =
+        isWbs ? 'Add WBS task' : 'Add cost centre';
+
+      const alloc = allocatedMin(type), remain = remainingMin(type);
+      document.getElementById('coSummary').innerHTML = `
+        <div class="alloc-stat done"><div class="as-label">Assigned</div><div class="as-value">${fmt(alloc)}</div></div>
+        <div class="alloc-stat ${remain > 0 ? 'warn' : 'done'}"><div class="as-label">Unassigned</div><div class="as-value">${fmt(remain)}</div></div>`;
+
+      document.getElementById('coList').innerHTML = allocs[type].map((a, i) => `
+        <div class="alloc-card" style="cursor:pointer;" onclick="openEditAlloc('${type}', ${i})">
+          <div class="alloc-card-top">
+            <div class="alloc-card-body">
+              <div class="alloc-card-title">${a.label}</div>
+              ${a.zone ? `<div class="alloc-card-sub">${a.zone}</div>` : ''}
+            </div>
+            <span class="alloc-card-dur">${fmt(a.min)}</span>
+            <button class="alloc-remove" onclick="event.stopPropagation();removeAlloc('${type}', ${i})">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>`).join('');
+
+      document.getElementById('coAssignBtn').style.display = remain > 0 ? 'flex' : 'none';
+      renderCoEquip();
+    }
+
+    function renderAssignPage() {
+      // nothing to render in sheet — summary lives on the clock-out screen
+    }
+
+    function toggleWbsInfo() {
+      const note = document.getElementById('wbsInfoNote');
+      note.style.display = note.style.display === 'none' ? 'flex' : 'none';
+    }
+
+    function fmt(min) {
+      const h = Math.floor(Math.max(0, min) / 60);
+      const m = Math.max(0, min) % 60;
+      return `${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m`;
+    }
+    function allocatedMin(type) { return allocs[type].reduce((s, a) => s + a.min, 0); }
+    function remainingMin(type) { return Math.max(0, clockedTotalMin - allocatedMin(type)); }
+
+    function recalcDuration() {
+      const brk = parseInt(document.getElementById('breakInput').value, 10) || 0;
+      clockedTotalMin = Math.max(0, GROSS_MIN - brk);
+      document.getElementById('durationValue').textContent = fmt(clockedTotalMin);
+      renderCoAlloc();
+    }
+
+    function removeAlloc(type, idx) {
+      allocs[type].splice(idx, 1);
+      renderCoAlloc();
+      if (document.getElementById('sheetAssign').classList.contains('open')) renderAssignPage();
+    }
+
+    function resetAddForm() {
+      fillOn = false;
+      document.getElementById('fillCheck').classList.remove('on');
+      document.getElementById('fillCheckBox').innerHTML = '';
+      document.getElementById('assignSelect').value = '';
+      document.getElementById('assignZone').value = '';
+      document.getElementById('assignHour').value = '0';
+      document.getElementById('assignMin').value = '15';
+      document.getElementById('assignHour').disabled = false;
+      document.getElementById('assignMin').disabled = false;
+      editAllocIndex = -1;
+      document.getElementById('assignAddBtn').textContent = 'Add';
+    }
+
+    function openAssign(type) {
+      assignType = type;
+      const isWbs = type === 'wbs';
+      document.getElementById('assignTitle').textContent = isWbs ? 'Assign WBS task' : 'Assign cost centre';
+      document.getElementById('assignFieldLabel').textContent = isWbs ? 'WBS task' : 'Cost centre';
+      document.getElementById('assignAddLabel').textContent = isWbs ? 'Add WBS task' : 'Add cost centre';
+      document.getElementById('assignInfoBtn').style.display = isWbs ? 'flex' : 'none';
+      document.getElementById('wbsInfoNote').style.display = 'none';
+      document.getElementById('zoneField').style.display = isWbs ? 'none' : 'flex';
+      const sel = document.getElementById('assignSelect');
+      const opts = isWbs ? wbsTasks : costCentres;
+      sel.innerHTML = `<option value="">Select ${isWbs ? 'WBS task' : 'cost centre'}</option>` +
+        opts.map(o => `<option>${o}</option>`).join('');
+      resetAddForm();
+      toggleFillRemaining();   // default fill remaining checked
+      renderAssignPage();
+      openSheet('sheetAssign');
+      document.getElementById('sheetAssignBackdrop').classList.add('visible');
+    }
+
+    function closeAssign() {
+      closeSheet('sheetAssign');
+      document.getElementById('sheetAssignBackdrop').classList.remove('visible');
+      editAllocIndex = -1;
+      renderCoAlloc();
+    }
+
+    function toggleFillRemaining() {
+      fillOn = !fillOn;
+      document.getElementById('fillCheck').classList.toggle('on', fillOn);
+      document.getElementById('fillCheckBox').innerHTML = fillOn ? tickSvgSm() : '';
+      if (fillOn) {
+        const r = editAllocIndex >= 0
+          ? remainingMin(assignType) + allocs[assignType][editAllocIndex].min
+          : remainingMin(assignType);
+        document.getElementById('assignHour').value = Math.floor(r / 60);
+        document.getElementById('assignMin').value = r % 60;
+      }
+      document.getElementById('assignHour').disabled = fillOn;
+      document.getElementById('assignMin').disabled = fillOn;
+    }
+
+    function addAllocation() {
+      const label = document.getElementById('assignSelect').value;
+      if (!label) { showToast(assignType === 'wbs' ? 'Select a WBS task' : 'Select a cost centre'); return; }
+      const zone = assignType === 'cc' ? document.getElementById('assignZone').value : null;
+      if (assignType === 'cc' && !zone) { showToast('Select a zone'); return; }
+      const h = parseInt(document.getElementById('assignHour').value, 10) || 0;
+      const m = parseInt(document.getElementById('assignMin').value, 10) || 0;
+      const min = h * 60 + m;
+      if (min <= 0) { showToast('Enter a duration'); return; }
+      const maxMin = editAllocIndex >= 0
+        ? remainingMin(assignType) + allocs[assignType][editAllocIndex].min
+        : remainingMin(assignType);
+      if (min > maxMin) { showToast(`Only ${fmt(maxMin)} unassigned`); return; }
+      if (editAllocIndex >= 0) {
+        allocs[assignType][editAllocIndex] = { label, zone, min };
+        editAllocIndex = -1;
+        showToast('Updated');
+      } else {
+        allocs[assignType].push({ label, zone, min });
+        showToast('Added to timesheet');
+      }
+      closeAssign();
+    }
+
+    function openEditAlloc(type, index) {
+      const a = allocs[type][index];
+      openAssign(type);              // resets editAllocIndex to -1 internally
+      editAllocIndex = index;        // set AFTER openAssign so it isn't overwritten
+      document.getElementById('assignSelect').value = a.label;
+      if (type === 'cc') document.getElementById('assignZone').value = a.zone || '';
+      // Fill remaining was checked by default; override with actual allocation values
+      fillOn = false;
+      document.getElementById('fillCheck').classList.remove('on');
+      document.getElementById('fillCheckBox').innerHTML = '';
+      document.getElementById('assignHour').value = Math.floor(a.min / 60);
+      document.getElementById('assignMin').value = a.min % 60;
+      document.getElementById('assignHour').disabled = false;
+      document.getElementById('assignMin').disabled = false;
+      document.getElementById('assignTitle').textContent = type === 'wbs' ? 'Edit WBS task' : 'Edit cost centre';
+      document.getElementById('assignAddBtn').textContent = 'Save changes';
+    }
+
+    function renderCoEquip() {
+      const c = document.getElementById('coEquipList');
+      if (!selected.length) {
+        c.innerHTML = '<p class="card-hint" style="margin:0 0 10px;">No equipment added.</p>';
+        return;
+      }
+      const type = chosenClockoutType;
+      const list = allocs[type] || [];
+      const isWbs = type === 'wbs';
+      c.innerHTML = selected.map(e => `
+        <div class="co-equip-card">
+          <div class="co-equip-head">
+            <span class="equip-code">${e.code}</span>
+            <span class="co-equip-name">${e.name}</span>
+            ${e.tag ? `<span class="hire-tag" style="color:#1565c0;background:#e3f2fd;">${e.tag}</span>` : ''}
+          </div>
+          ${list.length ? `
+          <div class="equip-auto-note">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Auto-assigned from your ${isWbs ? 'WBS' : 'cost centre'} allocation
+          </div>
+          <div class="equip-auto-list">
+            ${list.map(a => `<div class="equip-auto-row"><span class="equip-auto-label">${a.label}</span><span class="equip-auto-dur">${fmt(a.min)}</span></div>`).join('')}
+          </div>` : `
+          <div class="co-equip-row">
+            <span class="equip-warn-chip">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Allocate your time to auto-assign this plant
+            </span>
+          </div>`}
+        </div>`).join('');
+    }
+
+    function confirmClockOut() {
+      if (!allocs[chosenClockoutType].length) {
+        showToast(`Allocate your time to ${chosenClockoutType === 'wbs' ? 'a WBS task' : 'a cost centre'}`);
+        return;
+      }
+      if (isClockedIn) { endSession('Clocked out — timesheet updated'); return; }
+      showToast('Timesheet updated successfully');
+    }
+
+    /* ── Misc ── */
+    function tickSvg()   { return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'; }
+    function tickSvgSm() { return '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'; }
+
+    let toastTimer;
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+    }
+
+    /* ── Init ── */
+    updateFooter();
+  </script>
+</body>
+</html>
