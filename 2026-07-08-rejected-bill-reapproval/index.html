@@ -649,63 +649,86 @@
   let suggestionApplied = false;
 
   /* ---------- list rendering ---------- */
+  let activeTab = 'rejected'; // 'rejected' | 'awaiting'
+
+  function switchTab(t) {
+    activeTab = t;
+    document.getElementById('tab-rejected').classList.toggle('active', t === 'rejected');
+    document.getElementById('tab-awaiting').classList.toggle('active', t === 'awaiting');
+    renderList();
+  }
+
   function renderList() {
     const tbody = document.getElementById('bills-tbody');
     tbody.innerHTML = '';
-    const rejected = bills.filter(b => !b.resubmitted);
-    const done = bills.filter(b => b.resubmitted);
+    const rejected = bills.filter(b => b.rejBy && !b.resubmitted && !b.firstRound);
+    const awaiting = bills.filter(b => b.resubmitted || b.firstRound);
 
-    rejected.forEach(b => {
+    document.getElementById('tab-rejected-count').textContent = rejected.length;
+    document.getElementById('tab-awaiting-count').textContent = awaiting.length;
+    document.getElementById('rejected-banner').style.display = activeTab === 'rejected' ? 'flex' : 'none';
+    document.getElementById('awaiting-banner').style.display = activeTab === 'awaiting' ? 'flex' : 'none';
+    document.getElementById('col-reason').textContent = activeTab === 'rejected' ? 'Rejection reason' : 'Approval progress';
+
+    const rows = activeTab === 'rejected' ? rejected : awaiting;
+    rows.forEach(b => {
+      const wf = b.workflow || DEFAULT_WORKFLOW;
       const tr = document.createElement('tr');
       tr.id = 'row-' + b.id;
       tr.style.cursor = 'pointer';
       tr.onclick = () => showDetail(b);
-      tr.innerHTML = `
-        <td><div class="sup-name">${b.supplier}</div></td>
-        <td>${b.ref}</td>
-        <td><span class="proj-link">${b.project}</span></td>
-        <td><div class="rej-reason"><span class="who">${b.rejBy}:</span> “${trunc(b.reason, 80)}”</div>${b.suggested ? `<span class="pill workflow" style="margin-top:5px;">💡 Suggested → ${PEOPLE[b.suggested.who].name}</span>` : ''}</td>
-        <td>${miniAvatars(b.workflow || DEFAULT_WORKFLOW, rejectionStates(b))}</td>
-        <td>${b.date}</td>
-        <td class="right"><b>${b.total === 0 ? '($0.00)' : fmt(b.total)}</b></td>
-        <td><span class="pill rejected">Rejected</span></td>
-        <td>
-          <button class="btn-resubmit" onclick="event.stopPropagation(); openModal(${b.id})">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
-            Resubmit
-          </button>
-          <button class="kebab" onclick="event.stopPropagation()">⋮</button>
-        </td>`;
+      if (b.justUpdated) { tr.className = 'row-updated'; b.justUpdated = false; }
+
+      if (activeTab === 'rejected') {
+        tr.innerHTML = `
+          <td><div class="sup-name">${b.supplier}</div></td>
+          <td>${b.ref}</td>
+          <td><span class="proj-link">${b.project}</span></td>
+          <td><div class="rej-reason"><span class="who">${b.rejBy}:</span> “${trunc(b.reason, 80)}”</div>${b.suggested ? `<span class="pill workflow" style="margin-top:5px;">💡 Suggested → ${PEOPLE[b.suggested.who].name}</span>` : ''}</td>
+          <td>${miniAvatars(wf, rejectionStates(b))}</td>
+          <td>${b.date}</td>
+          <td class="right"><b>${b.total === 0 ? '($0.00)' : fmt(b.total)}</b></td>
+          <td><span class="pill rejected">Rejected</span></td>
+          <td>
+            <button class="btn-resubmit" onclick="event.stopPropagation(); openModal(${b.id})">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+              Resubmit
+            </button>
+            <button class="kebab" onclick="event.stopPropagation()">⋮</button>
+          </td>`;
+      } else if (b.resubmitted) {
+        const creditChip = b.credit ? `<span class="pill credit">🏷 Credit ${fmt(b.credit.amount)}</span> ` : '';
+        const wfChip = b.workflowChanged ? `<span class="pill workflow">⇄ Workflow updated</span> ` : '';
+        const displayTotal = b.credit ? b.total - b.credit.amount : b.total;
+        tr.innerHTML = `
+          <td><div class="sup-name">${b.supplier}</div></td>
+          <td>${b.ref}</td>
+          <td><span class="proj-link">${b.project}</span></td>
+          <td><div style="display:flex;gap:6px;flex-wrap:wrap;">${creditChip}${wfChip}<span class="pill attempt">↻ Resubmitted · attempt ${b.attempt || 2}</span></div></td>
+          <td>${miniAvatars(wf, { [wf[0]]: 'current' })}</td>
+          <td>${b.date}</td>
+          <td class="right"><b>${b.credit ? `<span class="strike">${fmt(b.total)}</span>` : ''}${fmt(displayTotal)}</b></td>
+          <td><span class="pill awaiting">Awaiting Approval</span></td>
+          <td><button class="btn-resubmit" onclick="event.stopPropagation(); showDetail(bills.find(x => x.id === ${b.id}))">Review</button></td>`;
+      } else {
+        // first-round bill sitting with an approver
+        tr.innerHTML = `
+          <td><div class="sup-name">${b.supplier}</div></td>
+          <td>${b.ref}</td>
+          <td><span class="proj-link">${b.project}</span></td>
+          <td><div class="rej-reason" style="color:#888;">With ${PEOPLE[wf[0]].name} · 1 of ${wf.length} approver${wf.length > 1 ? 's' : ''}</div></td>
+          <td>${miniAvatars(wf, { [wf[0]]: 'current' })}</td>
+          <td>${b.date}</td>
+          <td class="right"><b>${fmt(b.total)}</b></td>
+          <td><span class="pill awaiting">Awaiting Approval</span></td>
+          <td><button class="btn-resubmit" onclick="event.stopPropagation(); showDetail(bills.find(x => x.id === ${b.id}))">Review</button></td>`;
+      }
       tbody.appendChild(tr);
     });
 
-    done.forEach(b => {
-      const tr = document.createElement('tr');
-      tr.className = 'row-updated';
-      tr.style.cursor = 'pointer';
-      tr.onclick = () => showDetail(b);
-      const creditChip = b.credit ? `<span class="pill credit">🏷 Credit ${fmt(b.credit.amount)}</span> ` : '';
-      const wfChip = b.workflowChanged ? `<span class="pill workflow">⇄ Workflow updated</span> ` : '';
-      const displayTotal = b.credit ? b.total - b.credit.amount : b.total;
-      tr.innerHTML = `
-        <td><div class="sup-name">${b.supplier}</div></td>
-        <td>${b.ref}</td>
-        <td><span class="proj-link">${b.project}</span></td>
-        <td><div style="display:flex;gap:6px;flex-wrap:wrap;">${creditChip}${wfChip}<span class="pill attempt">↻ Resubmitted · attempt ${b.attempt || 2}</span></div></td>
-        <td>${miniAvatars(b.workflow || DEFAULT_WORKFLOW, { [(b.workflow || DEFAULT_WORKFLOW)[0]]: 'current' })}</td>
-        <td>${b.date}</td>
-        <td class="right"><b>${b.credit ? `<span class="strike">${fmt(b.total)}</span>` : ''}${fmt(displayTotal)}</b></td>
-        <td><span class="pill awaiting">Awaiting Approval</span></td>
-        <td><span style="font-size:12px;color:#999;">View as approver →</span></td>`;
-      tbody.appendChild(tr);
-    });
-
-    if (rejected.length === 0 && done.length === 0) {
-      tbody.innerHTML = '<tr class="empty-row"><td colspan="9">No rejected bills 🎉</td></tr>';
+    if (!rows.length) {
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="9">No ${activeTab === 'rejected' ? 'rejected' : 'awaiting approval'} bills 🎉</td></tr>`;
     }
-
-    document.getElementById('tab-rejected-count').textContent = rejected.length;
-    document.getElementById('tab-awaiting-count').textContent = 3 + done.length;
   }
 
   const trunc = (s, n) => s.length > n ? s.slice(0, n) + '…' : s;
