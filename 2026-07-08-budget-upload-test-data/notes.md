@@ -36,9 +36,9 @@ appears as two budget rows with the same Item Code — different cost centres, p
 BOQ/Budget amounts, and a "60/40 split w/ …" note. In E3/E5 (resource layout) the split
 falls out of the resource categories: an item's Labour rows map to the **Labour** cost
 centre, Plant rows to **Plant & Equipment**, and the remaining rows stay on the trade's
-primary centre. 6–9 items per E file are split; the rest stay single-CC.
+primary centre. Same for E3/E5/E6. 6–9 items per E file are split; the rest stay single-CC.
 
-## The 25 files
+## The 26 files
 
 | # | Project | Method | Budget style | BOQ total | incl. prov. | Margin | Errors |
 |---|---------|--------|-------------|-----------|-------------|--------|--------|
