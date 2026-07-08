@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Rejected Bill Reapproval</title>
+<!--
+  PROTOTYPE: Reapproval workflow for rejected bills.
+
+  Problem: today a rejected bill is a dead end — the only way forward is to
+  "approve" it from the rejected bill detail page, which is unintuitive and
+  skips the approval workflow entirely.
+
+  Idea: from the Rejected tab (and the bill detail page) the user can
+  RESUBMIT a bill back into the approval workflow. Two paths:
+    1. Resubmit for reapproval — straight back through the approver chain.
+    2. Apply credit & resubmit — record the supplier credit note first;
+       the credit is flagged to approvers during reapproval (original total,
+       credit, adjusted total) and the bill then goes through approval again.
+  Approvers see a clear "Resubmission" banner with the rejection history and
+  any credit applied, so attempt #2 has full context.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; transition: background 0.15s; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+
+  /* Main */
+  .main { flex: 1; overflow-y: auto; min-width: 0; }
+  .screen { display: none; padding: 20px 28px; }
+  .screen.active { display: block; }
+
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .page-header h1 { font-size: 22px; font-weight: 600; }
+  .page-header .header-actions { display: flex; align-items: center; gap: 10px; }
+  .header-pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; color: #444; cursor: pointer; }
+
+  /* Stat strip */
+  .stat-strip { display: flex; gap: 28px; background: #fff; border: 1px solid #e8e8e8; border-radius: 8px; padding: 12px 20px; margin-bottom: 16px; flex-wrap: wrap; }
+  .stat { font-size: 12px; color: #888; }
+  .stat b { display: block; font-size: 15px; color: #222; margin-top: 3px; font-weight: 600; }
+  .stat b.neg { color: #c62828; }
+
+  /* Tabs */
+  .bill-tabs { display: flex; gap: 0; margin-bottom: 0; border-bottom: 2px solid #e0e0e0; flex-wrap: wrap; }
+  .bill-tab { padding: 10px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #888; letter-spacing: 0.3px; display: flex; align-items: center; gap: 6px; }
+  .bill-tab.active { color: #f7941d; border-bottom-color: #f7941d; }
+  .bill-tab:hover { color: #f7941d; }
+  .bill-tab .count { font-size: 11px; font-weight: 700; background: #eee; color: #777; border-radius: 10px; padding: 1px 8px; }
+  .bill-tab.active .count { background: #f7941d; color: #fff; }
+  .bill-tab .count.red { background: #d93025; color: #fff; }
+
+  /* Rejected helper banner */
+  .rejected-banner { display: flex; align-items: center; gap: 12px; background: #fdecea; border: 1px solid #f6c7c3; border-radius: 0 0 8px 8px; padding: 12px 18px; font-size: 13px; color: #7a2620; margin-bottom: 14px; }
+  .rejected-banner .rb-icon { width: 30px; height: 30px; border-radius: 50%; background: #d93025; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+  .rejected-banner b { color: #b3251c; }
+
+  .table-wrapper { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: #fafafa; }
+  th { text-align: left; padding: 11px 14px; font-size: 12px; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; white-space: nowrap; }
+  td { padding: 11px 14px; font-size: 13px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; vertical-align: middle; }
+  tbody tr:hover { background: #fffaf4; }
+  td.right, th.right { text-align: right; }
+  .proj-link { color: #1a73e8; }
+  .sup-name { font-weight: 600; color: #333; }
+  .rej-reason { font-size: 11.5px; color: #b3251c; margin-top: 3px; max-width: 300px; white-space: normal; line-height: 1.35; }
+  .rej-reason .who { color: #999; }
+
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 12px; white-space: nowrap; }
+  .pill.rejected { background: #fdecea; color: #d93025; }
+  .pill.awaiting { background: #fff3e0; color: #e8850f; }
+  .pill.credit { background: #e8f0fe; color: #1a5cb8; }
+  .pill.attempt { background: #ede7f6; color: #5e35b1; }
+
+  .btn-resubmit { display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border: 1.5px solid #f7941d; border-radius: 6px; background: #fff; color: #e8850f; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+  .btn-resubmit:hover { background: #f7941d; color: #fff; }
+  .btn-resubmit svg { width: 13px; height: 13px; }
+  .kebab { background: none; border: none; cursor: pointer; font-size: 16px; color: #999; padding: 2px 8px; }
+
+  .row-updated { animation: rowflash 1.6s ease-out; }
+  @keyframes rowflash { 0% { background: #e6f4ea; } 100% { background: transparent; } }
+
+  /* ===== MODAL ===== */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(20,20,35,0.55); z-index: 100; align-items: flex-start; justify-content: center; padding: 40px 24px; overflow-y: auto; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 640px; box-shadow: 0 24px 60px rgba(0,0,0,0.3); }
+  .modal-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #eee; }
+  .modal-head h2 { font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .modal-head .sub { font-size: 12.5px; color: #888; margin-top: 4px; font-weight: 400; }
+  .modal-head .x { background: none; border: none; font-size: 22px; color: #999; cursor: pointer; line-height: 1; }
+  .modal-body { padding: 20px 24px 24px; }
+  .modal-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 16px 24px; border-top: 1px solid #eee; }
+  .modal-foot .spacer { flex: 1; }
+  .btn { padding: 10px 20px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; border: none; }
+  .btn.primary { background: #f7941d; color: #fff; }
+  .btn.primary:hover { background: #e8850f; }
+  .btn.primary:disabled { background: #f0cfa4; cursor: not-allowed; }
+  .btn.ghost { background: #fff; border: 1px solid #d0d0d0; color: #555; font-weight: 600; }
+  .btn.ghost:hover { background: #f5f5f5; }
+
+  /* rejection context box */
+  .rej-context { background: #fdecea; border: 1px solid #f6c7c3; border-radius: 10px; padding: 14px 16px; margin-bottom: 18px; }
+  .rej-context .rc-head { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: #b3251c; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .rej-context .rc-quote { font-size: 13.5px; color: #5c1a15; line-height: 1.45; font-style: italic; }
+  .rej-context .rc-meta { font-size: 12px; color: #a05a54; margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+  .rc-avatar { width: 22px; height: 22px; border-radius: 50%; background: #2b3a67; color: #fff; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+
+  /* choice cards */
+  .choice-label { font-size: 12px; font-weight: 700; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .choice-cards { display: flex; flex-direction: column; gap: 12px; }
+  .choice-card { display: flex; gap: 14px; align-items: flex-start; border: 2px solid #e0e0e0; border-radius: 12px; padding: 16px; cursor: pointer; transition: all 0.15s; background: #fff; }
+  .choice-card:hover { border-color: #f7941d; background: #fffaf4; }
+  .choice-card.selected { border-color: #f7941d; background: #fff8f0; box-shadow: 0 2px 10px rgba(247,148,29,0.15); }
+  .choice-card .cc-icon { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .cc-icon.orange { background: #fff3e0; color: #e8850f; }
+  .cc-icon.blue { background: #e8f0fe; color: #1a5cb8; }
+  .cc-icon svg { width: 22px; height: 22px; }
+  .choice-card h3 { font-size: 14.5px; font-weight: 700; margin-bottom: 3px; display: flex; align-items: center; gap: 8px; }
+  .choice-card p { font-size: 12.5px; color: #777; line-height: 1.45; }
+  .cc-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #ccc; flex-shrink: 0; margin-top: 2px; position: relative; }
+  .choice-card.selected .cc-radio { border-color: #f7941d; }
+  .choice-card.selected .cc-radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: #f7941d; }
+
+  /* step 2 form */
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 12.5px; font-weight: 600; color: #555; margin-bottom: 6px; }
+  .form-group label .req { color: #d93025; }
+  .form-group input[type=text], .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 7px; font-size: 13.5px; font-family: inherit; outline: none; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: #f7941d; box-shadow: 0 0 0 3px rgba(247,148,29,0.12); }
+  .form-row { display: flex; gap: 14px; }
+  .form-row .form-group { flex: 1; }
+  .hint { font-size: 11.5px; color: #999; margin-top: 5px; }
+
+  /* credit totals */
+  .credit-summary { background: #f6f9ff; border: 1px solid #cfe0fb; border-radius: 10px; padding: 14px 18px; margin: 4px 0 18px; }
+  .credit-summary .cs-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; color: #555; }
+  .credit-summary .cs-row.credit-line { color: #1a5cb8; font-weight: 600; }
+  .credit-summary .cs-row.total { border-top: 1px dashed #b9cff2; margin-top: 6px; padding-top: 9px; font-weight: 700; color: #1a3a6b; font-size: 14.5px; }
+
+  /* approver preview */
+  .preview-box { border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; margin-bottom: 4px; }
+  .preview-box .pv-head { background: #fafafa; border-bottom: 1px solid #eee; padding: 8px 14px; font-size: 11px; font-weight: 700; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
+  .preview-box .pv-body { padding: 12px 14px; }
+  .pv-banner { display: flex; gap: 10px; align-items: flex-start; background: #ede7f6; border: 1px solid #d4c8ee; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; color: #4a2f8c; line-height: 1.45; }
+  .pv-banner .pv-i { font-size: 15px; }
+  .pv-banner b { color: #3c2478; }
+  .pv-chips { display: flex; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
+
+  /* approver flow row */
+  .approver-flow { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+  .appr { display: flex; align-items: center; gap: 7px; background: #fafafa; border: 1px solid #e8e8e8; border-radius: 20px; padding: 5px 12px 5px 5px; font-size: 12.5px; font-weight: 600; color: #444; }
+  .appr .av { width: 24px; height: 24px; border-radius: 50%; color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .appr-arrow { color: #bbb; font-size: 13px; }
+
+  /* ===== DETAIL SCREEN (approver view) ===== */
+  .crumb { font-size: 13px; color: #888; margin-bottom: 14px; }
+  .crumb a { color: #1a73e8; cursor: pointer; text-decoration: none; }
+  .detail-title { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .detail-title h1 { font-size: 20px; font-weight: 700; }
+
+  .resub-banner { display: flex; gap: 14px; align-items: flex-start; background: #ede7f6; border: 1px solid #d4c8ee; border-left: 5px solid #5e35b1; border-radius: 10px; padding: 16px 18px; margin-bottom: 18px; }
+  .resub-banner .rb2-icon { width: 40px; height: 40px; border-radius: 50%; background: #5e35b1; color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 18px; }
+  .resub-banner h3 { font-size: 14.5px; font-weight: 700; color: #3c2478; margin-bottom: 4px; }
+  .resub-banner p { font-size: 13px; color: #55418a; line-height: 1.5; }
+  .resub-banner .note-quote { margin-top: 8px; background: #fff; border: 1px solid #e2daf3; border-radius: 8px; padding: 9px 12px; font-size: 12.5px; color: #444; font-style: italic; }
+
+  .detail-grid { display: grid; grid-template-columns: 1fr 340px; gap: 18px; align-items: start; }
+  .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; }
+  .card .card-head { padding: 13px 18px; border-bottom: 1px solid #eee; font-size: 13.5px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
+  .card .card-body { padding: 16px 18px; }
+
+  .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 20px; }
+  .meta-grid .m { font-size: 11.5px; color: #999; }
+  .meta-grid .m b { display: block; font-size: 13.5px; color: #222; font-weight: 600; margin-top: 3px; }
+
+  .li-table td, .li-table th { padding: 9px 12px; font-size: 12.5px; }
+  .totals-block { border-top: 2px solid #eee; }
+  .totals-block .t-row { display: flex; justify-content: space-between; padding: 6px 18px; font-size: 13px; color: #555; }
+  .totals-block .t-row.credit-line { color: #1a5cb8; font-weight: 600; background: #f6f9ff; }
+  .totals-block .t-row.grand { font-weight: 700; font-size: 15px; color: #222; padding: 10px 18px; border-top: 1px solid #eee; }
+  .strike { text-decoration: line-through; color: #aaa; font-weight: 400; margin-right: 8px; }
+
+  /* timeline */
+  .timeline { list-style: none; }
+  .timeline li { display: flex; gap: 12px; position: relative; padding-bottom: 18px; }
+  .timeline li:last-child { padding-bottom: 0; }
+  .timeline li::before { content: ''; position: absolute; left: 13px; top: 28px; bottom: 0; width: 2px; background: #eee; }
+  .timeline li:last-child::before { display: none; }
+  .tl-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; z-index: 1; }
+  .tl-dot.grey { background: #f0f0f0; color: #888; }
+  .tl-dot.red { background: #fdecea; color: #d93025; }
+  .tl-dot.blue { background: #e8f0fe; color: #1a5cb8; }
+  .tl-dot.purple { background: #ede7f6; color: #5e35b1; }
+  .tl-dot.orange { background: #fff3e0; color: #e8850f; }
+  .tl-body { font-size: 12.5px; color: #555; line-height: 1.45; padding-top: 4px; }
+  .tl-body b { color: #222; }
+  .tl-body .when { font-size: 11px; color: #aaa; margin-top: 2px; }
+  .tl-body .tl-note { margin-top: 6px; background: #fafafa; border: 1px solid #eee; border-radius: 7px; padding: 7px 10px; font-style: italic; color: #666; }
+
+  .detail-actions { display: flex; gap: 10px; margin-top: 18px; justify-content: flex-end; }
+  .btn.reject { background: #fff; border: 1.5px solid #d93025; color: #d93025; }
+  .btn.reject:hover { background: #fdecea; }
+  .btn.approve { background: #2e7d32; color: #fff; }
+  .btn.approve:hover { background: #256a29; }
+
+  /* toast */
+  .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(80px); background: #1a1a2e; color: #fff; padding: 13px 22px; border-radius: 10px; font-size: 13.5px; display: flex; align-items: center; gap: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); transition: transform 0.3s ease; z-index: 200; max-width: 90vw; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast .tick { width: 22px; height: 22px; border-radius: 50%; background: #4caf50; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+
+  .empty-row td { text-align: center; color: #999; padding: 34px; font-size: 13.5px; }
+
+  @media (max-width: 1000px) { .detail-grid { grid-template-columns: 1fr; } .sidebar { display: none; } }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Cookie's Civil</div>
+    <div class="sidebar-item"><span class="icon">▤</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">◫</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">🕒</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Site Docket</div>
+    <div class="sidebar-item active"><span class="icon">🧾</span> Bills</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Forms</div>
+    <div class="sidebar-item"><span class="icon">🚜</span> Plant &amp; Equipment</div>
+    <div class="sidebar-item"><span class="icon">👥</span> Suppliers</div>
+    <div class="sidebar-item"><span class="icon">⚙</span> Settings</div>
+  </aside>
+
+  <main class="main">
+
+    <!-- ============ SCREEN: BILLS LIST (REJECTED TAB) ============ -->
+    <section class="screen active" id="screen-list">
+      <div class="page-header">
+        <h1>Bills</h1>
+        <div class="header-actions">
+          <div class="header-pill">✉ Email bill entry</div>
+          <div class="header-pill">🗎 Scan log</div>
+          <div class="header-pill" style="background:#f7941d;color:#fff;border-color:#f7941d;">Add bill manually</div>
+        </div>
+      </div>
+
+      <div class="stat-strip">
+        <div class="stat">Total <b>$ 1,415,180.92</b></div>
+        <div class="stat">Awaiting Credit <b>$ 81.68</b></div>
+        <div class="stat">Awaiting approval <b id="stat-awaiting">$ 10,049.39</b></div>
+        <div class="stat">Awaiting payment <b>$ 1,407,326.85</b></div>
+        <div class="stat">Paid <b class="neg">$ -2,277.00</b></div>
+      </div>
+
+      <div class="bill-tabs">
+        <div class="bill-tab">ALL <span class="count">148</span></div>
+        <div class="bill-tab">DRAFT <span class="count">73</span></div>
+        <div class="bill-tab">AWAITING CREDIT <span class="count">1</span></div>
+        <div class="bill-tab">AWAITING APPROVAL <span class="count" id="tab-awaiting-count">3</span></div>
+        <div class="bill-tab">AWAITING PAYMENT <span class="count">56</span></div>
+        <div class="bill-tab">PAID <span class="count">8</span></div>
+        <div class="bill-tab">OVERDUE <span class="count red">130</span></div>
+        <div class="bill-tab active">REJECTED <span class="count red" id="tab-rejected-count">7</span></div>
+      </div>
+
+      <div class="rejected-banner">
+        <div class="rb-icon">!</div>
+        <div><b>These bills were rejected during approval.</b> Fix the issue, then <b>resubmit</b> each bill back into the approval workflow — either as-is, or after applying a supplier credit.</div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Supplier</th>
+              <th>Ref.</th>
+              <th>Project</th>
+              <th>Rejection reason</th>
+              <th>Date</th>
+              <th class="right">Total</th>
+              <th>Status</th>
+              <th style="width:170px;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="bills-tbody"><!-- rows rendered by JS --></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ SCREEN: BILL DETAIL (APPROVER VIEW AFTER RESUBMIT) ============ -->
+    <section class="screen" id="screen-detail">
+      <div class="crumb"><a onclick="showScreen('list')">← Bills List</a> &nbsp;›&nbsp; Details</div>
+      <div class="detail-title">
+        <h1 id="det-title">Bill: 28501742</h1>
+        <span class="pill awaiting">Awaiting Approval</span>
+        <span class="pill attempt" id="det-attempt">↻ Resubmission · attempt 2</span>
+        <span class="pill credit" id="det-credit-chip" style="display:none;">🏷 Credit applied</span>
+      </div>
+
+      <div class="resub-banner">
+        <div class="rb2-icon">↻</div>
+        <div style="flex:1;">
+          <h3>This bill has been resubmitted for approval</h3>
+          <p id="det-banner-text"></p>
+          <div class="note-quote" id="det-banner-note" style="display:none;"></div>
+        </div>
+      </div>
+
+      <div class="detail-grid">
+        <div>
+          <div class="card" style="margin-bottom:18px;">
+            <div class="card-head">Bill details</div>
+            <div class="card-body">
+              <div class="meta-grid">
+                <div class="m">Supplier <b id="det-supplier">10march</b></div>
+                <div class="m">Project <b id="det-project">(123456) Troughton Rd</b></div>
+                <div class="m">Supplier invoice ref <b id="det-ref">28501742</b></div>
+                <div class="m">Transaction date <b id="det-date">Mon, 09/03/2026</b></div>
+                <div class="m">Due date <b id="det-due">Mon, 09/03/2026</b></div>
+                <div class="m">Amounts <b>GST · Exclusive</b></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">Line items <span style="font-size:11.5px;color:#999;font-weight:400;">from supplier invoice</span></div>
+            <table class="li-table">
+              <thead><tr><th>Description</th><th>Resource</th><th class="right">Qty</th><th class="right">Unit cost</th><th class="right">Total exc.</th></tr></thead>
+              <tbody id="det-lines"></tbody>
+            </table>
+            <div class="totals-block">
+              <div class="t-row"><span>Subtotal (exc. GST)</span><span id="det-subtotal"></span></div>
+              <div class="t-row credit-line" id="det-credit-row" style="display:none;"><span id="det-credit-label">Credit note applied</span><span id="det-credit-amt"></span></div>
+              <div class="t-row grand"><span>Amount payable</span><span><span class="strike" id="det-orig-total" style="display:none;"></span><span id="det-grand"></span></span></div>
+            </div>
+          </div>
+
+          <div class="detail-actions">
+            <button class="btn reject" onclick="toast('Bill rejected again — it returns to the Rejected tab with your reason.')">✕ Reject</button>
+            <button class="btn approve" onclick="toast('Bill approved — moves to next approver / Awaiting Payment.')">✓ Approve</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="card" style="margin-bottom:18px;">
+            <div class="card-head">Approval workflow</div>
+            <div class="card-body">
+              <div class="approver-flow" id="det-approvers"></div>
+              <div class="hint" style="margin-top:10px;">Approval restarts from the first approver on resubmission.</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head">History</div>
+            <div class="card-body">
+              <ul class="timeline" id="det-timeline"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============ RESUBMIT MODAL ============ -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2 id="modal-title">↻ Resubmit bill for approval</h2>
+        <div class="sub" id="modal-sub"></div>
+      </div>
+      <button class="x" onclick="closeModal()">×</button>
+    </div>
+
+    <!-- STEP 1: context + path choice -->
+    <div class="modal-body" id="modal-step1">
+      <div class="rej-context">
+        <div class="rc-head">⚠ Rejected — reason from approver</div>
+        <div class="rc-quote" id="m-reason"></div>
+        <div class="rc-meta"><span class="rc-avatar" id="m-rej-av"></span><span id="m-rej-meta"></span></div>
+      </div>
+
+      <div class="choice-label">How do you want to resolve this?</div>
+      <div class="choice-cards">
+        <div class="choice-card" id="choice-resubmit" onclick="selectPath('resubmit')">
+          <div class="cc-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg></div>
+          <div style="flex:1;">
+            <h3>Resubmit for reapproval</h3>
+            <p>Send this bill straight back through the approval workflow. Use this when the issue has been resolved outside the bill (e.g. rates confirmed with the supplier) or after editing the bill.</p>
+          </div>
+          <div class="cc-radio"></div>
+        </div>
+        <div class="choice-card" id="choice-credit" onclick="selectPath('credit')">
+          <div class="cc-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.83z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
+          <div style="flex:1;">
+            <h3>Apply credit now &amp; resubmit <span class="pill credit">flagged to approvers</span></h3>
+            <p>Record the supplier's credit note against this bill first, then send it back for reapproval. Approvers will see the original total, the credit, and the adjusted amount payable.</p>
+          </div>
+          <div class="cc-radio"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2: details -->
+    <div class="modal-body" id="modal-step2" style="display:none;">
+
+      <!-- credit fields (credit path only) -->
+      <div id="credit-fields" style="display:none;">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Credit note reference <span class="req">*</span></label>
+            <input type="text" id="f-credit-ref" placeholder="e.g. CN-28501742" oninput="refreshStep2()">
+          </div>
+          <div class="form-group">
+            <label>Credit amount (exc. GST) <span class="req">*</span></label>
+            <input type="text" id="f-credit-amt" placeholder="0.00" oninput="refreshStep2()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Credit reason <span class="req">*</span></label>
+          <select id="f-credit-reason" onchange="refreshStep2()">
+            <option value="">Select a reason…</option>
+            <option>Charged during stand-down period</option>
+            <option>Pricing / rate error</option>
+            <option>Quantity short-supplied</option>
+            <option>Damaged or returned goods</option>
+            <option>Duplicate charge</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="credit-summary">
+          <div class="cs-row"><span>Original bill total (exc. GST)</span><span id="cs-orig"></span></div>
+          <div class="cs-row credit-line"><span id="cs-credit-label">Credit note</span><span id="cs-credit">– $0.00</span></div>
+          <div class="cs-row total"><span>Adjusted amount for approval</span><span id="cs-adjusted"></span></div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Note to approvers <span class="req" id="note-req">*</span></label>
+        <textarea id="f-note" rows="3" placeholder="Explain what changed since the rejection…" oninput="refreshStep2()"></textarea>
+        <div class="hint">Shown in the resubmission banner so approvers have context for attempt 2.</div>
+      </div>
+
+      <div class="form-group">
+        <label>Approval workflow</label>
+        <div class="approver-flow" id="m-approvers"></div>
+        <div class="hint">Same workflow as the original submission. Approval restarts from the first approver.</div>
+      </div>
+
+      <div class="preview-box">
+        <div class="pv-head">What approvers will see</div>
+        <div class="pv-body">
+          <div class="pv-banner">
+            <span class="pv-i">↻</span>
+            <div>
+              <b>Resubmission — attempt 2.</b> <span id="pv-text"></span>
+            </div>
+          </div>
+          <div class="pv-chips">
+            <span class="pill attempt">↻ Resubmitted</span>
+            <span class="pill credit" id="pv-credit-chip" style="display:none;">🏷 Credit applied</span>
+            <span class="pill rejected">Previously rejected</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn ghost" id="btn-back" style="display:none;" onclick="gotoStep(1)">← Back</button>
+      <div class="spacer"></div>
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" id="btn-next" disabled onclick="nextOrSubmit()">Continue</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span class="tick">✓</span><span id="toast-msg"></span></div>
+
+<script>
+  const fmt = n => '$' + n.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+  const APPROVERS = [
+    { init: 'TV', name: 'Trent Vanderway', role: 'Project Manager', color: '#2b3a67' },
+    { init: 'JB', name: 'Jess Barton', role: 'Commercial Manager', color: '#8e24aa' },
+    { init: 'MS', name: 'Mike Sutton', role: 'Finance', color: '#00796b' },
+  ];
+
+  const bills = [
+    { id: 1, supplier: 'Rema Tip Top', ref: '7138617', project: '(C100) Barton', date: 'Thu, 05/03/2026', total: 2584.83,
+      rejBy: 'Jess Barton', rejInit: 'JB', rejDate: 'Fri, 06/03/2026',
+      reason: 'Rates don’t match the agreed schedule of rates — confirm pricing with supplier before this is paid.' },
+    { id: 2, supplier: 'ADBRI Concrete', ref: '35312', project: '(C100) Barton', date: 'Wed, 19/11/2025', total: 2394.48,
+      rejBy: 'Trent Vanderway', rejInit: 'TV', rejDate: 'Thu, 20/11/2025',
+      reason: 'Docket 8871 not attached — need proof of delivery for this pour.' },
+    { id: 3, supplier: '10march', ref: '28501742', project: '(123456) Troughton Rd', date: 'Mon, 09/03/2026', total: 3207.39,
+      rejBy: 'Trent Vanderway', rejInit: 'TV', rejDate: 'Tue, 10/03/2026',
+      reason: 'We were charged for the full hire week but the equipment was stood down from 23/02 – 25/02. Request a credit from Kennards for the stand-down period.',
+      lines: [
+        { desc: 'TRIPOD - CONFINED SPACE - 1009030', res: 'LS Labour', qty: 1, unit: 364.55, total: 510.36 },
+        { desc: 'CONFINED SPACE WINCH - PERSON RECOVERY 15M', res: 'LS Materials', qty: 1, unit: 206.36, total: 288.91 },
+        { desc: 'CONFINED SPACE WINCH - PERSON AND MATERIALS 20M', res: 'LS Materials', qty: 1, unit: 280.91, total: 393.27 },
+        { desc: 'GAS DETECTOR 4 IN 1 - CONFINED SPACE - 1009090', res: 'LS Materials', qty: 1, unit: 412.73, total: 577.82 },
+        { desc: 'FAN - EXHAUST 300MM (12IN) - 190030', res: 'LS Materials', qty: 1, unit: 260.00, total: 364.00 },
+        { desc: 'ROPE POSITIONING DEVICE - 1009075', res: 'LS Materials', qty: 1, unit: 296.36, total: 414.91 },
+        { desc: 'SAFETY HARNESS SPREADER BAR + others', res: 'LS Materials', qty: 1, unit: 262.00, total: 658.12 },
+      ] },
+    { id: 4, supplier: 'Hilti', ref: '1253974722', project: '(123456) Troughton Rd', date: 'Thu, 12/02/2026', total: 4681.68,
+      rejBy: 'Mike Sutton', rejInit: 'MS', rejDate: 'Fri, 13/02/2026',
+      reason: 'PO not referenced — match this to PO-123456-0021 or explain the variance.' },
+    { id: 5, supplier: '10march', ref: '57655685485976', project: '(AN001) AN Test Project', date: 'Mon, 08/12/2025', total: 0.00,
+      rejBy: 'Trent Vanderway', rejInit: 'TV', rejDate: 'Tue, 09/12/2025',
+      reason: 'Zero-value bill — confirm whether this should be voided instead.' },
+    { id: 6, supplier: 'Acme', ref: 'INV-0003', project: '(VAR002) Cost Plus Project', date: 'Thu, 13/03/2025', total: 11889.90,
+      rejBy: 'Jess Barton', rejInit: 'JB', rejDate: 'Fri, 14/03/2025',
+      reason: 'Duplicate of bill 0003 on Bourke Street Roadworks — only one should proceed.' },
+    { id: 7, supplier: 'Acme', ref: '0003', project: '(VAR004) Bourke Street Roadworks', date: 'Thu, 13/03/2025', total: 11889.90,
+      rejBy: 'Jess Barton', rejInit: 'JB', rejDate: 'Fri, 14/03/2025',
+      reason: 'Duplicate of bill INV-0003 on Cost Plus Project — only one should proceed.' },
+  ];
+
+  let currentBill = null;
+  let selectedPath = null;   // 'resubmit' | 'credit'
+  let step = 1;
+
+  /* ---------- list rendering ---------- */
+  function renderList() {
+    const tbody = document.getElementById('bills-tbody');
+    tbody.innerHTML = '';
+    const rejected = bills.filter(b => !b.resubmitted);
+    const done = bills.filter(b => b.resubmitted);
+
+    rejected.forEach(b => {
+      const tr = document.createElement('tr');
+      tr.id = 'row-' + b.id;
+      tr.innerHTML = `
+        <td><div class="sup-name">${b.supplier}</div></td>
+        <td>${b.ref}</td>
+        <td><span class="proj-link">${b.project}</span></td>
+        <td><div class="rej-reason"><span class="who">${b.rejBy}:</span> “${trunc(b.reason, 80)}”</div></td>
+        <td>${b.date}</td>
+        <td class="right"><b>${b.total === 0 ? '($0.00)' : fmt(b.total)}</b></td>
+        <td><span class="pill rejected">Rejected</span></td>
+        <td>
+          <button class="btn-resubmit" onclick="openModal(${b.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+            Resubmit
+          </button>
+          <button class="kebab">⋮</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+
+    done.forEach(b => {
+      const tr = document.createElement('tr');
+      tr.className = 'row-updated';
+      tr.style.cursor = 'pointer';
+      tr.onclick = () => showDetail(b);
+      const creditChip = b.credit ? `<span class="pill credit">🏷 Credit ${fmt(b.credit.amount)}</span> ` : '';
+      const displayTotal = b.credit ? b.total - b.credit.amount : b.total;
+      tr.innerHTML = `
+        <td><div class="sup-name">${b.supplier}</div></td>
+        <td>${b.ref}</td>
+        <td><span class="proj-link">${b.project}</span></td>
+        <td><div style="display:flex;gap:6px;flex-wrap:wrap;">${creditChip}<span class="pill attempt">↻ Resubmitted · attempt 2</span></div></td>
+        <td>${b.date}</td>
+        <td class="right"><b>${b.credit ? `<span class="strike">${fmt(b.total)}</span>` : ''}${fmt(displayTotal)}</b></td>
+        <td><span class="pill awaiting">Awaiting Approval</span></td>
+        <td><span style="font-size:12px;color:#999;">View as approver →</span></td>`;
+      tbody.appendChild(tr);
+    });
+
+    if (rejected.length === 0 && done.length === 0) {
+      tbody.innerHTML = '<tr class="empty-row"><td colspan="8">No rejected bills 🎉</td></tr>';
+    }
+
+    document.getElementById('tab-rejected-count').textContent = rejected.length;
+    document.getElementById('tab-awaiting-count').textContent = 3 + done.length;
+  }
+
+  const trunc = (s, n) => s.length > n ? s.slice(0, n) + '…' : s;
+
+  /* ---------- modal ---------- */
+  function openModal(id) {
+    currentBill = bills.find(b => b.id === id);
+    selectedPath = null;
+    step = 1;
+    document.getElementById('modal-sub').textContent =
+      `${currentBill.supplier} · Ref ${currentBill.ref} · ${currentBill.project} · ${currentBill.total === 0 ? '($0.00)' : fmt(currentBill.total)}`;
+    document.getElementById('m-reason').textContent = '“' + currentBill.reason + '”';
+    document.getElementById('m-rej-av').textContent = currentBill.rejInit;
+    document.getElementById('m-rej-meta').textContent = `Rejected by ${currentBill.rejBy} · ${currentBill.rejDate}`;
+    document.getElementById('choice-resubmit').classList.remove('selected');
+    document.getElementById('choice-credit').classList.remove('selected');
+    ['f-credit-ref','f-credit-amt','f-note'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('f-credit-reason').value = '';
+    gotoStep(1);
+    document.getElementById('modal-overlay').classList.add('open');
+  }
+  function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+
+  function selectPath(p) {
+    selectedPath = p;
+    document.getElementById('choice-resubmit').classList.toggle('selected', p === 'resubmit');
+    document.getElementById('choice-credit').classList.toggle('selected', p === 'credit');
+    document.getElementById('btn-next').disabled = false;
+  }
+
+  function gotoStep(n) {
+    step = n;
+    document.getElementById('modal-step1').style.display = n === 1 ? 'block' : 'none';
+    document.getElementById('modal-step2').style.display = n === 2 ? 'block' : 'none';
+    document.getElementById('btn-back').style.display = n === 2 ? 'inline-block' : 'none';
+    if (n === 1) {
+      document.getElementById('modal-title').innerHTML = '↻ Resubmit bill for approval';
+      document.getElementById('btn-next').textContent = 'Continue';
+      document.getElementById('btn-next').disabled = !selectedPath;
+    } else {
+      const isCredit = selectedPath === 'credit';
+      document.getElementById('modal-title').innerHTML = isCredit ? '🏷 Apply credit &amp; resubmit' : '↻ Resubmit for reapproval';
+      document.getElementById('credit-fields').style.display = isCredit ? 'block' : 'none';
+      document.getElementById('pv-credit-chip').style.display = isCredit ? 'inline-flex' : 'none';
+      document.getElementById('btn-next').textContent = isCredit ? 'Apply credit & send for reapproval' : 'Send for reapproval';
+      document.getElementById('cs-orig').textContent = fmt(currentBill.total);
+      renderApprovers(document.getElementById('m-approvers'));
+      refreshStep2();
+    }
+  }
+
+  function creditAmount() {
+    const v = parseFloat((document.getElementById('f-credit-amt').value || '').replace(/[^0-9.]/g, ''));
+    return isNaN(v) ? 0 : v;
+  }
+
+  function refreshStep2() {
+    const isCredit = selectedPath === 'credit';
+    const note = document.getElementById('f-note').value.trim();
+    let valid = note.length > 0;
+    if (isCredit) {
+      const ref = document.getElementById('f-credit-ref').value.trim();
+      const amt = creditAmount();
+      const reason = document.getElementById('f-credit-reason').value;
+      valid = valid && ref.length > 0 && amt > 0 && amt <= currentBill.total && reason;
+      document.getElementById('cs-credit').textContent = '– ' + fmt(amt);
+      document.getElementById('cs-credit-label').textContent = 'Credit note' + (ref ? ' ' + ref : '');
+      document.getElementById('cs-adjusted').textContent = fmt(Math.max(0, currentBill.total - amt));
+      document.getElementById('pv-text').textContent =
+        `Previously rejected by ${currentBill.rejBy}. A supplier credit ${ref ? '(' + ref + ') ' : ''}of ${fmt(amt)} has been applied — approve the adjusted amount of ${fmt(Math.max(0, currentBill.total - amt))}.`;
+    } else {
+      document.getElementById('pv-text').textContent =
+        `Previously rejected by ${currentBill.rejBy} — “${trunc(currentBill.reason, 70)}”. Review the resubmission note and approve or reject.`;
+    }
+    document.getElementById('btn-next').disabled = !valid;
+  }
+
+  function nextOrSubmit() {
+    if (step === 1) { gotoStep(2); return; }
+    // submit
+    const note = document.getElementById('f-note').value.trim();
+    currentBill.resubmitted = true;
+    currentBill.note = note;
+    if (selectedPath === 'credit') {
+      currentBill.credit = {
+        ref: document.getElementById('f-credit-ref').value.trim(),
+        amount: creditAmount(),
+        reason: document.getElementById('f-credit-reason').value,
+      };
+      toast(`Credit ${currentBill.credit.ref} applied — ${currentBill.supplier} ${currentBill.ref} sent for reapproval at ${fmt(currentBill.total - currentBill.credit.amount)}.`);
+    } else {
+      currentBill.credit = null;
+      toast(`${currentBill.supplier} ${currentBill.ref} resubmitted — now Awaiting Approval (attempt 2).`);
+    }
+    closeModal();
+    renderList();
+  }
+
+  /* ---------- approver chips ---------- */
+  function renderApprovers(el) {
+    el.innerHTML = '';
+    APPROVERS.forEach((a, i) => {
+      if (i > 0) {
+        const arrow = document.createElement('span');
+        arrow.className = 'appr-arrow';
+        arrow.textContent = '→';
+        el.appendChild(arrow);
+      }
+      const chip = document.createElement('span');
+      chip.className = 'appr';
+      chip.innerHTML = `<span class="av" style="background:${a.color}">${a.init}</span>${a.name.split(' ')[0]} <span style="font-weight:400;color:#999;">· ${a.role}</span>`;
+      el.appendChild(chip);
+    });
+  }
+
+  /* ---------- detail (approver view) ---------- */
+  function showDetail(b) {
+    document.getElementById('det-title').textContent = 'Bill: ' + b.ref;
+    document.getElementById('det-supplier').textContent = b.supplier;
+    document.getElementById('det-project').textContent = b.project;
+    document.getElementById('det-ref').textContent = b.ref;
+    document.getElementById('det-date').textContent = b.date;
+    document.getElementById('det-due').textContent = b.date;
+
+    const hasCredit = !!b.credit;
+    document.getElementById('det-credit-chip').style.display = hasCredit ? 'inline-flex' : 'none';
+
+    let bannerText = `Rejected by <b>${b.rejBy}</b> on ${b.rejDate}: “${b.reason}”`;
+    if (hasCredit) {
+      bannerText += `<br>Supplier credit <b>${b.credit.ref}</b> (${b.credit.reason.toLowerCase()}) of <b>${fmt(b.credit.amount)}</b> has been applied — the amount for approval is <b>${fmt(b.total - b.credit.amount)}</b>.`;
+    }
+    document.getElementById('det-banner-text').innerHTML = bannerText;
+    const noteEl = document.getElementById('det-banner-note');
+    if (b.note) { noteEl.style.display = 'block'; noteEl.textContent = '“' + b.note + '” — resubmission note'; }
+    else noteEl.style.display = 'none';
+
+    // lines
+    const lines = b.lines || [
+      { desc: 'Supplier invoice line items', res: '—', qty: 1, unit: b.total, total: b.total },
+    ];
+    const tb = document.getElementById('det-lines');
+    tb.innerHTML = lines.map(l =>
+      `<tr><td style="white-space:normal;max-width:260px;">${l.desc}</td><td>${l.res}</td><td class="right">${l.qty}</td><td class="right">${fmt(l.unit)}</td><td class="right">${fmt(l.total)}</td></tr>`
+    ).join('');
+
+    document.getElementById('det-subtotal').textContent = fmt(b.total);
+    if (hasCredit) {
+      document.getElementById('det-credit-row').style.display = 'flex';
+      document.getElementById('det-credit-label').textContent = `Credit note ${b.credit.ref} — ${b.credit.reason}`;
+      document.getElementById('det-credit-amt').textContent = '– ' + fmt(b.credit.amount);
+      document.getElementById('det-orig-total').style.display = 'inline';
+      document.getElementById('det-orig-total').textContent = fmt(b.total);
+      document.getElementById('det-grand').textContent = fmt(b.total - b.credit.amount);
+    } else {
+      document.getElementById('det-credit-row').style.display = 'none';
+      document.getElementById('det-orig-total').style.display = 'none';
+      document.getElementById('det-grand').textContent = fmt(b.total);
+    }
+
+    renderApprovers(document.getElementById('det-approvers'));
+
+    // timeline
+    const tl = [];
+    tl.push({ dot: 'grey', icon: '📥', html: `<b>Bill created</b> from scanned invoice`, when: b.date });
+    tl.push({ dot: 'grey', icon: '➤', html: `<b>Submitted for approval</b> — attempt 1`, when: b.date });
+    tl.push({ dot: 'red', icon: '✕', html: `<b>Rejected by ${b.rejBy}</b><div class="tl-note">“${b.reason}”</div>`, when: b.rejDate });
+    if (hasCredit) tl.push({ dot: 'blue', icon: '🏷', html: `<b>Credit ${b.credit.ref} applied</b> — ${fmt(b.credit.amount)} (${b.credit.reason})`, when: 'Today' });
+    tl.push({ dot: 'purple', icon: '↻', html: `<b>Resubmitted for approval</b> — attempt 2${b.note ? `<div class="tl-note">“${b.note}”</div>` : ''}`, when: 'Today' });
+    tl.push({ dot: 'orange', icon: '⏳', html: `<b>Awaiting approval</b> — with ${APPROVERS[0].name} (1 of ${APPROVERS.length})`, when: 'Now' });
+    document.getElementById('det-timeline').innerHTML = tl.map(t =>
+      `<li><span class="tl-dot ${t.dot}">${t.icon}</span><div class="tl-body">${t.html}<div class="when">${t.when}</div></div></li>`
+    ).join('');
+
+    showScreen('detail');
+  }
+
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+    window.scrollTo(0, 0);
+  }
+
+  /* ---------- toast ---------- */
+  let toastTimer;
+  function toast(msg) {
+    document.getElementById('toast-msg').textContent = msg;
+    const t = document.getElementById('toast');
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 4200);
+  }
+
+  renderList();
+</script>
+</body>
+</html>
