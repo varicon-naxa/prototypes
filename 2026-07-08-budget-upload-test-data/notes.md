@@ -71,7 +71,7 @@ primary centre. 6–9 items per E file are split; the rest stay single-CC.
 \* D5's margin on paper — its deliberate error budgets the whole drainage section
 ~8% above BOQ, so the true clean margin on the remaining sections is higher.
 
-## Deliberate errors (8 files, 3 each)
+## Deliberate errors (10 files, 3 each)
 
 **A4 — Old Pacific Hwy Culverts** (WBS / lump sum)
 1. BOQ: duplicate Item Code `2.1.1` — same code on two rows.
@@ -115,5 +115,16 @@ primary centre. 6–9 items per E file are split; the rest stay single-CC.
 3. Budget: the entire Stormwater Drainage section is budgeted ~8% **above** BOQ
    (negative margin across 5 items).
 
+**E4 — Shellharbour Marina Foreshore** (Cost Centre / lump sum, split CCs)
+1. Budget: split rows for item `3.2.3` sum to $3,200 **less** than its BOQ line amount.
+2. Budget: second split row of item `4.1.1` has a blank Cost Centre (note says "CC TBC - ask DK").
+3. Budget: item `4.1.2` is "split" across two rows that **both** map to the same cost centre (Concrete).
+
+**E5 — Cooma Saleyards Truck Wash** (Cost Centre / resource, split CCs)
+1. Budget: item `2.1.3` rows use **"Overheads/Prelims"** (no spaces) — near-duplicate of
+   the "Overheads / Prelims" cost centre.
+2. Budget: split item `2.2.3` total budget exceeds its BOQ amount (~−7% margin).
+3. Budget: item `3.1.2` has text `see 2.1.1` in a Budget ($) cell.
+
 `_summary.json` holds the same data machine-readable (totals incl. provisional split,
-margins on fixed works, error list per file).
+margins on fixed works, split-item codes for E files, error list per file).
