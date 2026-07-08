@@ -62,6 +62,11 @@ primary centre. 6–9 items per E file are split; the rest stay single-CC.
 | D3 | Nowra CBD Streetscape Stg 2 | Cost Centre | Resource | $3.89M | $87k | 20.0% | — |
 | D4 | Pacific Palms Watermain | Cost Centre | Resource | $2.04M | $133k | 11.1% | ⚠ 3 |
 | D5 | Berrima Quarry Access Rd | Cost Centre | Resource | $1.95M | $117k | 14.6%* | ⚠ 3 |
+| E1 | Ballina Coastal Shared Path Stg 2 | Cost Centre | Lump sum, split CCs | $1.88M | $194k | 12.5% | — |
+| E2 | Orange Airport Apron Extension | Cost Centre | Lump sum, split CCs | $2.23M | $60k | 17.0% | — |
+| E3 | Wodonga Logistics Hub Intersection | Cost Centre | Resource, split CCs | $2.26M | $140k | 19.5% | — |
+| E4 | Shellharbour Marina Foreshore | Cost Centre | Lump sum, split CCs | $1.67M | $119k | 14.0% | ⚠ 3 |
+| E5 | Cooma Saleyards Truck Wash | Cost Centre | Resource, split CCs | $3.38M | $133k | 10.8% | ⚠ 3 |
 
 \* D5's margin on paper — its deliberate error budgets the whole drainage section
 ~8% above BOQ, so the true clean margin on the remaining sections is higher.
