@@ -9,6 +9,8 @@
    - **Apply credit now & resubmit** — record the supplier credit note (ref, amount, reason) against the bill first. The credit is *flagged in the reapproval*: approvers see original total → credit → adjusted amount payable.
 2. **Step 2 — details.** Credit fields (credit path only), a required note to approvers, the approval workflow (restarts from the first approver), and a live preview of exactly what approvers will see.
 
+**Also available from the bill detail page:** clicking any rejected row opens the bill detail in its rejected state — a red rejection banner with **Resubmit for approval** as the primary action (replacing today's unintuitive bare "Approve"), plus an Edit bill option. It opens the same modal, and you land back on the detail page in its resubmitted state.
+
 After resubmitting, the bill moves to **Awaiting Approval** with a `↻ Resubmitted · attempt 2` badge (plus a `🏷 Credit` chip if applicable). Click the resubmitted row to see the **approver's view**: a resubmission banner with rejection reason, credit details, resubmission note, adjusted totals (original struck through), and a full history timeline (created → submitted → rejected → credit applied → resubmitted → awaiting approval).
 
 **Try it:** the 10march / 28501742 Kennards hire bill is the hero scenario — rejected because the supplier charged through a stand-down period, so use "Apply credit & resubmit" (e.g. CN-28501742, $291.57, "Charged during stand-down period").
