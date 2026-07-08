@@ -920,18 +920,55 @@
     toast(`${b.supplier} ${b.ref} rejected — back on the Rejected tab${suggestKey ? ` with a suggestion to route to ${PEOPLE[suggestKey].name}` : ''}.`);
   }
 
-  /* ---------- approver chips (read-only) ---------- */
-  function renderApprovers(el, keys, newKeys) {
+  /* ---------- approver chips (read-only, with workflow states) ---------- */
+  // states: { key: 'approved' | 'rejected' | 'current' | 'skipped' }
+  function renderApprovers(el, keys, newKeys, states) {
     keys = keys || DEFAULT_WORKFLOW;
     newKeys = newKeys || [];
+    states = states || {};
     el.innerHTML = '';
     keys.forEach((k, i) => {
       if (i > 0) el.insertAdjacentHTML('beforeend', '<span class="appr-arrow">→</span>');
       const a = PEOPLE[k];
       const isNew = newKeys.includes(k);
+      const st = states[k];
+      const badge = st === 'approved' ? '<span class="av-badge ok">✓</span>'
+                  : st === 'rejected' ? '<span class="av-badge no">✕</span>'
+                  : st === 'current'  ? '<span class="av-badge cur"></span>' : '';
+      const label = st === 'approved' ? '<span class="st-label ok">Approved</span>'
+                  : st === 'rejected' ? '<span class="st-label no">Rejected</span>'
+                  : st === 'current'  ? '<span class="st-label cur">Reviewing</span>'
+                  : st === 'skipped'  ? '<span class="st-label" style="color:#aaa;">Not reached</span>' : '';
+      const cls = 'appr' + (isNew ? ' new' : '') + (st === 'skipped' ? ' dim' : '') + (st === 'rejected' ? ' rejector' : '');
       el.insertAdjacentHTML('beforeend',
-        `<span class="appr${isNew ? ' new' : ''}"><span class="av" style="background:${a.color}">${a.init}</span>${a.name.split(' ')[0]} <span style="font-weight:400;color:#999;">· ${a.role}</span>${isNew ? '<span class="new-tag">NEW</span>' : ''}</span>`);
+        `<span class="${cls}"><span class="av" style="background:${a.color}">${a.init}${badge}</span>${a.name.split(' ')[0]} <span style="font-weight:400;color:#999;">· ${a.role}</span>${label}${isNew ? '<span class="new-tag">NEW</span>' : ''}</span>`);
     });
+  }
+
+  // compact avatar strip for the bills table
+  function miniAvatars(keys, states) {
+    states = states || {};
+    return '<span class="mini-avs">' + keys.map(k => {
+      const a = PEOPLE[k];
+      const st = states[k];
+      const badge = st === 'approved' ? '<span class="av-badge ok">✓</span>'
+                  : st === 'rejected' ? '<span class="av-badge no">✕</span>'
+                  : st === 'current'  ? '<span class="av-badge cur"></span>' : '';
+      const title = `${a.name} — ${st === 'approved' ? 'approved' : st === 'rejected' ? 'rejected' : st === 'current' ? 'reviewing now' : st === 'skipped' ? 'not reached' : 'pending'}`;
+      return `<span class="mini-av${st === 'skipped' ? ' dim' : ''}" style="background:${a.color}" title="${title}">${a.init}${badge}</span>`;
+    }).join('') + '</span>';
+  }
+
+  // where did the workflow stop for a rejected bill?
+  function rejectionStates(b) {
+    const wf = b.workflow || DEFAULT_WORKFLOW;
+    const states = {};
+    const ri = wf.indexOf(b.rejInit);
+    wf.forEach((k, i) => {
+      if (ri < 0) return;
+      states[k] = i < ri ? 'approved' : i === ri ? 'rejected' : 'skipped';
+    });
+    return states;
   }
 
   /* ---------- detail (approver view) ---------- */
