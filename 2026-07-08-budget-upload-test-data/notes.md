@@ -31,7 +31,7 @@ estimator build-up rates to 4 decimals, quantities rounded three different ways,
 trailing spaces and drawing references in descriptions, budgets rounded to $50,
 estimator notes ("sub quote - CivilTech 14/6", "quote expires 30/7"), messy filenames.
 
-**Multi-cost-centre splits (E files):** in E1/E2/E4 (lump-sum layout) a split line item
+**Multi-cost-centre splits (E files, 3 lump sum + 3 resource):** in E1/E2/E4 (lump-sum layout) a split line item
 appears as two budget rows with the same Item Code — different cost centres, portioned
 BOQ/Budget amounts, and a "60/40 split w/ …" note. In E3/E5 (resource layout) the split
 falls out of the resource categories: an item's Labour rows map to the **Labour** cost
