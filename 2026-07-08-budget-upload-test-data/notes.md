@@ -67,6 +67,7 @@ primary centre. Same for E3/E5/E6. 6–9 items per E file are split; the rest st
 | E3 | Wodonga Logistics Hub Intersection | Cost Centre | Resource, split CCs | $2.26M | $140k | 19.5% | — |
 | E4 | Shellharbour Marina Foreshore | Cost Centre | Lump sum, split CCs | $1.67M | $119k | 14.0% | ⚠ 3 |
 | E5 | Cooma Saleyards Truck Wash | Cost Centre | Resource, split CCs | $3.38M | $133k | 10.8% | ⚠ 3 |
+| E6 | Maitland Showground Carpark | Cost Centre | Resource, split CCs | $2.61M | $74k | 15.5% | — |
 
 \* D5's margin on paper — its deliberate error budgets the whole drainage section
 ~8% above BOQ, so the true clean margin on the remaining sections is higher.
