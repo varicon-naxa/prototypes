@@ -702,8 +702,68 @@
       document.getElementById('pv-credit-chip').style.display = isCredit ? 'inline-flex' : 'none';
       document.getElementById('btn-next').textContent = isCredit ? 'Apply credit & send for reapproval' : 'Send for reapproval';
       document.getElementById('cs-orig').textContent = fmt(currentBill.total);
-      renderApprovers(document.getElementById('m-approvers'));
+      renderDraftWorkflow();
+      refreshSuggestionBanner();
       refreshStep2();
+    }
+  }
+
+  function refreshSuggestionBanner() {
+    const banner = document.getElementById('m-sugg');
+    const s = currentBill.suggested;
+    if (!s) { banner.style.display = 'none'; return; }
+    banner.style.display = 'flex';
+    if (suggestionApplied || draftWorkflow.includes(s.who)) {
+      banner.classList.add('applied');
+      document.getElementById('m-sugg-text').innerHTML = `Suggestion applied — <b>${PEOPLE[s.who].name}</b> is now in the approval workflow.`;
+      document.getElementById('m-sugg-btn').style.display = 'none';
+    } else {
+      banner.classList.remove('applied');
+      document.getElementById('m-sugg-text').innerHTML = `<b>${currentBill.rejBy}</b> suggested this should go to <b>${PEOPLE[s.who].name}</b> (${PEOPLE[s.who].role})${s.replace ? ` instead of ${PEOPLE[s.replace].name}` : ''}.`;
+      document.getElementById('m-sugg-btn').style.display = 'inline-block';
+    }
+  }
+
+  function applySuggestion() {
+    const s = currentBill.suggested;
+    if (!s || draftWorkflow.includes(s.who)) return;
+    const idx = s.replace ? draftWorkflow.indexOf(s.replace) : -1;
+    if (idx >= 0) draftWorkflow.splice(idx, 1, s.who);
+    else draftWorkflow.push(s.who);
+    suggestionApplied = true;
+    renderDraftWorkflow();
+    refreshSuggestionBanner();
+    refreshStep2();
+  }
+
+  function removeApprover(i) {
+    draftWorkflow.splice(i, 1);
+    renderDraftWorkflow();
+    refreshSuggestionBanner();
+    refreshStep2();
+  }
+
+  function addApprover(key) {
+    if (key && !draftWorkflow.includes(key)) draftWorkflow.push(key);
+    renderDraftWorkflow();
+    refreshSuggestionBanner();
+    refreshStep2();
+  }
+
+  function renderDraftWorkflow() {
+    const el = document.getElementById('m-approvers');
+    el.innerHTML = '';
+    draftWorkflow.forEach((k, i) => {
+      if (i > 0) el.insertAdjacentHTML('beforeend', '<span class="appr-arrow">→</span>');
+      const a = PEOPLE[k];
+      const isNew = !modalOrigWorkflow.includes(k);
+      el.insertAdjacentHTML('beforeend',
+        `<span class="appr${isNew ? ' new' : ''}"><span class="av" style="background:${a.color}">${a.init}</span>${a.name.split(' ')[0]} <span style="font-weight:400;color:#999;">· ${a.role}</span>${isNew ? '<span class="new-tag">NEW</span>' : ''}<button class="rm" title="Remove approver" onclick="removeApprover(${i})">×</button></span>`);
+    });
+    const avail = Object.keys(PEOPLE).filter(k => !draftWorkflow.includes(k));
+    if (avail.length) {
+      el.insertAdjacentHTML('beforeend',
+        `<select class="add-appr-select" onchange="addApprover(this.value)"><option value="">＋ Add approver…</option>${avail.map(k => `<option value="${k}">${PEOPLE[k].name} — ${PEOPLE[k].role}</option>`).join('')}</select>`);
     }
   }
 
