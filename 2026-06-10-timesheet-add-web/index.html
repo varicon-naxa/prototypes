@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Add Timesheet — tidied web</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #143666;
+      --primary-dk: #0d2649;
+      --accent: #F2AD3E;
+      --accent-bg: #fff8ec;
+      --muted: #6b7280;
+      --border: #e6e8ee;
+      --field-border: #d8dce3;
+      --surface: #f6f7f9;
+      --green-bg: #e8f5e9;
+      --green-text: #2e7d32;
+      --amber-bg: #fff8ec;
+      --amber-text: #b86e00;
+      --red: #d4183d;
+      --shadow-sm: 0 1px 3px rgba(16,24,40,0.06);
+      --shadow-md: 0 4px 14px rgba(16,24,40,0.08);
+    }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: var(--surface);
+      color: var(--primary);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* ──────────────── SIDE NAV ──────────────── */
+    .sidenav {
+      width: 232px;
+      background: var(--primary);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      min-height: 100vh;
+      position: sticky;
+      top: 0;
+    }
+    .sn-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .sn-logo {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--accent); color: var(--primary);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 16px;
+    }
+    .sn-collapse {
+      background: none; border: none; cursor: pointer; color: #fff;
+      opacity: 0.55; padding: 4px; display: flex;
+    }
+    .sn-collapse:hover { opacity: 1; }
+    .sn-company {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      cursor: pointer;
+    }
+    .sn-company .ci {
+      width: 28px; height: 28px; border-radius: 50%; background: rgba(255,255,255,0.15);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 12px;
+    }
+    .sn-company .cn { flex: 1; font-size: 14px; font-weight: 500; }
+    .sn-company .cv { opacity: 0.6; }
+
+    .sn-list { flex: 1; padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
+    .sn-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; border-radius: 8px;
+      color: rgba(255,255,255,0.85); font-size: 14px; font-weight: 400;
+      cursor: pointer; background: none; border: none; text-align: left; width: 100%;
+      font-family: 'Roboto', sans-serif;
+    }
+    .sn-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .sn-item.active { background: rgba(255,255,255,0.12); color: #fff; font-weight: 500; }
+    .sn-item .badge {
+      margin-left: auto; background: var(--accent); color: var(--primary);
+      font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 10px;
+    }
+    .sn-foot { padding: 12px 12px 18px; display: flex; flex-direction: column; gap: 8px; }
+    .sn-card {
+      background: rgba(255,255,255,0.06); border-radius: 8px;
+      padding: 10px 12px; font-size: 12px; line-height: 1.35;
+      cursor: pointer;
+    }
+    .sn-card:hover { background: rgba(255,255,255,0.1); }
+    .sn-card .top { opacity: 0.75; }
+    .sn-card .bot { font-weight: 500; margin-top: 1px; }
+
+    /* ──────────────── MAIN ──────────────── */
+    .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+    .topbar {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 28px;
+      background: #fff;
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .icon-btn {
+      background: none; border: none; cursor: pointer; color: var(--primary);
+      padding: 4px; display: flex; align-items: center; justify-content: center;
+      border-radius: 8px;
+    }
+    .icon-btn:hover { background: var(--surface); }
+    .tb-title { font-size: 18px; font-weight: 700; color: var(--primary); }
+    .tb-spacer { flex: 1; }
+    .btn {
+      border: none; cursor: pointer; font-family: 'Roboto', sans-serif;
+      font-size: 14px; font-weight: 500;
+      border-radius: 8px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    }
+    .btn:active { opacity: 0.9; }
+    .btn-outline {
+      background: #fff; color: var(--primary);
+      border: 1.5px solid var(--field-border);
+      padding: 8px 14px;
+    }
+    .btn-outline:hover { background: var(--surface); }
+    .btn-primary {
+      background: var(--accent); color: #233759;
+      padding: 9px 16px; font-weight: 700;
+    }
+    .btn-primary:hover { filter: brightness(1.02); }
+    .btn-ghost {
+      background: none; color: var(--primary);
+      padding: 8px 12px;
+    }
+    .btn-ghost:hover { background: var(--surface); }
+    .avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--primary); color: #fff;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 13px;
+    }
+    .user-chip {
+      display: flex; align-items: center; gap: 9px; padding: 4px 10px 4px 4px;
+      border-radius: 22px; cursor: pointer;
+    }
+    .user-chip:hover { background: var(--surface); }
+    .user-chip span { font-size: 13px; font-weight: 500; }
+
+    /* Content layout */
+    .content {
+      flex: 1;
+      padding: 24px 28px 120px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 24px;
+      max-width: 1400px;
+      width: 100%;
+    }
+
+    /* Cards */
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: var(--shadow-sm);
+      padding: 22px 24px;
+      margin-bottom: 16px;
+    }
+    .card:last-child { margin-bottom: 0; }
+    .card-h {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 14px; font-weight: 700; color: var(--primary);
+      text-transform: uppercase; letter-spacing: 0.4px;
+      margin-bottom: 6px;
+    }
+    .card-h .req { color: var(--red); font-size: 13px; }
+    .card-hint { font-size: 13px; color: var(--muted); margin-bottom: 18px; line-height: 1.45; }
+
+    /* Fields */
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field-label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 500; color: var(--primary);
+    }
+    .field-label .info {
+      width: 15px; height: 15px; border-radius: 50%;
+      border: 1.5px solid var(--muted); color: var(--muted);
+      font-size: 10px; font-weight: 700;
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: help; line-height: 1;
+    }
+    .field-label .right { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-weight: 400; color: var(--muted); }
+
+    .input,
+    .select {
+      width: 100%;
+      border: 1.5px solid var(--field-border);
+      border-radius: 8px;
+      padding: 11px 14px;
+      font-size: 14px; font-family: 'Roboto', sans-serif;
+      color: var(--primary); background: #fff; outline: none;
+    }
+    .input::placeholder { color: #9ca3af; }
+    .input:focus, .select:focus { border-color: var(--primary); }
+    .select {
+      appearance: none; -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='%23143666'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 14px center;
+      padding-right: 38px; cursor: pointer;
+    }
+
+    .input-with-icon { position: relative; }
+    .input-with-icon .ic { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+
+    /* Toggle switch */
+    .toggle {
+      position: relative; width: 36px; height: 20px;
+      background: #d1d5db; border-radius: 12px; cursor: pointer;
+      transition: background 0.18s;
+      flex-shrink: 0;
+    }
+    .toggle.on { background: var(--accent); }
+    .toggle .knob {
+      position: absolute; top: 2px; left: 2px;
+      width: 16px; height: 16px; border-radius: 50%; background: #fff;
+      transition: left 0.18s; box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+    .toggle.on .knob { left: 18px; }
+
+    /* Multi-select chips field */
+    .chip-field {
+      width: 100%;
+      min-height: 46px;
+      border: 1.5px solid var(--field-border);
+      border-radius: 8px;
+      padding: 7px 10px;
+      background: #fff;
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      cursor: text;
+    }
+    .chip-field:focus-within { border-color: var(--primary); }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface);
+      border-radius: 18px; padding: 4px 6px 4px 10px;
+      font-size: 13px; color: var(--primary);
+    }
+    .chip .av {
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--primary); color: #fff;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700;
+    }
+    .chip .x {
+      background: none; border: none; cursor: pointer; color: var(--muted);
+      padding: 0; display: inline-flex; align-items: center;
+    }
+    .chip .x:hover { color: var(--red); }
+    .chip-add {
+      flex: 1; min-width: 140px;
+      border: none; outline: none;
+      font-size: 14px; font-family: 'Roboto', sans-serif; color: var(--primary);
+      background: transparent; padding: 6px 0;
+    }
+    .chip-add::placeholder { color: #9ca3af; }
+
+    /* Time + duration */
+    .time-summary {
+      display: flex; align-items: center; justify-content: space-between; gap: 14px;
+      margin-top: 18px; padding: 14px 16px;
+      background: var(--surface);
+      border-radius: 10px;
+    }
+    .time-summary .ts-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+    .time-summary .ts-val { font-size: 22px; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
+
+    /* Workflow chooser tiles */
+    .wf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .wf-tile {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 18px;
+      border: 1.5px solid var(--field-border);
+      border-radius: 12px;
+      background: #fff; cursor: pointer;
+      font-family: 'Roboto', sans-serif;
+      text-align: left;
+    }
+    .wf-tile:hover { border-color: #b8bfcc; }
+    .wf-tile.selected { border-color: var(--accent); background: var(--accent-bg); box-shadow: inset 0 0 0 1px var(--accent); }
+    .wf-tile.locked { opacity: 0.45; pointer-events: none; }
+    .wf-tile .ic {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: #eef1f7; color: var(--primary);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .wf-tile.selected .ic { background: var(--accent); color: #fff; }
+    .wf-tile .body { flex: 1; min-width: 0; }
+    .wf-tile .title { font-size: 14px; font-weight: 700; }
+    .wf-tile .sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+    .wf-tile .pill {
+      font-size: 11px; font-weight: 700;
+      background: var(--green-bg); color: var(--green-text);
+      border-radius: 12px; padding: 3px 9px; margin-top: 4px;
+      display: inline-block;
+    }
+
+    /* Allocation table */
+    .alloc-bar {
+      display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+      margin: 16px 0 10px;
+    }
+    .stat {
+      display: flex; flex-direction: column;
+      padding: 8px 14px;
+      background: var(--surface); border-radius: 10px; min-width: 132px;
+    }
+    .stat .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
+    .stat .val { font-size: 16px; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
+    .stat.assigned .val { color: var(--green-text); }
+    .stat.unassigned.warn .val { color: var(--amber-text); }
+    .stat.unassigned.done .val { color: var(--green-text); }
+
+    .data-table {
+      width: 100%; border-collapse: collapse;
+      background: #fff;
+      border-radius: 10px; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .data-table th {
+      text-align: left; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.4px; text-transform: uppercase;
+      color: var(--muted);
+      padding: 12px 14px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table td {
+      padding: 12px 14px;
+      font-size: 14px; color: var(--primary);
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table .col-act { width: 64px; text-align: right; }
+    .row-remove {
+      background: none; border: none; cursor: pointer; color: var(--muted);
+      width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 6px;
+    }
+    .row-remove:hover { background: #fdecec; color: var(--red); }
+
+    .add-row {
+      display: flex; flex-direction: column; gap: 14px;
+      margin-top: 12px;
+      padding: 14px;
+      background: var(--surface);
+      border-radius: 10px;
+    }
+    .add-row .field-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
+    .task-cascade { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .task-single { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    .duration-row { display: grid; grid-template-columns: 110px 110px 1fr auto; gap: 10px; align-items: end; }
+    .duration-row .fill-toggle {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--muted);
+      padding-bottom: 12px;
+    }
+    .select:disabled { background-color: #eef0f3; color: var(--muted); cursor: not-allowed; opacity: 0.85; }
+    .cascade-arrow {
+      color: var(--muted); font-size: 11px;
+      display: inline-flex; align-items: center; gap: 2px;
+    }
+
+    .add-btn {
+      background: var(--primary); color: #fff; border: none; cursor: pointer;
+      padding: 11px 16px; border-radius: 8px;
+      font-size: 13px; font-weight: 500; font-family: 'Roboto', sans-serif;
+      display: inline-flex; align-items: center; gap: 6px;
+      align-self: end;
+    }
+    .add-btn:hover { background: var(--primary-dk); }
+    .add-btn.disabled { opacity: 0.45; pointer-events: none; }
+    .full-hint {
+      margin-top: 10px; padding: 12px 14px;
+      background: var(--green-bg); border-radius: 10px;
+      font-size: 13px; color: var(--green-text); font-weight: 500;
+      text-align: center;
+    }
+
+    /* Checkbox */
+    .checkbox {
+      width: 18px; height: 18px;
+      border: 1.5px solid var(--field-border); border-radius: 4px;
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+      color: #fff; flex-shrink: 0;
+    }
+    .checkbox.on { background: var(--accent); border-color: var(--accent); }
+
+    /* Auto-assigned equipment */
+    .auto-equip-note {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--green-bg); color: var(--green-text);
+      padding: 10px 14px; border-radius: 10px;
+      font-size: 13px; font-weight: 500;
+      margin-bottom: 12px;
+    }
+    .auto-equip-note svg { flex-shrink: 0; }
+
+    /* Empty state row (compact) */
+    .empty-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px;
+      background: var(--surface); border-radius: 10px;
+      font-size: 13px; color: var(--muted);
+    }
+    .empty-row .grow { flex: 1; }
+    .empty-row button {
+      background: none; border: 1.5px dashed var(--field-border);
+      padding: 8px 14px; border-radius: 8px;
+      color: var(--primary); font-size: 13px; font-weight: 500;
+      cursor: pointer; font-family: 'Roboto', sans-serif;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .empty-row button:hover { background: #fff; border-style: solid; border-color: var(--primary); }
+
+    /* Remarks + attach */
+    textarea.input { min-height: 92px; resize: vertical; font-family: 'Roboto', sans-serif; }
+    .attach-zone {
+      margin-top: 12px;
+      border: 1.5px dashed var(--field-border);
+      border-radius: 10px;
+      padding: 16px;
+      display: flex; align-items: center; gap: 14px;
+      cursor: pointer; color: var(--muted); font-size: 13px;
+    }
+    .attach-zone:hover { border-color: var(--primary); background: var(--surface); color: var(--primary); }
+    .attach-zone svg { flex-shrink: 0; color: var(--primary); opacity: 0.7; }
+
+    /* Right summary rail */
+    .summary {
+      position: sticky;
+      top: 88px;
+      align-self: start;
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: var(--shadow-sm);
+      padding: 22px 24px;
+    }
+    .sum-h { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--primary); margin-bottom: 14px; }
+    .sum-row { display: flex; justify-content: space-between; align-items: baseline; padding: 7px 0; gap: 12px; }
+    .sum-row .lbl { font-size: 13px; color: var(--muted); }
+    .sum-row .val { font-size: 14px; font-weight: 500; color: var(--primary); text-align: right; }
+    .sum-row .val.big { font-size: 18px; font-weight: 700; }
+    .sum-row .val.muted { color: var(--muted); font-weight: 400; }
+    .sum-div { height: 1px; background: var(--border); margin: 8px 0; }
+
+    .sum-alloc-list { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .sum-alloc {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      background: var(--surface); border-radius: 8px; padding: 8px 10px;
+      font-size: 12px;
+    }
+    .sum-alloc .nm { color: var(--primary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sum-alloc .dr { font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+    /* Workflow card — project-level setting */
+    .wf-card-banner {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--accent-bg); border: 1px solid #f0c66a;
+      border-radius: 10px; padding: 10px 14px;
+      font-size: 12.5px; color: #7c5200; margin-bottom: 16px;
+    }
+    .wf-card-banner svg { flex-shrink: 0; color: var(--accent); }
+
+    /* Worker multi-select dropdown */
+    .ms-wrapper { position: relative; }
+    .ms-trigger {
+      width: 100%;
+      min-height: 46px;
+      border: 1.5px solid var(--field-border);
+      border-radius: 8px;
+      padding: 7px 38px 7px 10px;
+      background: #fff;
+      cursor: pointer;
+      display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+      position: relative; font-family: 'Roboto', sans-serif;
+    }
+    .ms-trigger.open { border-color: var(--primary); }
+    .ms-trigger:hover { border-color: #b8bfcc; }
+    .ms-trigger.open:hover { border-color: var(--primary); }
+    .ms-trigger .ph { color: #9ca3af; font-size: 14px; padding: 6px 4px; }
+    .ms-trigger::after {
+      content: ''; position: absolute; right: 14px; top: 50%;
+      transform: translateY(-50%); width: 0; height: 0;
+      border-left: 5px solid transparent; border-right: 5px solid transparent;
+      border-top: 6px solid var(--primary); opacity: 0.6;
+    }
+    .ms-panel {
+      position: absolute; left: 0; right: 0; top: calc(100% + 6px);
+      background: #fff; border: 1px solid var(--field-border);
+      border-radius: 10px; box-shadow: var(--shadow-md);
+      z-index: 30; display: none; max-height: 320px; overflow: hidden;
+      flex-direction: column;
+    }
+    .ms-panel.open { display: flex; }
+    .ms-search {
+      padding: 10px 12px; border-bottom: 1px solid var(--border);
+    }
+    .ms-search input {
+      width: 100%; border: 1.5px solid var(--field-border); border-radius: 6px;
+      padding: 8px 12px; font-size: 13px; font-family: 'Roboto', sans-serif; outline: none;
+    }
+    .ms-search input:focus { border-color: var(--primary); }
+    .ms-list { overflow-y: auto; flex: 1; }
+    .ms-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; cursor: pointer; font-size: 14px;
+    }
+    .ms-item:hover { background: var(--surface); }
+    .ms-item.on { background: #fff8ec; }
+    .ms-item .av {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--primary); color: #fff;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+    .ms-item .nm { flex: 1; color: var(--primary); }
+    .ms-item .role { font-size: 12px; color: var(--muted); }
+    .ms-foot {
+      padding: 10px 12px; border-top: 1px solid var(--border);
+      display: flex; gap: 8px; align-items: center; justify-content: space-between;
+    }
+    .ms-foot .ms-count { font-size: 12px; color: var(--muted); }
+    .ms-foot button {
+      background: none; border: none; cursor: pointer; color: var(--accent);
+      font-size: 13px; font-weight: 500; font-family: 'Roboto', sans-serif;
+    }
+
+    /* Equipment add row */
+    .equip-add-row {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 1.4fr 80px 80px auto;
+      gap: 10px; align-items: end;
+      margin-top: 12px;
+      padding: 14px;
+      background: var(--surface);
+      border-radius: 10px;
+    }
+    .equip-add-row .field-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
+
+    /* Allowance add row */
+    .allow-add-row {
+      display: grid;
+      grid-template-columns: 1fr 1.3fr 1.6fr auto;
+      gap: 10px; align-items: end;
+      margin-top: 12px;
+      padding: 14px;
+      background: var(--surface);
+      border-radius: 10px;
+    }
+    .allow-add-row .field-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); }
+
+    .input-prefix {
+      position: relative;
+    }
+    .input-prefix .prefix {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--muted); font-size: 14px;
+    }
+    .input-prefix input { padding-left: 24px; }
+
+    /* Sticky footer save bar */
+    .savebar {
+      position: fixed;
+      left: 232px; right: 0; bottom: 0;
+      background: #fff;
+      border-top: 1px solid var(--border);
+      padding: 12px 28px;
+      display: flex; align-items: center; gap: 12px;
+      box-shadow: 0 -4px 12px rgba(16,24,40,0.05);
+      z-index: 20;
+    }
+    .savebar .left { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; }
+    .savebar .lbl { font-size: 12px; color: var(--muted); }
+    .savebar .val { font-size: 14px; font-weight: 700; color: var(--primary); }
+
+    /* Toast */
+    .toast {
+      position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%) translateY(20px);
+      background: var(--primary); color: #fff;
+      padding: 12px 18px; border-radius: 24px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 200; font-size: 13px; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Info popover */
+    .info-note {
+      display: none; align-items: flex-start; gap: 8px;
+      background: #eef4ff; border: 1px solid #cfe0ff; color: #234a86;
+      border-radius: 10px; padding: 10px 12px;
+      font-size: 12px; line-height: 1.45; margin-top: 8px;
+    }
+    .info-note.show { display: flex; }
+    .info-note svg { flex-shrink: 0; margin-top: 1px; }
+
+    /* Multi-project subsection */
+    .multi-proj-rows { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+    .multi-proj-row {
+      display: grid; grid-template-columns: 1.8fr 110px auto;
+      gap: 10px; align-items: end;
+    }
+    .multi-proj-row .row-remove { align-self: end; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+  <!-- ──────────────── SIDE NAV ──────────────── -->
+  <aside class="sidenav">
+    <div class="sn-top">
+      <div class="sn-logo">V</div>
+      <button class="sn-collapse" title="Collapse">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg>
+      </button>
+    </div>
+    <div class="sn-company">
+      <div class="ci">C</div>
+      <div class="cn">Cookie's Civil</div>
+      <span class="cv"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5l8 7-8 7z"/></svg></span>
+    </div>
+    <nav class="sn-list">
+      <button class="sn-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> Projects</button>
+      <button class="sn-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> Dashboard</button>
+      <button class="sn-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Gallery</button>
+      <button class="sn-item active"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg> Timesheet</button>
+      <button class="sn-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Leave <span class="badge">9</span></button>
+      <button class="sn-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="16" rx="2"/><line x1="12" y1="9" x2="12" y2="17"/><line x1="8" y1="13" x2="16" y2="13"/></svg> Scheduler</button>
+      <button class="sn-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Daywork Record</button>
+      <button class="sn-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg> Purchase Order <span class="badge">3</span></button>
+      <button class="sn-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 13"/></svg> Site Docket</button>
+      <button class="sn-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="13" y2="16"/></svg> Bills</button>
+      <button class="sn-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Forms</button>
+      <button class="sn-item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Settings</button>
+    </nav>
+    <div class="sn-foot">
+      <div class="sn-card"><div class="top">Got Questions?</div><div class="bot">Visit Knowledge Base</div></div>
+    </div>
+  </aside>
+
+  <!-- ──────────────── MAIN ──────────────── -->
+  <div class="main">
+
+    <!-- Top bar -->
+    <header class="topbar">
+      <button class="icon-btn" title="Back" onclick="showToast('Back to timesheet list')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <h1 class="tb-title">Add Timesheet</h1>
+      <div class="tb-spacer"></div>
+      <button class="btn btn-outline" onclick="showToast('Initial data upload')">Initial Data Upload</button>
+      <button class="icon-btn" onclick="showToast('Quick add')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+      <div class="user-chip">
+        <div class="avatar">AN</div>
+        <span>Alec Neill</span>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <main class="content">
+
+      <!-- ──── FORM COLUMN ──── -->
+      <section class="form-col">
+
+        <!-- Workflow (set at project level) -->
+        <div class="card">
+          <div class="card-h">Workflow <span class="req">*</span></div>
+          <p class="card-hint">Pick how you'll allocate time on this timesheet. This is set at project level — each project uses WBS <em>or</em> cost centres.</p>
+
+          <div class="wf-card-banner">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12.01" y2="8"/><line x1="12" y1="16" x2="12" y2="12"/></svg>
+            <span>Workflow is inherited from <b id="wfProjectName">(C100) Barton</b>. Change the project to switch workflow.</span>
+          </div>
+
+          <div class="wf-grid">
+            <button class="wf-tile" id="wfWbs" onclick="selectWorkflow('wbs')">
+              <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>
+              <span class="body">
+                <span class="title">WBS</span>
+                <span class="sub">Work breakdown structure</span>
+                <span class="pill" id="wfWbsPill" style="display:none"></span>
+              </span>
+            </button>
+            <button class="wf-tile" id="wfCc" onclick="selectWorkflow('cc')">
+              <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span>
+              <span class="body">
+                <span class="title">Cost Centre</span>
+                <span class="sub">Cost centre codes</span>
+                <span class="pill" id="wfCcPill" style="display:none"></span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Basics -->
+        <div class="card">
+          <div class="card-h">Basics</div>
+          <p class="card-hint">Pick the day, project and workers this timesheet is for.</p>
+
+          <div class="row-3">
+            <div class="field">
+              <label class="field-label">Date</label>
+              <div class="input-with-icon">
+                <input class="input" id="dateInput" value="Wed 10/06/2026" />
+                <span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+              </div>
+            </div>
+            <div class="field" style="grid-column: span 2;">
+              <label class="field-label">
+                Project
+                <span class="right">
+                  Activate multi-project
+                  <span class="toggle" id="multiProjToggle" onclick="toggleMultiProj()"><span class="knob"></span></span>
+                </span>
+              </label>
+              <select class="select" id="projectSelect" onchange="updateSummary()">
+                <option value="">Select project…</option>
+                <option value="(C100) Barton" selected>(C100) Barton</option>
+                <option>(EFX-07) Eastern Freeway Extension</option>
+                <option>(NRR-03) Northcote Road Rehab</option>
+                <option>(CPB-01) CBD Pedestrian Bridge</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Multi-project rows (hidden by default) -->
+          <div id="multiProjBlock" style="display:none; margin-top: 18px;">
+            <label class="field-label">Split time across projects</label>
+            <div class="multi-proj-rows" id="multiProjRows"></div>
+            <button class="btn btn-outline" style="margin-top: 12px;" onclick="addMultiProjRow()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add project
+            </button>
+          </div>
+
+          <div class="field" style="margin-top: 18px;">
+            <label class="field-label">
+              Workers
+              <span class="right">
+                Show all workers
+                <span class="toggle on" onclick="this.classList.toggle('on')"><span class="knob"></span></span>
+              </span>
+            </label>
+            <div class="ms-wrapper" id="workersWrapper">
+              <div class="ms-trigger" id="workersTrigger" onclick="toggleWorkersDropdown(event)"></div>
+              <div class="ms-panel" id="workersPanel" onclick="event.stopPropagation()">
+                <div class="ms-search">
+                  <input id="workerSearch" placeholder="Search workers…" oninput="renderWorkerList()" />
+                </div>
+                <div class="ms-list" id="workerList"></div>
+                <div class="ms-foot">
+                  <span class="ms-count" id="workerCount">0 of 0 selected</span>
+                  <button onclick="clearWorkers()">Clear selection</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Approved time -->
+        <div class="card">
+          <div class="card-h">Approved time <span class="req">*</span></div>
+          <p class="card-hint">Clocked window for the day. Break is subtracted from total.</p>
+
+          <div class="row-3">
+            <div class="field">
+              <label class="field-label">Clock in</label>
+              <input class="input" id="clockIn" value="07:00 AM" oninput="recalcTotal()" />
+            </div>
+            <div class="field">
+              <label class="field-label">Clock out</label>
+              <input class="input" id="clockOut" value="11:30 PM" oninput="recalcTotal()" />
+            </div>
+            <div class="field">
+              <label class="field-label">Break (mins)</label>
+              <input class="input" id="breakInput" type="text" inputmode="numeric" value="30" oninput="recalcTotal()" />
+            </div>
+          </div>
+          <div class="time-summary">
+            <span class="ts-label">Total time</span>
+            <span class="ts-val" id="totalTime">16h 00m</span>
+          </div>
+        </div>
+
+        <!-- Time allocation -->
+        <div class="card">
+          <div class="card-h">Time allocation <span class="req">*</span></div>
+          <p class="card-hint" id="allocCardHint">Pick a workflow above to start allocating your time. You can split it across one or more entries.</p>
+
+          <!-- Allocation table (shown once a workflow is picked) -->
+          <div id="allocBlock" style="display:none">
+            <div class="alloc-bar">
+              <div class="stat assigned">
+                <span class="lbl">Assigned</span>
+                <span class="val" id="statAssigned">00h 00m</span>
+              </div>
+              <div class="stat unassigned warn" id="statUnassignedBox">
+                <span class="lbl">Unassigned</span>
+                <span class="val" id="statUnassigned">16h 00m</span>
+              </div>
+              <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+                <button class="btn btn-ghost" onclick="toggleWbsInfo()" id="wbsInfoBtn" style="display:none;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  WBS rules
+                </button>
+              </div>
+            </div>
+
+            <div class="info-note" id="wbsInfoNote">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span>Only the lowest level of the WBS can be selected.</span>
+            </div>
+
+            <table class="data-table" id="allocTable" style="display:none;">
+              <thead>
+                <tr>
+                  <th id="allocCol1">WBS task</th>
+                  <th style="width: 140px;">Duration</th>
+                  <th class="col-act">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="allocBody"></tbody>
+            </table>
+
+            <div class="add-row" id="addRow">
+
+              <!-- WBS cascade: Task → Sub-task → Sub-sub-task -->
+              <div class="task-cascade" id="taskCascadeWbs">
+                <div class="field">
+                  <label class="field-label">Task</label>
+                  <select class="select" id="addLvl1" onchange="onWbsLvl1()"></select>
+                </div>
+                <div class="field">
+                  <label class="field-label">Sub-task</label>
+                  <select class="select" id="addLvl2" onchange="onWbsLvl2()" disabled></select>
+                </div>
+                <div class="field">
+                  <label class="field-label">Sub-sub-task <span style="color:var(--accent);">←</span></label>
+                  <select class="select" id="addLvl3" onchange="onWbsLvl3Pick()" disabled></select>
+                </div>
+              </div>
+
+              <!-- Cost centre single picker -->
+              <div class="task-single" id="taskSingleCc" style="display:none;">
+                <div class="field">
+                  <label class="field-label" id="addLabelEl">Add cost centre</label>
+                  <select class="select" id="addSelect" onchange="onCcPick()"></select>
+                </div>
+              </div>
+
+              <div class="duration-row">
+                <div class="field">
+                  <label class="field-label">Hours</label>
+                  <input class="input" id="addHour" type="text" inputmode="numeric" value="0" oninput="uncheckFill()" />
+                </div>
+                <div class="field">
+                  <label class="field-label">Minutes</label>
+                  <input class="input" id="addMin" type="text" inputmode="numeric" value="15" oninput="uncheckFill()" />
+                </div>
+                <div class="fill-toggle">
+                  <span class="checkbox" id="fillCheckbox" onclick="toggleFillRemaining()"></span>
+                  <span onclick="toggleFillRemaining()" style="cursor:pointer">Fill with remaining duration</span>
+                </div>
+                <button class="add-btn" id="addAllocBtn" onclick="addAllocation()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Add
+                </button>
+              </div>
+            </div>
+
+            <div class="full-hint" id="fullHint" style="display:none">
+              ✓ All your clocked time is allocated.
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Equipment -->
+        <div class="card">
+          <div class="card-h">Equipment</div>
+          <p class="card-hint">Add any plant the worker operated. Assign it to the same task or cost centre.</p>
+
+          <table class="data-table" id="equipTable" style="display:none;">
+            <thead>
+              <tr>
+                <th>Equipment</th>
+                <th style="width: 170px;">Company / Supplier</th>
+                <th>Task / Cost Centre</th>
+                <th style="width: 110px;">Duration</th>
+                <th class="col-act">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="equipBody"></tbody>
+          </table>
+
+          <div class="equip-add-row">
+            <div class="field">
+              <label class="field-label">Equipment</label>
+              <select class="select" id="equipSelect" onchange="onEquipPick()">
+                <option value="">Select equipment…</option>
+                <option data-supplier="Cookie's Civil">(DOZ001) Dozer</option>
+                <option data-supplier="Cookie's Civil">(EXC014) Excavator 14T</option>
+                <option data-supplier="Cookie's Civil">(ROL-09) Smooth Drum Roller</option>
+                <option data-supplier="Hertz Hire">(GRD-M160) Grader M160</option>
+                <option data-supplier="Boral">(TRK-22) Tipper Truck</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label">Company / Supplier</label>
+              <input class="input" id="equipSupplier" readonly value="" placeholder="Auto" style="background: #fff;" />
+            </div>
+            <div class="field">
+              <label class="field-label" id="equipTaskLabel">Task / Cost Centre</label>
+              <select class="select" id="equipTask" onchange="onEquipTaskChange()"><option value="">Select workflow first…</option></select>
+            </div>
+            <div class="field">
+              <label class="field-label">Hours</label>
+              <input class="input" id="equipHour" type="text" inputmode="numeric" value="0" />
+            </div>
+            <div class="field">
+              <label class="field-label">Min</label>
+              <input class="input" id="equipMin" type="text" inputmode="numeric" value="0" />
+            </div>
+            <button class="add-btn" onclick="addEquipment()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add
+            </button>
+          </div>
+        </div>
+
+        <!-- Allowance -->
+        <div class="card">
+          <div class="card-h">Allowance</div>
+          <p class="card-hint">Add any allowances the worker is claiming. Assign each to a task or cost centre.</p>
+
+          <table class="data-table" id="allowTable" style="display:none;">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Task / Cost Centre</th>
+                <th>Note</th>
+                <th class="col-act">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="allowBody"></tbody>
+          </table>
+
+          <div class="allow-add-row">
+            <div class="field">
+              <label class="field-label">Type</label>
+              <select class="select" id="allowType">
+                <option value="">Select type…</option>
+                <option>Travel allowance</option>
+                <option>Meal allowance</option>
+                <option>Tool allowance</option>
+                <option>Site allowance</option>
+                <option>Inclement weather</option>
+                <option>Living away from home</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" id="allowTaskLabel">Task / Cost Centre</label>
+              <select class="select" id="allowTask"><option value="">Select workflow first…</option></select>
+            </div>
+            <div class="field">
+              <label class="field-label">Note</label>
+              <input class="input" id="allowNote" placeholder="Optional note…" />
+            </div>
+            <button class="add-btn" onclick="addAllowance()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add
+            </button>
+          </div>
+        </div>
+
+        <!-- Remarks + attachments -->
+        <div class="card">
+          <div class="card-h">Notes</div>
+          <div class="field">
+            <label class="field-label">Remarks</label>
+            <textarea class="input" placeholder="Add a note about this shift…"></textarea>
+          </div>
+          <div class="attach-zone" onclick="showToast('Attach files')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            <span>Drag files here or <b style="color: var(--accent);">browse</b> to attach.</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ──── SUMMARY COLUMN ──── -->
+      <aside>
+        <div class="summary">
+          <div class="sum-h">Timesheet summary</div>
+          <div class="sum-row">
+            <span class="lbl">Date</span>
+            <span class="val" id="sumDate">Wed 10/06/2026</span>
+          </div>
+          <div class="sum-row">
+            <span class="lbl">Project</span>
+            <span class="val" id="sumProject">(C100) Barton</span>
+          </div>
+          <div class="sum-row">
+            <span class="lbl">Workers</span>
+            <span class="val" id="sumWorkers">2 selected</span>
+          </div>
+          <div class="sum-div"></div>
+          <div class="sum-row">
+            <span class="lbl">Clocked total</span>
+            <span class="val big" id="sumTotal">16h 00m</span>
+          </div>
+          <div class="sum-row">
+            <span class="lbl">Allocated</span>
+            <span class="val" id="sumAllocated">00h 00m</span>
+          </div>
+          <div class="sum-row">
+            <span class="lbl">Unallocated</span>
+            <span class="val" id="sumUnallocated" style="color: var(--amber-text);">16h 00m</span>
+          </div>
+          <div id="sumAllocList" class="sum-alloc-list"></div>
+          <div class="sum-div"></div>
+          <div class="sum-row">
+            <span class="lbl">Equipment</span>
+            <span class="val" id="sumEquip">2 items</span>
+          </div>
+          <div class="sum-row">
+            <span class="lbl">Allowance</span>
+            <span class="val muted" id="sumAllowance">None</span>
+          </div>
+        </div>
+      </aside>
+
+    </main>
+  </div>
+
+  <!-- Sticky save bar -->
+  <div class="savebar">
+    <div class="left">
+      <div><span class="lbl">Total</span> <span class="val" id="barTotal">16h 00m</span></div>
+      <div><span class="lbl">Allocated</span> <span class="val" id="barAllocated">00h 00m</span></div>
+      <div><span class="lbl">Workers</span> <span class="val" id="barWorkers">2</span></div>
+    </div>
+    <button class="btn btn-outline" onclick="showToast('Discarded')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveTimesheet()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      Save Timesheet
+    </button>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    /* ──────────── Data ──────────── */
+    /* WBS is a 3-level tree: Task → Sub-task → Sub-sub-task. Only the leaf can be allocated. */
+    const wbsTree = [
+      { code: '1', name: 'Earthworks', children: [
+        { code: '1.1', name: 'Bulk excavation', children: [
+          { code: '1.1.1', name: 'Topsoil strip' },
+          { code: '1.1.2', name: 'Stockpile haul' },
+          { code: '1.1.3', name: 'Backfill' },
+        ]},
+        { code: '1.2', name: 'Trim & batter', children: [
+          { code: '1.2.1', name: 'Subgrade prep' },
+          { code: '1.2.2', name: 'Batter trim' },
+        ]},
+      ]},
+      { code: '2', name: 'Drainage', children: [
+        { code: '2.1', name: 'Pipe laying', children: [
+          { code: '2.1.1', name: 'Excavate trench' },
+          { code: '2.1.2', name: 'Bedding & lay pipes' },
+          { code: '2.1.3', name: 'Backfill & compact' },
+        ]},
+        { code: '2.2', name: 'Pits & culverts', children: [
+          { code: '2.2.1', name: 'Precast install' },
+          { code: '2.2.2', name: 'Connections' },
+        ]},
+      ]},
+      { code: '3', name: 'Pavement', children: [
+        { code: '3.1', name: 'Base course', children: [
+          { code: '3.1.1', name: 'Place & spread' },
+          { code: '3.1.2', name: 'Compact' },
+        ]},
+        { code: '3.2', name: 'Asphalt wearing', children: [
+          { code: '3.2.1', name: 'Tack coat' },
+          { code: '3.2.2', name: 'Asphalt lay' },
+        ]},
+      ]},
+    ];
+    const costCentres = [
+      'CC-100 — Labour',
+      'CC-200 — Plant & Equipment',
+      'CC-300 — Materials',
+      'CC-400 — Subcontractors',
+    ];
+
+    /* ──────────── Data: workers ──────────── */
+    const WORKERS = [
+      { id: 'jk', name: 'Jack Kowalski',  role: 'Plant operator' },
+      { id: 'sn', name: 'Sam Nguyen',     role: 'Foreman' },
+      { id: 'mo', name: 'Maria Oliver',   role: 'Engineer' },
+      { id: 'tr', name: 'Tom Richards',   role: 'Labourer' },
+      { id: 'pb', name: 'Priya Banerjee', role: 'Engineer' },
+      { id: 'lc', name: 'Liam Chen',      role: 'Plant operator' },
+      { id: 'rh', name: 'Rachel Hayes',   role: 'Supervisor' },
+    ];
+
+    /* ──────────── State ──────────── */
+    let workers = ['jk', 'sn'];     // selected worker ids
+    let multiProj = false;
+    let multiProjList = [];
+    let workflow = null;            // 'wbs' | 'cc'
+    let allocs = [];                // [{label, min}]
+    let equipment = [];             // [{code, name, supplier, task, min}]
+    let allowances = [];            // [{type, total, task, note}]
+    let fillOn = false;
+    let totalMin = 16 * 60;         // recomputed from time inputs
+
+    /* ──────────── Helpers ──────────── */
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function fmt(min) {
+      const h = Math.floor(Math.max(0, min) / 60);
+      const m = Math.max(0, min) % 60;
+      return `${pad(h)}h ${pad(m)}m`;
+    }
+    function allocated() { return allocs.reduce((s, a) => s + a.min, 0); }
+    function remaining() { return Math.max(0, totalMin - allocated()); }
+
+    function parseTime(s) {
+      // accepts "7:00 AM", "07:00", "23:30", "11:30 PM"
+      s = s.trim().toUpperCase();
+      const m = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+      if (!m) return null;
+      let h = parseInt(m[1], 10), mm = parseInt(m[2], 10);
+      const ampm = m[3];
+      if (ampm === 'AM') { if (h === 12) h = 0; }
+      else if (ampm === 'PM') { if (h !== 12) h += 12; }
+      return h * 60 + mm;
+    }
+
+    function recalcTotal() {
+      const ci = parseTime(document.getElementById('clockIn').value);
+      const co = parseTime(document.getElementById('clockOut').value);
+      const br = parseInt(document.getElementById('breakInput').value, 10) || 0;
+      if (ci == null || co == null) return;
+      let gross = co - ci; if (gross < 0) gross += 24 * 60;
+      totalMin = Math.max(0, gross - br);
+      document.getElementById('totalTime').textContent = fmt(totalMin);
+      renderAllocs();
+      updateSummary();
+    }
+
+    /* ──────────── Workers (multi-select dropdown) ──────────── */
+    function initials(name) {
+      return name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+    }
+    function renderWorkerTrigger() {
+      const trig = document.getElementById('workersTrigger');
+      const sel = WORKERS.filter(w => workers.includes(w.id));
+      if (!sel.length) {
+        trig.innerHTML = '<span class="ph">Select workers…</span>';
+      } else {
+        trig.innerHTML = sel.map(w =>
+          `<span class="chip"><span class="av">${initials(w.name)}</span> ${w.name} <button class="x" onclick="toggleWorker(event,'${w.id}')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></span>`
+        ).join('');
+      }
+      document.getElementById('workerCount').textContent = `${sel.length} of ${WORKERS.length} selected`;
+    }
+    function renderWorkerList() {
+      const q = (document.getElementById('workerSearch').value || '').toLowerCase();
+      const c = document.getElementById('workerList');
+      const items = WORKERS.filter(w => (w.name + ' ' + w.role).toLowerCase().includes(q));
+      if (!items.length) {
+        c.innerHTML = '<div style="padding:18px 14px;color:var(--muted);font-size:13px;">No workers match</div>';
+        return;
+      }
+      c.innerHTML = items.map(w => `
+        <div class="ms-item ${workers.includes(w.id) ? 'on' : ''}" onclick="toggleWorker(event, '${w.id}')">
+          <span class="checkbox ${workers.includes(w.id) ? 'on' : ''}">${workers.includes(w.id) ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</span>
+          <span class="av">${initials(w.name)}</span>
+          <span class="nm">${w.name}</span>
+          <span class="role">${w.role}</span>
+        </div>`).join('');
+    }
+    function toggleWorker(e, id) {
+      if (e) e.stopPropagation();
+      const i = workers.indexOf(id);
+      if (i >= 0) workers.splice(i, 1); else workers.push(id);
+      renderWorkerTrigger();
+      renderWorkerList();
+      updateSummary();
+    }
+    function clearWorkers() {
+      workers = [];
+      renderWorkerTrigger();
+      renderWorkerList();
+      updateSummary();
+    }
+    function toggleWorkersDropdown(e) {
+      e && e.stopPropagation();
+      const panel = document.getElementById('workersPanel');
+      const trig = document.getElementById('workersTrigger');
+      const open = panel.classList.toggle('open');
+      trig.classList.toggle('open', open);
+      if (open) {
+        document.getElementById('workerSearch').value = '';
+        renderWorkerList();
+        setTimeout(() => document.getElementById('workerSearch').focus(), 50);
+      }
+    }
+    document.addEventListener('click', e => {
+      const wrap = document.getElementById('workersWrapper');
+      if (!wrap.contains(e.target)) {
+        document.getElementById('workersPanel').classList.remove('open');
+        document.getElementById('workersTrigger').classList.remove('open');
+      }
+    });
+
+    /* ──────────── Multi-project ──────────── */
+    function toggleMultiProj() {
+      multiProj = !multiProj;
+      document.getElementById('multiProjToggle').classList.toggle('on', multiProj);
+      document.getElementById('multiProjBlock').style.display = multiProj ? 'block' : 'none';
+      if (multiProj && !multiProjList.length) {
+        multiProjList.push({ project: '', hours: '' }, { project: '', hours: '' });
+        renderMultiProj();
+      }
+    }
+    function addMultiProjRow() {
+      multiProjList.push({ project: '', hours: '' });
+      renderMultiProj();
+    }
+    function removeMultiProjRow(i) { multiProjList.splice(i, 1); renderMultiProj(); }
+    function renderMultiProj() {
+      const c = document.getElementById('multiProjRows');
+      c.innerHTML = multiProjList.map((r, i) => `
+        <div class="multi-proj-row">
+          <div class="field">
+            <label class="field-label" style="font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:var(--muted);">Project</label>
+            <select class="select"><option>(C100) Barton</option><option>(EFX-07) Eastern Freeway</option><option>(NRR-03) Northcote</option></select>
+          </div>
+          <div class="field">
+            <label class="field-label" style="font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:var(--muted);">Hours</label>
+            <input class="input" type="text" value="${r.hours || '4'}" />
+          </div>
+          <button class="row-remove" onclick="removeMultiProjRow(${i})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>`).join('');
+    }
+
+    /* ──────────── Workflow selection ──────────── */
+    function selectWorkflow(type) {
+      if (workflow && workflow !== type && allocs.length) {
+        showToast('Clear current allocations to switch workflow');
+        return;
+      }
+      workflow = type;
+      const isWbs = type === 'wbs';
+      document.getElementById('wfWbs').classList.toggle('selected', isWbs);
+      document.getElementById('wfCc').classList.toggle('selected', !isWbs);
+      document.getElementById('allocBlock').style.display = 'block';
+      document.getElementById('allocCardHint').textContent = isWbs
+        ? 'Drill in: Task → Sub-task → Sub-sub-task, then assign hours. Only the lowest level is chargeable.'
+        : 'Split your clocked time across one or more cost centres.';
+      document.getElementById('wbsInfoBtn').style.display = isWbs ? 'inline-flex' : 'none';
+      document.getElementById('wbsInfoNote').classList.remove('show');
+
+      // Show cascade (WBS) or single (Cost Centre) picker
+      document.getElementById('taskCascadeWbs').style.display = isWbs ? 'grid' : 'none';
+      document.getElementById('taskSingleCc').style.display = isWbs ? 'none' : 'grid';
+
+      if (isWbs) {
+        const lvl1 = document.getElementById('addLvl1');
+        lvl1.innerHTML = '<option value="">Select task…</option>' +
+          wbsTree.map(t => `<option value="${t.code}">${t.code}. ${t.name}</option>`).join('');
+        resetWbsCascade();
+      } else {
+        document.getElementById('addLabelEl').textContent = 'Cost centre';
+        document.getElementById('addSelect').innerHTML = '<option value="">Select cost centre…</option>' +
+          costCentres.map(o => `<option>${o}</option>`).join('');
+        document.getElementById('addSelect').value = '';
+      }
+
+      // Equipment + Allowance Task dropdowns are populated from this timesheet's allocations only
+      document.getElementById('equipTaskLabel').textContent = isWbs ? 'WBS sub-sub-task' : 'Cost centre';
+      document.getElementById('allowTaskLabel').textContent = isWbs ? 'WBS sub-sub-task' : 'Cost centre';
+      refreshEquipAllowTaskOptions();
+
+      renderAllocs();
+      renderEquipTable();
+      renderAllowTable();
+      prefillTaskSelects();
+    }
+
+    /* WBS cascade handlers */
+    function resetWbsCascade() {
+      const l1 = document.getElementById('addLvl1');
+      const l2 = document.getElementById('addLvl2');
+      const l3 = document.getElementById('addLvl3');
+      l1.value = '';
+      l2.innerHTML = '<option value="">Select sub-task…</option>'; l2.disabled = true;
+      l3.innerHTML = '<option value="">Select sub-sub-task…</option>'; l3.disabled = true;
+    }
+    function onWbsLvl1() {
+      const code = document.getElementById('addLvl1').value;
+      const node = wbsTree.find(t => t.code === code);
+      const l2 = document.getElementById('addLvl2');
+      const l3 = document.getElementById('addLvl3');
+      if (!node || !node.children) { l2.innerHTML = '<option value="">Select sub-task…</option>'; l2.disabled = true; l3.innerHTML = '<option value="">Select sub-sub-task…</option>'; l3.disabled = true; return; }
+      l2.innerHTML = '<option value="">Select sub-task…</option>' +
+        node.children.map(c => `<option value="${c.code}">${c.code} ${c.name}</option>`).join('');
+      l2.disabled = false;
+      l3.innerHTML = '<option value="">Select sub-sub-task…</option>'; l3.disabled = true;
+    }
+    function onWbsLvl2() {
+      const l1code = document.getElementById('addLvl1').value;
+      const l2code = document.getElementById('addLvl2').value;
+      const parent = wbsTree.find(t => t.code === l1code);
+      const node = parent && parent.children && parent.children.find(c => c.code === l2code);
+      const l3 = document.getElementById('addLvl3');
+      if (!node || !node.children) { l3.innerHTML = '<option value="">Select sub-sub-task…</option>'; l3.disabled = true; return; }
+      l3.innerHTML = '<option value="">Select sub-sub-task…</option>' +
+        node.children.map(c => `<option value="${c.code} ${c.name}">${c.code} ${c.name}</option>`).join('');
+      l3.disabled = false;
+    }
+    /* As soon as a sub-sub-task is picked in the cascade, prefill Equipment + Allowance task fields */
+    function onWbsLvl3Pick() {
+      const leaf = document.getElementById('addLvl3').value;
+      if (!leaf) return;
+      const eq = document.getElementById('equipTask');
+      const al = document.getElementById('allowTask');
+      if (eq && !eq.value) eq.value = leaf;
+      if (al && !al.value) al.value = leaf;
+    }
+    /* Same for cost centre */
+    function onCcPick() {
+      const cc = document.getElementById('addSelect').value;
+      if (!cc) return;
+      const eq = document.getElementById('equipTask');
+      const al = document.getElementById('allowTask');
+      if (eq && !eq.value) eq.value = cc;
+      if (al && !al.value) al.value = cc;
+    }
+
+    /* All WBS leaves (level 3) for Equipment + Allowance Task dropdowns */
+    function wbsLeaves() {
+      const out = [];
+      wbsTree.forEach(t1 => (t1.children || []).forEach(t2 => (t2.children || []).forEach(t3 => out.push(`${t3.code} ${t3.name}`))));
+      return out;
+    }
+    /* Populate Equipment + Allowance Task dropdowns with all available options for the workflow.
+       Prefilling sets the most recently picked sub-sub-task (or cost centre) as the default. */
+    function refreshEquipAllowTaskOptions() {
+      const opts = workflow === 'wbs' ? wbsLeaves() : (workflow === 'cc' ? costCentres : []);
+      const placeholder = workflow
+        ? `Select ${workflow === 'wbs' ? 'sub-sub-task' : 'cost centre'}…`
+        : 'Pick a workflow first…';
+      const html = `<option value="">${placeholder}</option>` + opts.map(l => `<option>${l}</option>`).join('');
+      ['equipTask', 'allowTask'].forEach(id => {
+        const el = document.getElementById(id);
+        const prev = el.value;
+        el.innerHTML = html;
+        if (opts.includes(prev)) el.value = prev;
+      });
+    }
+
+    function toggleWbsInfo() {
+      document.getElementById('wbsInfoNote').classList.toggle('show');
+    }
+
+    /* Prefill Equipment + Allowance Task/Cost Centre from time allocation */
+    function prefillTaskSelects() {
+      if (!allocs.length) return;
+      const latest = allocs[allocs.length - 1].label;
+      const eq = document.getElementById('equipTask');
+      const al = document.getElementById('allowTask');
+      if (eq && !eq.value) eq.value = latest;
+      if (al && !al.value) al.value = latest;
+      // Also prefill equipment hours from the matching allocation, unless the user has already edited
+      prefillEquipHoursFromCurrent();
+    }
+    /* Prefill equipment hours from the allocation that matches the currently picked equipTask.
+       Only fills if Hours/Min are still at default 0 — never overwrites a user edit. */
+    function prefillEquipHoursFromCurrent() {
+      const task = document.getElementById('equipTask').value;
+      if (!task) return;
+      const alloc = allocs.find(a => a.label === task);
+      if (!alloc) return;
+      const curMin = (parseInt(document.getElementById('equipHour').value, 10) || 0) * 60
+                   + (parseInt(document.getElementById('equipMin').value, 10) || 0);
+      if (curMin > 0) return;
+      document.getElementById('equipHour').value = String(Math.floor(alloc.min / 60));
+      document.getElementById('equipMin').value = String(alloc.min % 60);
+    }
+    /* When the user picks a different task for equipment, prefill hours from that allocation. */
+    function onEquipTaskChange() {
+      const task = document.getElementById('equipTask').value;
+      if (!task) return;
+      const alloc = allocs.find(a => a.label === task);
+      if (!alloc) return;
+      document.getElementById('equipHour').value = String(Math.floor(alloc.min / 60));
+      document.getElementById('equipMin').value = String(alloc.min % 60);
+    }
+
+    /* ──────────── Allocations ──────────── */
+    function toggleFillRemaining() {
+      fillOn = !fillOn;
+      document.getElementById('fillCheckbox').classList.toggle('on', fillOn);
+      document.getElementById('fillCheckbox').innerHTML = fillOn ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : '';
+      if (fillOn) {
+        const r = remaining();
+        document.getElementById('addHour').value = Math.floor(r / 60);
+        document.getElementById('addMin').value = r % 60;
+      }
+    }
+    function uncheckFill() {
+      if (!fillOn) return;
+      fillOn = false;
+      document.getElementById('fillCheckbox').classList.remove('on');
+      document.getElementById('fillCheckbox').innerHTML = '';
+    }
+    function addAllocation() {
+      let label = '';
+      if (workflow === 'wbs') {
+        label = document.getElementById('addLvl3').value;
+        if (!label) { showToast('Pick down to the sub-sub-task'); return; }
+      } else if (workflow === 'cc') {
+        label = document.getElementById('addSelect').value;
+        if (!label) { showToast('Select a cost centre'); return; }
+      } else {
+        showToast('Pick a workflow first'); return;
+      }
+      const h = parseInt(document.getElementById('addHour').value, 10) || 0;
+      const m = parseInt(document.getElementById('addMin').value, 10) || 0;
+      const min = h * 60 + m;
+      if (min <= 0) { showToast('Enter a duration'); return; }
+      if (min > remaining()) { showToast(`Only ${fmt(remaining())} unassigned`); return; }
+      allocs.push({ label, min });
+      renderAllocs();
+      // reset add row
+      if (workflow === 'wbs') resetWbsCascade();
+      else document.getElementById('addSelect').value = '';
+      document.getElementById('addHour').value = '0';
+      document.getElementById('addMin').value = '15';
+      fillOn = false;
+      document.getElementById('fillCheckbox').classList.remove('on');
+      document.getElementById('fillCheckbox').innerHTML = '';
+      refreshEquipAllowTaskOptions();
+      prefillTaskSelects();
+      showToast('Added to timesheet');
+    }
+    function removeAllocation(i) {
+      allocs.splice(i, 1);
+      renderAllocs();
+      refreshEquipAllowTaskOptions();
+    }
+
+    function renderAllocs() {
+      const a = allocated(), r = remaining();
+      document.getElementById('statAssigned').textContent = fmt(a);
+      document.getElementById('statUnassigned').textContent = fmt(r);
+      document.getElementById('statUnassignedBox').classList.toggle('warn', r > 0);
+      document.getElementById('statUnassignedBox').classList.toggle('done', r === 0);
+
+      const t = document.getElementById('allocTable');
+      const body = document.getElementById('allocBody');
+      const col1 = document.getElementById('allocCol1');
+      col1.textContent = workflow === 'wbs' ? 'WBS task' : 'Cost centre';
+      if (allocs.length) {
+        t.style.display = 'table';
+        body.innerHTML = allocs.map((al, i) => `
+          <tr>
+            <td>${al.label}</td>
+            <td><strong>${fmt(al.min)}</strong></td>
+            <td class="col-act"><button class="row-remove" onclick="removeAllocation(${i})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></td>
+          </tr>`).join('');
+      } else {
+        t.style.display = 'none';
+        body.innerHTML = '';
+      }
+      // toggle add row & full hint
+      const full = r === 0;
+      document.getElementById('addRow').style.display = full ? 'none' : 'grid';
+      document.getElementById('fullHint').style.display = full ? 'block' : 'none';
+
+      // workflow pills
+      document.getElementById('wfWbsPill').style.display = (workflow === 'wbs' && allocs.length) ? 'inline-block' : 'none';
+      document.getElementById('wfCcPill').style.display = (workflow === 'cc' && allocs.length) ? 'inline-block' : 'none';
+      if (workflow === 'wbs' && allocs.length) document.getElementById('wfWbsPill').textContent = `✓ ${fmt(a)} allocated`;
+      if (workflow === 'cc' && allocs.length) document.getElementById('wfCcPill').textContent = `✓ ${fmt(a)} allocated`;
+      // locked tile when other has data
+      document.getElementById('wfWbs').classList.toggle('locked', workflow === 'cc' && allocs.length > 0);
+      document.getElementById('wfCc').classList.toggle('locked', workflow === 'wbs' && allocs.length > 0);
+
+      updateSummary();
+    }
+
+    /* ──────────── Equipment (manual add) ──────────── */
+    function onEquipPick() {
+      const sel = document.getElementById('equipSelect');
+      const opt = sel.options[sel.selectedIndex];
+      document.getElementById('equipSupplier').value = opt && opt.dataset && opt.dataset.supplier ? opt.dataset.supplier : '';
+    }
+    function addEquipment() {
+      if (!workflow) { showToast('Pick a workflow first'); return; }
+      const sel = document.getElementById('equipSelect');
+      const label = sel.value;
+      if (!label) { showToast('Select equipment'); return; }
+      const task = document.getElementById('equipTask').value;
+      if (!task) { showToast(`Select a ${workflow === 'wbs' ? 'WBS task' : 'cost centre'}`); return; }
+      const h = parseInt(document.getElementById('equipHour').value, 10) || 0;
+      const m = parseInt(document.getElementById('equipMin').value, 10) || 0;
+      const min = h * 60 + m;
+      if (min <= 0) { showToast('Enter a duration'); return; }
+      const supplier = document.getElementById('equipSupplier').value || '—';
+      equipment.push({ label, supplier, task, min });
+      // reset add row
+      sel.value = '';
+      document.getElementById('equipSupplier').value = '';
+      document.getElementById('equipTask').value = '';
+      document.getElementById('equipHour').value = '0';
+      document.getElementById('equipMin').value = '0';
+      renderEquipTable();
+      updateSummary();
+      prefillTaskSelects();
+      showToast('Equipment added');
+    }
+    function removeEquipment(i) {
+      equipment.splice(i, 1);
+      renderEquipTable();
+      updateSummary();
+    }
+    function renderEquipTable() {
+      const t = document.getElementById('equipTable');
+      const body = document.getElementById('equipBody');
+      if (!equipment.length) { t.style.display = 'none'; body.innerHTML = ''; return; }
+      t.style.display = 'table';
+      body.innerHTML = equipment.map((e, i) => `
+        <tr>
+          <td>${e.label}</td>
+          <td>${e.supplier}</td>
+          <td>${e.task}</td>
+          <td><strong>${fmt(e.min)}</strong></td>
+          <td class="col-act"><button class="row-remove" onclick="removeEquipment(${i})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></td>
+        </tr>`).join('');
+    }
+
+    /* ──────────── Allowance ──────────── */
+    function addAllowance() {
+      if (!workflow) { showToast('Pick a workflow first'); return; }
+      const type = document.getElementById('allowType').value;
+      if (!type) { showToast('Select an allowance type'); return; }
+      const task = document.getElementById('allowTask').value;
+      if (!task) { showToast(`Select a ${workflow === 'wbs' ? 'WBS task' : 'cost centre'}`); return; }
+      const note = document.getElementById('allowNote').value;
+      allowances.push({ type, task, note });
+      // reset add row
+      document.getElementById('allowType').value = '';
+      document.getElementById('allowTask').value = '';
+      document.getElementById('allowNote').value = '';
+      renderAllowTable();
+      updateSummary();
+      prefillTaskSelects();
+      showToast('Allowance added');
+    }
+    function removeAllowance(i) {
+      allowances.splice(i, 1);
+      renderAllowTable();
+      updateSummary();
+    }
+    function renderAllowTable() {
+      const t = document.getElementById('allowTable');
+      const body = document.getElementById('allowBody');
+      if (!allowances.length) { t.style.display = 'none'; body.innerHTML = ''; return; }
+      t.style.display = 'table';
+      body.innerHTML = allowances.map((a, i) => `
+        <tr>
+          <td>${a.type}</td>
+          <td>${a.task}</td>
+          <td>${a.note || '<span style="color:var(--muted);">—</span>'}</td>
+          <td class="col-act"><button class="row-remove" onclick="removeAllowance(${i})"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></td>
+        </tr>`).join('');
+    }
+
+    /* ──────────── Summary rail ──────────── */
+    function updateSummary() {
+      document.getElementById('sumDate').textContent = document.getElementById('dateInput').value || '—';
+      document.getElementById('sumProject').textContent = document.getElementById('projectSelect').value || '—';
+      document.getElementById('wfProjectName').textContent = document.getElementById('projectSelect').value || '—';
+      const workerCount = workers.length;
+      document.getElementById('sumWorkers').textContent = workerCount ? `${workerCount} selected` : 'None';
+      document.getElementById('barWorkers').textContent = String(workerCount);
+
+      document.getElementById('sumTotal').textContent = fmt(totalMin);
+      document.getElementById('barTotal').textContent = fmt(totalMin);
+      const a = allocated(), r = totalMin - a;
+      document.getElementById('sumAllocated').textContent = fmt(a);
+      document.getElementById('barAllocated').textContent = fmt(a);
+      const un = document.getElementById('sumUnallocated');
+      un.textContent = fmt(Math.max(0, r));
+      un.style.color = r > 0 ? 'var(--amber-text)' : 'var(--green-text)';
+
+      const list = document.getElementById('sumAllocList');
+      list.innerHTML = allocs.map(al => `<div class="sum-alloc"><span class="nm">${al.label}</span><span class="dr">${fmt(al.min)}</span></div>`).join('');
+
+      // equipment count
+      document.getElementById('sumEquip').textContent = equipment.length ? `${equipment.length} ${equipment.length === 1 ? 'item' : 'items'}` : 'None';
+
+      // allowance total
+      const allowSumEl = document.getElementById('sumAllowance');
+      if (allowSumEl) {
+        if (!allowances.length) {
+          allowSumEl.textContent = 'None';
+          allowSumEl.className = 'val muted';
+        } else {
+          allowSumEl.textContent = `${allowances.length} ${allowances.length === 1 ? 'item' : 'items'}`;
+          allowSumEl.className = 'val';
+        }
+      }
+    }
+
+    function saveTimesheet() {
+      if (!workflow || !allocs.length) {
+        showToast('Allocate your time before saving');
+        return;
+      }
+      showToast('Timesheet saved');
+    }
+
+    /* ──────────── Toast ──────────── */
+    let toastTimer;
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+    }
+
+    /* ──────────── Init ──────────── */
+    renderWorkerTrigger();
+    recalcTotal();
+    updateSummary();
+  </script>
+</body>
+</html>

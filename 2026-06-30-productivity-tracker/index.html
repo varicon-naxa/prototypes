@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Productivity Tracker - Cookie's Civil</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#333;display:flex;min-height:100vh}
+
+/* ── Sidebar (identical to budget-overview) ── */
+.sidebar{width:240px;background:#1b2a4a;color:#fff;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;overflow-y:auto}
+.sidebar-header{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sidebar-logo .logo-icon{width:32px;height:32px;background:linear-gradient(135deg,#f5a623,#f7c948);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#1b2a4a}
+.sidebar-collapse{color:rgba(255,255,255,.5);cursor:pointer;font-size:14px}
+.sidebar-org{padding:12px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.08);cursor:pointer}
+.sidebar-org .org-avatar{width:28px;height:28px;background:#3b5998;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.sidebar-org span{font-size:14px;font-weight:500}
+.sidebar-org .chevron{margin-left:auto;font-size:11px;opacity:.5}
+.sidebar-nav{padding:8px 0;flex:1}
+.nav-item{display:flex;align-items:center;gap:12px;padding:10px 16px;font-size:14px;color:rgba(255,255,255,.75);cursor:pointer;transition:all .15s;text-decoration:none;position:relative}
+.nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-item.active{background:#f5a623;color:#fff;font-weight:600;border-radius:0 6px 6px 0;margin-right:8px}
+.nav-item i.nav-icon{width:20px;text-align:center;font-size:15px}
+.nav-item .badge{background:#f5a623;color:#fff;font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;margin-left:auto}
+.nav-item.active .badge{background:#fff;color:#f5a623}
+.nav-item .beta{background:rgba(255,255,255,.15);font-size:10px;padding:1px 6px;border-radius:4px;font-weight:500}
+.nav-item .chev{margin-left:auto;font-size:11px;opacity:.5}
+
+/* ── Main ── */
+.main{margin-left:240px;flex:1;display:flex;flex-direction:column;min-height:100vh}
+
+/* ── Top Bar ── */
+.topbar{background:#fff;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:50}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.topbar-left .back-btn{color:#1b2a4a;font-size:18px;cursor:pointer;padding:4px}
+.topbar-left h1{font-size:18px;font-weight:600;color:#1b2a4a}
+.topbar-right{display:flex;align-items:center;gap:16px}
+.search-btn{display:flex;align-items:center;gap:6px;border:2px solid #f5a623;color:#f5a623;background:transparent;padding:6px 16px;border-radius:20px;font-size:14px;font-weight:500;cursor:pointer}
+.plus-btn{width:32px;height:32px;border:1px solid #e2e8f0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;cursor:pointer;color:#64748b;font-size:16px}
+.user-menu{display:flex;align-items:center;gap:8px;cursor:pointer}
+.user-avatar{width:34px;height:34px;background:#1b2a4a;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.user-name{font-size:14px;font-weight:500;color:#1b2a4a}
+
+/* ── Page ── */
+.page-content{padding:24px;flex:1}
+
+/* ── Buttons ── */
+.btn{padding:10px 22px;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;border:none;transition:all .15s;font-family:'Inter',sans-serif;display:inline-flex;align-items:center;gap:8px}
+.btn-primary{background:#f5a623;color:#fff}
+.btn-primary:hover{background:#e6951a}
+.btn-secondary{background:#f1f5f9;color:#475569}
+.btn-secondary:hover{background:#e2e8f0}
+.btn-outline{background:transparent;border:1px solid #e2e8f0;color:#475569}
+.btn-outline:hover{background:#f8fafc}
+
+/* ── Forecast Stats ── */
+.forecast-stats{display:flex;gap:0;margin-bottom:24px;background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden}
+.forecast-stat{flex:1;padding:16px 20px;border-right:1px solid #f1f5f9}
+.forecast-stat:last-child{border-right:none}
+.forecast-stat .fs-label{font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
+.forecast-stat .fs-value{font-size:18px;font-weight:700;color:#1b2a4a}
+.forecast-stat .fs-value.green{color:#16a34a}
+.forecast-stat .fs-value.blue{color:#3b82f6}
+.forecast-stat .fs-value.amber{color:#f5a623}
+.forecast-stat .fs-value.red{color:#ef4444}
+
+/* ── Toolbar ── */
+.review-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap}
+.review-toolbar-left{display:flex;align-items:center;gap:10px}
+.review-toolbar-right{display:flex;align-items:center;gap:10px}
+.filter-select{padding:8px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;color:#64748b;background:#fff;outline:none;min-width:150px}
+.filter-select:focus{border-color:#f5a623}
+.review-search{padding:8px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;outline:none;width:180px}
+.review-search:focus{border-color:#f5a623}
+.expand-btn{padding:7px 14px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;color:#64748b;background:#fff;cursor:pointer;font-family:'Inter',sans-serif}
+.expand-btn:hover{background:#f8fafc}
+
+/* ── Type Toggle ── */
+.type-toggle{display:inline-flex;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;font-size:12px}
+.type-toggle span{padding:6px 12px;cursor:pointer;color:#64748b;transition:all .15s;white-space:nowrap}
+.type-toggle span.active{background:#f5a623;color:#fff;font-weight:600}
+
+/* ── Table ── */
+.review-table{width:100%;border-collapse:collapse}
+.review-table thead{background:#1b2a4a}
+.review-table thead th{padding:12px 14px;text-align:left;font-size:12px;font-weight:600;color:#fff;letter-spacing:.3px;white-space:nowrap;border-bottom:none}
+.review-table thead th.right{text-align:right}
+.review-table thead .sub-header{background:#243456}
+.review-table thead .sub-header th{padding:8px 14px;font-size:11px;font-weight:500;color:rgba(255,255,255,.7);border-bottom:none}
+.review-table tbody td{padding:11px 14px;font-size:13px;color:#334155;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.review-table tbody tr:hover{background:#f8fafc}
+.review-table tbody td.right{text-align:right;font-weight:600}
+.review-table tfoot{background:#f8fafc}
+.review-table tfoot td{padding:12px 14px;font-weight:700;color:#1b2a4a;border-top:2px solid #e2e8f0}
+.review-table tfoot td.right{text-align:right}
+
+.cc-super-header th{background:#1b2a4a;color:#fff;font-size:13px;font-weight:600;padding:10px 14px;border-bottom:2px solid #f5a623;letter-spacing:.3px}
+
+.cc-parent-row{cursor:pointer}
+.cc-parent-row:hover{background:#f8fafc}
+.cc-parent-row td{font-weight:600;color:#1b2a4a}
+.cc-parent-row .expand-icon{transition:transform .2s;display:inline-block;width:20px;text-align:center;color:#94a3b8}
+.cc-parent-row.expanded .expand-icon{transform:rotate(90deg);color:#f5a623}
+.cc-child-row{display:none}
+.cc-child-row.visible{display:table-row}
+.cc-child-row td{background:#f8fafc;font-size:12px;color:#64748b;padding:6px 14px !important;border-bottom:1px solid #f1f5f9}
+.cc-child-row td:first-child{border-left:3px solid #f5a623}
+
+/* ── Progress bar ── */
+.progress-bar{height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;min-width:80px}
+.progress-fill{height:100%;border-radius:3px;transition:width .3s ease}
+.progress-fill.green{background:#16a34a}
+.progress-fill.amber{background:#f5a623}
+.progress-fill.red{background:#ef4444}
+.progress-fill.blue{background:#3b82f6}
+
+/* ── Status pill ── */
+.status-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap}
+.status-pill.on-track{background:#dcfce7;color:#16a34a}
+.status-pill.at-risk{background:#fef3c7;color:#d97706}
+.status-pill.over-budget{background:#fef2f2;color:#ef4444}
+.status-pill.not-started{background:#f1f5f9;color:#94a3b8}
+
+/* ── Link pill ── */
+.budget-link{display:inline-flex;align-items:center;gap:4px;color:#3b82f6;font-size:12px;font-weight:500;cursor:pointer;text-decoration:none;padding:3px 8px;border-radius:4px;transition:background .15s}
+.budget-link:hover{background:#eff6ff}
+
+/* ── Date range picker ── */
+.date-range{display:flex;align-items:center;gap:6px}
+.date-range input{padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;outline:none;color:#334155}
+.date-range input:focus{border-color:#f5a623}
+.date-range span{color:#94a3b8;font-size:12px}
+
+/* ── Footer ── */
+.review-footer{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;font-size:13px;color:#64748b}
+.review-footer .pagination{display:flex;align-items:center;gap:6px}
+.review-footer .page-btn{width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:1px solid #e2e8f0;border-radius:4px;background:#fff;cursor:pointer;color:#64748b;font-size:12px}
+.review-footer .page-btn.active{background:#1b2a4a;color:#fff;border-color:#1b2a4a}
+
+/* ── Weekly trend sparkline ── */
+.sparkline{display:inline-flex;align-items:flex-end;gap:2px;height:24px;vertical-align:middle}
+.sparkline .bar{width:4px;border-radius:2px 2px 0 0;transition:height .3s ease}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;right:24px;background:#1b2a4a;color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;display:none;align-items:center;gap:8px;z-index:300;animation:slideUp .3s ease;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.toast.show{display:flex}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* ── Actions Bar ── */
+.actions-bar{display:flex;justify-content:space-between;align-items:center;margin-top:24px}
+</style>
+</head>
+<body>
+
+<!-- ═══ Sidebar ═══ -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo"><div class="logo-icon">V</div></div>
+    <span class="sidebar-collapse"><i class="fas fa-angles-left"></i></span>
+  </div>
+  <div class="sidebar-org">
+    <div class="org-avatar">C</div>
+    <span>Cookie's Civil</span>
+    <i class="fas fa-chevron-right chevron"></i>
+  </div>
+  <nav class="sidebar-nav">
+    <a class="nav-item"><i class="fas fa-folder nav-icon"></i> Projects</a>
+    <a class="nav-item"><i class="fas fa-th-large nav-icon"></i> Dashboard</a>
+    <a class="nav-item"><i class="far fa-image nav-icon"></i> Gallery</a>
+    <a class="nav-item"><i class="far fa-clock nav-icon"></i> Timesheet</a>
+    <a class="nav-item"><i class="far fa-calendar nav-icon"></i> Leave <span class="badge">8</span><i class="fas fa-chevron-down chev"></i></a>
+    <a class="nav-item"><i class="far fa-calendar-check nav-icon"></i> Scheduler <span class="beta">Beta</span><i class="fas fa-chevron-down chev"></i></a>
+    <a class="nav-item"><i class="fas fa-clipboard-list nav-icon"></i> Daywork Docket</a>
+    <a class="nav-item"><i class="fas fa-cart-shopping nav-icon"></i> Purchase Order</a>
+    <a class="nav-item"><i class="fas fa-truck nav-icon"></i> Delivery Docket</a>
+    <a class="nav-item" onclick="window.location.href='budget-overview.html'"><i class="fas fa-file-invoice-dollar nav-icon"></i> Bills</a>
+    <a class="nav-item"><i class="far fa-file-alt nav-icon"></i> Forms <i class="fas fa-chevron-down chev"></i></a>
+    <a class="nav-item"><i class="fas fa-tools nav-icon"></i> Equipment</a>
+    <a class="nav-item active"><i class="fas fa-chart-line nav-icon"></i> Productivity</a>
+    <a class="nav-item"><i class="fas fa-user-cog nav-icon"></i> Resource Assigner</a>
+    <a class="nav-item"><i class="far fa-comment-dots nav-icon"></i> Suppliers</a>
+    <a class="nav-item"><i class="far fa-folder-open nav-icon"></i> File Manager</a>
+    <a class="nav-item"><i class="fas fa-users-cog nav-icon"></i> User Management <i class="fas fa-chevron-down chev"></i></a>
+  </nav>
+</aside>
+
+<!-- ═══ Main ═══ -->
+<div class="main">
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="back-btn" onclick="window.location.href='budget-overview.html'"><i class="fas fa-arrow-left"></i></span>
+      <h1>Productivity Tracker</h1>
+      <i class="far fa-question-circle" style="color:#94a3b8;font-size:14px;cursor:pointer"></i>
+      <i class="fas fa-circle" style="font-size:8px;color:#22c55e"></i>
+    </div>
+    <div class="topbar-right">
+      <button class="search-btn"><i class="fas fa-wand-magic-sparkles"></i> Search</button>
+      <span class="plus-btn"><i class="fas fa-plus"></i></span>
+      <div class="user-menu">
+        <div class="user-avatar">AN</div>
+        <span class="user-name">Alec Neill</span>
+        <i class="fas fa-chevron-down" style="font-size:11px;color:#94a3b8"></i>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-content">
+
+    <!-- ═══ KPI Stats Bar ═══ -->
+    <div class="forecast-stats" id="statsBar"></div>
+
+    <!-- ═══ Toolbar ═══ -->
+    <div class="review-toolbar">
+      <div class="review-toolbar-left">
+        <select class="filter-select" id="filterCC" onchange="renderTable()">
+          <option value="">Filter by Cost Centre</option>
+        </select>
+        <div class="date-range">
+          <input type="date" id="dateFrom" value="2026-06-01" onchange="renderTable()">
+          <span>to</span>
+          <input type="date" id="dateTo" value="2026-06-30" onchange="renderTable()">
+        </div>
+      </div>
+      <div class="review-toolbar-right">
+        <button class="expand-btn" onclick="collapseAll()"><i class="fas fa-compress-alt" style="margin-right:4px"></i> Collapse all</button>
+        <div class="type-toggle" id="viewToggle">
+          <span class="active" onclick="switchView('task')"><i class="fas fa-list-check" style="margin-right:4px"></i> Task View</span>
+          <span onclick="switchView('resource')"><i class="fas fa-users" style="margin-right:4px"></i> Resource View</span>
+          <span onclick="switchView('weekly')"><i class="fas fa-chart-bar" style="margin-right:4px"></i> Weekly View</span>
+        </div>
+        <input type="text" class="review-search" placeholder="Search tasks..." id="searchInput" oninput="filterTableSearch()">
+        <a class="budget-link" onclick="window.location.href='budget-overview.html'"><i class="fas fa-file-invoice-dollar"></i> Budget Overview</a>
+        <a class="budget-link" style="color:#3b82f6" onclick="window.open('https://varicon-naxa.github.io/prototypes/2026-04-01-budget-upload/','_blank')"><i class="fas fa-upload"></i> Budget Mapping</a>
+        <button class="btn-outline btn" style="padding:7px 14px;font-size:13px" onclick="showToast('Export started')">EXPORT <i class="fas fa-chevron-down" style="font-size:10px"></i></button>
+      </div>
+    </div>
+
+    <!-- ═══ Productivity Table ═══ -->
+    <div style="border:1px solid #e2e8f0;border-radius:8px 8px 0 0;overflow-x:auto">
+      <table class="review-table" id="prodTable">
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+        <tfoot id="tableFoot"></tfoot>
+      </table>
+    </div>
+
+    <!-- Footer -->
+    <div class="review-footer" id="tableFooter">
+      <div>Rows Per Page 15</div>
+      <div class="pagination">
+        <span style="color:#cbd5e1">First</span>
+        <span class="page-btn" style="color:#cbd5e1"><i class="fas fa-chevron-left"></i></span>
+        <span class="page-btn active">1</span>
+        <span class="page-btn" style="color:#cbd5e1"><i class="fas fa-chevron-right"></i></span>
+        <span style="color:#cbd5e1">Last</span>
+      </div>
+      <div id="rowCount"></div>
+      <div style="display:flex;align-items:center;gap:4px;color:#16a34a"><span>Live</span> <i class="fas fa-circle" style="font-size:8px"></i></div>
+    </div>
+
+    <!-- Actions Bar -->
+    <div class="actions-bar">
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="window.location.href='budget-overview.html'"><i class="fas fa-file-invoice-dollar"></i> Budget Overview</button>
+        <button class="btn btn-secondary" onclick="window.open('https://varicon-naxa.github.io/prototypes/2026-04-01-budget-upload/','_blank')" style="border:1px solid #3b82f6;color:#3b82f6;background:#eff6ff"><i class="fas fa-upload"></i> Budget Mapping</button>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-outline" onclick="showToast('Exported to CSV')"><i class="fas fa-file-export"></i> Export Report</button>
+        <button class="btn btn-primary" onclick="showToast('Logging hours...')"><i class="fas fa-plus-circle"></i> Log Hours</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══ Toast ═══ -->
+<div class="toast" id="toast"><i class="fas fa-check-circle" style="color:#22c55e"></i><span id="toastText"></span></div>
+
+<script>
+/* ═══════════════════════════════════════════
+   PRODUCTIVITY DATA — linked to budget cost centres & tasks
+   ═══════════════════════════════════════════ */
+/* Budget Upload prototype link */
+const BUDGET_MAPPING_URL = 'https://varicon-naxa.github.io/prototypes/2026-04-01-budget-upload/';
+
+/* Cost Centres — matching budget-upload prototype */
+const costCentres = [
+  { id: 'EW', name: 'Earthworks' },
+  { id: 'CON', name: 'Concrete' },
+  { id: 'STL', name: 'Steel & Rebar' },
+  { id: 'FW', name: 'Formwork' },
+  { id: 'LAB', name: 'Labour' },
+  { id: 'PE', name: 'Plant & Equipment' },
+  { id: 'DR', name: 'Drainage' },
+  { id: 'OH', name: 'Overheads / Prelims' }
+];
+
+/* Zones — matching budget-upload prototype */
+const zones = ['Project Wide', 'Zone A', 'Zone B', 'Zone C', 'Zone D'];
+
+/* Resource Types — matching budget-upload prototype */
+const resourceTypes = ['Labour', 'Plant and Equipment', 'Material', 'Subcontract', 'Miscellaneous'];
+
+/* BOQ-aligned productivity data
+   BOQ codes & descriptions mirror the budget-upload prototype structure:
+   1.x = Preliminaries, 2.x = Structural Works, 3.x = Structural Steel,
+   4.x = Drainage, 5.x = Roadway Construction, P.x = Provisional */
+const prodData = [
+  {
+    ccId: 'OH', ccName: 'Overheads / Prelims',
+    boqSection: '1', boqSectionName: 'Preliminaries',
+    budgetContract: 145000, estimatedBudget: 145000, trackedCost: 58200,
+    tasks: [
+      {
+        num: '1.1.1', name: 'Site Establishment',
+        boqCode: '1.1.1', unit: 'item', qty: 1, rate: 45000, boqAmount: 45000,
+        budgetHrs: 160, actualHrs: 72, budgetCost: 45000, actualCost: 22400,
+        zone: 'Project Wide', status: 'on-track',
+        weeklyHrs: [14, 16, 14, 14, 14],
+        resources: [
+          { name: 'Site Foreman', type: 'Labour', budgetHrs: 80, actualHrs: 40, rate: 85.00, output: '—' },
+          { name: 'General Labourer', type: 'Labour', budgetHrs: 60, actualHrs: 24, rate: 65.00, output: '—' },
+          { name: 'Bobcat / Skid Steer', type: 'Plant and Equipment', budgetHrs: 20, actualHrs: 8, rate: 95.00, output: '—' }
+        ]
+      },
+      {
+        num: '1.1.2', name: 'Traffic Management',
+        boqCode: '1.1.2', unit: 'item', qty: 1, rate: 35000, boqAmount: 35000,
+        budgetHrs: 80, actualHrs: 28, budgetCost: 35000, actualCost: 12600,
+        zone: 'Project Wide', status: 'on-track',
+        weeklyHrs: [6, 6, 6, 5, 5],
+        resources: [
+          { name: 'General Labourer', type: 'Labour', budgetHrs: 80, actualHrs: 28, rate: 65.00, output: '—' }
+        ]
+      },
+      {
+        num: '1.2.1', name: 'Project Insurances',
+        boqCode: '1.2.1', unit: 'item', qty: 1, rate: 65000, boqAmount: 65000,
+        budgetHrs: 0, actualHrs: 0, budgetCost: 65000, actualCost: 23200,
+        zone: 'Project Wide', status: 'on-track',
+        weeklyHrs: [0, 0, 0, 0, 0],
+        resources: []
+      }
+    ]
+  },
+  {
+    ccId: 'EW', ccName: 'Earthworks',
+    boqSection: '2', boqSectionName: 'Structural Works',
+    budgetContract: 572800, estimatedBudget: 412400, trackedCost: 284600,
+    tasks: [
+      {
+        num: '2.1.1', name: 'Bulk Excavation',
+        boqCode: '2.1.1', unit: 'm3', qty: 12000, rate: 8.50, boqAmount: 102000,
+        budgetHrs: 480, actualHrs: 384, budgetCost: 102000, actualCost: 78200,
+        zone: 'Zone A', status: 'on-track',
+        weeklyHrs: [80, 82, 76, 74, 72],
+        resources: [
+          { name: '20T Excavator', type: 'Plant and Equipment', budgetHrs: 240, actualHrs: 196, rate: 145.00, output: '25.2 m³/hr' },
+          { name: '10T Tipper Truck', type: 'Plant and Equipment', budgetHrs: 120, actualHrs: 104, rate: 110.00, output: '—' },
+          { name: 'Skilled Labourer', type: 'Labour', budgetHrs: 120, actualHrs: 84, rate: 72.00, output: '—' }
+        ]
+      },
+      {
+        num: '2.1.2', name: 'Foundation Excavation',
+        boqCode: '2.1.2', unit: 'm3', qty: 2400, rate: 14.00, boqAmount: 33600,
+        budgetHrs: 160, actualHrs: 112, budgetCost: 33600, actualCost: 22800,
+        zone: 'Zone A', status: 'on-track',
+        weeklyHrs: [22, 24, 22, 22, 22],
+        resources: [
+          { name: '5T Excavator', type: 'Plant and Equipment', budgetHrs: 80, actualHrs: 56, rate: 95.00, output: '15.8 m³/hr' },
+          { name: 'General Labourer', type: 'Labour', budgetHrs: 80, actualHrs: 56, rate: 65.00, output: '—' }
+        ]
+      },
+      {
+        num: '2.2.1', name: 'Concrete Footings',
+        boqCode: '2.2.1', unit: 'm3', qty: 320, rate: 385.00, boqAmount: 123200,
+        budgetHrs: 640, actualHrs: 340, budgetCost: 123200, actualCost: 68400,
+        zone: 'Zone B', status: 'at-risk',
+        weeklyHrs: [60, 68, 72, 70, 70],
+        resources: [
+          { name: 'Concrete Finisher', type: 'Labour', budgetHrs: 240, actualHrs: 128, rate: 78.00, output: '0.42 m³/hr' },
+          { name: 'General Labourer', type: 'Labour', budgetHrs: 160, actualHrs: 84, rate: 65.00, output: '—' },
+          { name: 'Concrete Pump', type: 'Plant and Equipment', budgetHrs: 120, actualHrs: 64, rate: 185.00, output: '2.6 m³/hr' },
+          { name: 'Ready Mix Concrete', type: 'Material', budgetHrs: 0, actualHrs: 0, rate: 0, output: '168 m³ del.' }
+        ]
+      },
+      {
+        num: '2.2.2', name: 'Concrete Slabs on Grade',
+        boqCode: '2.2.2', unit: 'm2', qty: 1800, rate: 68.00, boqAmount: 122400,
+        budgetHrs: 520, actualHrs: 216, budgetCost: 122400, actualCost: 48200,
+        zone: 'Zone B', status: 'on-track',
+        weeklyHrs: [40, 44, 44, 44, 44],
+        resources: [
+          { name: 'Concrete Finisher', type: 'Labour', budgetHrs: 200, actualHrs: 84, rate: 78.00, output: '8.6 m²/hr' },
+          { name: 'General Labourer', type: 'Labour', budgetHrs: 160, actualHrs: 68, rate: 65.00, output: '—' },
+          { name: 'Concrete Pump', type: 'Plant and Equipment', budgetHrs: 80, actualHrs: 32, rate: 185.00, output: '—' },
+          { name: 'Roller / Compactor', type: 'Plant and Equipment', budgetHrs: 80, actualHrs: 32, rate: 95.00, output: '—' }
+        ]
+      },
+      {
+        num: '2.3.1', name: 'Retaining Walls',
+        boqCode: '2.3.1', unit: 'm2', qty: 640, rate: 145.00, boqAmount: 92800,
+        budgetHrs: 400, actualHrs: 148, budgetCost: 92800, actualCost: 36200,
+        zone: 'Zone C', status: 'on-track',
+        weeklyHrs: [28, 30, 30, 30, 30],
+        resources: [
+          { name: 'Concrete Finisher', type: 'Labour', budgetHrs: 160, actualHrs: 60, rate: 78.00, output: '—' },
+          { name: 'Steel Fixer', type: 'Labour', budgetHrs: 120, actualHrs: 44, rate: 75.00, output: '—' },
+          { name: 'General Labourer', type: 'Labour', budgetHrs: 120, actualHrs: 44, rate: 65.00, output: '—' }
+        ]
+      },
+      {
+        num: '2.4.1', name: 'Supply & Fix Reinforcement',
+        boqCode: '2.4.1', unit: 'tonne', qty: 85, rate: 1150.00, boqAmount: 97750,
+        budgetHrs: 320, actualHrs: 124, budgetCost: 97750, actualCost: 30800,
+        zone: 'Zone A', status: 'on-track',
+        weeklyHrs: [24, 24, 26, 26, 24],
+        resources: [
+          { name: 'Steel Fixer', type: 'Labour', budgetHrs: 200, actualHrs: 80, rate: 75.00, output: '0.26 t/hr' },
+          { name: 'General Labourer', type: 'Labour', budgetHrs: 120, actualHrs: 44, rate: 65.00, output: '—' }
+        ]
+      }
+    ]
+  },
+  {
+    ccId: 'STL', ccName: 'Steel & Rebar',
+    boqSection: '3', boqSectionName: 'Structural Steel',
+    budgetContract: 346800, estimatedBudget: 264200, trackedCost: 68400,
+    tasks: [
+      {
+        num: '3.1.1', name: 'Steel Columns & Beams',
+        boqCode: '3.1.1', unit: 'tonne', qty: 120, rate: 1850.00, boqAmount: 222000,
+        budgetHrs: 480, actualHrs: 96, budgetCost: 222000, actualCost: 48200,
+        zone: 'Zone B', status: 'on-track',
+        weeklyHrs: [16, 18, 20, 22, 20],
+        resources: [
+          { name: 'Steel Fixer', type: 'Labour', budgetHrs: 240, actualHrs: 48, rate: 75.00, output: '0.25 t/hr' },
+          { name: 'Skilled Labourer', type: 'Labour', budgetHrs: 120, actualHrs: 24, rate: 72.00, output: '—' },
+          { name: '20T Excavator', type: 'Plant and Equipment', budgetHrs: 60, actualHrs: 12, rate: 145.00, output: '—' },
+          { name: 'Welding Equipment', type: 'Plant and Equipment', budgetHrs: 60, actualHrs: 12, rate: 45.00, output: '—' }
+        ]
+      },
+      {
+        num: '3.2.1', name: 'Purlins & Girts',
+        boqCode: '3.2.1', unit: 'lm', qty: 2400, rate: 52.00, boqAmount: 124800,
+        budgetHrs: 320, actualHrs: 64, budgetCost: 124800, actualCost: 20200,
+        zone: 'Zone B', status: 'not-started',
+        weeklyHrs: [0, 0, 12, 24, 28],
+        resources: [
+          { name: 'Steel Fixer', type: 'Labour', budgetHrs: 160, actualHrs: 32, rate: 75.00, output: '—' },
+          { name: 'Skilled Labourer', type: 'Labour', budgetHrs: 160, actualHrs: 32, rate: 72.00, output: '—' }
+        ]
+      }
+    ]
+  },
+  {
+    ccId: 'DR', ccName: 'Drainage',
+    boqSection: '4', boqSectionName: 'Drainage',
+    budgetContract: 342000, estimatedBudget: 258600, trackedCost: 92400,
+    tasks: [
+      {
+        num: '4.1.1', name: 'Stormwater Pipes',
+        boqCode: '4.1.1', unit: 'lm', qty: 1200, rate: 145.00, boqAmount: 174000,
+        budgetHrs: 360, actualHrs: 144, budgetCost: 174000, actualCost: 58200,
+        zone: 'Zone C', status: 'on-track',
+        weeklyHrs: [28, 30, 28, 30, 28],
+        resources: [
+          { name: '5T Excavator', type: 'Plant and Equipment', budgetHrs: 120, actualHrs: 48, rate: 95.00, output: '3.3 lm/hr' },
+          { name: 'Skilled Labourer', type: 'Labour', budgetHrs: 120, actualHrs: 48, rate: 72.00, output: '—' },
+          { name: 'General Labourer', type: 'Labour', budgetHrs: 120, actualHrs: 48, rate: 65.00, output: '—' }
+        ]
+      },
+      {
+        num: '4.2.1', name: 'Pits & Headwalls',
+        boqCode: '4.2.1', unit: 'each', qty: 18, rate: 9300.00, boqAmount: 167400,
+        budgetHrs: 280, actualHrs: 84, budgetCost: 167400, actualCost: 34200,
+        zone: 'Zone D', status: 'at-risk',
+        weeklyHrs: [14, 16, 18, 18, 18],
+        resources: [
+          { name: 'Concrete Finisher', type: 'Labour', budgetHrs: 100, actualHrs: 32, rate: 78.00, output: '0.06 ea/hr' },
+          { name: 'General Labourer', type: 'Labour', budgetHrs: 100, actualHrs: 28, rate: 65.00, output: '—' },
+          { name: '5T Excavator', type: 'Plant and Equipment', budgetHrs: 80, actualHrs: 24, rate: 95.00, output: '—' }
+        ]
+      }
+    ]
+  },
+  {
+    ccId: 'EW', ccName: 'Earthworks',
+    boqSection: '5', boqSectionName: 'Roadway Construction',
+    budgetContract: 299000, estimatedBudget: 228400, trackedCost: 64800,
+    tasks: [
+      {
+        num: '5.1.1', name: 'Subgrade Preparation',
+        boqCode: '5.1.1', unit: 'm2', qty: 8500, rate: 12.00, boqAmount: 102000,
+        budgetHrs: 280, actualHrs: 84, budgetCost: 102000, actualCost: 28400,
+        zone: 'Zone D', status: 'on-track',
+        weeklyHrs: [16, 16, 18, 18, 16],
+        resources: [
+          { name: '20T Excavator', type: 'Plant and Equipment', budgetHrs: 100, actualHrs: 32, rate: 145.00, output: '30.4 m²/hr' },
+          { name: 'Roller / Compactor', type: 'Plant and Equipment', budgetHrs: 80, actualHrs: 24, rate: 95.00, output: '—' },
+          { name: 'General Labourer', type: 'Labour', budgetHrs: 100, actualHrs: 28, rate: 65.00, output: '—' }
+        ]
+      },
+      {
+        num: '5.2.1', name: 'Pavement Layers',
+        boqCode: '5.2.1', unit: 'm2', qty: 8500, rate: 23.20, boqAmount: 197200,
+        budgetHrs: 360, actualHrs: 92, budgetCost: 197200, actualCost: 36400,
+        zone: 'Zone D', status: 'on-track',
+        weeklyHrs: [16, 18, 20, 20, 18],
+        resources: [
+          { name: 'Roller / Compactor', type: 'Plant and Equipment', budgetHrs: 120, actualHrs: 32, rate: 95.00, output: '—' },
+          { name: '10T Tipper Truck', type: 'Plant and Equipment', budgetHrs: 120, actualHrs: 32, rate: 110.00, output: '—' },
+          { name: 'General Labourer', type: 'Labour', budgetHrs: 120, actualHrs: 28, rate: 65.00, output: '—' }
+        ]
+      }
+    ]
+  }
+];
+
+/* ═══════════════════════════════════════════
+   COMPUTED TOTALS
+   ═══════════════════════════════════════════ */
+function computeTotals() {
+  let budgetHrs = 0, actualHrs = 0, budgetCost = 0, actualCost = 0, totalResources = 0, boqTotal = 0;
+  prodData.forEach(cc => {
+    cc.tasks.forEach(t => {
+      budgetHrs += t.budgetHrs;
+      actualHrs += t.actualHrs;
+      budgetCost += t.budgetCost;
+      actualCost += t.actualCost;
+      boqTotal += t.boqAmount || 0;
+      totalResources += t.resources.length;
+    });
+  });
+  return { budgetHrs, actualHrs, budgetCost, actualCost, totalResources, boqTotal };
+}
+
+/* ═══════════════════════════════════════════
+   RENDER STATS BAR
+   ═══════════════════════════════════════════ */
+function renderStats() {
+  const t = computeTotals();
+  const hrsUsedPct = t.budgetHrs > 0 ? ((t.actualHrs / t.budgetHrs) * 100).toFixed(1) : '0.0';
+  const costUsedPct = t.budgetCost > 0 ? ((t.actualCost / t.budgetCost) * 100).toFixed(1) : '0.0';
+  const earnedValue = t.budgetCost > 0 ? ((t.actualCost / t.budgetCost) * 100).toFixed(1) : '0.0';
+  const cpi = t.actualCost > 0 ? (t.budgetCost * (t.actualHrs / t.budgetHrs) / t.actualCost).toFixed(2) : '—';
+
+  document.getElementById('statsBar').innerHTML = [
+    { label: 'BOQ Contract', value: fmt(t.boqTotal) },
+    { label: 'Budget Hours', value: t.budgetHrs.toLocaleString() + ' hrs' },
+    { label: 'Actual Hours', value: t.actualHrs.toLocaleString() + ' hrs', cls: 'blue' },
+    { label: 'Hours Used', value: hrsUsedPct + '%', cls: parseFloat(hrsUsedPct) > 90 ? 'red' : 'amber' },
+    { label: 'Actual Cost', value: fmt(t.actualCost), cls: 'blue' },
+    { label: 'Cost Used', value: costUsedPct + '%', cls: parseFloat(costUsedPct) > 90 ? 'red' : 'green' },
+    { label: 'CPI', value: cpi, cls: parseFloat(cpi) >= 1.0 ? 'green' : 'red' },
+    { label: 'Active Resources', value: t.totalResources.toString() }
+  ].map(s => `
+    <div class="forecast-stat">
+      <div class="fs-label">${s.label}</div>
+      <div class="fs-value ${s.cls || ''}">${s.value}</div>
+    </div>
+  `).join('');
+}
+
+/* ═══════════════════════════════════════════
+   RENDER FILTER
+   ═══════════════════════════════════════════ */
+function renderFilter() {
+  const sel = document.getElementById('filterCC');
+  sel.innerHTML = '<option value="">Filter by Cost Centre</option>';
+  const seen = new Set();
+  costCentres.forEach(cc => {
+    if (prodData.some(d => d.ccId === cc.id) && !seen.has(cc.id)) {
+      sel.innerHTML += `<option value="${cc.id}">(${cc.id}) ${cc.name}</option>`;
+      seen.add(cc.id);
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════
+   VIEW STATE
+   ═══════════════════════════════════════════ */
+let currentView = 'task';
+
+function switchView(mode) {
+  currentView = mode;
+  document.querySelectorAll('#viewToggle span').forEach((s, i) => {
+    s.classList.toggle('active', (mode === 'task' && i === 0) || (mode === 'resource' && i === 1) || (mode === 'weekly' && i === 2));
+  });
+  renderTable();
+}
+
+/* ═══════════════════════════════════════════
+   RENDER TABLE
+   ═══════════════════════════════════════════ */
+function renderTable() {
+  const head = document.getElementById('tableHead');
+  const body = document.getElementById('tableBody');
+  const foot = document.getElementById('tableFoot');
+  const filterVal = document.getElementById('filterCC').value;
+  const data = filterVal ? prodData.filter(cc => cc.ccId === filterVal) : prodData;
+
+  if (currentView === 'task') renderTaskView(head, body, foot, data);
+  else if (currentView === 'resource') renderResourceView(head, body, foot, data);
+  else renderWeeklyView(head, body, foot, data);
+
+  const total = data.reduce((s, cc) => s + cc.tasks.length, 0);
+  document.getElementById('rowCount').textContent = `1 to ${total} of ${total}`;
+}
+
+/* ── Task View ── */
+function renderTaskView(head, body, foot, data) {
+  head.innerHTML = `
+    <tr class="cc-super-header">
+      <th>Task</th>
+      <th class="right" style="width:110px">Budget Hrs</th>
+      <th class="right" style="width:110px">Actual Hrs</th>
+      <th class="right" style="width:100px">% Used</th>
+      <th class="right" style="width:140px">Budget Cost</th>
+      <th class="right" style="width:140px">Actual Cost</th>
+      <th style="width:120px;text-align:center">Progress</th>
+      <th style="width:100px;text-align:center">Status</th>
+      <th style="width:80px;text-align:center">Budget</th>
+    </tr>
+    <tr class="sub-header">
+      <th>Cost Centre / Task / Resource</th>
+      <th class="right">Planned</th>
+      <th class="right">Logged</th>
+      <th class="right">Hrs Used</th>
+      <th class="right">Est. Budget</th>
+      <th class="right">Tracked</th>
+      <th style="text-align:center">Completion</th>
+      <th style="text-align:center">Health</th>
+      <th style="text-align:center">Link</th>
+    </tr>`;
+
+  let html = '';
+  let totBudgetHrs = 0, totActualHrs = 0, totBudgetCost = 0, totActualCost = 0;
+
+  data.forEach((cc, ci) => {
+    cc.tasks.forEach((task, ti) => {
+      const groupId = `g${ci}_${ti}`;
+      const pctHrs = task.budgetHrs > 0 ? ((task.actualHrs / task.budgetHrs) * 100).toFixed(1) : '—';
+      const pctCost = task.budgetCost > 0 ? ((task.actualCost / task.budgetCost) * 100).toFixed(1) : 0;
+      const barClass = parseFloat(pctCost) > 90 ? 'red' : parseFloat(pctCost) > 70 ? 'amber' : 'green';
+      const statusLabel = task.status.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+      totBudgetHrs += task.budgetHrs;
+      totActualHrs += task.actualHrs;
+      totBudgetCost += task.budgetCost;
+      totActualCost += task.actualCost;
+
+      html += `<tr class="cc-parent-row" onclick="toggleGroup('${groupId}',this)">
+        <td><span class="expand-icon"><i class="fas fa-chevron-right"></i></span> <span style="color:#3b82f6;font-weight:500;margin-right:4px;font-size:12px">${task.boqCode}</span> ${task.name} <span style="color:#94a3b8;font-size:11px;margin-left:4px">(${cc.ccName}${task.zone ? ' · ' + task.zone : ''})</span></td>
+        <td class="right">${task.budgetHrs}</td>
+        <td class="right">${task.actualHrs}</td>
+        <td class="right" style="color:${parseFloat(pctHrs) > 90 ? '#ef4444' : '#334155'}">${pctHrs}%</td>
+        <td class="right">${fmt(task.budgetCost)}</td>
+        <td class="right">${fmt(task.actualCost)}</td>
+        <td style="text-align:center"><div class="progress-bar"><div class="progress-fill ${barClass}" style="width:${Math.min(parseFloat(pctCost) || 0, 100)}%"></div></div></td>
+        <td style="text-align:center"><span class="status-pill ${task.status}">${statusLabel}</span></td>
+        <td style="text-align:center"><a class="budget-link" onclick="event.stopPropagation();window.location.href='budget-overview.html'"><i class="fas fa-external-link-alt"></i></a></td>
+      </tr>`;
+
+      task.resources.forEach(res => {
+        const resPct = res.budgetHrs > 0 ? ((res.actualHrs / res.budgetHrs) * 100).toFixed(1) : '—';
+        const resCost = res.actualHrs * res.rate;
+        const resBudgetCost = res.budgetHrs * res.rate;
+        const resIcon = res.type === 'Plant and Equipment' ? 'truck-monster' : res.type === 'Material' ? 'cubes' : res.type === 'Subcontract' ? 'handshake' : 'user';
+        html += `<tr class="cc-child-row" data-group="${groupId}">
+          <td style="padding-left:40px"><i class="fas fa-${resIcon}" style="color:#94a3b8;margin-right:6px;font-size:11px"></i>${res.name} <span style="color:#94a3b8;font-size:11px">(${res.type})</span></td>
+          <td class="right" style="font-weight:400">${res.budgetHrs}</td>
+          <td class="right" style="font-weight:400">${res.actualHrs}</td>
+          <td class="right" style="font-weight:400;color:${parseFloat(resPct) > 90 ? '#ef4444' : '#64748b'}">${resPct}%</td>
+          <td class="right" style="font-weight:400">${fmt(resBudgetCost)}</td>
+          <td class="right" style="font-weight:400">${fmt(resCost)}</td>
+          <td style="text-align:center;font-size:12px;color:#64748b">${res.output}</td>
+          <td></td>
+          <td></td>
+        </tr>`;
+      });
+    });
+  });
+
+  body.innerHTML = html;
+
+  const totPct = totBudgetHrs > 0 ? ((totActualHrs / totBudgetHrs) * 100).toFixed(1) : '0.0';
+  foot.innerHTML = `<tr>
+    <td style="font-weight:700">Total</td>
+    <td class="right" style="font-weight:700">${totBudgetHrs}</td>
+    <td class="right" style="font-weight:700">${totActualHrs}</td>
+    <td class="right" style="font-weight:700">${totPct}%</td>
+    <td class="right" style="font-weight:700">${fmt(totBudgetCost)}</td>
+    <td class="right" style="font-weight:700">${fmt(totActualCost)}</td>
+    <td></td><td></td><td></td>
+  </tr>`;
+}
+
+/* ── Resource View ── */
+function renderResourceView(head, body, foot, data) {
+  head.innerHTML = `
+    <tr class="cc-super-header">
+      <th>Resource</th>
+      <th style="width:140px">Type</th>
+      <th style="width:180px">BOQ Item / Task</th>
+      <th class="right" style="width:100px">Budget Hrs</th>
+      <th class="right" style="width:100px">Actual Hrs</th>
+      <th class="right" style="width:90px">% Used</th>
+      <th class="right" style="width:100px">Rate</th>
+      <th class="right" style="width:120px">Cost to Date</th>
+      <th style="width:110px">Output Rate</th>
+    </tr>`;
+
+  let html = '';
+  let allResources = [];
+  data.forEach(cc => {
+    cc.tasks.forEach(task => {
+      task.resources.forEach(res => {
+        allResources.push({ ...res, taskName: task.name, boqCode: task.boqCode, ccName: cc.ccName, ccId: cc.ccId, zone: task.zone });
+      });
+    });
+  });
+
+  let totBudgetHrs = 0, totActualHrs = 0, totCost = 0;
+  allResources.forEach(res => {
+    const pct = res.budgetHrs > 0 ? ((res.actualHrs / res.budgetHrs) * 100).toFixed(1) : '—';
+    const cost = res.actualHrs * res.rate;
+    totBudgetHrs += res.budgetHrs;
+    totActualHrs += res.actualHrs;
+    totCost += cost;
+
+    const resIcon2 = res.type === 'Plant and Equipment' ? 'truck-monster' : res.type === 'Material' ? 'cubes' : res.type === 'Subcontract' ? 'handshake' : 'user';
+    html += `<tr>
+      <td style="font-weight:500;color:#1b2a4a"><i class="fas fa-${resIcon2}" style="color:#94a3b8;margin-right:6px;font-size:12px"></i>${res.name}</td>
+      <td style="color:#64748b">${res.type}</td>
+      <td style="color:#64748b;font-size:12px"><span style="color:#3b82f6;font-weight:500">${res.boqCode}</span> ${res.taskName}</td>
+      <td class="right">${res.budgetHrs}</td>
+      <td class="right">${res.actualHrs}</td>
+      <td class="right" style="color:${parseFloat(pct) > 90 ? '#ef4444' : '#334155'}">${pct}%</td>
+      <td class="right" style="font-weight:400">${fmt(res.rate)}/hr</td>
+      <td class="right">${fmt(cost)}</td>
+      <td style="color:#64748b">${res.output}</td>
+    </tr>`;
+  });
+
+  body.innerHTML = html;
+  const totPct = totBudgetHrs > 0 ? ((totActualHrs / totBudgetHrs) * 100).toFixed(1) : '0.0';
+  foot.innerHTML = `<tr>
+    <td style="font-weight:700">Total (${allResources.length} resources)</td>
+    <td></td><td></td>
+    <td class="right" style="font-weight:700">${totBudgetHrs}</td>
+    <td class="right" style="font-weight:700">${totActualHrs}</td>
+    <td class="right" style="font-weight:700">${totPct}%</td>
+    <td></td>
+    <td class="right" style="font-weight:700">${fmt(totCost)}</td>
+    <td></td>
+  </tr>`;
+}
+
+/* ── Weekly View ── */
+function renderWeeklyView(head, body, foot, data) {
+  const weeks = ['Wk 1<br>Jun 2', 'Wk 2<br>Jun 9', 'Wk 3<br>Jun 16', 'Wk 4<br>Jun 23', 'Wk 5<br>Jun 30'];
+  head.innerHTML = `
+    <tr class="cc-super-header">
+      <th>Task</th>
+      ${weeks.map(w => `<th class="right" style="width:90px">${w}</th>`).join('')}
+      <th class="right" style="width:90px">Total</th>
+      <th style="width:140px;text-align:center">Trend</th>
+      <th style="width:100px;text-align:center">Status</th>
+    </tr>`;
+
+  let html = '';
+  let weekTotals = [0, 0, 0, 0, 0];
+
+  data.forEach(cc => {
+    cc.tasks.forEach(task => {
+      const total = task.weeklyHrs.reduce((a, b) => a + b, 0);
+      task.weeklyHrs.forEach((h, i) => weekTotals[i] += h);
+      const maxHr = Math.max(...task.weeklyHrs, 1);
+      const statusLabel = task.status.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+      const sparkBars = task.weeklyHrs.map(h => {
+        const height = Math.max((h / maxHr) * 22, 2);
+        const color = h === 0 ? '#e2e8f0' : '#3b82f6';
+        return `<div class="bar" style="height:${height}px;background:${color}"></div>`;
+      }).join('');
+
+      html += `<tr>
+        <td style="font-weight:500;color:#1b2a4a"><span style="color:#3b82f6;font-weight:500;margin-right:4px;font-size:12px">${task.boqCode}</span> ${task.name} <span style="color:#94a3b8;font-size:11px">(${cc.ccName})</span></td>
+        ${task.weeklyHrs.map(h => `<td class="right" style="font-weight:${h > 0 ? '500' : '400'};color:${h > 0 ? '#334155' : '#cbd5e1'}">${h}h</td>`).join('')}
+        <td class="right" style="font-weight:600">${total}h</td>
+        <td style="text-align:center"><div class="sparkline">${sparkBars}</div></td>
+        <td style="text-align:center"><span class="status-pill ${task.status}">${statusLabel}</span></td>
+      </tr>`;
+    });
+  });
+
+  body.innerHTML = html;
+  const grandTotal = weekTotals.reduce((a, b) => a + b, 0);
+  foot.innerHTML = `<tr>
+    <td style="font-weight:700">Total</td>
+    ${weekTotals.map(w => `<td class="right" style="font-weight:700">${w}h</td>`).join('')}
+    <td class="right" style="font-weight:700">${grandTotal}h</td>
+    <td></td><td></td>
+  </tr>`;
+}
+
+/* ═══════════════════════════════════════════
+   EXPAND / COLLAPSE
+   ═══════════════════════════════════════════ */
+function toggleGroup(groupId, parentRow) {
+  parentRow.classList.toggle('expanded');
+  const isExpanded = parentRow.classList.contains('expanded');
+  document.querySelectorAll(`.cc-child-row[data-group="${groupId}"]`).forEach(row => {
+    row.classList.toggle('visible', isExpanded);
+  });
+}
+
+function collapseAll() {
+  document.querySelectorAll('.cc-parent-row').forEach(r => r.classList.remove('expanded'));
+  document.querySelectorAll('.cc-child-row').forEach(r => r.classList.remove('visible'));
+}
+
+function filterTableSearch() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  if (!q) { renderTable(); return; }
+  document.querySelectorAll('#tableBody tr').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+/* ═══════════════════════════════════════════
+   UTILITIES
+   ═══════════════════════════════════════════ */
+function fmt(n) {
+  if (n === null || n === undefined) return '-';
+  return '$ ' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastText').textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+/* ═══════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════ */
+renderStats();
+renderFilter();
+renderTable();
+</script>
+</body>
+</html>

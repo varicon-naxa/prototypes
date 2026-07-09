@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Scan Quote → Purchase Order</title>
+<!--
+  PROTOTYPE: "Scan Quote" on the Purchase Order page.
+  Idea: instead of keying a PO by hand, the user scans/uploads a supplier
+  quote. Varicon "reads" it (OCR + extraction), guesses the supplier, project
+  and line items, and drops the user into a pre-filled PO form where the
+  extracted values are highlighted for a quick review before submit.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; transition: background 0.15s; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+  .sidebar-item.active .icon { opacity: 1; }
+
+  /* Main */
+  .main { flex: 1; overflow-y: auto; }
+  .screen { display: none; padding: 24px 32px; }
+  .screen.active { display: block; }
+
+  /* ===== LIST SCREEN ===== */
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .page-header h1 { font-size: 22px; font-weight: 600; }
+  .page-header .header-actions { display: flex; align-items: center; gap: 10px; }
+  .header-pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; color: #444; cursor: pointer; }
+
+  .view-toggle-bar { display: flex; margin-bottom: 20px; border-radius: 10px; overflow: hidden; border: 2px solid #1a1a2e; background: #fff; }
+  .view-toggle-btn { flex: 1; padding: 14px 24px; font-size: 15px; font-weight: 700; cursor: pointer; border: none; background: #fff; color: #999; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .view-toggle-btn.active { background: #f7941d; color: #fff; }
+  .view-toggle-btn:hover:not(.active) { background: #f0f0f0; color: #555; }
+  .view-toggle-btn svg { width: 20px; height: 20px; }
+  .view-toggle-btn .toggle-count { padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; }
+  .view-toggle-btn.active .toggle-count { background: rgba(255,255,255,0.25); color: #fff; }
+  .view-toggle-btn:not(.active) .toggle-count { background: #eee; color: #999; }
+
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .toolbar-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; color: #444; cursor: pointer; }
+  .toolbar-btn:hover { background: #f9f9f9; }
+  .toolbar-search { display: flex; align-items: center; border: 1px solid #d0d0d0; border-radius: 6px; padding: 0 10px; background: #fff; margin-left: auto; }
+  .toolbar-search input { border: none; outline: none; padding: 8px 6px; font-size: 13px; width: 180px; }
+  .toolbar-search svg { width: 16px; height: 16px; color: #999; }
+
+  .po-tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid #e0e0e0; }
+  .po-tab { padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #888; }
+  .po-tab.active { color: #f7941d; border-bottom-color: #f7941d; }
+  .po-tab:hover { color: #f7941d; }
+  .po-tab .count { font-weight: 400; color: #999; margin-left: 4px; }
+  .po-tab.active .count { color: #f7941d; }
+
+  /* Dual entry: Add PO + Scan Quote */
+  .entry-row { display: flex; gap: 16px; margin-bottom: 0; }
+  .entry-card {
+    flex: 1; display: flex; align-items: center; gap: 16px;
+    padding: 16px 24px; cursor: pointer; transition: all 0.2s;
+    border-radius: 12px 12px 0 0;
+  }
+  .entry-add { background: linear-gradient(135deg, #f7941d, #f15a24); box-shadow: 0 4px 16px rgba(247,148,29,0.35); }
+  .entry-add:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(247,148,29,0.45); }
+  .entry-scan { background: linear-gradient(135deg, #2b3a67, #1a1a2e); box-shadow: 0 4px 16px rgba(26,26,46,0.3); position: relative; overflow: hidden; }
+  .entry-scan:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(26,26,46,0.4); }
+  .entry-icon { width: 48px; height: 48px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .entry-icon svg { width: 26px; height: 26px; }
+  .entry-text h2 { font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 2px; display: flex; align-items: center; gap: 8px; }
+  .entry-text p { font-size: 13px; color: rgba(255,255,255,0.85); }
+  .ai-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; background: rgba(255,255,255,0.22); color: #fff; padding: 2px 8px; border-radius: 10px; }
+
+  .table-wrapper { background: #fff; border: 1px solid #e0e0e0; border-radius: 0 0 8px 8px; overflow: hidden; }
+  .table-wrapper table { width: 100%; border-collapse: collapse; }
+  .table-wrapper thead { background: #fafafa; }
+  .table-wrapper th { text-align: left; padding: 12px 14px; font-size: 12px; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; white-space: nowrap; }
+  .table-wrapper td { padding: 11px 14px; font-size: 13px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; }
+  .table-wrapper tr:last-child td { border-bottom: none; }
+  .table-wrapper tr:hover { background: #fafafa; }
+  .status-pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 12px; background: #fff3e0; color: #e8850f; }
+  .actions-btn { background: none; border: none; cursor: pointer; font-size: 16px; color: #999; }
+  .table-footer { display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 12px 16px; font-size: 13px; color: #888; border-top: 1px solid #e0e0e0; }
+
+  /* ===== SCAN MODAL ===== */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(20,20,35,0.55); z-index: 100; align-items: center; justify-content: center; padding: 24px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 60px rgba(0,0,0,0.3); }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid #eee; }
+  .modal-head h2 { font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .modal-head .x { background: none; border: none; font-size: 22px; color: #999; cursor: pointer; line-height: 1; }
+  .modal-body { padding: 24px; }
+
+  .scan-drop { border: 2px dashed #c9c9d6; border-radius: 12px; padding: 36px 24px; text-align: center; cursor: pointer; transition: all 0.2s; background: #fafafe; }
+  .scan-drop:hover { border-color: #f7941d; background: #fff8f0; }
+  .scan-drop .big-icon { width: 56px; height: 56px; margin: 0 auto 12px; border-radius: 50%; background: #ecedf5; display: flex; align-items: center; justify-content: center; }
+  .scan-drop .big-icon svg { width: 30px; height: 30px; color: #2b3a67; }
+  .scan-drop h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .scan-drop p { font-size: 13px; color: #999; }
+  .scan-or { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: #bbb; font-size: 12px; }
+  .scan-or::before, .scan-or::after { content: ''; flex: 1; height: 1px; background: #eee; }
+  .scan-alt { display: flex; gap: 12px; }
+  .scan-alt button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1px solid #d8d8e0; border-radius: 8px; background: #fff; font-size: 13px; font-weight: 600; color: #444; cursor: pointer; }
+  .scan-alt button:hover { background: #f7f7fb; border-color: #b8b8c8; }
+  .scan-alt button svg { width: 18px; height: 18px; }
+  .sample-link { margin-top: 16px; text-align: center; font-size: 12px; color: #888; }
+  .sample-link a { color: #f7941d; font-weight: 600; cursor: pointer; text-decoration: none; }
+
+  /* Scanning state */
+  .scanning { text-align: center; padding: 24px 8px; }
+  .doc-preview { width: 150px; height: 196px; margin: 0 auto 24px; border-radius: 8px; background: #fff; border: 1px solid #e0e0e0; box-shadow: 0 4px 18px rgba(0,0,0,0.12); position: relative; overflow: hidden; padding: 16px 14px; }
+  .doc-preview .ln { height: 6px; background: #e6e6ee; border-radius: 3px; margin-bottom: 8px; }
+  .doc-preview .ln.short { width: 50%; }
+  .doc-preview .ln.med { width: 75%; }
+  .doc-preview .ln.title { height: 10px; width: 60%; background: #cdd0e0; margin-bottom: 14px; }
+  .scan-laser { position: absolute; left: 0; right: 0; height: 36px; background: linear-gradient(180deg, rgba(247,148,29,0) 0%, rgba(247,148,29,0.35) 100%); border-bottom: 2px solid #f7941d; animation: scanmove 1.4s ease-in-out infinite; }
+  @keyframes scanmove { 0%{top:-36px} 100%{top:196px} }
+  .scanning h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .scan-steps { list-style: none; margin: 18px auto 0; max-width: 280px; text-align: left; }
+  .scan-steps li { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #aaa; padding: 6px 0; transition: color 0.3s; }
+  .scan-steps li .dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #ddd; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+  .scan-steps li.done { color: #2e7d32; }
+  .scan-steps li.done .dot { background: #4caf50; border-color: #4caf50; color: #fff; }
+  .scan-steps li.active { color: #333; font-weight: 600; }
+  .scan-steps li.active .dot { border-color: #f7941d; border-top-color: transparent; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ===== CREATE / REVIEW SCREEN ===== */
+  .top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .top-bar-left { display: flex; align-items: center; gap: 12px; }
+  .back-btn { background: none; border: none; cursor: pointer; font-size: 20px; color: #666; padding: 4px; }
+  .back-btn:hover { color: #333; }
+  .top-bar h1 { font-size: 20px; font-weight: 600; }
+  .top-bar-actions { display: flex; gap: 10px; }
+  .btn-draft { padding: 10px 20px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; color: #555; }
+  .btn-draft:hover { background: #f5f5f5; }
+  .btn-submit { padding: 10px 20px; border: none; border-radius: 6px; background: #f7941d; font-size: 13px; font-weight: 700; cursor: pointer; color: #fff; }
+  .btn-submit:hover { background: #e8850f; }
+
+  .extracted-banner { display: flex; align-items: center; gap: 14px; padding: 14px 18px; background: #f0f7ff; border: 1px solid #b9d8ff; border-radius: 10px; margin-bottom: 20px; }
+  .extracted-banner .eb-icon { width: 38px; height: 38px; border-radius: 50%; background: #1a73e8; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .extracted-banner .eb-icon svg { width: 20px; height: 20px; color: #fff; }
+  .extracted-banner .eb-text { flex: 1; }
+  .extracted-banner .eb-text strong { font-size: 14px; }
+  .extracted-banner .eb-text p { font-size: 12px; color: #5a6b80; margin-top: 2px; }
+  .extracted-banner .eb-view { font-size: 12px; font-weight: 600; color: #1a73e8; cursor: pointer; white-space: nowrap; }
+
+  .form-grid { display: flex; gap: 16px; margin-bottom: 16px; }
+  .form-grid > div { flex: 1; }
+  .fld-label { display: block; font-size: 12px; font-weight: 600; color: #888; margin-bottom: 5px; }
+  .fld { position: relative; }
+  .fld select, .fld input { width: 100%; padding: 11px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 14px; background: #fff; }
+  .fld.prefilled select, .fld.prefilled input, .fld.low select, .fld.low input { padding-right: 70px; }
+  .fld.prefilled select, .fld.prefilled input { border-color: #4caf50; background: #f5fff5; }
+  .fld .conf { position: absolute; top: 50%; right: 36px; transform: translateY(-50%); font-size: 10px; font-weight: 700; color: #2e7d32; background: #e8f5e9; padding: 2px 7px; border-radius: 8px; pointer-events: none; }
+  .fld.low select, .fld.low input { border-color: #f7941d; background: #fff8f0; }
+  .fld.low .conf { color: #b06b00; background: #fdecc8; }
+
+  .sec-title { font-size: 15px; font-weight: 600; margin: 24px 0 12px; display: flex; align-items: center; gap: 8px; }
+
+  .track-by { display: flex; align-items: center; gap: 14px; margin: 20px 0 4px; padding: 14px 16px; background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; flex-wrap: wrap; }
+  .track-by .track-label { font-size: 13px; font-weight: 700; color: #333; }
+  .seg { display: inline-flex; border: 2px solid #1a1a2e; border-radius: 8px; overflow: hidden; }
+  .seg-btn { padding: 8px 18px; font-size: 13px; font-weight: 700; border: none; background: #fff; color: #888; cursor: pointer; transition: all 0.15s; }
+  .seg-btn.active { background: #1a1a2e; color: #fff; }
+  .seg-btn:not(.active):hover { background: #f0f0f0; color: #555; }
+  .track-hint { font-size: 12px; color: #888; }
+  .cc-cell, .wbs-cell { display: block; }
+
+  .tip { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; background: #fff8e6; border: 1px solid #f0d98c; border-radius: 10px; margin: 16px 0 0; font-size: 13px; color: #7a5b00; line-height: 1.5; }
+  .tip .tip-ic { flex-shrink: 0; font-size: 16px; }
+  .tip a { color: #b06b00; font-weight: 700; cursor: pointer; white-space: nowrap; text-decoration: none; }
+  .tip a:hover { text-decoration: underline; }
+  .tip .tip-x { margin-left: auto; align-self: flex-start; background: none; border: none; color: #b59500; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 0 0 8px; }
+  .delivery-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+  .delivery-table thead { background: #fafafa; }
+  .delivery-table th { text-align: left; padding: 10px 12px; font-size: 12px; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; }
+  .delivery-table td { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+  .delivery-table input, .delivery-table select { width: 100%; padding: 8px 9px; border: 1px solid #d0d0d0; border-radius: 4px; font-size: 13px; }
+  .delivery-table tr.extracted input, .delivery-table tr.extracted select { border-color: #4caf50; background: #f5fff5; }
+  .delivery-table tr.needs-code select { border-color: #f7941d; background: #fff8f0; }
+  /* Fields the PERSON must choose (not read from the quote) — override the green "extracted" look */
+  .delivery-table select.manual { border-color: #f7941d !important; background: #fff8f0 !important; color: #b06b00; font-weight: 600; }
+  .delivery-table select.manual option { color: #333; font-weight: 400; }
+  .delivery-table select.resolved { border-color: #4caf50 !important; background: #f5fff5 !important; color: #333; font-weight: 400; }
+  .row-flag { font-size: 10px; font-weight: 700; color: #b06b00; background: #fdecc8; padding: 2px 6px; border-radius: 8px; white-space: nowrap; }
+  .add-line-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border: 1px dashed #ccc; border-radius: 6px; background: #fff; font-size: 13px; color: #888; cursor: pointer; }
+  .add-line-btn:hover { background: #f9f9f9; border-color: #aaa; color: #555; }
+
+  .totals { display: flex; flex-direction: column; align-items: flex-end; margin: 20px 0; }
+  .totals .row { display: flex; gap: 40px; padding: 4px 0; font-size: 14px; }
+  .totals .row .t-label { color: #888; text-align: right; min-width: 160px; }
+  .totals .row .t-val { font-weight: 600; min-width: 110px; text-align: right; }
+  .totals .total-row { font-size: 18px; font-weight: 700; border-top: 2px solid #e0e0e0; padding-top: 8px; margin-top: 4px; }
+
+  .attach-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; font-size: 13px; }
+  .attach-chip svg { width: 16px; height: 16px; color: #d23f3f; }
+  .attach-chip .tag { font-size: 10px; font-weight: 700; color: #1a73e8; background: #e8f1ff; padding: 2px 7px; border-radius: 8px; }
+
+  .annotation { margin-top: 28px; padding: 16px 20px; background: #fff8f0; border: 1px solid #f7941d; border-radius: 8px; font-size: 13px; color: #333; line-height: 1.65; }
+  .annotation h3 { color: #f7941d; font-size: 14px; margin-bottom: 8px; }
+  .annotation ul { margin-left: 20px; }
+  .annotation li { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Cookie's Civil</div>
+    <div class="sidebar-item"><span class="icon">📁</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">🖼</span> Gallery</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+    <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+    <div class="sidebar-item"><span class="icon">📄</span> Daywork Record</div>
+    <div class="sidebar-item active" onclick="showScreen('list')"><span class="icon">🛒</span> Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">🚚</span> Site Docket</div>
+    <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+  </div>
+
+  <div class="main">
+
+    <!-- ==================== SCREEN 1: PO LIST ==================== -->
+    <div class="screen active" id="screenList">
+      <div class="page-header">
+        <h1>Purchase Order</h1>
+        <div class="header-actions">
+          <span class="header-pill">Need Help? ▾</span>
+          <span class="header-pill">⬇ Export</span>
+        </div>
+      </div>
+
+      <div class="view-toggle-bar">
+        <button class="view-toggle-btn active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          All Purchase Orders <span class="toggle-count">108</span>
+        </button>
+        <button class="view-toggle-btn">
+          ⭐ My Purchase Orders <span class="toggle-count">3</span>
+        </button>
+      </div>
+
+      <div class="toolbar">
+        <button class="toolbar-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Select Date Range ▾</button>
+        <button class="toolbar-btn">Filter by Project ▾</button>
+        <button class="toolbar-btn">Filter by Supplier ▾</button>
+        <button class="toolbar-btn">Filter by Approver ▾</button>
+        <div class="toolbar-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search Purchase Order"></div>
+      </div>
+
+      <div class="po-tabs">
+        <div class="po-tab active">ALL <span class="count">3</span></div>
+        <div class="po-tab">DRAFT <span class="count">0</span></div>
+        <div class="po-tab">AWAITING APPROVAL <span class="count">3</span></div>
+        <div class="po-tab">APPROVED <span class="count">0</span></div>
+        <div class="po-tab">CLOSED <span class="count">0</span></div>
+        <div class="po-tab">CANCELLED <span class="count">0</span></div>
+        <div class="po-tab">REJECTED <span class="count">0</span></div>
+      </div>
+
+      <!-- Dual entry: manual vs scan -->
+      <div class="entry-row">
+        <div class="entry-card entry-add" onclick="showScreen('create')">
+          <div class="entry-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+          <div class="entry-text"><h2>Add Purchase Order</h2><p>Create a new purchase order manually</p></div>
+        </div>
+        <div class="entry-card entry-scan" onclick="openScan()">
+          <div class="entry-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
+          </div>
+          <div class="entry-text"><h2>Scan a Quote <span class="ai-badge">✨ AI</span></h2><p>Upload a supplier quote &amp; we'll build the PO for you</p></div>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>PO Number</th><th>PO Title</th><th>Order Date</th><th>Supplier</th><th>Project</th><th>Delivery Status</th><th style="text-align:right">Total</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>PO-VAR004-0036</td><td>Test PO 123</td><td>Wed, 13-05-2026</td><td>AAA Boring</td><td>(VAR004) Bourke Str…</td><td>Not Received</td><td style="text-align:right">$ 6,500.00</td><td><span class="status-pill">Awaiting Approval</span></td><td><button class="actions-btn">⋮</button></td></tr>
+            <tr><td>DI-BUG</td><td>DI-BUG</td><td>Wed, 25-03-2026</td><td>10march</td><td>(123456) Troughton …</td><td>Not Received</td><td style="text-align:right">$ 8,000.00</td><td><span class="status-pill">Awaiting Approval</span></td><td><button class="actions-btn">⋮</button></td></tr>
+            <tr><td>PO-VAR011-0001</td><td>-</td><td>Wed, 26-11-2025</td><td>A1 Asphalting Pty. Ltd.</td><td>(VAR011) Residentia…</td><td>Not Received</td><td style="text-align:right">$ 5,600.00</td><td><span class="status-pill">Awaiting Approval</span></td><td><button class="actions-btn">⋮</button></td></tr>
+          </tbody>
+        </table>
+        <div class="table-footer"><span>Rows per page <strong>100</strong> ▾</span><span>1–3 of 3</span><span>‹ ›</span></div>
+      </div>
+    </div>
+
+    <!-- ==================== SCREEN 2: REVIEW PRE-FILLED PO ==================== -->
+    <div class="screen" id="screenReview">
+      <div class="top-bar">
+        <div class="top-bar-left">
+          <button class="back-btn" onclick="showScreen('list')">←</button>
+          <h1>Review Purchase Order</h1>
+        </div>
+        <div class="top-bar-actions">
+          <button class="btn-draft" onclick="showScreen('list')">SAVE AS DRAFT</button>
+          <button class="btn-submit" onclick="alert('PO submitted for approval (prototype).'); showScreen('list');">SUBMIT FOR APPROVAL</button>
+        </div>
+      </div>
+
+      <div class="extracted-banner">
+        <div class="eb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="eb-text">
+          <strong>We filled this in from <em>Boral-Quote-Q8842.pdf</em></strong>
+          <p>Fields in <span style="color:#2e7d32;font-weight:600;">green</span> were read from the quote. Items in <span style="color:#b06b00;font-weight:600;">amber</span> — the project, PO title, and each line's <strong>resource category</strong>, <strong>accounting code</strong> &amp; <strong>cost centre/task</strong> — are yours to set before submitting.</p>
+        </div>
+        <span class="eb-view" onclick="alert('Opens the original quote PDF side-by-side (prototype).')">View original ↗</span>
+      </div>
+
+      <div class="form-grid">
+        <div>
+          <label class="fld-label">Supplier</label>
+          <div class="fld prefilled"><select><option>Boral</option><option>Hanson</option><option>A1 Asphalting Pty. Ltd.</option></select><span class="conf">98%</span></div>
+        </div>
+        <div>
+          <label class="fld-label">Project</label>
+          <div class="fld low"><select style="color:#b06b00;"><option>Select project… ⚠</option><option style="color:#333;">(VAR004) Bourke Street Roadworks</option><option style="color:#333;">(VAR001) Road Replacement Swanston St</option><option style="color:#333;">(VAR011) Residential House Foundation</option></select><span class="conf">Required</span></div>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div>
+          <label class="fld-label">PO Title</label>
+          <div class="fld low"><input type="text" placeholder="Enter a PO title…"><span class="conf">Required</span></div>
+        </div>
+        <div>
+          <label class="fld-label">Quote / Reference No.</label>
+          <div class="fld prefilled"><input type="text" value="Q8842"><span class="conf">✓</span></div>
+        </div>
+        <div>
+          <label class="fld-label">Order Date</label>
+          <div class="fld"><input type="text" value="Wed, 10-06-2026"></div>
+        </div>
+      </div>
+
+      <div class="track-by">
+        <span class="track-label">Track this PO by</span>
+        <div class="seg">
+          <button class="seg-btn active" id="segCC" onclick="setTrack('cc')">Cost Centre</button>
+          <button class="seg-btn" id="segWBS" onclick="setTrack('wbs')">WBS</button>
+        </div>
+        <span class="track-hint" id="trackHint">Each line item is coded to a <strong>cost centre</strong>.</span>
+      </div>
+
+      <div class="sec-title">🧾 Delivery Items <span style="font-size:12px;font-weight:500;color:#888;">— 4 line items read from the quote</span></div>
+
+      <div class="tip" id="supplierTip">
+        <span class="tip-ic">💡</span>
+        <div>For ease of use, set default <strong>resource categories</strong> and <strong>accounting codes</strong> at the supplier level — we'll pre-fill them on every scanned quote from this supplier, so you only review them. <a onclick="alert('Opens Boral → Default coding settings (prototype).')">Set up Boral defaults →</a></div>
+        <button class="tip-x" title="Dismiss" onclick="document.getElementById('supplierTip').remove()">×</button>
+      </div>
+
+      <table class="delivery-table">
+        <thead><tr><th style="width:26px">#</th><th>Resource / Description</th><th style="width:140px">Resource Category</th><th style="width:150px">Accounting Code</th><th style="width:150px" id="trackCol">Cost Centre</th><th style="width:60px">Unit</th><th style="width:70px">Qty</th><th style="width:100px">Unit Cost</th><th style="width:100px">Amount</th></tr></thead>
+        <tbody>
+          <tr class="extracted">
+            <td>1</td><td><input type="text" value="32 MPa Concrete — N32"></td>
+            <td><select class="manual" onchange="resolveManual(this)"><option>Select category</option><option>Materials</option><option>Labour</option><option>Plant &amp; Equipment</option><option>Subcontractor</option><option>Other</option></select></td>
+            <td><select class="manual" onchange="resolveManual(this)"><option>Select code</option><option>5200 · Concrete</option><option>5210 · Plant Hire</option><option>5900 · Other</option></select></td>
+            <td><span class="cc-cell"><select class="manual" onchange="resolveManual(this)"><option>Select cost centre</option><option>CC-100 · Earthworks</option><option>CC-200 · Concrete</option><option>CC-300 · Drainage</option><option>CC-400 · Plant &amp; Hire</option></select></span><span class="wbs-cell" style="display:none"><select class="manual" onchange="resolveManual(this)"><option>Select task</option><option>1.2 Bulk Earthworks</option><option>2.1 Slab Pour</option><option>2.3 Pump &amp; Place</option><option>3.1 Site Delivery</option></select></span></td>
+            <td><input type="text" value="m³"></td><td><input type="text" value="48"></td><td><input type="text" value="$ 198.00"></td><td>$ 9,504.00</td>
+          </tr>
+          <tr class="extracted">
+            <td>2</td><td><input type="text" value="Concrete pump hire — boom"></td>
+            <td><select class="manual" onchange="resolveManual(this)"><option>Select category</option><option>Materials</option><option>Labour</option><option>Plant &amp; Equipment</option><option>Subcontractor</option><option>Other</option></select></td>
+            <td><select class="manual" onchange="resolveManual(this)"><option>Select code</option><option>5200 · Concrete</option><option>5210 · Plant Hire</option><option>5900 · Other</option></select></td>
+            <td><span class="cc-cell"><select class="manual" onchange="resolveManual(this)"><option>Select cost centre</option><option>CC-100 · Earthworks</option><option>CC-200 · Concrete</option><option>CC-300 · Drainage</option><option>CC-400 · Plant &amp; Hire</option></select></span><span class="wbs-cell" style="display:none"><select class="manual" onchange="resolveManual(this)"><option>Select task</option><option>1.2 Bulk Earthworks</option><option>2.1 Slab Pour</option><option>2.3 Pump &amp; Place</option><option>3.1 Site Delivery</option></select></span></td>
+            <td><input type="text" value="day"></td><td><input type="text" value="1"></td><td><input type="text" value="$ 1,250.00"></td><td>$ 1,250.00</td>
+          </tr>
+          <tr class="extracted needs-code">
+            <td>3</td><td><input type="text" value="Saturday surcharge"> </td>
+            <td><select class="manual" onchange="resolveManual(this)"><option>Select category</option><option>Materials</option><option>Labour</option><option>Plant &amp; Equipment</option><option>Subcontractor</option><option>Other</option></select></td>
+            <td><select class="manual" onchange="resolveManual(this)"><option>Select code</option><option>5200 · Concrete</option><option>5210 · Plant Hire</option><option>5900 · Other</option></select></td>
+            <td><span class="cc-cell"><select class="manual" onchange="resolveManual(this)"><option>Select cost centre</option><option>CC-100 · Earthworks</option><option>CC-200 · Concrete</option><option>CC-300 · Drainage</option><option>CC-400 · Plant &amp; Hire</option></select></span><span class="wbs-cell" style="display:none"><select class="manual" onchange="resolveManual(this)"><option>Select task</option><option>1.2 Bulk Earthworks</option><option>2.1 Slab Pour</option><option>2.3 Pump &amp; Place</option><option>3.1 Site Delivery</option></select></span></td>
+            <td><input type="text" value="ea"></td><td><input type="text" value="1"></td><td><input type="text" value="$ 320.00"></td><td>$ 320.00</td>
+          </tr>
+          <tr class="extracted">
+            <td>4</td><td><input type="text" value="Delivery / cartage"></td>
+            <td><select class="manual" onchange="resolveManual(this)"><option>Select category</option><option>Materials</option><option>Labour</option><option>Plant &amp; Equipment</option><option>Subcontractor</option><option>Other</option></select></td>
+            <td><select class="manual" onchange="resolveManual(this)"><option>Select code</option><option>5200 · Concrete</option><option>5210 · Plant Hire</option><option>5900 · Other</option></select></td>
+            <td><span class="cc-cell"><select class="manual" onchange="resolveManual(this)"><option>Select cost centre</option><option>CC-100 · Earthworks</option><option>CC-200 · Concrete</option><option>CC-300 · Drainage</option><option>CC-400 · Plant &amp; Hire</option></select></span><span class="wbs-cell" style="display:none"><select class="manual" onchange="resolveManual(this)"><option>Select task</option><option>1.2 Bulk Earthworks</option><option>2.1 Slab Pour</option><option>2.3 Pump &amp; Place</option><option>3.1 Site Delivery</option></select></span></td>
+            <td><input type="text" value="ea"></td><td><input type="text" value="1"></td><td><input type="text" value="$ 180.00"></td><td>$ 180.00</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+        <button class="add-line-btn">+ Add Delivery Item</button>
+        <span class="row-flag">⚠ Choose a resource category, accounting code &amp; cost centre/task for each line</span>
+      </div>
+
+      <div class="totals">
+        <div class="row"><span class="t-label">Subtotal</span><span class="t-val">$ 11,254.00</span></div>
+        <div class="row"><span class="t-label">Total GST 10%</span><span class="t-val">$ 1,125.40</span></div>
+        <div class="row total-row"><span class="t-label">Total</span><span class="t-val">$ 12,379.40</span></div>
+      </div>
+
+      <div class="sec-title">📎 Attachment</div>
+      <div class="attach-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Boral-Quote-Q8842.pdf
+        <span class="tag">SOURCE QUOTE</span>
+      </div>
+
+      <div class="annotation">
+        <h3>What this prototype shows</h3>
+        <ul>
+          <li><strong>One scan → a ready PO.</strong> The quote is OCR'd and mapped to supplier, project, line items, quantities and unit costs.</li>
+          <li><strong>Confidence-led review.</strong> Green = trust it, amber = check it. The user only spends attention where the model is unsure (e.g. accounting code on the surcharge line).</li>
+          <li><strong>The quote stays attached</strong> as the source document, so approvers can verify against the original.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ==================== SCREEN 3: MANUAL CREATE (stub) ==================== -->
+    <div class="screen" id="screenCreate">
+      <div class="top-bar">
+        <div class="top-bar-left">
+          <button class="back-btn" onclick="showScreen('list')">←</button>
+          <h1>Add Purchase Order</h1>
+        </div>
+      </div>
+      <div class="annotation" style="background:#f5f5f5;border-color:#ddd;">
+        <h3 style="color:#666;">Manual PO creation</h3>
+        <p>This is the existing manual flow — out of scope for this prototype. The focus here is the <strong>Scan a Quote</strong> path. Use the back arrow and try “Scan a Quote”.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SCAN MODAL ==================== -->
+<div class="modal-overlay" id="scanModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2b3a67" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><line x1="3" y1="12" x2="21" y2="12"/></svg> Scan a Quote</h2>
+      <button class="x" onclick="closeScan()">×</button>
+    </div>
+    <div class="modal-body" id="scanBody">
+      <!-- upload state injected here -->
+    </div>
+  </div>
+</div>
+
+<script>
+function resolveManual(sel) {
+  const chosen = sel.selectedIndex > 0;
+  sel.classList.toggle('manual', !chosen);
+  sel.classList.toggle('resolved', chosen);
+}
+
+function setTrack(mode) {
+  const cc = mode === 'cc';
+  document.getElementById('segCC').classList.toggle('active', cc);
+  document.getElementById('segWBS').classList.toggle('active', !cc);
+  document.getElementById('trackCol').textContent = cc ? 'Cost Centre' : 'Task';
+  document.getElementById('trackHint').innerHTML = cc
+    ? 'Each line item is coded to a <strong>cost centre</strong>.'
+    : 'Each line item is coded to a <strong>WBS task</strong>.';
+  document.querySelectorAll('.cc-cell').forEach(e => e.style.display = cc ? 'block' : 'none');
+  document.querySelectorAll('.wbs-cell').forEach(e => e.style.display = cc ? 'none' : 'block');
+}
+
+function showScreen(screen) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const map = { list: 'screenList', review: 'screenReview', create: 'screenCreate' };
+  document.getElementById(map[screen]).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+const uploadHTML = `
+  <div class="scan-drop" onclick="startScan()">
+    <div class="big-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+    <h3>Drop a quote here, or click to browse</h3>
+    <p>PDF, JPG or PNG · supplier quotes, estimates, pro-forma invoices</p>
+  </div>
+  <div class="scan-or">or</div>
+  <div class="scan-alt">
+    <button onclick="startScan()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg> Take a photo</button>
+    <button onclick="startScan()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> From email</button>
+  </div>
+  <div class="sample-link">No quote handy? <a onclick="startScan()">Try it with a sample quote →</a></div>
+`;
+
+function openScan() {
+  document.getElementById('scanBody').innerHTML = uploadHTML;
+  document.getElementById('scanModal').classList.add('open');
+}
+function closeScan() { document.getElementById('scanModal').classList.remove('open'); }
+
+function startScan() {
+  document.getElementById('scanBody').innerHTML = `
+    <div class="scanning">
+      <div class="doc-preview">
+        <div class="ln title"></div>
+        <div class="ln"></div><div class="ln med"></div><div class="ln short"></div>
+        <div class="ln"></div><div class="ln med"></div><div class="ln short"></div>
+        <div class="scan-laser"></div>
+      </div>
+      <h3>Reading your quote…</h3>
+      <ul class="scan-steps">
+        <li id="ss1"><span class="dot"></span> Detecting document &amp; text</li>
+        <li id="ss2"><span class="dot"></span> Identifying supplier &amp; project</li>
+        <li id="ss3"><span class="dot"></span> Extracting line items &amp; pricing</li>
+      </ul>
+    </div>`;
+  const steps = ['ss1','ss2','ss3'];
+  let i = 0;
+  document.getElementById(steps[0]).classList.add('active');
+  const timer = setInterval(() => {
+    const cur = document.getElementById(steps[i]);
+    cur.classList.remove('active'); cur.classList.add('done');
+    cur.querySelector('.dot').innerHTML = '✓';
+    i++;
+    if (i < steps.length) {
+      document.getElementById(steps[i]).classList.add('active');
+    } else {
+      clearInterval(timer);
+      setTimeout(() => { closeScan(); showScreen('review'); }, 450);
+    }
+  }, 850);
+}
+</script>
+</body>
+</html>
