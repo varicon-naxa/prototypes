@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Surfacing the AI Support Agent</title>
+<style>
+  :root {
+    --navy: #1b2439;
+    --navy-2: #232e47;
+    --orange: #f5821f;
+    --orange-soft: #fff2e5;
+    --orange-ring: rgba(245,130,31,.28);
+    --ai: #6d5efc;          /* distinct AI hue, separate from brand orange */
+    --ai-soft: #efedff;
+    --ai-ring: rgba(109,94,252,.28);
+    --ground: #eef0f4;
+    --panel: #ffffff;
+    --line: #e2e6ec;
+    --ink: #1f2937;
+    --ink-2: #55617a;
+    --muted: #8a93a6;
+    --green: #16a34a;
+    --green-soft: #e7f6ec;
+    --shadow: 0 10px 30px rgba(20,27,45,.10), 0 2px 6px rgba(20,27,45,.06);
+    --radius: 10px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#0f1420; --panel:#161c2b; --line:#2a3348; --ink:#eef1f6;
+      --ink-2:#aeb7c8; --muted:#7d879b; --orange-soft:#3a2a17; --ai-soft:#22203a;
+      --green-soft:#173226; --shadow:0 10px 30px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0f1420; --panel:#161c2b; --line:#2a3348; --ink:#eef1f6;
+    --ink-2:#aeb7c8; --muted:#7d879b; --orange-soft:#3a2a17; --ai-soft:#22203a;
+    --green-soft:#173226; --shadow:0 10px 30px rgba(0,0,0,.4);
+  }
+  :root[data-theme="light"] {
+    --ground:#eef0f4; --panel:#ffffff; --line:#e2e6ec; --ink:#1f2937;
+    --ink-2:#55617a; --muted:#8a93a6; --orange-soft:#fff2e5; --ai-soft:#efedff;
+    --green-soft:#e7f6ec; --shadow:0 10px 30px rgba(20,27,45,.10), 0 2px 6px rgba(20,27,45,.06);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--font); line-height: 1.5; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 40px 24px 72px; }
+
+  header.page { margin-bottom: 32px; }
+  .eyebrow { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--orange); font-weight: 700; }
+  h1 { font-size: 26px; margin: 8px 0 6px; letter-spacing: -.02em; text-wrap: balance; }
+  .sub { color: var(--ink-2); max-width: 62ch; margin: 0; }
+
+  .option { margin-top: 40px; }
+  .opt-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .opt-num { font-size: 12px; font-weight: 800; color: #fff; background: var(--navy); width: 22px; height: 22px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex: none; transform: translateY(2px); }
+  .opt-head h2 { font-size: 18px; margin: 0; letter-spacing: -.01em; }
+  .opt-desc { color: var(--ink-2); margin: 2px 0 16px 34px; font-size: 14px; max-width: 70ch; }
+  .tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 3px 8px; border-radius: 999px; background: var(--ai-soft); color: var(--ai); }
+
+  /* ---- Faux app chrome ---- */
+  .app { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+  .toolbar { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); flex-wrap: wrap; position: relative; }
+  .t-title { font-size: 17px; font-weight: 700; margin-right: auto; letter-spacing: -.01em; }
+
+  .btn { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; padding: 9px 13px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; white-space: nowrap; font-family: var(--font); }
+  .btn svg { width: 15px; height: 15px; }
+  .btn.ghost { color: var(--ink-2); }
+  .btn.primary { background: var(--orange); border-color: var(--orange); color: #fff; }
+  .btn.help { color: #d97706; border-color: transparent; background: transparent; font-weight: 700; }
+
+  .search { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 13px; min-width: 160px; }
+
+  /* AI button variants */
+  .btn.ai { background: var(--ai); border-color: var(--ai); color: #fff; box-shadow: 0 1px 2px var(--ai-ring); }
+  .btn.ai-outline { background: var(--ai-soft); border-color: transparent; color: var(--ai); font-weight: 700; }
+  .ai-dot { width: 7px; height: 7px; border-radius: 999px; background: #34d399; box-shadow: 0 0 0 0 rgba(52,211,153,.55); animation: pulse 1.8s ease-out infinite; }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(52,211,153,.55); }
+    70%  { box-shadow: 0 0 0 7px rgba(52,211,153,0); }
+    100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ai-dot { animation: none; box-shadow: 0 0 0 3px rgba(52,211,153,.25); }
+  }
+
+  /* ---- Faux table ---- */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tbl th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding: 12px 18px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 92%, var(--ground)); }
+  .tbl td { padding: 13px 18px; border-bottom: 1px solid var(--line); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .tbl td.job { color: var(--ink); font-weight: 600; }
+  .pill { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--green-soft); color: var(--green); }
+  .tbl-wrap { overflow-x: auto; }
+
+  /* ---- Floating action pill (Option 2) ---- */
+  .stage { position: relative; }
+  .fab { position: absolute; right: 20px; bottom: 20px; display: inline-flex; align-items: center; gap: 9px; background: var(--ai); color: #fff; border: none; padding: 12px 18px 12px 14px; border-radius: 999px; font-weight: 700; font-size: 14px; box-shadow: 0 12px 28px var(--ai-ring), 0 3px 8px rgba(0,0,0,.16); cursor: pointer; font-family: var(--font); }
+  .fab svg { width: 18px; height: 18px; }
+  .fab .ai-dot { background: #a7ffd8; }
+
+  /* ---- Need Help panel reorder (Option 3) ---- */
+  .panel-pop { position: absolute; right: 18px; top: 64px; width: 340px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 14px; z-index: 5; }
+  .panel-pop h3 { margin: 2px 4px 12px; font-size: 14px; }
+  .help-card { display: flex; gap: 11px; padding: 12px; border-radius: 10px; border: 1px solid var(--line); margin-bottom: 8px; }
+  .help-card.feature { border-color: var(--ai); background: var(--ai-soft); }
+  .help-card .ic { width: 34px; height: 34px; border-radius: 8px; background: var(--ground); display: flex; align-items: center; justify-content: center; flex: none; color: var(--ink-2); }
+  .help-card.feature .ic { background: var(--ai); color: #fff; }
+  .help-card .ic svg { width: 18px; height: 18px; }
+  .help-card .h { font-size: 13.5px; font-weight: 700; margin: 0 0 2px; display:flex; align-items:center; gap:7px; }
+  .help-card .p { font-size: 12px; color: var(--ink-2); margin: 0; }
+  .mini-tag { font-size: 9.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; background: var(--ai); color:#fff; padding: 2px 6px; border-radius: 999px; }
+
+  .note { margin: 12px 0 0 34px; font-size: 13px; color: var(--ink-2); display: flex; gap: 8px; align-items: flex-start; }
+  .note b { color: var(--ink); font-weight: 700; }
+  .rec { border-left: 3px solid var(--orange); padding-left: 12px; }
+
+  .recap { margin-top: 48px; border-top: 1px solid var(--line); padding-top: 24px; }
+  .recap h2 { font-size: 16px; margin: 0 0 14px; }
+  .cmp { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .cmp th, .cmp td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .cmp th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  .cmp td:first-child { font-weight: 700; color: var(--ink); white-space: nowrap; }
+  .yes { color: var(--green); font-weight: 700; }
+  .cmp-wrap { overflow-x: auto; }
+  .foot { margin-top: 28px; font-size: 12.5px; color: var(--muted); }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="page">
+    <div class="eyebrow">Varicon · Support UX</div>
+    <h1>Making the AI Support agent easy to find</h1>
+    <p class="sub">Right now the AI agent lives two clicks deep — inside the <em>Need&nbsp;Help?</em> dropdown as one of three cards, plus a small unlabelled chat bubble on the right edge. Below are three ways to surface it, mocked on the live Projects toolbar, ordered from lightest to boldest change.</p>
+  </header>
+
+  <!-- OPTION 1 -->
+  <section class="option">
+    <div class="opt-head"><span class="opt-num">1</span><h2>Dedicated “Ask AI” button in the toolbar</h2></div>
+    <p class="opt-desc">Lift the agent out of the dropdown and give it its own persistent, labelled button next to <em>Need&nbsp;Help?</em>. Distinct AI colour and a “live” dot signal it’s an instant, always-on assistant — not another menu.</p>
+    <div class="app">
+      <div class="toolbar">
+        <span class="t-title">Projects</span>
+        <span class="search">🔍 Search</span>
+        <button class="btn ai"><span class="ai-dot"></span> Ask AI</button>
+        <button class="btn help">? Need Help?</button>
+        <button class="btn primary">+ Add Project</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>Job Number</th><th>Project Name</th><th>Type</th><th>Status</th><th>Completion</th></tr></thead>
+          <tbody>
+            <tr><td class="job">VAR011</td><td>Residential House Foundation</td><td>Civil</td><td><span class="pill">Active</span></td><td>01/09/2026</td></tr>
+            <tr><td class="job">VAR006</td><td>Little Collins Roadworks</td><td>Civil</td><td><span class="pill">Active</span></td><td>30/04/2026</td></tr>
+            <tr><td class="job">VAR005</td><td>Bar Beach Curb Works</td><td>Civil</td><td><span class="pill">Active</span></td><td>18/02/2026</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="note rec"><b>Recommended.</b> Lowest lift, highest visibility. Sits where users already look for help, reads as a first-class action, and works on every module’s toolbar for consistency.</p>
+  </section>
+
+  <!-- OPTION 2 -->
+  <section class="option">
+    <div class="opt-head"><span class="opt-num">2</span><h2>Labelled floating “Ask AI” pill <span class="tag">upgrade the bubble</span></h2></div>
+    <p class="opt-desc">Keep the persistent corner presence, but replace the tiny unlabelled bubble with a clear pill so people know what it is. Follows the pattern users expect from Intercom / Zendesk-style assistants.</p>
+    <div class="app stage">
+      <div class="toolbar">
+        <span class="t-title">Projects</span>
+        <span class="search">🔍 Search</span>
+        <button class="btn help">? Need Help?</button>
+        <button class="btn primary">+ Add Project</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>Job Number</th><th>Project Name</th><th>Type</th><th>Status</th><th>Completion</th></tr></thead>
+          <tbody>
+            <tr><td class="job">VAR011</td><td>Residential House Foundation</td><td>Civil</td><td><span class="pill">Active</span></td><td>01/09/2026</td></tr>
+            <tr><td class="job">VAR006</td><td>Little Collins Roadworks</td><td>Civil</td><td><span class="pill">Active</span></td><td>30/04/2026</td></tr>
+            <tr><td class="job">VAR005</td><td>Bar Beach Curb Works</td><td>Civil</td><td><span class="pill">Active</span></td><td>18/02/2026</td></tr>
+            <tr><td class="job">VAR004</td><td>Bourke Street Roadworks</td><td>Civil</td><td><span class="pill">Active</span></td><td>31/08/2025</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <button class="fab"><span class="ai-dot"></span> Ask AI</button>
+    </div>
+    <p class="note"><b>Trade-off:</b> always visible, but floats over content and can clash with the existing bubble. Best paired with Option 1, not instead of it.</p>
+  </section>
+
+  <!-- OPTION 3 -->
+  <section class="option">
+    <div class="opt-head"><span class="opt-num">3</span><h2>Promote AI to the top of the “Need&nbsp;Help?” panel</h2></div>
+    <p class="opt-desc">Smallest change of all — keep the dropdown, but make the AI agent the hero card at the top (full-width, coloured, badged) instead of the last of three equal tiles.</p>
+    <div class="app stage" style="min-height:300px;">
+      <div class="toolbar">
+        <span class="t-title">Projects</span>
+        <span class="search">🔍 Search</span>
+        <button class="btn help" style="background:var(--orange-soft);border-radius:8px;">? Need Help?</button>
+        <button class="btn primary">+ Add Project</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr><th>Job Number</th><th>Project Name</th><th>Type</th><th>Status</th><th>Completion</th></tr></thead>
+          <tbody>
+            <tr><td class="job">VAR011</td><td>Residential House Foundation</td><td>Civil</td><td><span class="pill">Active</span></td><td>01/09/2026</td></tr>
+            <tr><td class="job">VAR006</td><td>Little Collins Roadworks</td><td>Civil</td><td><span class="pill">Active</span></td><td>30/04/2026</td></tr>
+            <tr><td class="job">VAR005</td><td>Bar Beach Curb Works</td><td>Civil</td><td><span class="pill">Active</span></td><td>18/02/2026</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-pop">
+        <h3>Need Help?</h3>
+        <div class="help-card feature">
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a7 7 0 0 0-7 7v4a4 4 0 0 0 4 4h6a4 4 0 0 0 4-4v-4a7 7 0 0 0-7-7Z"/><circle cx="9" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="11" r="1" fill="currentColor" stroke="none"/></svg>
+          </div>
+          <div>
+            <p class="h">Ask AI Support <span class="mini-tag">Instant</span></p>
+            <p class="p">Chat with our AI agent and get instant answers about this module.</p>
+          </div>
+        </div>
+        <div class="help-card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg></div>
+          <div><p class="h">Quick Walkthrough</p><p class="p">Step-by-step guide to this module.</p></div>
+        </div>
+        <div class="help-card">
+          <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h13l3 3v13H4z"/><path d="M8 8h6M8 12h8M8 16h5"/></svg></div>
+          <div><p class="h">Knowledge Base</p><p class="p">Articles, FAQs and videos.</p></div>
+        </div>
+      </div>
+    </div>
+    <p class="note"><b>Trade-off:</b> the fastest to ship and lowest risk, but the agent is still one click behind the dropdown — it doesn’t solve discoverability for people who never open <em>Need&nbsp;Help?</em>.</p>
+  </section>
+
+  <!-- RECAP -->
+  <section class="recap">
+    <h2>At a glance</h2>
+    <div class="cmp-wrap">
+      <table class="cmp">
+        <thead><tr><th>Option</th><th>Visibility</th><th>Dev effort</th><th>Risk</th><th>Best for</th></tr></thead>
+        <tbody>
+          <tr><td>1 · Toolbar button</td><td class="yes">Always visible</td><td>Low</td><td>Low</td><td>The default fix — ship this</td></tr>
+          <tr><td>2 · Floating pill</td><td class="yes">Always visible</td><td>Low–Med</td><td>Med (overlap)</td><td>Reinforcing #1 across all pages</td></tr>
+          <tr><td>3 · Panel hero card</td><td>One click deep</td><td>Very low</td><td>Very low</td><td>A quick interim win this week</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="foot">Mockup only — colours approximate the Varicon palette (brand orange kept for primary actions; a separate violet used for AI so the two never compete). Toggle your theme to preview light/dark.</p>
+  </section>
+</div>
+
+</body>
+</html>
