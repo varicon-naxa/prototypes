@@ -140,5 +140,21 @@ File margins are net of these indirects.
 2. Budget: split item `2.2.3` total budget exceeds its BOQ amount (~−7% margin).
 3. Budget: item `3.1.2` has text `see 2.1.1` in a Budget ($) cell.
 
+**F3 — Latrobe Valley Depot Consolidation** (Cost Centre / lump sum, off-BOQ indirects)
+1. Budget: indirect "Contract works & public liability insurance" carries Item Code `8.1.1`,
+   which doesn't exist in the BOQ — looks like a mis-keyed mapping rather than a true indirect.
+2. Budget: indirect "Head office overhead allocation (2.5%)" has **no Item Code and a blank
+   Cost Centre** — completely unmappable (note reads "which CC does this go to??").
+3. Budget: "Bank guarantee / performance bond fees" appears **twice** with different amounts
+   ($16,989 vs $20,047) — double counted.
+
+**F6 — Penrith Lakes Access Improvements** (Cost Centre / resource, off-BOQ indirects)
+1. Budget: indirect "Site utes, fuel & tolls" uses invalid resource category **"Overheads"**.
+2. Budget: indirect "Staff accommodation & living away allowance" has its amounts keyed into
+   the **BOQ ($) column** instead of Budget ($) — column shift on a line with no BOQ item.
+3. Budget: indirect "HSEQ advisor site visits & audits" includes a **negative** Budget row
+   (−$4,500 insurance rebate credit).
+
 `_summary.json` holds the same data machine-readable (totals incl. provisional split,
-margins on fixed works, split-item codes for E files, error list per file).
+margins on fixed works, split-item codes for E files, indirect totals for F files,
+error list per file).
