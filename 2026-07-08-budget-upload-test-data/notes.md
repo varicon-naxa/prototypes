@@ -38,7 +38,14 @@ falls out of the resource categories: an item's Labour rows map to the **Labour*
 centre, Plant rows to **Plant & Equipment**, and the remaining rows stay on the trade's
 primary centre. Same for E3/E5/E6. 6–9 items per E file are split; the rest stay single-CC.
 
-## The 26 files
+**Off-BOQ indirect costs (F files, 3 lump sum + 3 resource):** each F Budget sheet ends
+with an "INDIRECT / OFF-BOQ COSTS" block — 5–7 budget lines (contract works insurance,
+bank guarantee fees, PM salary share, site utes, head-office allocation, etc.) that tie
+to a cost centre only, with **no Item Code and no BOQ amount**. They total ~4–6% of the
+fixed-works BOQ, and the cost centres include a custom "Insurances & Bonds" centre.
+File margins are net of these indirects.
+
+## The 32 files
 
 | # | Project | Method | Budget style | BOQ total | incl. prov. | Margin | Errors |
 |---|---------|--------|-------------|-----------|-------------|--------|--------|
