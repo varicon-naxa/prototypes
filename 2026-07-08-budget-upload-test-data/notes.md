@@ -155,6 +155,6 @@ File margins are net of these indirects.
 3. Budget: indirect "HSEQ advisor site visits & audits" includes a **negative** Budget row
    (−$4,500 insurance rebate credit).
 
-`_summary.json` holds the same data machine-readable (totals incl. provisional split,
+`summary.json` holds the same data machine-readable (totals incl. provisional split,
 margins on fixed works, split-item codes for E files, indirect totals for F files,
 error list per file).
