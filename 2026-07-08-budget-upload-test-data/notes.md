@@ -75,6 +75,12 @@ File margins are net of these indirects.
 | E4 | Shellharbour Marina Foreshore | Cost Centre | Lump sum, split CCs | $1.67M | $119k | 14.0% | ⚠ 3 |
 | E5 | Cooma Saleyards Truck Wash | Cost Centre | Resource, split CCs | $3.38M | $133k | 10.8% | ⚠ 3 |
 | E6 | Maitland Showground Carpark | Cost Centre | Resource, split CCs | $2.61M | $74k | 15.5% | — |
+| F1 | Googong Reservoir Access Rd | Cost Centre | Lump sum, off-BOQ | $1.62M | $90k | 16.0% | — |
+| F2 | Toowoomba Enterprise Hub Roads | Cost Centre | Lump sum, off-BOQ | $3.05M | $92k | 12.0% | — |
+| F3 | Latrobe Valley Depot Consolidation | Cost Centre | Lump sum, off-BOQ | $2.36M | $161k | 13.6% | ⚠ 3 |
+| F4 | Bunbury ORR Service Road Pkg | Cost Centre | Resource, off-BOQ | $2.69M | $144k | 18.5% | — |
+| F5 | Mount Barker Sports Hub Stg 1 | Cost Centre | Resource, off-BOQ | $2.27M | $157k | 11.0% | — |
+| F6 | Penrith Lakes Access Improvements | Cost Centre | Resource, off-BOQ | $2.09M | $152k | 16.4% | ⚠ 3 |
 
 \* D5's margin on paper — its deliberate error budgets the whole drainage section
 ~8% above BOQ, so the true clean margin on the remaining sections is higher.
