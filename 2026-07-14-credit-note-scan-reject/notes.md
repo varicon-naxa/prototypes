@@ -10,6 +10,12 @@
 
 Applying the credit pre-fills reference / date / amount from the scan, shows the adjusted amount payable, and moves the bill out of Awaiting Credit → Awaiting Payment.
 
+**No dead ends** — if the right bill isn't in the suggestions:
+
+- **Search all bills** — the search box at the top of step 1 searches every open bill (any supplier / status); paid & rejected are hidden with a count.
+- **Save credit for later** — if the bill isn't in Varicon yet, save the credit note as an *unapplied credit* against the supplier; the user is prompted to apply it when the supplier's next bill arrives.
+- Applying to a bill from a *different* supplier than the credit note shows a double-check warning; applying to a bill not in Awaiting Credit adjusts the total without changing status.
+
 **Escape hatch:** "Not a credit note? Create as bill anyway" for OCR misclassification, plus Discard.
 
 **Try it:** click **Scan bills** → click the dropzone (simulates uploading 3 documents — 2 invoices, 1 credit note) → follow the rejection card's "Apply credit to a bill".
