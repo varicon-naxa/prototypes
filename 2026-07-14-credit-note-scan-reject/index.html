@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Credit Note Detected on Bill Scan</title>
+<!--
+  PROTOTYPE: Credit note detection in the bill upload / scan flow.
+
+  Problem: users upload supplier credit notes through "Scan bills" (or email
+  bill entry). Today the scanner happily creates a bill from the credit note,
+  which double-counts cost, confuses approvers, and breaks the Xero sync.
+  There is also no bridge from the scanned credit note to the bill that is
+  sitting in AWAITING CREDIT waiting for exactly that credit.
+
+  Idea: when the scanner classifies a document as a CREDIT NOTE it
+    1. REJECTS it — no bill is created,
+    2. tells the user exactly why (detection signals: "Credit Note" heading,
+       negative total, reference to an existing invoice),
+    3. prompts them to apply the credit manually to a bill — suggesting
+       bills in AWAITING CREDIT first (best match: same supplier and/or
+       referenced invoice number on the credit note), then other open bills
+       from that supplier.
+  Applying the credit pre-fills ref / date / amount from the scan, shows the
+  adjusted bill total, and moves the bill out of Awaiting Credit.
+
+  Escape hatch: "Not a credit note? Create as bill anyway" for OCR
+  misclassification.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 200px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 16px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 18px; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { padding: 8px 16px; font-size: 13px; color: #f7941d; font-weight: 600; margin-bottom: 4px; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; cursor: pointer; transition: background 0.15s; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: #f7941d; color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.7; }
+
+  /* Main */
+  .main { flex: 1; overflow-y: auto; min-width: 0; padding: 20px 28px; }
+
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .page-header h1 { font-size: 22px; font-weight: 600; }
+  .page-header .header-actions { display: flex; align-items: center; gap: 10px; }
+  .header-pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; color: #444; cursor: pointer; }
+  .header-pill.primary { background: #f7941d; border-color: #f7941d; color: #fff; font-weight: 600; }
+
+  /* Stat strip */
+  .stat-strip { display: flex; gap: 28px; background: #fff; border: 1px solid #e8e8e8; border-radius: 8px; padding: 12px 20px; margin-bottom: 16px; flex-wrap: wrap; }
+  .stat { font-size: 12px; color: #888; }
+  .stat b { display: block; font-size: 15px; color: #222; margin-top: 3px; font-weight: 600; }
+  .stat b.credit { color: #1a5cb8; }
+
+  /* Tabs */
+  .bill-tabs { display: flex; gap: 0; border-bottom: 2px solid #e0e0e0; flex-wrap: wrap; }
+  .bill-tab { padding: 10px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; color: #888; letter-spacing: 0.3px; display: flex; align-items: center; gap: 6px; }
+  .bill-tab.active { color: #f7941d; border-bottom-color: #f7941d; }
+  .bill-tab:hover { color: #f7941d; }
+  .bill-tab .count { font-size: 11px; font-weight: 700; background: #eee; color: #777; border-radius: 10px; padding: 1px 8px; }
+  .bill-tab.active .count { background: #f7941d; color: #fff; }
+
+  /* Scan bills bar */
+  .scan-bar { display: flex; align-items: center; justify-content: center; gap: 8px; background: #f7941d; color: #fff; font-size: 13.5px; font-weight: 700; border-radius: 0 0 8px 8px; padding: 11px; cursor: pointer; margin-bottom: 14px; transition: background 0.15s; }
+  .scan-bar:hover { background: #e8850f; }
+
+  .table-wrapper { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: #fafafa; }
+  th { text-align: left; padding: 11px 14px; font-size: 12px; font-weight: 600; color: #666; border-bottom: 1px solid #e0e0e0; white-space: nowrap; }
+  td { padding: 11px 14px; font-size: 13px; border-bottom: 1px solid #f0f0f0; white-space: nowrap; vertical-align: middle; }
+  tbody tr:hover { background: #fffaf4; }
+  td.right, th.right { text-align: right; }
+  .proj-link { color: #1a73e8; }
+  .sup-name { font-weight: 600; color: #333; }
+  .row-note { font-size: 11.5px; color: #1a5cb8; margin-top: 3px; max-width: 320px; white-space: normal; line-height: 1.35; }
+  .row-note.applied { color: #2e7d32; }
+  .due-red { color: #c62828; }
+
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 12px; white-space: nowrap; }
+  .pill.draft { background: #eee; color: #666; }
+  .pill.awaiting-credit { background: #e8f0fe; color: #1a5cb8; }
+  .pill.awaiting-approval { background: #fff8e1; color: #b28704; }
+  .pill.awaiting-payment { background: #fff3e0; color: #e8850f; }
+  .pill.paid { background: #e8f5e9; color: #2e7d32; }
+  .pill.rejected { background: #fdecea; color: #d93025; }
+
+  .row-updated { animation: rowflash 1.8s ease-out; }
+  @keyframes rowflash { 0% { background: #e6f4ea; } 100% { background: transparent; } }
+  .row-new { animation: rowflash 1.8s ease-out; }
+
+  /* ===== MODALS ===== */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(20,20,35,0.55); z-index: 100; align-items: flex-start; justify-content: center; padding: 40px 24px; overflow-y: auto; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 660px; box-shadow: 0 24px 60px rgba(0,0,0,0.3); }
+  .modal-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #eee; }
+  .modal-head h2 { font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .modal-head .sub { font-size: 12.5px; color: #888; margin-top: 4px; font-weight: 400; }
+  .modal-head .x { background: none; border: none; font-size: 22px; color: #999; cursor: pointer; line-height: 1; }
+  .modal-body { padding: 20px 24px 24px; }
+  .modal-foot { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 16px 24px; border-top: 1px solid #eee; }
+  .modal-foot .spacer { flex: 1; }
+  .btn { padding: 10px 20px; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; border: none; }
+  .btn.primary { background: #f7941d; color: #fff; }
+  .btn.primary:hover { background: #e8850f; }
+  .btn.primary:disabled { background: #f0cfa4; cursor: not-allowed; }
+  .btn.ghost { background: #fff; border: 1px solid #d0d0d0; color: #555; font-weight: 600; }
+  .btn.ghost:hover { background: #f5f5f5; }
+
+  /* dropzone */
+  .dropzone { border: 2px dashed #d8c4a8; border-radius: 12px; background: #fffaf4; padding: 34px 20px; text-align: center; cursor: pointer; transition: all 0.15s; }
+  .dropzone:hover { border-color: #f7941d; background: #fff5e8; }
+  .dropzone .dz-icon { font-size: 30px; margin-bottom: 8px; }
+  .dropzone h3 { font-size: 14.5px; font-weight: 700; color: #444; margin-bottom: 4px; }
+  .dropzone p { font-size: 12.5px; color: #999; }
+  .dz-proto-hint { font-size: 11px; color: #b98a3e; background: #fff3df; border-radius: 6px; display: inline-block; padding: 3px 10px; margin-top: 12px; }
+
+  /* scan file rows */
+  .scan-files { display: flex; flex-direction: column; gap: 10px; }
+  .scan-file { border: 1px solid #e6e6e6; border-radius: 10px; padding: 12px 14px; }
+  .scan-file .sf-top { display: flex; align-items: center; gap: 10px; }
+  .sf-doc { width: 34px; height: 34px; border-radius: 8px; background: #f2f2f2; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .sf-name { font-size: 13px; font-weight: 600; color: #333; }
+  .sf-sub { font-size: 11.5px; color: #999; margin-top: 2px; }
+  .sf-state { margin-left: auto; font-size: 11.5px; font-weight: 700; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .sf-state.scanning { color: #e8850f; }
+  .sf-state.ok { color: #2e7d32; }
+  .sf-state.bad { color: #d93025; }
+  .sf-state.applied { color: #1a5cb8; }
+  .sf-bar { height: 4px; border-radius: 2px; background: #f0e4d3; margin-top: 10px; overflow: hidden; }
+  .sf-bar i { display: block; height: 100%; width: 0; background: #f7941d; border-radius: 2px; transition: width 0.5s ease; }
+  .spinner { width: 12px; height: 12px; border: 2px solid #f0cfa4; border-top-color: #e8850f; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* credit note rejection card */
+  .cn-reject { border: 1.5px solid #f6c7c3; background: #fff7f6; border-radius: 10px; margin-top: 12px; padding: 14px 16px; }
+  .cn-reject .cnr-head { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; color: #b3251c; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .cn-reject p.why { font-size: 13px; color: #5c2a26; line-height: 1.5; }
+  .cn-reject p.why b { color: #b3251c; }
+  .cn-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 2px; }
+  .cn-chip { font-size: 11px; font-weight: 600; background: #fff; border: 1px solid #f0b9b4; color: #8c3a33; border-radius: 12px; padding: 3px 10px; display: inline-flex; align-items: center; gap: 5px; }
+  .cn-hint { display: flex; align-items: flex-start; gap: 8px; background: #e8f0fe; border: 1px solid #cfe0fb; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; color: #1a3a6b; line-height: 1.45; margin-top: 12px; }
+  .cn-hint b { color: #1a5cb8; }
+  .cn-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .btn-apply-credit { display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 6px; background: #1a5cb8; color: #fff; font-size: 12.5px; font-weight: 700; cursor: pointer; border: none; }
+  .btn-apply-credit:hover { background: #14498f; }
+  .btn-small-ghost { padding: 8px 13px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; color: #666; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .btn-small-ghost:hover { background: #f5f5f5; }
+  .link-misclass { font-size: 11.5px; color: #999; text-decoration: underline; cursor: pointer; margin-left: auto; }
+  .link-misclass:hover { color: #666; }
+
+  .cn-applied-note { display: flex; align-items: center; gap: 8px; background: #e8f5e9; border: 1px solid #b7dfb9; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; color: #2e5d31; margin-top: 12px; line-height: 1.4; }
+
+  /* ===== APPLY CREDIT MODAL ===== */
+  .credit-doc-chip { display: flex; align-items: center; gap: 12px; background: #f6f9ff; border: 1px solid #cfe0fb; border-radius: 10px; padding: 12px 14px; margin-bottom: 18px; }
+  .credit-doc-chip .cd-icon { width: 38px; height: 38px; border-radius: 9px; background: #e8f0fe; color: #1a5cb8; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
+  .credit-doc-chip .cd-main b { font-size: 13.5px; color: #1a3a6b; }
+  .credit-doc-chip .cd-main div { font-size: 12px; color: #6b83ab; margin-top: 2px; }
+  .credit-doc-chip .cd-amt { margin-left: auto; font-size: 16px; font-weight: 800; color: #1a5cb8; }
+
+  .sect-label { font-size: 11.5px; font-weight: 800; color: #888; text-transform: uppercase; letter-spacing: 0.6px; margin: 16px 0 8px; display: flex; align-items: center; gap: 7px; }
+  .sect-label:first-of-type { margin-top: 0; }
+  .sect-label .tag-sugg { background: #e8f0fe; color: #1a5cb8; border-radius: 10px; font-size: 10px; padding: 2px 8px; letter-spacing: 0.3px; }
+
+  .bill-option { display: flex; gap: 12px; align-items: flex-start; border: 2px solid #e0e0e0; border-radius: 12px; padding: 13px 15px; cursor: pointer; transition: all 0.15s; background: #fff; margin-bottom: 10px; }
+  .bill-option:hover { border-color: #1a5cb8; background: #f9fbff; }
+  .bill-option.selected { border-color: #1a5cb8; background: #f2f7ff; box-shadow: 0 2px 10px rgba(26,92,184,0.14); }
+  .bill-option .bo-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #ccc; flex-shrink: 0; margin-top: 2px; position: relative; }
+  .bill-option.selected .bo-radio { border-color: #1a5cb8; }
+  .bill-option.selected .bo-radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: #1a5cb8; }
+  .bill-option .bo-main { flex: 1; min-width: 0; }
+  .bill-option h4 { font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .bill-option .bo-sub { font-size: 12px; color: #888; margin-top: 3px; }
+  .bill-option .bo-amt { font-size: 14px; font-weight: 700; color: #333; flex-shrink: 0; margin-top: 1px; }
+  .match-badges { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 7px; }
+  .match-badge { font-size: 10.5px; font-weight: 700; border-radius: 10px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px; }
+  .match-badge.strong { background: #e8f5e9; color: #2e7d32; }
+  .match-badge.med { background: #e8f0fe; color: #1a5cb8; }
+  .no-match-note { font-size: 12px; color: #999; padding: 4px 2px 0; }
+
+  /* step 2 form */
+  .form-group { margin-bottom: 15px; }
+  .form-group label { display: block; font-size: 12.5px; font-weight: 600; color: #555; margin-bottom: 6px; }
+  .form-group label .req { color: #d93025; }
+  .form-group input[type=text], .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid #d0d0d0; border-radius: 7px; font-size: 13.5px; font-family: inherit; outline: none; }
+  .form-group input:focus, .form-group textarea:focus { border-color: #1a5cb8; box-shadow: 0 0 0 3px rgba(26,92,184,0.12); }
+  .form-row { display: flex; gap: 14px; }
+  .form-row .form-group { flex: 1; }
+  .prefill-tag { font-size: 10px; font-weight: 800; background: #e8f0fe; color: #1a5cb8; border-radius: 8px; padding: 2px 7px; margin-left: 6px; letter-spacing: 0.4px; }
+
+  .applying-to { display: flex; align-items: center; gap: 10px; background: #fafafa; border: 1px solid #e8e8e8; border-radius: 10px; padding: 11px 14px; margin-bottom: 16px; font-size: 12.5px; color: #666; }
+  .applying-to b { color: #333; }
+  .applying-to .change { margin-left: auto; font-size: 11.5px; color: #1a73e8; cursor: pointer; text-decoration: underline; flex-shrink: 0; }
+
+  .credit-summary { background: #f6f9ff; border: 1px solid #cfe0fb; border-radius: 10px; padding: 14px 18px; margin: 4px 0 16px; }
+  .credit-summary .cs-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; color: #555; }
+  .credit-summary .cs-row.credit-line { color: #1a5cb8; font-weight: 600; }
+  .credit-summary .cs-row.total { border-top: 1px dashed #b9cff2; margin-top: 6px; padding-top: 9px; font-weight: 700; color: #1a3a6b; font-size: 14.5px; }
+  .after-note { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: #7a6a1a; background: #fffde7; border: 1px solid #f3e6a8; border-radius: 8px; padding: 9px 12px; line-height: 1.45; }
+
+  /* toast */
+  .toast { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(20px); background: #1f2b20; color: #fff; font-size: 13px; padding: 12px 20px; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 10px; opacity: 0; pointer-events: none; transition: all 0.3s ease; z-index: 200; max-width: 90vw; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast .t-ok { color: #7bd88a; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org">Varicon Info</div>
+    <div class="sidebar-item"><span class="icon">▦</span> Dashboard</div>
+    <div class="sidebar-item"><span class="icon">🗂</span> Projects</div>
+    <div class="sidebar-item"><span class="icon">🧾</span> Purchase Orders</div>
+    <div class="sidebar-item active"><span class="icon">📄</span> Bills</div>
+    <div class="sidebar-item"><span class="icon">📋</span> Site Diary</div>
+    <div class="sidebar-item"><span class="icon">⏱</span> Timesheets</div>
+    <div class="sidebar-item"><span class="icon">⚙</span> Settings</div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <h1>Bills</h1>
+      <div class="header-actions">
+        <div class="header-pill">✉ Email bill entry</div>
+        <div class="header-pill">🗒 Scan log</div>
+        <div class="header-pill primary">Add bill manually ▾</div>
+      </div>
+    </div>
+
+    <div class="stat-strip">
+      <div class="stat">Total ⓘ<b>$1,415,180.92</b></div>
+      <div class="stat">Awaiting Credit ⓘ<b class="credit" id="statAwaitingCredit">$4,850.00</b></div>
+      <div class="stat">Awaiting approval ⓘ<b>$10,049.39</b></div>
+      <div class="stat">Awaiting payment ⓘ<b id="statAwaitingPayment">$1,407,326.85</b></div>
+      <div class="stat">Paid ⓘ<b>$-2,277.00</b></div>
+    </div>
+
+    <div class="bill-tabs" id="billTabs">
+      <div class="bill-tab active" data-filter="all">ALL <span class="count" data-count="all">0</span></div>
+      <div class="bill-tab" data-filter="draft">DRAFT <span class="count" data-count="draft">0</span></div>
+      <div class="bill-tab" data-filter="awaiting-credit">AWAITING CREDIT <span class="count" data-count="awaiting-credit">0</span></div>
+      <div class="bill-tab" data-filter="awaiting-approval">AWAITING APPROVAL <span class="count" data-count="awaiting-approval">0</span></div>
+      <div class="bill-tab" data-filter="awaiting-payment">AWAITING PAYMENT <span class="count" data-count="awaiting-payment">0</span></div>
+      <div class="bill-tab" data-filter="paid">PAID <span class="count" data-count="paid">0</span></div>
+      <div class="bill-tab" data-filter="rejected">REJECTED <span class="count" data-count="rejected">0</span></div>
+    </div>
+
+    <div class="scan-bar" onclick="openScanModal()">⛶ &nbsp;Scan bills</div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Supplier</th><th>Ref.</th><th>Project</th><th>Date</th><th>Due Date</th><th>Status</th><th class="right">Total</th>
+          </tr>
+        </thead>
+        <tbody id="billTbody">
+          <tr data-status="awaiting-credit" id="rowBoralCredit">
+            <td><span class="sup-name">Boral</span><div class="row-note" id="boralNote">⏳ Waiting on supplier credit note — over-delivery of 32&nbsp;MPa concrete</div></td>
+            <td>VR19503118</td>
+            <td><span class="proj-link">(VAR004) Bourke Street Roadworks</span></td>
+            <td>Wed, 01/07/2026</td>
+            <td>Fri, 31/07/2026</td>
+            <td><span class="pill awaiting-credit" id="boralPill">Awaiting Credit</span></td>
+            <td class="right" id="boralTotal"><b>$4,850.00</b></td>
+          </tr>
+          <tr data-status="awaiting-approval">
+            <td><span class="sup-name">Boral</span></td>
+            <td>VR19510891</td>
+            <td><span class="proj-link">(VAR004) Bourke Street Roadworks</span></td>
+            <td>Wed, 01/07/2026</td>
+            <td>Thu, 30/07/2026</td>
+            <td><span class="pill awaiting-approval">Awaiting Approval</span></td>
+            <td class="right"><b>$4,031.75</b></td>
+          </tr>
+          <tr data-status="awaiting-payment">
+            <td><span class="sup-name">ABC construction supplier</span></td>
+            <td>Inv002</td>
+            <td><span class="proj-link">(123456) Troughton Rd</span></td>
+            <td>Mon, 11/05/2026</td>
+            <td class="due-red">Sun, 31/05/2026</td>
+            <td><span class="pill awaiting-payment">Awaiting Payment</span></td>
+            <td class="right"><b>$3,520.00</b></td>
+          </tr>
+          <tr data-status="awaiting-payment">
+            <td><span class="sup-name">A1 Asphalting Pty. Ltd.</span></td>
+            <td>TST1101</td>
+            <td><span class="proj-link">(VAR006) Little Collins Roadworks</span></td>
+            <td>Thu, 02/04/2026</td>
+            <td class="due-red">Wed, 08/04/2026</td>
+            <td><span class="pill awaiting-payment">Awaiting Payment</span></td>
+            <td class="right"><b>$38.50</b></td>
+          </tr>
+          <tr data-status="awaiting-payment">
+            <td><span class="sup-name">PowaGroup Global Industries Pty Ltd</span></td>
+            <td>H0974-6</td>
+            <td><span class="proj-link">(C100) Barton</span></td>
+            <td>Mon, 09/03/2026</td>
+            <td class="due-red">Fri, 27/03/2026</td>
+            <td><span class="pill awaiting-payment">Awaiting Payment</span></td>
+            <td class="right"><b>$4,092.79</b></td>
+          </tr>
+          <tr data-status="rejected">
+            <td><span class="sup-name">ADBRI Concrete</span></td>
+            <td>35312</td>
+            <td><span class="proj-link">(C100) Barton</span></td>
+            <td>Wed, 19/11/2025</td>
+            <td class="due-red">Tue, 30/12/2025</td>
+            <td><span class="pill rejected">Rejected</span></td>
+            <td class="right"><b>$2,394.48</b></td>
+          </tr>
+          <tr data-status="paid">
+            <td><span class="sup-name">Rema Tip Top</span></td>
+            <td>7138617</td>
+            <td><span class="proj-link">(C100) Barton</span></td>
+            <td>Thu, 05/03/2026</td>
+            <td>Thu, 30/04/2026</td>
+            <td><span class="pill paid">Paid</span></td>
+            <td class="right"><b>$2,584.83</b></td>
+          </tr>
+          <tr data-status="draft">
+            <td><span class="sup-name">10march</span></td>
+            <td>28501742</td>
+            <td><span class="proj-link">(123456) Troughton Rd</span></td>
+            <td>Mon, 09/03/2026</td>
+            <td class="due-red">Mon, 09/03/2026</td>
+            <td><span class="pill draft">Draft</span></td>
+            <td class="right"><b>$3,207.39</b></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<!-- ===== SCAN MODAL ===== -->
+<div class="modal-overlay" id="scanOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2>⛶ Scan bills</h2>
+        <div class="sub">Upload supplier invoices — we'll read them and create draft bills automatically.</div>
+      </div>
+      <button class="x" onclick="closeScanModal()">×</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="dropzone" id="dropzone" onclick="startScan()">
+        <div class="dz-icon">📥</div>
+        <h3>Drag &amp; drop documents here</h3>
+        <p>or click to browse — PDF, JPG, PNG up to 25 MB each</p>
+        <div class="dz-proto-hint">Prototype: click to simulate uploading 3 documents from today's mail</div>
+      </div>
+
+      <div class="scan-files" id="scanFiles" style="display:none;">
+
+        <div class="scan-file">
+          <div class="sf-top">
+            <div class="sf-doc">📄</div>
+            <div><div class="sf-name">INV-88213.pdf</div><div class="sf-sub" id="sub1">Queued…</div></div>
+            <div class="sf-state scanning" id="state1"><span class="spinner"></span> Scanning</div>
+          </div>
+          <div class="sf-bar"><i id="bar1"></i></div>
+        </div>
+
+        <div class="scan-file" id="creditFileCard">
+          <div class="sf-top">
+            <div class="sf-doc">📄</div>
+            <div><div class="sf-name">CN-00412.pdf</div><div class="sf-sub" id="sub2">Queued…</div></div>
+            <div class="sf-state scanning" id="state2"><span class="spinner"></span> Scanning</div>
+          </div>
+          <div class="sf-bar" id="bar2wrap"><i id="bar2"></i></div>
+
+          <!-- rejection card, revealed after scan -->
+          <div class="cn-reject" id="cnReject" style="display:none;">
+            <div class="cnr-head">⛔ Credit note detected — bill not created</div>
+            <p class="why">This document is a <b>credit note from Boral for −$960.00</b>, not a supplier invoice. Creating a bill from it would double-count the cost, send it through approvals, and post it to Xero as a payable. Credit notes must instead be applied <b>against the bill they relate to</b>.</p>
+            <div class="cn-chips">
+              <span class="cn-chip">🔎 "CREDIT NOTE" document heading</span>
+              <span class="cn-chip">➖ Negative total: −$960.00</span>
+              <span class="cn-chip">🔗 References invoice VR19503118</span>
+            </div>
+            <div class="cn-hint" id="cnHint">
+              <span>💡</span>
+              <div><b>1 bill from Boral is sitting in Awaiting Credit</b> — VR19503118 · $4,850.00 · (VAR004) Bourke Street Roadworks. It looks like this credit note belongs to it.</div>
+            </div>
+            <div class="cn-actions" id="cnActions">
+              <button class="btn-apply-credit" onclick="openCreditModal()">➜ &nbsp;Apply credit to a bill</button>
+              <button class="btn-small-ghost" onclick="discardCredit()">Discard</button>
+              <span class="link-misclass" onclick="alert('Prototype: this escape hatch would create a normal draft bill from the document, for when the scanner misclassifies.')">Not a credit note? Create as bill anyway</span>
+            </div>
+            <div class="cn-applied-note" id="cnAppliedNote" style="display:none;">
+              ✔ &nbsp;<span>Credit <b>CN-00412 (−$960.00)</b> applied to bill <b>VR19503118</b>. The bill has moved out of Awaiting Credit.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="scan-file">
+          <div class="sf-top">
+            <div class="sf-doc">📄</div>
+            <div><div class="sf-name">INV-30981.pdf</div><div class="sf-sub" id="sub3">Queued…</div></div>
+            <div class="sf-state scanning" id="state3"><span class="spinner"></span> Scanning</div>
+          </div>
+          <div class="sf-bar"><i id="bar3"></i></div>
+        </div>
+
+      </div>
+    </div>
+    <div class="modal-foot">
+      <div class="spacer" style="font-size:12px;color:#999;" id="scanSummary"></div>
+      <button class="btn ghost" onclick="closeScanModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== APPLY CREDIT MODAL ===== -->
+<div class="modal-overlay" id="creditOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2>Apply credit note to a bill</h2>
+        <div class="sub" id="creditSub">Step 1 of 2 — choose the bill this credit belongs to</div>
+      </div>
+      <button class="x" onclick="closeCreditModal()">×</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="credit-doc-chip">
+        <div class="cd-icon">🧾</div>
+        <div class="cd-main">
+          <b>CN-00412.pdf · Boral</b>
+          <div>Credit note · dated Fri, 10/07/2026 · references invoice VR19503118</div>
+        </div>
+        <div class="cd-amt">−$960.00</div>
+      </div>
+
+      <!-- STEP 1 -->
+      <div id="creditStep1">
+        <div class="sect-label">Suggested <span class="tag-sugg">bills awaiting credit</span></div>
+
+        <div class="bill-option selected" id="optBoral" onclick="selectBill('optBoral')">
+          <div class="bo-radio"></div>
+          <div class="bo-main">
+            <h4>Boral — VR19503118 <span class="pill awaiting-credit">Awaiting Credit</span></h4>
+            <div class="bo-sub">(VAR004) Bourke Street Roadworks · dated 01/07/2026 · due 31/07/2026</div>
+            <div class="match-badges">
+              <span class="match-badge strong">✔ Referenced on the credit note</span>
+              <span class="match-badge strong">✔ Same supplier</span>
+              <span class="match-badge med">Marked awaiting credit</span>
+            </div>
+          </div>
+          <div class="bo-amt">$4,850.00</div>
+        </div>
+
+        <div class="sect-label">Other open bills from Boral</div>
+
+        <div class="bill-option" id="optBoral2" onclick="selectBill('optBoral2')">
+          <div class="bo-radio"></div>
+          <div class="bo-main">
+            <h4>Boral — VR19510891 <span class="pill awaiting-approval">Awaiting Approval</span></h4>
+            <div class="bo-sub">(VAR004) Bourke Street Roadworks · dated 01/07/2026 · due 30/07/2026</div>
+            <div class="match-badges">
+              <span class="match-badge med">Same supplier</span>
+            </div>
+          </div>
+          <div class="bo-amt">$4,031.75</div>
+        </div>
+
+        <div class="no-match-note">Can't see the right bill? Search all bills, or save the credit note against the supplier to apply later.</div>
+      </div>
+
+      <!-- STEP 2 -->
+      <div id="creditStep2" style="display:none;">
+        <div class="applying-to">
+          Applying to&nbsp;<b id="applyTargetLabel">Boral — VR19503118 · $4,850.00</b>
+          <span class="change" onclick="backToStep1()">Change bill</span>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Credit note reference <span class="req">*</span><span class="prefill-tag">FROM SCAN</span></label>
+            <input type="text" value="CN-00412" id="inpRef">
+          </div>
+          <div class="form-group">
+            <label>Credit date <span class="req">*</span><span class="prefill-tag">FROM SCAN</span></label>
+            <input type="text" value="10/07/2026" id="inpDate">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Credit amount <span class="req">*</span><span class="prefill-tag">FROM SCAN</span></label>
+            <input type="text" value="$960.00" id="inpAmt">
+          </div>
+          <div class="form-group">
+            <label>Reason</label>
+            <input type="text" value="Over-delivery — returned 12 m³ of 32 MPa concrete" id="inpReason">
+          </div>
+        </div>
+
+        <div class="credit-summary">
+          <div class="cs-row"><span>Bill total (VR19503118)</span><span>$4,850.00</span></div>
+          <div class="cs-row credit-line"><span>Credit note CN-00412</span><span>−$960.00</span></div>
+          <div class="cs-row total"><span>Adjusted amount payable</span><span>$3,890.00</span></div>
+        </div>
+
+        <div class="after-note">
+          <span>⚠</span>
+          <div>Applying this credit moves <b>VR19503118</b> out of <b>Awaiting Credit</b> and on to <b>Awaiting Payment</b> at the adjusted amount. The credit note document is attached to the bill and synced to Xero as a supplier credit.</div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" id="creditBackBtn" style="display:none;" onclick="backToStep1()">← Back</button>
+      <div class="spacer"></div>
+      <button class="btn ghost" onclick="closeCreditModal()">Cancel</button>
+      <button class="btn primary" id="creditNextBtn" onclick="creditNext()">Continue →</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span class="t-ok">✔</span><span id="toastMsg"></span></div>
+
+<script>
+  var scanStarted = false;
+  var creditApplied = false;
+  var onStep2 = false;
+
+  /* ---------- tab counts + filtering ---------- */
+  function refreshCounts() {
+    var rows = document.querySelectorAll('#billTbody tr');
+    var counts = { all: rows.length };
+    rows.forEach(function (r) {
+      var s = r.getAttribute('data-status');
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    document.querySelectorAll('[data-count]').forEach(function (el) {
+      el.textContent = counts[el.getAttribute('data-count')] || 0;
+    });
+  }
+  document.getElementById('billTabs').addEventListener('click', function (e) {
+    var tab = e.target.closest('.bill-tab');
+    if (!tab) return;
+    document.querySelectorAll('.bill-tab').forEach(function (t) { t.classList.remove('active'); });
+    tab.classList.add('active');
+    var f = tab.getAttribute('data-filter');
+    document.querySelectorAll('#billTbody tr').forEach(function (r) {
+      r.style.display = (f === 'all' || r.getAttribute('data-status') === f) ? '' : 'none';
+    });
+  });
+  refreshCounts();
+
+  /* ---------- scan modal ---------- */
+  function openScanModal() { document.getElementById('scanOverlay').classList.add('open'); }
+  function closeScanModal() { document.getElementById('scanOverlay').classList.remove('open'); }
+  function openCredit() {}
+
+  function startScan() {
+    if (scanStarted) return;
+    scanStarted = true;
+    document.getElementById('dropzone').style.display = 'none';
+    document.getElementById('scanFiles').style.display = 'flex';
+    ['sub1','sub2','sub3'].forEach(function (id) { document.getElementById(id).textContent = 'Uploading…'; });
+    setTimeout(function(){ document.getElementById('bar1').style.width='60%'; document.getElementById('bar2').style.width='40%'; document.getElementById('bar3').style.width='30%'; }, 150);
+    setTimeout(function(){ document.getElementById('bar1').style.width='100%'; document.getElementById('bar2').style.width='85%'; document.getElementById('bar3').style.width='70%'; }, 900);
+    setTimeout(function(){ finishFile1(); }, 1600);
+    setTimeout(function(){ document.getElementById('bar2').style.width='100%'; document.getElementById('bar3').style.width='100%'; }, 1700);
+    setTimeout(function(){ finishFile3(); }, 2300);
+    setTimeout(function(){ rejectCreditNote(); }, 2600);
+  }
+
+  function finishFile1() {
+    var st = document.getElementById('state1');
+    st.className = 'sf-state ok'; st.innerHTML = '✔ Draft bill created';
+    document.getElementById('sub1').textContent = 'ABC construction supplier · $1,845.90 · (123456) Troughton Rd';
+    addDraftRow('ABC construction supplier', 'INV-88213', '(123456) Troughton Rd', '$1,845.90');
+  }
+  function finishFile3() {
+    var st = document.getElementById('state3');
+    st.className = 'sf-state ok'; st.innerHTML = '✔ Draft bill created';
+    document.getElementById('sub3').textContent = 'ADBRI Concrete · $2,113.20 · (C100) Barton';
+    addDraftRow('ADBRI Concrete', 'INV-30981', '(C100) Barton', '$2,113.20');
+    updateScanSummary();
+  }
+  function rejectCreditNote() {
+    var st = document.getElementById('state2');
+    st.className = 'sf-state bad'; st.innerHTML = '⛔ Rejected — credit note';
+    document.getElementById('sub2').textContent = 'Boral · credit note −$960.00 · references VR19503118';
+    document.getElementById('bar2wrap').style.display = 'none';
+    document.getElementById('cnReject').style.display = 'block';
+    document.getElementById('creditFileCard').style.borderColor = '#f6c7c3';
+    updateScanSummary();
+  }
+  function updateScanSummary() {
+    document.getElementById('scanSummary').textContent = creditApplied
+      ? '2 draft bills created · 1 credit note applied to a bill'
+      : '2 draft bills created · 1 document rejected (credit note)';
+  }
+
+  function addDraftRow(supplier, ref, project, total) {
+    var tr = document.createElement('tr');
+    tr.setAttribute('data-status', 'draft');
+    tr.className = 'row-new';
+    tr.innerHTML = '<td><span class="sup-name">' + supplier + '</span></td><td>' + ref + '</td>' +
+      '<td><span class="proj-link">' + project + '</span></td><td>Tue, 14/07/2026</td><td>-</td>' +
+      '<td><span class="pill draft">Draft</span></td><td class="right"><b>' + total + '</b></td>';
+    var tbody = document.getElementById('billTbody');
+    tbody.insertBefore(tr, tbody.firstChild);
+    refreshCounts();
+  }
+
+  function discardCredit() {
+    var card = document.getElementById('cnReject');
+    card.innerHTML = '<div class="cnr-head" style="color:#888;">Credit note discarded</div><p class="why" style="color:#888;">The document was removed. You can re-upload it any time from the scan log.</p>';
+    card.style.borderColor = '#e0e0e0'; card.style.background = '#fafafa';
+  }
+
+  /* ---------- apply credit modal ---------- */
+  function openCreditModal() { document.getElementById('creditOverlay').classList.add('open'); }
+  function closeCreditModal() { document.getElementById('creditOverlay').classList.remove('open'); }
+
+  var selectedBill = 'optBoral';
+  function selectBill(id) {
+    selectedBill = id;
+    ['optBoral','optBoral2'].forEach(function (o) { document.getElementById(o).classList.toggle('selected', o === id); });
+    document.getElementById('applyTargetLabel').textContent = id === 'optBoral'
+      ? 'Boral — VR19503118 · $4,850.00'
+      : 'Boral — VR19510891 · $4,031.75';
+  }
+
+  function creditNext() {
+    if (!onStep2) {
+      onStep2 = true;
+      document.getElementById('creditStep1').style.display = 'none';
+      document.getElementById('creditStep2').style.display = 'block';
+      document.getElementById('creditSub').textContent = 'Step 2 of 2 — confirm the credit details (pre-filled from the scan)';
+      document.getElementById('creditNextBtn').textContent = 'Apply credit';
+      document.getElementById('creditBackBtn').style.display = 'inline-block';
+    } else {
+      applyCredit();
+    }
+  }
+  function backToStep1() {
+    onStep2 = false;
+    document.getElementById('creditStep2').style.display = 'none';
+    document.getElementById('creditStep1').style.display = 'block';
+    document.getElementById('creditSub').textContent = 'Step 1 of 2 — choose the bill this credit belongs to';
+    document.getElementById('creditNextBtn').textContent = 'Continue →';
+    document.getElementById('creditBackBtn').style.display = 'none';
+  }
+
+  function applyCredit() {
+    creditApplied = true;
+    closeCreditModal();
+
+    // update the Boral bill row
+    var row = document.getElementById('rowBoralCredit');
+    row.setAttribute('data-status', 'awaiting-payment');
+    row.classList.add('row-updated');
+    var pill = document.getElementById('boralPill');
+    pill.className = 'pill awaiting-payment'; pill.textContent = 'Awaiting Payment';
+    document.getElementById('boralTotal').innerHTML = '<b>$3,890.00</b>';
+    var note = document.getElementById('boralNote');
+    note.className = 'row-note applied';
+    note.innerHTML = '✔ Credit CN-00412 applied: −$960.00 (was $4,850.00)';
+
+    // stats + counts
+    document.getElementById('statAwaitingCredit').textContent = '$0.00';
+    document.getElementById('statAwaitingPayment').textContent = '$1,411,216.85';
+    refreshCounts();
+
+    // scan modal card flips to applied
+    var st = document.getElementById('state2');
+    st.className = 'sf-state applied'; st.innerHTML = '✔ Credit applied to VR19503118';
+    document.getElementById('cnActions').style.display = 'none';
+    document.getElementById('cnHint').style.display = 'none';
+    document.getElementById('cnAppliedNote').style.display = 'flex';
+    var cardBox = document.getElementById('cnReject');
+    cardBox.style.borderColor = '#b7dfb9'; cardBox.style.background = '#f6fcf7';
+    updateScanSummary();
+
+    showToast('Credit note CN-00412 (−$960.00) applied to bill VR19503118 — moved to Awaiting Payment');
+  }
+
+  function showToast(msg) {
+    document.getElementById('toastMsg').textContent = msg;
+    var t = document.getElementById('toast');
+    t.classList.add('show');
+    setTimeout(function () { t.classList.remove('show'); }, 4500);
+  }
+</script>
+</body>
+</html>
