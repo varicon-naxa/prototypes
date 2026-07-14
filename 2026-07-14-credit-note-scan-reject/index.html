@@ -24,8 +24,11 @@
   Applying the credit pre-fills ref / date / amount from the scan, shows the
   adjusted bill total, and moves the bill out of Awaiting Credit.
 
-  Escape hatch: "Not a credit note? Create as bill anyway" for OCR
-  misclassification.
+  No dead ends: if the right bill isn't suggested the user can SEARCH ALL
+  open bills, or SAVE THE CREDIT AS UNAPPLIED against the supplier (e.g. the
+  bill hasn't been entered yet) — it's then offered when the supplier's next
+  bill arrives. Escape hatch for OCR misclassification: "Not a credit note?
+  Create as bill anyway".
 -->
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -156,13 +159,19 @@
   .link-misclass:hover { color: #666; }
 
   .cn-applied-note { display: flex; align-items: center; gap: 8px; background: #e8f5e9; border: 1px solid #b7dfb9; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; color: #2e5d31; margin-top: 12px; line-height: 1.4; }
+  .cn-saved-note { display: flex; align-items: center; gap: 8px; background: #e8f0fe; border: 1px solid #cfe0fb; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; color: #1a3a6b; margin-top: 12px; line-height: 1.4; }
 
   /* ===== APPLY CREDIT MODAL ===== */
-  .credit-doc-chip { display: flex; align-items: center; gap: 12px; background: #f6f9ff; border: 1px solid #cfe0fb; border-radius: 10px; padding: 12px 14px; margin-bottom: 18px; }
+  .credit-doc-chip { display: flex; align-items: center; gap: 12px; background: #f6f9ff; border: 1px solid #cfe0fb; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; }
   .credit-doc-chip .cd-icon { width: 38px; height: 38px; border-radius: 9px; background: #e8f0fe; color: #1a5cb8; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
   .credit-doc-chip .cd-main b { font-size: 13.5px; color: #1a3a6b; }
   .credit-doc-chip .cd-main div { font-size: 12px; color: #6b83ab; margin-top: 2px; }
   .credit-doc-chip .cd-amt { margin-left: auto; font-size: 16px; font-weight: 800; color: #1a5cb8; }
+
+  .bill-search { position: relative; margin-bottom: 14px; }
+  .bill-search input { width: 100%; padding: 10px 12px 10px 34px; border: 1px solid #d0d0d0; border-radius: 8px; font-size: 13.5px; font-family: inherit; outline: none; }
+  .bill-search input:focus { border-color: #1a5cb8; box-shadow: 0 0 0 3px rgba(26,92,184,0.12); }
+  .bill-search .si { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: #999; font-size: 14px; }
 
   .sect-label { font-size: 11.5px; font-weight: 800; color: #888; text-transform: uppercase; letter-spacing: 0.6px; margin: 16px 0 8px; display: flex; align-items: center; gap: 7px; }
   .sect-label:first-of-type { margin-top: 0; }
@@ -182,7 +191,17 @@
   .match-badge { font-size: 10.5px; font-weight: 700; border-radius: 10px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px; }
   .match-badge.strong { background: #e8f5e9; color: #2e7d32; }
   .match-badge.med { background: #e8f0fe; color: #1a5cb8; }
-  .no-match-note { font-size: 12px; color: #999; padding: 4px 2px 0; }
+
+  .search-empty { text-align: center; padding: 22px 16px; color: #888; font-size: 13px; line-height: 1.5; background: #fafafa; border: 1px dashed #ddd; border-radius: 10px; }
+  .search-empty b { color: #555; }
+  .search-note { font-size: 11.5px; color: #aaa; margin: -4px 0 10px; }
+
+  /* no-dead-end box */
+  .cant-see { display: flex; align-items: flex-start; gap: 10px; background: #fafafa; border: 1px solid #e8e8e8; border-radius: 10px; padding: 12px 14px; margin-top: 14px; }
+  .cant-see .cs-txt { font-size: 12.5px; color: #666; line-height: 1.5; flex: 1; }
+  .cant-see .cs-txt b { color: #444; }
+  .btn-save-later { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1.5px solid #1a5cb8; border-radius: 6px; background: #fff; color: #1a5cb8; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+  .btn-save-later:hover { background: #1a5cb8; color: #fff; }
 
   /* step 2 form */
   .form-group { margin-bottom: 15px; }
@@ -262,16 +281,16 @@
           </tr>
         </thead>
         <tbody id="billTbody">
-          <tr data-status="awaiting-credit" id="rowBoralCredit">
-            <td><span class="sup-name">Boral</span><div class="row-note" id="boralNote">⏳ Waiting on supplier credit note — over-delivery of 32&nbsp;MPa concrete</div></td>
+          <tr data-status="awaiting-credit" data-ref="VR19503118">
+            <td><span class="sup-name">Boral</span><div class="row-note">⏳ Waiting on supplier credit note — over-delivery of 32&nbsp;MPa concrete</div></td>
             <td>VR19503118</td>
             <td><span class="proj-link">(VAR004) Bourke Street Roadworks</span></td>
             <td>Wed, 01/07/2026</td>
             <td>Fri, 31/07/2026</td>
-            <td><span class="pill awaiting-credit" id="boralPill">Awaiting Credit</span></td>
-            <td class="right" id="boralTotal"><b>$4,850.00</b></td>
+            <td><span class="pill awaiting-credit">Awaiting Credit</span></td>
+            <td class="right"><b>$4,850.00</b></td>
           </tr>
-          <tr data-status="awaiting-approval">
+          <tr data-status="awaiting-approval" data-ref="VR19510891">
             <td><span class="sup-name">Boral</span></td>
             <td>VR19510891</td>
             <td><span class="proj-link">(VAR004) Bourke Street Roadworks</span></td>
@@ -280,7 +299,7 @@
             <td><span class="pill awaiting-approval">Awaiting Approval</span></td>
             <td class="right"><b>$4,031.75</b></td>
           </tr>
-          <tr data-status="awaiting-payment">
+          <tr data-status="awaiting-payment" data-ref="Inv002">
             <td><span class="sup-name">ABC construction supplier</span></td>
             <td>Inv002</td>
             <td><span class="proj-link">(123456) Troughton Rd</span></td>
@@ -289,7 +308,7 @@
             <td><span class="pill awaiting-payment">Awaiting Payment</span></td>
             <td class="right"><b>$3,520.00</b></td>
           </tr>
-          <tr data-status="awaiting-payment">
+          <tr data-status="awaiting-payment" data-ref="TST1101">
             <td><span class="sup-name">A1 Asphalting Pty. Ltd.</span></td>
             <td>TST1101</td>
             <td><span class="proj-link">(VAR006) Little Collins Roadworks</span></td>
@@ -298,7 +317,7 @@
             <td><span class="pill awaiting-payment">Awaiting Payment</span></td>
             <td class="right"><b>$38.50</b></td>
           </tr>
-          <tr data-status="awaiting-payment">
+          <tr data-status="awaiting-payment" data-ref="H0974-6">
             <td><span class="sup-name">PowaGroup Global Industries Pty Ltd</span></td>
             <td>H0974-6</td>
             <td><span class="proj-link">(C100) Barton</span></td>
@@ -307,7 +326,7 @@
             <td><span class="pill awaiting-payment">Awaiting Payment</span></td>
             <td class="right"><b>$4,092.79</b></td>
           </tr>
-          <tr data-status="rejected">
+          <tr data-status="rejected" data-ref="35312">
             <td><span class="sup-name">ADBRI Concrete</span></td>
             <td>35312</td>
             <td><span class="proj-link">(C100) Barton</span></td>
@@ -316,7 +335,7 @@
             <td><span class="pill rejected">Rejected</span></td>
             <td class="right"><b>$2,394.48</b></td>
           </tr>
-          <tr data-status="paid">
+          <tr data-status="paid" data-ref="7138617">
             <td><span class="sup-name">Rema Tip Top</span></td>
             <td>7138617</td>
             <td><span class="proj-link">(C100) Barton</span></td>
@@ -325,7 +344,7 @@
             <td><span class="pill paid">Paid</span></td>
             <td class="right"><b>$2,584.83</b></td>
           </tr>
-          <tr data-status="draft">
+          <tr data-status="draft" data-ref="28501742">
             <td><span class="sup-name">10march</span></td>
             <td>28501742</td>
             <td><span class="proj-link">(123456) Troughton Rd</span></td>
@@ -397,7 +416,10 @@
               <span class="link-misclass" onclick="alert('Prototype: this escape hatch would create a normal draft bill from the document, for when the scanner misclassifies.')">Not a credit note? Create as bill anyway</span>
             </div>
             <div class="cn-applied-note" id="cnAppliedNote" style="display:none;">
-              ✔ &nbsp;<span>Credit <b>CN-00412 (−$960.00)</b> applied to bill <b>VR19503118</b>. The bill has moved out of Awaiting Credit.</span>
+              ✔ &nbsp;<span id="cnAppliedText"></span>
+            </div>
+            <div class="cn-saved-note" id="cnSavedNote" style="display:none;">
+              💾 &nbsp;<span>Saved as an <b>unapplied credit for Boral</b> (−$960.00). It's on the supplier's page and you'll be prompted to apply it when Boral's next bill arrives.</span>
             </div>
           </div>
         </div>
@@ -443,43 +465,33 @@
 
       <!-- STEP 1 -->
       <div id="creditStep1">
-        <div class="sect-label">Suggested <span class="tag-sugg">bills awaiting credit</span></div>
-
-        <div class="bill-option selected" id="optBoral" onclick="selectBill('optBoral')">
-          <div class="bo-radio"></div>
-          <div class="bo-main">
-            <h4>Boral — VR19503118 <span class="pill awaiting-credit">Awaiting Credit</span></h4>
-            <div class="bo-sub">(VAR004) Bourke Street Roadworks · dated 01/07/2026 · due 31/07/2026</div>
-            <div class="match-badges">
-              <span class="match-badge strong">✔ Referenced on the credit note</span>
-              <span class="match-badge strong">✔ Same supplier</span>
-              <span class="match-badge med">Marked awaiting credit</span>
-            </div>
-          </div>
-          <div class="bo-amt">$4,850.00</div>
+        <div class="bill-search">
+          <span class="si">🔍</span>
+          <input type="text" id="billSearch" placeholder="Search all bills — supplier, reference or project…" oninput="searchBills()">
         </div>
 
-        <div class="sect-label">Other open bills from Boral</div>
-
-        <div class="bill-option" id="optBoral2" onclick="selectBill('optBoral2')">
-          <div class="bo-radio"></div>
-          <div class="bo-main">
-            <h4>Boral — VR19510891 <span class="pill awaiting-approval">Awaiting Approval</span></h4>
-            <div class="bo-sub">(VAR004) Bourke Street Roadworks · dated 01/07/2026 · due 30/07/2026</div>
-            <div class="match-badges">
-              <span class="match-badge med">Same supplier</span>
-            </div>
-          </div>
-          <div class="bo-amt">$4,031.75</div>
+        <div id="suggestedLists">
+          <div class="sect-label">Suggested <span class="tag-sugg">bills awaiting credit</span></div>
+          <div id="suggList"></div>
+          <div class="sect-label">Other open bills from Boral</div>
+          <div id="otherList"></div>
         </div>
 
-        <div class="no-match-note">Can't see the right bill? Search all bills, or save the credit note against the supplier to apply later.</div>
+        <div id="searchResults" style="display:none;">
+          <div class="sect-label">Search results <span style="font-weight:600;color:#aaa;text-transform:none;letter-spacing:0;" id="searchCount"></span></div>
+          <div id="searchList"></div>
+        </div>
+
+        <div class="cant-see">
+          <div class="cs-txt"><b>Can't find the right bill?</b> It may not be in Varicon yet — e.g. the invoice hasn't arrived or been scanned. Save the credit against the supplier and apply it later; nothing is lost.</div>
+          <button class="btn-save-later" onclick="saveCreditForLater()">💾 Save credit for later</button>
+        </div>
       </div>
 
       <!-- STEP 2 -->
       <div id="creditStep2" style="display:none;">
         <div class="applying-to">
-          Applying to&nbsp;<b id="applyTargetLabel">Boral — VR19503118 · $4,850.00</b>
+          Applying to&nbsp;<b id="applyTargetLabel"></b>
           <span class="change" onclick="backToStep1()">Change bill</span>
         </div>
 
@@ -505,14 +517,14 @@
         </div>
 
         <div class="credit-summary">
-          <div class="cs-row"><span>Bill total (VR19503118)</span><span>$4,850.00</span></div>
+          <div class="cs-row"><span id="csBillLabel"></span><span id="csBillTotal"></span></div>
           <div class="cs-row credit-line"><span>Credit note CN-00412</span><span>−$960.00</span></div>
-          <div class="cs-row total"><span>Adjusted amount payable</span><span>$3,890.00</span></div>
+          <div class="cs-row total"><span>Adjusted amount payable</span><span id="csAdjusted"></span></div>
         </div>
 
         <div class="after-note">
           <span>⚠</span>
-          <div>Applying this credit moves <b>VR19503118</b> out of <b>Awaiting Credit</b> and on to <b>Awaiting Payment</b> at the adjusted amount. The credit note document is attached to the bill and synced to Xero as a supplier credit.</div>
+          <div id="afterNoteText"></div>
         </div>
       </div>
 
@@ -531,7 +543,27 @@
 <script>
   var scanStarted = false;
   var creditApplied = false;
+  var creditSaved = false;
   var onStep2 = false;
+  var CREDIT_AMT = 960.00;
+
+  /* ---------- bill data (mirrors the table; open bills are selectable targets) ---------- */
+  var BILLS = [
+    { ref: 'VR19503118', supplier: 'Boral', project: '(VAR004) Bourke Street Roadworks', status: 'awaiting-credit', statusLabel: 'Awaiting Credit', amount: 4850.00, dated: '01/07/2026', due: '31/07/2026',
+      badges: [{cls:'strong', txt:'✔ Referenced on the credit note'}, {cls:'strong', txt:'✔ Same supplier'}, {cls:'med', txt:'Marked awaiting credit'}] },
+    { ref: 'VR19510891', supplier: 'Boral', project: '(VAR004) Bourke Street Roadworks', status: 'awaiting-approval', statusLabel: 'Awaiting Approval', amount: 4031.75, dated: '01/07/2026', due: '30/07/2026',
+      badges: [{cls:'med', txt:'Same supplier'}] },
+    { ref: 'Inv002', supplier: 'ABC construction supplier', project: '(123456) Troughton Rd', status: 'awaiting-payment', statusLabel: 'Awaiting Payment', amount: 3520.00, dated: '11/05/2026', due: '31/05/2026', badges: [] },
+    { ref: 'TST1101', supplier: 'A1 Asphalting Pty. Ltd.', project: '(VAR006) Little Collins Roadworks', status: 'awaiting-payment', statusLabel: 'Awaiting Payment', amount: 38.50, dated: '02/04/2026', due: '08/04/2026', badges: [] },
+    { ref: 'H0974-6', supplier: 'PowaGroup Global Industries Pty Ltd', project: '(C100) Barton', status: 'awaiting-payment', statusLabel: 'Awaiting Payment', amount: 4092.79, dated: '09/03/2026', due: '27/03/2026', badges: [] },
+    { ref: '28501742', supplier: '10march', project: '(123456) Troughton Rd', status: 'draft', statusLabel: 'Draft', amount: 3207.39, dated: '09/03/2026', due: '09/03/2026', badges: [] }
+  ];
+  var CLOSED_COUNT = 2; // paid + rejected bills excluded from credit targets
+
+  var selectedRef = 'VR19503118';
+
+  function fmt(n) { return '$' + n.toLocaleString('en-AU', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+  function billByRef(ref) { return BILLS.filter(function (b) { return b.ref === ref; })[0]; }
 
   /* ---------- tab counts + filtering ---------- */
   function refreshCounts() {
@@ -560,7 +592,6 @@
   /* ---------- scan modal ---------- */
   function openScanModal() { document.getElementById('scanOverlay').classList.add('open'); }
   function closeScanModal() { document.getElementById('scanOverlay').classList.remove('open'); }
-  function openCredit() {}
 
   function startScan() {
     if (scanStarted) return;
@@ -580,13 +611,13 @@
     var st = document.getElementById('state1');
     st.className = 'sf-state ok'; st.innerHTML = '✔ Draft bill created';
     document.getElementById('sub1').textContent = 'ABC construction supplier · $1,845.90 · (123456) Troughton Rd';
-    addDraftRow('ABC construction supplier', 'INV-88213', '(123456) Troughton Rd', '$1,845.90');
+    addDraftRow('ABC construction supplier', 'INV-88213', '(123456) Troughton Rd', 1845.90);
   }
   function finishFile3() {
     var st = document.getElementById('state3');
     st.className = 'sf-state ok'; st.innerHTML = '✔ Draft bill created';
     document.getElementById('sub3').textContent = 'ADBRI Concrete · $2,113.20 · (C100) Barton';
-    addDraftRow('ADBRI Concrete', 'INV-30981', '(C100) Barton', '$2,113.20');
+    addDraftRow('ADBRI Concrete', 'INV-30981', '(C100) Barton', 2113.20);
     updateScanSummary();
   }
   function rejectCreditNote() {
@@ -599,20 +630,23 @@
     updateScanSummary();
   }
   function updateScanSummary() {
-    document.getElementById('scanSummary').textContent = creditApplied
-      ? '2 draft bills created · 1 credit note applied to a bill'
-      : '2 draft bills created · 1 document rejected (credit note)';
+    var tail = '1 document rejected (credit note)';
+    if (creditApplied) tail = '1 credit note applied to a bill';
+    if (creditSaved) tail = '1 credit note saved to supplier';
+    document.getElementById('scanSummary').textContent = '2 draft bills created · ' + tail;
   }
 
-  function addDraftRow(supplier, ref, project, total) {
+  function addDraftRow(supplier, ref, project, amount) {
     var tr = document.createElement('tr');
     tr.setAttribute('data-status', 'draft');
+    tr.setAttribute('data-ref', ref);
     tr.className = 'row-new';
     tr.innerHTML = '<td><span class="sup-name">' + supplier + '</span></td><td>' + ref + '</td>' +
       '<td><span class="proj-link">' + project + '</span></td><td>Tue, 14/07/2026</td><td>-</td>' +
-      '<td><span class="pill draft">Draft</span></td><td class="right"><b>' + total + '</b></td>';
+      '<td><span class="pill draft">Draft</span></td><td class="right"><b>' + fmt(amount) + '</b></td>';
     var tbody = document.getElementById('billTbody');
     tbody.insertBefore(tr, tbody.firstChild);
+    BILLS.push({ ref: ref, supplier: supplier, project: project, status: 'draft', statusLabel: 'Draft', amount: amount, dated: '14/07/2026', due: '-', badges: [] });
     refreshCounts();
   }
 
@@ -623,26 +657,68 @@
   }
 
   /* ---------- apply credit modal ---------- */
-  function openCreditModal() { document.getElementById('creditOverlay').classList.add('open'); }
+  function openCreditModal() {
+    renderSuggested();
+    document.getElementById('creditOverlay').classList.add('open');
+  }
   function closeCreditModal() { document.getElementById('creditOverlay').classList.remove('open'); }
 
-  var selectedBill = 'optBoral';
-  function selectBill(id) {
-    selectedBill = id;
-    ['optBoral','optBoral2'].forEach(function (o) { document.getElementById(o).classList.toggle('selected', o === id); });
-    document.getElementById('applyTargetLabel').textContent = id === 'optBoral'
-      ? 'Boral — VR19503118 · $4,850.00'
-      : 'Boral — VR19510891 · $4,031.75';
+  function optionHtml(b) {
+    var badges = b.badges.map(function (bd) { return '<span class="match-badge ' + bd.cls + '">' + bd.txt + '</span>'; }).join('');
+    return '<div class="bill-option' + (b.ref === selectedRef ? ' selected' : '') + '" data-opt="' + b.ref + '" onclick="selectBill(\'' + b.ref + '\')">' +
+      '<div class="bo-radio"></div><div class="bo-main">' +
+      '<h4>' + b.supplier + ' — ' + b.ref + ' <span class="pill ' + b.status + '">' + b.statusLabel + '</span></h4>' +
+      '<div class="bo-sub">' + b.project + ' · dated ' + b.dated + ' · due ' + b.due + '</div>' +
+      (badges ? '<div class="match-badges">' + badges + '</div>' : '') +
+      '</div><div class="bo-amt">' + fmt(b.amount) + '</div></div>';
+  }
+
+  function renderSuggested() {
+    document.getElementById('suggList').innerHTML = BILLS.filter(function (b) { return b.status === 'awaiting-credit'; }).map(optionHtml).join('');
+    document.getElementById('otherList').innerHTML = BILLS.filter(function (b) { return b.supplier === 'Boral' && b.status !== 'awaiting-credit'; }).map(optionHtml).join('');
+  }
+
+  function searchBills() {
+    var q = document.getElementById('billSearch').value.trim().toLowerCase();
+    var showSearch = q.length > 0;
+    document.getElementById('suggestedLists').style.display = showSearch ? 'none' : 'block';
+    document.getElementById('searchResults').style.display = showSearch ? 'block' : 'none';
+    if (!showSearch) { renderSuggested(); return; }
+    var matches = BILLS.filter(function (b) {
+      return (b.supplier + ' ' + b.ref + ' ' + b.project).toLowerCase().indexOf(q) !== -1;
+    });
+    document.getElementById('searchCount').textContent = '— ' + matches.length + ' open bill' + (matches.length === 1 ? '' : 's') + ' (' + CLOSED_COUNT + ' paid/rejected hidden)';
+    if (matches.length === 0) {
+      document.getElementById('searchList').innerHTML = '<div class="search-empty"><b>No open bills match "' + q.replace(/</g,'&lt;') + '"</b><br>The bill may not be in Varicon yet — use <b>Save credit for later</b> below and apply it when the bill arrives.</div>';
+    } else {
+      document.getElementById('searchList').innerHTML = matches.map(optionHtml).join('');
+    }
+  }
+
+  function selectBill(ref) {
+    selectedRef = ref;
+    document.querySelectorAll('[data-opt]').forEach(function (el) {
+      el.classList.toggle('selected', el.getAttribute('data-opt') === ref);
+    });
   }
 
   function creditNext() {
     if (!onStep2) {
+      var b = billByRef(selectedRef);
       onStep2 = true;
       document.getElementById('creditStep1').style.display = 'none';
       document.getElementById('creditStep2').style.display = 'block';
       document.getElementById('creditSub').textContent = 'Step 2 of 2 — confirm the credit details (pre-filled from the scan)';
       document.getElementById('creditNextBtn').textContent = 'Apply credit';
       document.getElementById('creditBackBtn').style.display = 'inline-block';
+      document.getElementById('applyTargetLabel').textContent = b.supplier + ' — ' + b.ref + ' · ' + fmt(b.amount);
+      document.getElementById('csBillLabel').textContent = 'Bill total (' + b.ref + ')';
+      document.getElementById('csBillTotal').textContent = fmt(b.amount);
+      document.getElementById('csAdjusted').textContent = fmt(b.amount - CREDIT_AMT);
+      document.getElementById('afterNoteText').innerHTML = b.status === 'awaiting-credit'
+        ? 'Applying this credit moves <b>' + b.ref + '</b> out of <b>Awaiting Credit</b> and on to <b>Awaiting Payment</b> at the adjusted amount. The credit note document is attached to the bill and synced to Xero as a supplier credit.'
+        : 'The total of <b>' + b.ref + '</b> is reduced by the credit — its status (<b>' + b.statusLabel + '</b>) doesn\'t change. The credit note document is attached to the bill and synced to Xero as a supplier credit.'
+        + (b.supplier !== 'Boral' ? ' <b>Note:</b> this bill is from <b>' + b.supplier + '</b>, but the credit note was issued by <b>Boral</b> — double-check before applying.' : '');
     } else {
       applyCredit();
     }
@@ -657,36 +733,61 @@
   }
 
   function applyCredit() {
+    var b = billByRef(selectedRef);
     creditApplied = true;
     closeCreditModal();
 
-    // update the Boral bill row
-    var row = document.getElementById('rowBoralCredit');
-    row.setAttribute('data-status', 'awaiting-payment');
-    row.classList.add('row-updated');
-    var pill = document.getElementById('boralPill');
-    pill.className = 'pill awaiting-payment'; pill.textContent = 'Awaiting Payment';
-    document.getElementById('boralTotal').innerHTML = '<b>$3,890.00</b>';
-    var note = document.getElementById('boralNote');
-    note.className = 'row-note applied';
-    note.innerHTML = '✔ Credit CN-00412 applied: −$960.00 (was $4,850.00)';
-
-    // stats + counts
-    document.getElementById('statAwaitingCredit').textContent = '$0.00';
-    document.getElementById('statAwaitingPayment').textContent = '$1,411,216.85';
+    // update the target bill row
+    var row = document.querySelector('#billTbody tr[data-ref="' + b.ref + '"]');
+    if (row) {
+      row.classList.add('row-updated');
+      var totalCell = row.querySelector('td.right');
+      totalCell.innerHTML = '<b>' + fmt(b.amount - CREDIT_AMT) + '</b>';
+      var supCell = row.querySelector('td:first-child');
+      var note = supCell.querySelector('.row-note');
+      if (!note) { note = document.createElement('div'); supCell.appendChild(note); }
+      note.className = 'row-note applied';
+      note.innerHTML = '✔ Credit CN-00412 applied: −' + fmt(CREDIT_AMT) + ' (was ' + fmt(b.amount) + ')';
+      if (b.status === 'awaiting-credit') {
+        row.setAttribute('data-status', 'awaiting-payment');
+        var pill = row.querySelector('.pill');
+        pill.className = 'pill awaiting-payment'; pill.textContent = 'Awaiting Payment';
+        document.getElementById('statAwaitingCredit').textContent = '$0.00';
+        document.getElementById('statAwaitingPayment').textContent = '$1,411,216.85';
+      }
+    }
+    b.amount = b.amount - CREDIT_AMT;
+    if (b.status === 'awaiting-credit') { b.status = 'awaiting-payment'; b.statusLabel = 'Awaiting Payment'; }
     refreshCounts();
 
     // scan modal card flips to applied
     var st = document.getElementById('state2');
-    st.className = 'sf-state applied'; st.innerHTML = '✔ Credit applied to VR19503118';
+    st.className = 'sf-state applied'; st.innerHTML = '✔ Credit applied to ' + b.ref;
     document.getElementById('cnActions').style.display = 'none';
     document.getElementById('cnHint').style.display = 'none';
+    document.getElementById('cnAppliedText').innerHTML = 'Credit <b>CN-00412 (−$960.00)</b> applied to bill <b>' + b.ref + '</b>.' + (row && row.getAttribute('data-status') === 'awaiting-payment' ? ' The bill has moved out of Awaiting Credit.' : '');
     document.getElementById('cnAppliedNote').style.display = 'flex';
     var cardBox = document.getElementById('cnReject');
     cardBox.style.borderColor = '#b7dfb9'; cardBox.style.background = '#f6fcf7';
     updateScanSummary();
 
-    showToast('Credit note CN-00412 (−$960.00) applied to bill VR19503118 — moved to Awaiting Payment');
+    showToast('Credit note CN-00412 (−$960.00) applied to bill ' + b.ref);
+  }
+
+  function saveCreditForLater() {
+    creditSaved = true;
+    closeCreditModal();
+
+    var st = document.getElementById('state2');
+    st.className = 'sf-state applied'; st.innerHTML = '💾 Saved as unapplied credit — Boral';
+    document.getElementById('cnActions').style.display = 'none';
+    document.getElementById('cnHint').style.display = 'none';
+    document.getElementById('cnSavedNote').style.display = 'flex';
+    var cardBox = document.getElementById('cnReject');
+    cardBox.style.borderColor = '#cfe0fb'; cardBox.style.background = '#f6f9ff';
+    updateScanSummary();
+
+    showToast('Credit note CN-00412 (−$960.00) saved as unapplied credit for Boral — you\'ll be prompted when their next bill arrives');
   }
 
   function showToast(msg) {
