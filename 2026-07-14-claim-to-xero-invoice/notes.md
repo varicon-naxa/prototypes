@@ -21,7 +21,7 @@ client has actually paid.
    timeline update.
 
 ## Notes / assumptions
-- Invoicing is only available once the claim is approved (button lives where Submit/Approve were)
+- Invoicing is hard-gated on claim approval — the Xero button is disabled (with a lock hint) until Approve is clicked
 - One invoice line per claim (summary line). Line-per-claim-item could be a toggle later.
 - Payment sync via Xero webhooks (invoice.updated → status PAID), no polling
 - Partial payments not covered in this prototype — would show as "Partially Paid" with amount remaining
