@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Claim to Xero Invoice</title>
+<!--
+  Prototype: Create a Xero invoice directly from an approved progress claim.
+  - Invoice pre-filled with claim number, claim period and project; amount = claim total; claim PDF attached
+  - Once the invoice is paid in Xero, the payment syncs back and the claim shows as PAID
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6f8; color: #333; font-size: 13px; }
+
+  /* ===== Project header ===== */
+  .proj-header { background: #fff; border-bottom: 1px solid #e0e0e0; padding: 10px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .proj-header .ph-left { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: #333; }
+  .proj-header .ph-left .caret { color: #888; font-size: 11px; }
+  .proj-header .ph-right { display: flex; align-items: center; gap: 10px; }
+  .ph-btn { padding: 7px 14px; border: 1px solid #d0d0d0; background: #fff; border-radius: 4px; font-size: 12px; font-weight: 600; color: #444; cursor: default; }
+  .v-brand { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #333; font-size: 13px; }
+  .v-brand .v-mark { width: 22px; height: 22px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 4px; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; }
+
+  /* ===== Module tabs ===== */
+  .proj-tabs { display: flex; background: #eef1f5; border-bottom: 1px solid #dfe3e8; padding: 0 24px; overflow-x: auto; align-items: center; }
+  .proj-tab { padding: 11px 22px; font-size: 12.5px; font-weight: 500; color: #555; cursor: default; white-space: nowrap; background: #eef1f5; border-right: 1px solid #dfe3e8; }
+  .proj-tab.active { background: #1a2b56; color: #fff; font-weight: 600; }
+
+  /* ===== Claim header row ===== */
+  .claim-topbar { background: #fff; padding: 12px 24px 4px; display: flex; align-items: center; justify-content: space-between; }
+  .claim-topbar .ct-left { display: flex; align-items: center; gap: 10px; }
+  .claim-topbar .back { color: #555; font-size: 16px; cursor: default; }
+  .claim-topbar h3 { font-size: 14px; font-weight: 600; }
+  .status-badge { padding: 3px 12px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .3px; }
+  .st-approved { background: #e8f5e9; color: #2e7d32; }
+  .st-invoiced { background: #e3f2fd; color: #1565c0; }
+  .st-paid { background: #1b8a3a; color: #fff; }
+
+  /* ===== Claim meta (invoice ref / period) ===== */
+  .claim-meta { background: #fff; padding: 8px 24px 14px; display: flex; gap: 36px; border-bottom: 1px solid #eceff2; }
+  .cm-field .cm-label { font-size: 11.5px; color: #555; font-weight: 600; margin-bottom: 5px; }
+  .cm-field .cm-value { font-size: 12.5px; color: #333; padding: 7px 12px; border: 1px solid #dcdfe4; border-radius: 4px; background: #fafbfc; min-width: 190px; }
+
+  /* ===== Workflow stepper ===== */
+  .stepper-wrap { background: #fff; padding: 14px 24px; border-bottom: 1px solid #eceff2; }
+  .stepper { display: flex; align-items: center; max-width: 760px; }
+  .step { display: flex; align-items: center; gap: 7px; }
+  .step .dot { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; background: #e6e9ee; color: #9aa2ad; border: 2px solid #e6e9ee; }
+  .step .lbl { font-size: 11.5px; font-weight: 600; color: #9aa2ad; white-space: nowrap; }
+  .step.done .dot { background: #1b8a3a; border-color: #1b8a3a; color: #fff; }
+  .step.done .lbl { color: #1b8a3a; }
+  .step.current .dot { background: #fff; border-color: #f7941d; color: #f7941d; }
+  .step.current .lbl { color: #f7941d; }
+  .step-line { flex: 1; height: 2px; background: #e6e9ee; margin: 0 10px; min-width: 24px; }
+  .step-line.done { background: #1b8a3a; }
+
+  /* ===== Content ===== */
+  .content { padding: 16px 24px 110px; }
+
+  /* Progress summary bar */
+  .prog-wrap { margin-bottom: 14px; }
+  .prog-bar { height: 8px; border-radius: 4px; display: flex; overflow: hidden; background: #e0e3e8; margin-bottom: 10px; }
+  .prog-bar .p-prev { background: #4caf50; }
+  .prog-bar .p-curr { background: #f7941d; }
+  .prog-legend { display: flex; gap: 40px; align-items: center; }
+  .pl-item { display: flex; gap: 8px; align-items: flex-start; }
+  .pl-dot { width: 11px; height: 11px; border-radius: 50%; margin-top: 3px; }
+  .pl-item .pl-name { font-size: 12px; color: #666; }
+  .pl-item .pl-amt { font-size: 14px; font-weight: 700; color: #222; margin-top: 2px; }
+
+  /* ===== Xero sync panel ===== */
+  .xero-panel { display: none; background: #fff; border: 1px solid #d7e6f0; border-left: 4px solid #13b5ea; border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+  .xero-panel.show { display: block; }
+  .xp-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid #eef3f7; }
+  .xp-head .xp-title { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; color: #1a2b56; }
+  .xero-logo { width: 30px; height: 30px; border-radius: 50%; background: #13b5ea; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; letter-spacing: .2px; }
+  .xp-status { padding: 4px 12px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+  .xs-awaiting { background: #fff3e0; color: #e65100; }
+  .xs-paid { background: #1b8a3a; color: #fff; }
+  .xp-body { display: flex; flex-wrap: wrap; gap: 0; }
+  .xp-fields { flex: 1.4; min-width: 380px; padding: 14px 18px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px 20px; align-content: start; }
+  .xp-field .f-label { font-size: 10.5px; color: #8a929c; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; }
+  .xp-field .f-value { font-size: 13px; font-weight: 600; color: #222; margin-top: 3px; }
+  .xp-field .f-value a { color: #1565c0; text-decoration: none; }
+  .attach-chip { display: inline-flex; align-items: center; gap: 6px; background: #f1f6fa; border: 1px solid #d7e6f0; border-radius: 14px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: #1a2b56; margin-top: 3px; }
+  .paid-box { display: none; grid-column: 1 / -1; background: #edf7ef; border: 1px solid #bfe3c6; border-radius: 6px; padding: 10px 14px; font-size: 12.5px; color: #1b5e20; }
+  .paid-box.show { display: block; }
+  .paid-box b { font-weight: 700; }
+  .xp-timeline { flex: 1; min-width: 300px; border-left: 1px solid #eef3f7; padding: 14px 18px; }
+  .xp-timeline h5 { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: #8a929c; margin-bottom: 10px; }
+  .tl-item { display: flex; gap: 10px; padding-bottom: 12px; position: relative; }
+  .tl-item:not(:last-child)::before { content: ''; position: absolute; left: 8px; top: 20px; bottom: 0; width: 2px; background: #e6edf3; }
+  .tl-icon { width: 18px; height: 18px; border-radius: 50%; background: #13b5ea; color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 1; }
+  .tl-icon.green { background: #1b8a3a; }
+  .tl-icon.orange { background: #f7941d; }
+  .tl-item .tl-text { font-size: 12px; color: #333; line-height: 1.4; }
+  .tl-item .tl-time { font-size: 11px; color: #98a0aa; }
+  .xp-actions { padding: 10px 18px 14px; display: flex; gap: 10px; align-items: center; border-top: 1px solid #eef3f7; }
+  .xp-link { font-size: 12.5px; font-weight: 700; color: #13b5ea; cursor: pointer; text-decoration: none; }
+  .xp-link:hover { text-decoration: underline; }
+  .demo-btn { margin-left: auto; padding: 7px 14px; border: 1.5px dashed #b48ce0; color: #7b3ff2; background: #faf7ff; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .demo-btn:hover { background: #f3ebff; }
+  .demo-btn:disabled { opacity: .5; cursor: default; }
+
+  /* Section tabs (CONTRACT / VARIATION / RETENTION) */
+  .sec-tabs { display: flex; gap: 4px; border-bottom: 1px solid #e0e3e8; margin-bottom: 12px; }
+  .sec-tab { padding: 9px 14px; font-size: 12px; font-weight: 700; color: #888; letter-spacing: .3px; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: default; }
+  .sec-tab.active { color: #f7941d; border-bottom-color: #f7941d; }
+
+  /* Table */
+  .tbl-wrap { background: #fff; border: 1px solid #e0e3e8; border-radius: 6px; overflow-x: auto; }
+  table.claim { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 1080px; }
+  table.claim thead th { background: #eef0f4; color: #555; font-size: 11.5px; font-weight: 600; text-align: left; padding: 10px 10px; border-bottom: 1px solid #dfe3e8; white-space: nowrap; }
+  table.claim thead th.r, table.claim td.r { text-align: right; }
+  table.claim td { padding: 12px 10px; border-bottom: 1px solid #f0f2f5; vertical-align: middle; }
+  table.claim tbody tr:last-child td { border-bottom: none; }
+  .desc { font-weight: 600; color: #333; }
+  .pcell { display: flex; align-items: center; gap: 8px; }
+  .mini-bar { width: 64px; height: 6px; background: #e6e9ee; border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+  .mini-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg,#66bb6a,#4caf50); }
+  .mini-fill.has-curr { background: linear-gradient(90deg,#4caf50 var(--prev), #f7941d var(--prev)); }
+  .val-box { display: inline-block; padding: 6px 10px; border: 1px solid #dcdfe4; border-radius: 4px; background: #fafbfc; font-size: 12px; min-width: 70px; text-align: right; color: #333; }
+  .val-box.curr { background: #fff8f0; border-color: #f3c98b; font-weight: 700; }
+  .muted { color: #999; }
+
+  /* ===== Bottom bar ===== */
+  .bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #e0e0e0; box-shadow: 0 -2px 10px rgba(0,0,0,.07); display: flex; align-items: center; gap: 22px; padding: 10px 24px; z-index: 50; }
+  .bb-stat .bb-label { font-size: 10px; color: #98a0aa; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; }
+  .bb-stat .bb-val { font-size: 13.5px; font-weight: 700; color: #222; margin-top: 2px; }
+  .bb-sep { width: 1px; height: 30px; background: #e6e9ee; }
+  .bb-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .bb-total { text-align: right; margin-right: 6px; }
+  .bb-total .bb-label { color: #f7941d; }
+  .btn { padding: 10px 20px; border-radius: 5px; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid transparent; }
+  .btn-ghost { background: #fff; border-color: #cfd4da; color: #555; }
+  .btn-ghost:hover { background: #f5f6f8; }
+  .btn-xero { background: #13b5ea; color: #fff; display: flex; align-items: center; gap: 8px; }
+  .btn-xero:hover { background: #0fa3d3; }
+  .btn-xero .xmini { width: 18px; height: 18px; border-radius: 50%; background: #fff; color: #13b5ea; font-size: 7.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .btn-xero:disabled { background: #a9dff2; cursor: default; }
+
+  /* ===== Modals ===== */
+  .overlay { position: fixed; inset: 0; background: rgba(16,24,40,.5); display: none; align-items: flex-start; justify-content: center; z-index: 100; overflow-y: auto; padding: 40px 16px; }
+  .overlay.show { display: flex; }
+  .modal { background: #fff; border-radius: 12px; width: 100%; max-width: 640px; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  .modal-head { display: flex; align-items: center; gap: 12px; padding: 18px 24px; border-bottom: 1px solid #eef0f3; }
+  .modal-head h3 { font-size: 16px; font-weight: 700; color: #1a2b56; flex: 1; }
+  .modal-close { font-size: 20px; color: #98a0aa; cursor: pointer; border: none; background: none; }
+  .modal-body { padding: 20px 24px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; margin-bottom: 16px; }
+  .fg-full { grid-column: 1 / -1; }
+  .ffield .ff-label { font-size: 11px; font-weight: 700; color: #667085; margin-bottom: 5px; text-transform: uppercase; letter-spacing: .3px; }
+  .ffield .ff-label .auto { color: #13b5ea; font-weight: 700; text-transform: none; letter-spacing: 0; }
+  .ffield input, .ffield select { width: 100%; padding: 9px 12px; border: 1px solid #d0d5dd; border-radius: 6px; font-size: 13px; color: #222; background: #fff; }
+  .ffield input[readonly] { background: #f8fafc; color: #444; }
+  .amount-card { background: #f8fafc; border: 1px solid #e4e9ef; border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; }
+  .amount-card .ar { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; color: #444; }
+  .amount-card .ar.total { border-top: 2px solid #1a2b56; margin-top: 6px; padding-top: 10px; font-size: 15px; font-weight: 800; color: #1a2b56; }
+  .attach-row { display: flex; align-items: center; gap: 10px; background: #f1f6fa; border: 1px solid #d7e6f0; border-radius: 8px; padding: 11px 14px; margin-bottom: 6px; }
+  .attach-row .pdf-ico { width: 32px; height: 32px; background: #e53935; color: #fff; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; }
+  .attach-row .att-name { font-weight: 700; font-size: 12.5px; color: #1a2b56; }
+  .attach-row .att-sub { font-size: 11.5px; color: #7a8593; }
+  .attach-row .att-check { margin-left: auto; font-size: 12px; color: #1b8a3a; font-weight: 700; }
+  .modal-foot { padding: 16px 24px; border-top: 1px solid #eef0f3; display: flex; justify-content: flex-end; gap: 10px; }
+
+  /* Creating spinner state */
+  .creating { display: none; padding: 36px 24px; text-align: center; }
+  .creating.show { display: block; }
+  .spin { width: 42px; height: 42px; border: 4px solid #d7ecf5; border-top-color: #13b5ea; border-radius: 50%; margin: 0 auto 16px; animation: rot 0.8s linear infinite; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  .creating .c-step { font-size: 13px; color: #555; font-weight: 600; }
+
+  /* ===== Xero mock view ===== */
+  .xero-modal { max-width: 720px; }
+  .xm-chrome { background: #00263e; color: #fff; padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-radius: 12px 12px 0 0; }
+  .xm-chrome .xero-logo { width: 26px; height: 26px; font-size: 9px; }
+  .xm-chrome .xm-title { font-size: 13px; font-weight: 600; }
+  .xm-chrome .xm-org { margin-left: auto; font-size: 12px; color: #9fc3d8; }
+  .xm-body { padding: 22px 26px; }
+  .xm-inv-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+  .xm-inv-head h2 { font-size: 20px; color: #00263e; }
+  .xm-inv-head .xm-sub { font-size: 12.5px; color: #667085; margin-top: 4px; line-height: 1.6; }
+  .xm-badge { padding: 5px 14px; border-radius: 4px; font-size: 11.5px; font-weight: 800; letter-spacing: .5px; }
+  .xm-awaiting { background: #fff3e0; color: #e65100; border: 1px solid #ffd699; }
+  .xm-paid { background: #1b8a3a; color: #fff; }
+  .xm-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 8px; }
+  .xm-table th { text-align: left; padding: 8px 10px; background: #f2f6f8; color: #445; font-size: 11px; text-transform: uppercase; letter-spacing: .3px; }
+  .xm-table td { padding: 10px; border-bottom: 1px solid #eef2f5; }
+  .xm-table .r { text-align: right; }
+  .xm-totals { margin-left: auto; width: 260px; font-size: 13px; }
+  .xm-totals .ar { display: flex; justify-content: space-between; padding: 4px 10px; }
+  .xm-totals .ar.total { font-weight: 800; font-size: 14.5px; border-top: 2px solid #00263e; padding-top: 8px; margin-top: 4px; color: #00263e; }
+  .xm-att { margin-top: 16px; }
+  .xm-att h5 { font-size: 11px; text-transform: uppercase; color: #8a929c; margin-bottom: 8px; letter-spacing: .4px; }
+  .xm-pay-note { display: none; margin-top: 16px; background: #edf7ef; border: 1px solid #bfe3c6; border-radius: 6px; padding: 12px 14px; font-size: 12.5px; color: #1b5e20; }
+  .xm-pay-note.show { display: block; }
+
+  /* Toast */
+  .toast-wrap { position: fixed; top: 18px; right: 18px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
+  .toast { background: #1a2b56; color: #fff; padding: 12px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.25); display: flex; align-items: center; gap: 10px; animation: slidein .25s ease; max-width: 420px; }
+  .toast.green { background: #1b8a3a; }
+  .toast.blue { background: #13b5ea; }
+  @keyframes slidein { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .annotation { margin-top: 22px; padding: 16px 20px; background: #fff8f0; border: 1px solid #f7941d; border-radius: 8px; font-size: 12.5px; line-height: 1.65; max-width: 860px; }
+  .annotation h3 { color: #f7941d; font-size: 13.5px; margin-bottom: 8px; }
+  .annotation ul { margin-left: 18px; }
+</style>
+</head>
+<body>
+
+<!-- Project header -->
+<div class="proj-header">
+  <div class="ph-left"><span style="color:#888">&#8249;</span> (VAR003) House Slab Construction <span class="caret">&#9662;</span></div>
+  <div class="ph-right">
+    <div class="ph-btn">Initial Data Upload</div>
+    <div class="ph-btn">+</div>
+    <div class="v-brand"><span class="v-mark">V</span> Varicon Info <span class="caret" style="color:#888">&#9662;</span></div>
+  </div>
+</div>
+
+<!-- Module tabs -->
+<div class="proj-tabs">
+  <div class="proj-tab">Dashboard</div>
+  <div class="proj-tab">Budget Overview</div>
+  <div class="proj-tab">Daily Cost Tracking</div>
+  <div class="proj-tab active">Claim</div>
+  <div class="proj-tab">Variation Register</div>
+  <div class="proj-tab">Report</div>
+  <div class="proj-tab">File Manager</div>
+  <div class="proj-tab">Site Diary</div>
+  <div class="proj-tab">Daywork Record</div>
+</div>
+
+<!-- Claim header -->
+<div class="claim-topbar">
+  <div class="ct-left">
+    <span class="back">&#8592;</span>
+    <h3>Claim # 2</h3>
+    <span class="status-badge st-approved" id="claimBadge">APPROVED</span>
+  </div>
+</div>
+
+<div class="claim-meta">
+  <div class="cm-field">
+    <div class="cm-label">Invoice Ref</div>
+    <div class="cm-value" id="invRefField" style="color:#98a0aa">— created on invoicing —</div>
+  </div>
+  <div class="cm-field">
+    <div class="cm-label">Claim Period</div>
+    <div class="cm-value">&#128197;&nbsp; 01 Jun 2026 – 30 Jun 2026</div>
+  </div>
+  <div class="cm-field">
+    <div class="cm-label">Project</div>
+    <div class="cm-value">(VAR003) House Slab Construction</div>
+  </div>
+</div>
+
+<!-- Workflow stepper -->
+<div class="stepper-wrap">
+  <div class="stepper" id="stepper">
+    <div class="step done" data-step="draft"><div class="dot">&#10003;</div><div class="lbl">Draft</div></div>
+    <div class="step-line done"></div>
+    <div class="step done" data-step="submitted"><div class="dot">&#10003;</div><div class="lbl">Submitted</div></div>
+    <div class="step-line done"></div>
+    <div class="step done" data-step="approved"><div class="dot">&#10003;</div><div class="lbl">Approved</div></div>
+    <div class="step-line" id="line-invoice"></div>
+    <div class="step current" data-step="invoiced"><div class="dot">4</div><div class="lbl">Invoiced in Xero</div></div>
+    <div class="step-line" id="line-paid"></div>
+    <div class="step" data-step="paid"><div class="dot">5</div><div class="lbl">Paid</div></div>
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- Progress summary -->
+  <div class="prog-wrap">
+    <div class="prog-bar">
+      <div class="p-prev" style="width:16.7%"></div>
+      <div class="p-curr" style="width:28.2%"></div>
+    </div>
+    <div class="prog-legend">
+      <div class="pl-item"><div class="pl-dot" style="background:#4caf50"></div><div><div class="pl-name">Previously Claimed</div><div class="pl-amt">$ 8,700.00</div></div></div>
+      <div class="pl-item"><div class="pl-dot" style="background:#f7941d"></div><div><div class="pl-name">Current Claim</div><div class="pl-amt">$ 14,650.00</div></div></div>
+      <div class="pl-item"><div class="pl-dot" style="background:#1a2b56"></div><div><div class="pl-name">Claim to Date</div><div class="pl-amt">$ 23,350.00</div></div></div>
+      <div class="pl-item"><div class="pl-dot" style="background:#b8bec7"></div><div><div class="pl-name">Remaining</div><div class="pl-amt">$ 28,650.00</div></div></div>
+    </div>
+  </div>
+
+  <!-- Xero sync panel (appears after invoice creation) -->
+  <div class="xero-panel" id="xeroPanel">
+    <div class="xp-head">
+      <div class="xp-title"><div class="xero-logo">xero</div> Xero Invoice</div>
+      <span class="xp-status xs-awaiting" id="xeroStatus">AWAITING PAYMENT</span>
+    </div>
+    <div class="xp-body">
+      <div class="xp-fields">
+        <div class="xp-field"><div class="f-label">Invoice Number</div><div class="f-value"><a href="#" onclick="openXeroView();return false;">INV-0187</a></div></div>
+        <div class="xp-field"><div class="f-label">Reference</div><div class="f-value">Claim #2 — (VAR003) House Slab Construction</div></div>
+        <div class="xp-field"><div class="f-label">Contact</div><div class="f-value">Hamilton Property Group</div></div>
+        <div class="xp-field"><div class="f-label">Claim Period</div><div class="f-value">01 Jun – 30 Jun 2026</div></div>
+        <div class="xp-field"><div class="f-label">Amount (incl. GST)</div><div class="f-value">$ 16,115.00</div></div>
+        <div class="xp-field"><div class="f-label">Due Date</div><div class="f-value">13 Aug 2026</div></div>
+        <div class="xp-field" style="grid-column:1/-1"><div class="f-label">Attachment</div><span class="attach-chip">&#128206; Progress-Claim-2-VAR003.pdf</span></div>
+        <div class="paid-box" id="paidBox">
+          &#10003;&nbsp; <b>Payment received in Xero</b> — $ 16,115.00 on <b>14 Jul 2026</b> via bank transfer (Ref: HPG-8842).
+          Synced back to Varicon automatically.
+        </div>
+      </div>
+      <div class="xp-timeline">
+        <h5>Activity</h5>
+        <div id="timeline"></div>
+      </div>
+    </div>
+    <div class="xp-actions">
+      <a class="xp-link" onclick="openXeroView()">View invoice in Xero &#8599;</a>
+      <button class="demo-btn" id="simulatePayBtn" onclick="simulatePayment()">&#9889; Demo: client pays invoice in Xero</button>
+    </div>
+  </div>
+
+  <!-- Section tabs -->
+  <div class="sec-tabs">
+    <div class="sec-tab active">CONTRACT</div>
+    <div class="sec-tab">VARIATION</div>
+    <div class="sec-tab">RETENTION</div>
+  </div>
+
+  <!-- Claim table -->
+  <div class="tbl-wrap">
+    <table class="claim">
+      <thead>
+        <tr>
+          <th>Ref</th><th>Description</th><th>Unit</th><th class="r">Qty</th><th class="r">Total Sum</th>
+          <th>Progress</th><th class="r">Qty Complete</th><th class="r">Work Progress</th>
+          <th class="r">Previous Amt</th><th class="r">Current %</th><th class="r">Current Qty</th><th class="r">Claim Amount</th>
+        </tr>
+      </thead>
+      <tbody id="tblBody"></tbody>
+    </table>
+  </div>
+
+  <div class="annotation">
+    <h3>Prototype — Claim &#8594; Xero invoice &#8594; paid sync</h3>
+    <ul>
+      <li><b>Create Invoice in Xero</b> (bottom bar) is available once the claim is approved. The invoice is pre-filled from the claim: <b>reference = claim # + project</b>, <b>claim period</b> carried onto the invoice, <b>amount = claim total</b> (+ GST), and the <b>Progress Claim PDF is attached</b>.</li>
+      <li>After creation the claim shows the live Xero status (invoice #, due date, awaiting payment).</li>
+      <li>When the client pays in Xero, a <b>webhook syncs the payment back</b> — the claim flips to <b>PAID</b> with the payment date, amount and reference. No manual reconciliation in Varicon.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Bottom bar -->
+<div class="bottom-bar">
+  <div class="bb-stat"><div class="bb-label">Contract Works</div><div class="bb-val">$ 14,650.00</div></div>
+  <div class="bb-sep"></div>
+  <div class="bb-stat"><div class="bb-label">Variations</div><div class="bb-val">$ 0.00</div></div>
+  <div class="bb-sep"></div>
+  <div class="bb-stat"><div class="bb-label">Total Claim</div><div class="bb-val">$ 14,650.00</div></div>
+  <div class="bb-sep"></div>
+  <div class="bb-stat"><div class="bb-label">Retention Held</div><div class="bb-val">$ 0.00</div></div>
+  <div class="bb-right">
+    <div class="bb-total"><div class="bb-label">Total Claim — Retention</div><div class="bb-val">$ 14,650.00</div></div>
+    <button class="btn btn-ghost">Download PDF</button>
+    <button class="btn btn-xero" id="createInvBtn" onclick="openInvoiceModal()"><span class="xmini">xero</span> Create Invoice in Xero</button>
+  </div>
+</div>
+
+<!-- ===== Create invoice modal ===== -->
+<div class="overlay" id="invModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="xero-logo">xero</div>
+      <h3>Create Invoice in Xero</h3>
+      <button class="modal-close" onclick="closeInvoiceModal()">&times;</button>
+    </div>
+    <div id="invForm">
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="ffield fg-full">
+            <div class="ff-label">Reference <span class="auto">&#8226; auto-filled from claim</span></div>
+            <input readonly value="Claim #2 — (VAR003) House Slab Construction">
+          </div>
+          <div class="ffield">
+            <div class="ff-label">Claim Period <span class="auto">&#8226; auto</span></div>
+            <input readonly value="01 Jun 2026 – 30 Jun 2026">
+          </div>
+          <div class="ffield">
+            <div class="ff-label">Xero Contact</div>
+            <select><option>Hamilton Property Group</option><option>BuildRight Developments</option><option>+ New contact…</option></select>
+          </div>
+          <div class="ffield">
+            <div class="ff-label">Invoice Date</div>
+            <input type="text" value="14 Jul 2026">
+          </div>
+          <div class="ffield">
+            <div class="ff-label">Due Date</div>
+            <input type="text" value="13 Aug 2026">
+          </div>
+          <div class="ffield">
+            <div class="ff-label">Xero Account</div>
+            <select><option>200 — Sales / Progress Claims</option><option>210 — Construction Revenue</option></select>
+          </div>
+          <div class="ffield">
+            <div class="ff-label">Branding Theme</div>
+            <select><option>Standard Tax Invoice</option><option>Construction Claims</option></select>
+          </div>
+        </div>
+
+        <div class="amount-card">
+          <div class="ar"><span>Progress Claim #2 — contract works completed 01–30 Jun 2026</span><span>$ 14,650.00</span></div>
+          <div class="ar"><span>GST (10%)</span><span>$ 1,465.00</span></div>
+          <div class="ar total"><span>Invoice Total</span><span>$ 16,115.00</span></div>
+        </div>
+
+        <div class="attach-row">
+          <div class="pdf-ico">PDF</div>
+          <div>
+            <div class="att-name">Progress-Claim-2-VAR003.pdf</div>
+            <div class="att-sub">Full claim breakdown — attached to the Xero invoice</div>
+          </div>
+          <div class="att-check">&#10003; Attach</div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeInvoiceModal()">Cancel</button>
+        <button class="btn btn-xero" onclick="createInvoice()"><span class="xmini">xero</span> Create Invoice</button>
+      </div>
+    </div>
+    <div class="creating" id="creating">
+      <div class="spin"></div>
+      <div class="c-step" id="creatingStep">Creating invoice in Xero…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Xero mock view ===== -->
+<div class="overlay" id="xeroViewModal">
+  <div class="modal xero-modal">
+    <div class="xm-chrome">
+      <div class="xero-logo">xero</div>
+      <div class="xm-title">Business &#8250; Invoices &#8250; INV-0187</div>
+      <div class="xm-org">Varicon Constructions Pty Ltd</div>
+      <button class="modal-close" style="color:#9fc3d8" onclick="closeXeroView()">&times;</button>
+    </div>
+    <div class="xm-body">
+      <div class="xm-inv-head">
+        <div>
+          <h2>Tax Invoice INV-0187</h2>
+          <div class="xm-sub">
+            To: <b>Hamilton Property Group</b><br>
+            Reference: <b>Claim #2 — (VAR003) House Slab Construction</b><br>
+            Claim Period: 01 Jun 2026 – 30 Jun 2026 &nbsp;&#8226;&nbsp; Issued 14 Jul 2026 &nbsp;&#8226;&nbsp; Due 13 Aug 2026
+          </div>
+        </div>
+        <span class="xm-badge xm-awaiting" id="xmBadge">AWAITING PAYMENT</span>
+      </div>
+      <table class="xm-table">
+        <thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">GST</th><th class="r">Amount AUD</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Progress Claim #2 — contract works completed 01–30 Jun 2026<br><span style="color:#8a929c;font-size:11.5px">Project: (VAR003) House Slab Construction</span></td>
+            <td class="r">1.00</td><td class="r">14,650.00</td><td class="r">10%</td><td class="r">14,650.00</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="xm-totals">
+        <div class="ar"><span>Subtotal</span><span>14,650.00</span></div>
+        <div class="ar"><span>Total GST 10%</span><span>1,465.00</span></div>
+        <div class="ar total"><span>Total AUD</span><span>16,115.00</span></div>
+        <div class="ar" id="xmAmountDue" style="font-weight:700;color:#e65100"><span>Amount Due</span><span>16,115.00</span></div>
+      </div>
+      <div class="xm-att">
+        <h5>Attachments (1)</h5>
+        <span class="attach-chip">&#128206; Progress-Claim-2-VAR003.pdf &nbsp;(214 KB)</span>
+      </div>
+      <div class="xm-pay-note" id="xmPayNote">
+        &#10003;&nbsp; Payment of <b>$16,115.00</b> received on <b>14 Jul 2026</b> — bank transfer, Ref HPG-8842. Invoice fully paid.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+// ---- Claim line items (claim #2, approved) ----
+const items = [
+  { ref:'01', desc:'Excavation and Site Preparation', unit:'m3', qty:50,  sum:7500,  prevPct:40, currPct:30 },
+  { ref:'02', desc:'Gravel Base Layer (100mm thickness)', unit:'m3', qty:30, sum:6000, prevPct:20, currPct:40 },
+  { ref:'03', desc:'Vapor Barrier (Plastic Sheeting)', unit:'m3', qty:200, sum:10000, prevPct:20, currPct:30 },
+  { ref:'04', desc:'Reinforcement Steel (Rebar)', unit:'MT', qty:1.5, sum:12000, prevPct:0, currPct:50 },
+  { ref:'05', desc:'Concrete (25 MPa strength)', unit:'m3', qty:25, sum:12500, prevPct:0, currPct:0 },
+  { ref:'06', desc:'Formwork (Timber or Metal)', unit:'m', qty:80, sum:4000, prevPct:0, currPct:25 },
+];
+const fmt = n => '$ ' + n.toLocaleString('en-AU', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+document.getElementById('tblBody').innerHTML = items.map(it => {
+  const totalPct = it.prevPct + it.currPct;
+  const prevAmt = it.sum * it.prevPct/100, currAmt = it.sum * it.currPct/100;
+  const qtyComplete = it.qty * totalPct/100, currQty = it.qty * it.currPct/100;
+  const prevShare = totalPct ? (it.prevPct/totalPct*100) : 0;
+  return `<tr>
+    <td>${it.ref}</td>
+    <td class="desc">${it.desc}</td>
+    <td>${it.unit}</td>
+    <td class="r">${it.qty}</td>
+    <td class="r">${fmt(it.sum)}</td>
+    <td><div class="pcell"><div class="mini-bar"><div class="mini-fill ${it.currPct?'has-curr':''}" style="width:${totalPct}%; --prev:${prevShare}%"></div></div><span class="val-box">${totalPct.toFixed(2)} %</span></div></td>
+    <td class="r">${qtyComplete.toLocaleString('en-AU',{maximumFractionDigits:2})}</td>
+    <td class="r"><span class="val-box">${fmt(prevAmt + currAmt)}</span></td>
+    <td class="r">${fmt(prevAmt)}</td>
+    <td class="r"><span class="val-box curr">${it.currPct.toFixed(2)} %</span></td>
+    <td class="r">${currQty.toLocaleString('en-AU',{maximumFractionDigits:2})}</td>
+    <td class="r"><span class="val-box curr">${fmt(currAmt)}</span></td>
+  </tr>`;
+}).join('');
+
+// ---- Workflow ----
+const $ = id => document.getElementById(id);
+
+function toast(msg, cls) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + (cls||'');
+  t.innerHTML = msg;
+  $('toasts').appendChild(t);
+  setTimeout(() => { t.style.transition = 'opacity .4s'; t.style.opacity = 0; setTimeout(() => t.remove(), 400); }, 4200);
+}
+
+function addTimeline(text, time, iconCls, icon) {
+  const div = document.createElement('div');
+  div.className = 'tl-item';
+  div.innerHTML = `<div class="tl-icon ${iconCls||''}">${icon||'&#10003;'}</div><div><div class="tl-text">${text}</div><div class="tl-time">${time}</div></div>`;
+  $('timeline').prepend(div);
+}
+
+function openInvoiceModal() { $('invModal').classList.add('show'); }
+function closeInvoiceModal() { $('invModal').classList.remove('show'); }
+
+function createInvoice() {
+  $('invForm').style.display = 'none';
+  $('creating').classList.add('show');
+  const steps = ['Creating invoice in Xero…', 'Generating Progress Claim PDF…', 'Attaching PDF to invoice…', 'Done!'];
+  let i = 0;
+  const iv = setInterval(() => {
+    i++;
+    if (i < steps.length) { $('creatingStep').textContent = steps[i]; return; }
+    clearInterval(iv);
+    closeInvoiceModal();
+    $('invForm').style.display = '';
+    $('creating').classList.remove('show');
+    $('creatingStep').textContent = steps[0];
+    onInvoiceCreated();
+  }, 750);
+}
+
+function onInvoiceCreated() {
+  // Claim status → Invoiced
+  const badge = $('claimBadge');
+  badge.textContent = 'INVOICED';
+  badge.className = 'status-badge st-invoiced';
+  $('invRefField').textContent = 'INV-0187';
+  $('invRefField').style.color = '#333';
+
+  // Stepper: invoiced done, paid current
+  setStep('invoiced');
+
+  // Xero panel
+  $('xeroPanel').classList.add('show');
+  addTimeline('Invoice <b>INV-0187</b> created in Xero from Claim #2 — $16,115.00 incl. GST', '14 Jul 2026, 9:42 AM — by Alec (Varicon)', '', '&#8593;');
+  addTimeline('<b>Progress-Claim-2-VAR003.pdf</b> attached to invoice', '14 Jul 2026, 9:42 AM', '', '&#128206;');
+  addTimeline('Invoice status in Xero: <b>Awaiting Payment</b> — due 13 Aug 2026', '14 Jul 2026, 9:42 AM', 'orange', '&#8987;');
+
+  // Bottom bar: swap button
+  const btn = $('createInvBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="xmini">xero</span> Invoiced — INV-0187';
+
+  toast('&#10003; Invoice INV-0187 created in Xero with claim PDF attached', 'blue');
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function setStep(stepName) {
+  const order = ['draft','submitted','approved','invoiced','paid'];
+  const idx = order.indexOf(stepName);
+  document.querySelectorAll('#stepper .step').forEach(s => {
+    const i = order.indexOf(s.dataset.step);
+    s.classList.remove('current','done');
+    if (i <= idx) { s.classList.add('done'); s.querySelector('.dot').innerHTML = '&#10003;'; }
+    else if (i === idx+1) s.classList.add('current');
+  });
+  if (idx >= 3) $('line-invoice').classList.add('done');
+  if (idx >= 4) $('line-paid').classList.add('done');
+}
+
+function simulatePayment() {
+  const btn = $('simulatePayBtn');
+  btn.disabled = true;
+  btn.textContent = 'Waiting for Xero webhook…';
+  setTimeout(() => {
+    // Webhook received → mark paid
+    toast('&#9889; Xero webhook: payment received on INV-0187', 'blue');
+    setTimeout(() => {
+      const badge = $('claimBadge');
+      badge.textContent = 'PAID';
+      badge.className = 'status-badge st-paid';
+      $('xeroStatus').textContent = 'PAID';
+      $('xeroStatus').className = 'xp-status xs-paid';
+      $('paidBox').classList.add('show');
+      setStep('paid');
+      addTimeline('Payment <b>$16,115.00</b> received — bank transfer, Ref HPG-8842', '14 Jul 2026, 2:17 PM — synced from Xero', 'green', '$');
+      addTimeline('Claim #2 marked as <b>Paid</b> in Varicon', '14 Jul 2026, 2:17 PM — automatic', 'green');
+      // Xero mock view updates
+      $('xmBadge').textContent = 'PAID';
+      $('xmBadge').className = 'xm-badge xm-paid';
+      $('xmAmountDue').innerHTML = '<span>Amount Due</span><span>0.00</span>';
+      $('xmAmountDue').style.color = '#1b8a3a';
+      $('xmPayNote').classList.add('show');
+      btn.style.display = 'none';
+      toast('&#10003; Claim #2 marked as PAID — synced from Xero', 'green');
+    }, 900);
+  }, 1200);
+}
+
+function openXeroView() { $('xeroViewModal').classList.add('show'); }
+function closeXeroView() { $('xeroViewModal').classList.remove('show'); }
+
+// close modals on overlay click
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.remove('show'); }));
+</script>
+</body>
+</html>
