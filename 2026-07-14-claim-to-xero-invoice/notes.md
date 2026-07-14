@@ -6,8 +6,9 @@ There's no way to raise the invoice in Xero from the claim, and no visibility in
 client has actually paid.
 
 ## Workflow prototyped (starting from the Claim screen)
-1. **Approved claim** — claim #2 on (VAR003) House Slab Construction, current claim $14,650.00
-2. **Create Invoice in Xero** (bottom action bar) — modal pre-fills everything from the claim:
+1. **Submitted claim** — claim #2 on (VAR003) House Slab Construction, current claim $14,650.00.
+   **Invoicing is locked** ("Available once the claim is approved") until the claim is approved.
+2. **Approve Claim** → unlocks **Create Invoice in Xero** (bottom action bar) — modal pre-fills everything from the claim:
    - **Reference** = Claim number + Project: `Claim #2 — (VAR003) House Slab Construction`
    - **Claim Period** = 01 Jun – 30 Jun 2026 (carried onto the invoice)
    - Xero contact, invoice/due date, account code
