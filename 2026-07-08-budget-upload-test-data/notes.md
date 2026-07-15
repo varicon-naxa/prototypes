@@ -170,6 +170,20 @@ each category row is duplicated per zone with portioned BOQ/Budget.
 3. Budget: indirect "HSEQ advisor site visits & audits" includes a **negative** Budget row
    (−$4,500 insurance rebate credit).
 
+**G3 — Dubbo Bridge St Reconstruction** (Cost Centre / lump sum, zones)
+1. Budget: item `3.1.3` first split row assigned to **"Zone E"** — not in the project
+   zone list (Project Wide, Zone A–D).
+2. Budget: zone-split rows for item `4.1.2` sum to $5,100 **less** than its BOQ line amount.
+3. Budget: item `4.1.4` last split row uses zone label **"Zn C"** — near-duplicate
+   abbreviation of "Zone C".
+
+**G6 — Bendigo GovHub External Works** (Cost Centre / resource, zones)
+1. Budget: item `3.1.6` has the same resource category twice in the **same zone**
+   (Zone B) — double-counted instead of split across zones.
+2. Budget: zone-split item `4.1.1` total budget exceeds its BOQ amount (~−6% margin).
+3. Budget: item `4.2.3` resource rows have a **blank Zone** while the rest of the
+   file is zoned.
+
 `summary.json` holds the same data machine-readable (totals incl. provisional split,
 margins on fixed works, split-item codes for E files, indirect totals for F files,
-error list per file).
+zone-split item codes for G files, error list per file).
