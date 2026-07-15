@@ -90,6 +90,12 @@ each category row is duplicated per zone with portioned BOQ/Budget.
 | F4 | Bunbury ORR Service Road Pkg | Cost Centre | Resource, off-BOQ | $2.69M | $144k | 18.5% | — |
 | F5 | Mount Barker Sports Hub Stg 1 | Cost Centre | Resource, off-BOQ | $2.27M | $157k | 11.0% | — |
 | F6 | Penrith Lakes Access Improvements | Cost Centre | Resource, off-BOQ | $2.09M | $152k | 16.4% | ⚠ 3 |
+| G1 | Armidale Airport Precinct Roads | Cost Centre | Lump sum, zones | $2.38M | $165k | 13.0% | — |
+| G2 | Geelong Nth Growth Area Trunk | Cost Centre | Lump sum, zones | $2.87M | $84k | 17.5% | — |
+| G3 | Dubbo Bridge St Reconstruction | Cost Centre | Lump sum, zones | $3.97M | $149k | 15.0% | ⚠ 3 |
+| G4 | Sunshine Coast Foreshore Stg 2 | Cost Centre | Resource, zones | $1.60M | $132k | 12.0% | — |
+| G5 | Albury Logistics Terminal | Cost Centre | Resource, zones | $2.51M | $121k | 19.0% | — |
+| G6 | Bendigo GovHub External Works | Cost Centre | Resource, zones | $1.69M | $80k | 12.6% | ⚠ 3 |
 
 \* D5's margin on paper — its deliberate error budgets the whole drainage section
 ~8% above BOQ, so the true clean margin on the remaining sections is higher.
