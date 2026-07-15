@@ -45,7 +45,16 @@ to a cost centre only, with **no Item Code and no BOQ amount**. They total ~4–
 fixed-works BOQ, and the cost centres include a custom "Insurances & Bonds" centre.
 File margins are net of these indirects.
 
-## The 32 files
+**Zones (G files, 3 lump sum + 3 resource):** the Budget sheet gains a **Zone** column
+next to Cost Centre, using the prototype's zone list (`Project Wide`, `Zone A`–`Zone D`).
+The mapping is many-to-many both ways: a cost centre's items spread across several zones
+(e.g. Earthworks across Zones A/B/C) and each zone collects multiple cost centres
+(e.g. Zone B holding Earthworks, Drainage and Pavements). Prelims and provisional-adjacent
+lines sit in Project Wide. 5–8 items per file are split across 2–3 zones — in lump-sum
+files as repeated rows with portioned amounts and a "50% Zone A" note; in resource files
+each category row is duplicated per zone with portioned BOQ/Budget.
+
+## The 38 files
 
 | # | Project | Method | Budget style | BOQ total | incl. prov. | Margin | Errors |
 |---|---------|--------|-------------|-----------|-------------|--------|--------|
