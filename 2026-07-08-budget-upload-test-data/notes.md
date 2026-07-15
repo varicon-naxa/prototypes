@@ -100,7 +100,7 @@ each category row is duplicated per zone with portioned BOQ/Budget.
 \* D5's margin on paper — its deliberate error budgets the whole drainage section
 ~8% above BOQ, so the true clean margin on the remaining sections is higher.
 
-## Deliberate errors (12 files, 3 each)
+## Deliberate errors (14 files, 3 each)
 
 **A4 — Old Pacific Hwy Culverts** (WBS / lump sum)
 1. BOQ: duplicate Item Code `2.1.1` — same code on two rows.
