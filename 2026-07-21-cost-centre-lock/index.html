@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Mandatory Cost Centres</title>
+<style>
+  :root {
+    --navy: #143666;
+    --amber: #F19100;
+    --amber-dark: #d97f00;
+    --green: #0F8A0F;
+    --red: #d2281b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f4f5f7; color: #2b2b2b; }
+
+  /* ---- Prototype view switcher (NOT part of product) ---- */
+  .proto-bar { position: sticky; top: 0; z-index: 500; display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #0c1f3d; color: #fff; font-size: 13px; }
+  .proto-bar .proto-label { font-weight: 700; opacity: 0.7; margin-right: 6px; letter-spacing: 0.5px; }
+  .proto-bar button { padding: 6px 14px; border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; background: transparent; color: #cdd6e4; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .proto-bar button.active { background: var(--amber); border-color: var(--amber); color: #fff; }
+  .proto-bar button:hover:not(.active) { background: rgba(255,255,255,0.08); }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ---- App shell ---- */
+  .layout { display: flex; min-height: calc(100vh - 41px); }
+  .sidebar { width: 208px; background: var(--navy); color: #c9d3e2; flex-shrink: 0; padding-top: 14px; }
+  .sidebar-org { display: flex; align-items: center; gap: 10px; padding: 6px 16px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 8px; }
+  .sidebar-org .org-badge { width: 30px; height: 30px; border-radius: 50%; background: #2a4a80; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  .sidebar-org span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-item { display: flex; align-items: center; gap: 11px; padding: 9px 16px; font-size: 13px; cursor: pointer; }
+  .sidebar-item:hover { background: rgba(255,255,255,0.06); }
+  .sidebar-item.active { background: var(--amber); color: #fff; }
+  .sidebar-item .icon { width: 18px; text-align: center; opacity: 0.8; }
+
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .top-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 28px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+  .top-bar h1 { font-size: 20px; font-weight: 600; color: var(--navy); }
+  .top-bar-left { display: flex; align-items: center; gap: 12px; }
+  .back-btn { background: none; border: none; cursor: pointer; font-size: 20px; color: #666; }
+  .top-actions { display: flex; align-items: center; gap: 10px; }
+
+  .btn { padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+  .btn-primary { background: var(--amber); color: #fff; }
+  .btn-primary:hover { background: var(--amber-dark); }
+  .btn-outline { background: #fff; border-color: #d0d0d0; color: #444; }
+  .btn-outline:hover { background: #f5f5f5; }
+  .btn-ghost { background: #fff; border: 1px solid #e0e0e0; color: #555; }
+  .btn-disabled { background: #f0ad74; color: #fff; cursor: not-allowed; opacity: 0.7; }
+  .btn-icon { display: inline-flex; align-items: center; gap: 7px; }
+
+  .content { padding: 20px 28px 60px; overflow-y: auto; }
+
+  /* ---- Toolbar above table ---- */
+  .list-tabs { display: flex; gap: 24px; padding: 0 28px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+  .list-tab { padding: 12px 2px; font-size: 14px; font-weight: 600; color: #888; cursor: pointer; border-bottom: 2px solid transparent; }
+  .list-tab.active { color: var(--amber); border-bottom-color: var(--amber); }
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .toolbar .chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; color: #555; }
+  .toolbar .spacer { flex: 1; }
+  .search { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid #d0d0d0; border-radius: 6px; background: #fff; font-size: 13px; color: #999; min-width: 220px; }
+
+  /* ---- Table ---- */
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+  thead th { text-align: left; padding: 13px 16px; font-size: 12px; font-weight: 700; color: #5a6472; background: #eef1f5; border-bottom: 1px solid #e5e7eb; }
+  tbody td { padding: 14px 16px; font-size: 13px; border-bottom: 1px solid #f0f0f0; color: #333; }
+  tbody tr:hover { background: #fafbfc; }
+  .job-num { font-weight: 600; color: var(--navy); }
+  .type-pill { display: inline-block; padding: 3px 10px; border-radius: 4px; background: #eef1f5; font-size: 12px; color: #555; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 14px; font-size: 12px; font-weight: 600; }
+  .badge-active { background: #e6f4ea; color: var(--green); }
+  .badge-locked { background: #fdeceb; color: var(--red); }
+
+  /* locked row treatment */
+  tr.locked td:not(.actions-cell) { color: #9aa2ad; }
+  tr.locked .job-num { color: #9aa2ad; }
+  .lock-ico { margin-right: 6px; }
+
+  .assign-btn { padding: 7px 13px; border-radius: 6px; background: var(--amber); color: #fff; border: none; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+  .assign-btn:hover { background: var(--amber-dark); }
+  .kebab { background: none; border: none; color: #999; font-size: 18px; cursor: pointer; letter-spacing: 1px; }
+
+  .banner { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; background: #fff8ec; border: 1px solid var(--amber); border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #6b5726; line-height: 1.5; }
+  .banner .b-ico { flex-shrink: 0; }
+
+  /* ---- Modal ---- */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(20,30,50,0.5); z-index: 600; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { width: 520px; max-width: 92vw; background: #fff; border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; }
+  .modal-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 22px 14px; border-bottom: 1px solid #eee; }
+  .modal-head h2 { font-size: 17px; font-weight: 600; color: var(--navy); }
+  .modal-head p { font-size: 12.5px; color: #888; margin-top: 3px; }
+  .modal-close { background: none; border: none; font-size: 22px; color: #aaa; cursor: pointer; line-height: 1; }
+  .modal-body { padding: 20px 22px; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 22px 20px; border-top: 1px solid #eee; }
+
+  .field-label { display: block; font-size: 12px; font-weight: 700; color: #5a6472; margin-bottom: 6px; }
+  .field-label .req { color: var(--red); }
+
+  /* cost centre multi-select */
+  .cc-box { border: 1px solid #d0d0d0; border-radius: 6px; padding: 8px; min-height: 46px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .cc-box.error { border-color: var(--red); background: #fff7f6; }
+  .cc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #eaf1fb; border: 1px solid #b6cdf0; border-radius: 14px; font-size: 12px; color: var(--navy); font-weight: 600; }
+  .cc-chip .x { cursor: pointer; color: #7089b3; }
+  .cc-placeholder { color: #aaa; font-size: 13px; padding: 4px; }
+  .cc-options { margin-top: 12px; border: 1px solid #eee; border-radius: 6px; max-height: 210px; overflow-y: auto; }
+  .cc-opt { display: flex; align-items: center; gap: 10px; padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f2f2f2; cursor: pointer; }
+  .cc-opt:last-child { border-bottom: none; }
+  .cc-opt:hover { background: #f7f9fc; }
+  .cc-opt input { accent-color: var(--amber); width: 16px; height: 16px; }
+  .field-error { color: var(--red); font-size: 12px; margin-top: 6px; display: none; align-items: center; gap: 5px; }
+  .field-error.show { display: flex; }
+
+  /* ---- Settings view ---- */
+  .settings-wrap { display: flex; gap: 0; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+  .settings-nav { width: 250px; border-right: 1px solid #eee; padding: 8px 0; flex-shrink: 0; }
+  .settings-nav .s-item { padding: 11px 20px; font-size: 13.5px; color: #555; cursor: pointer; }
+  .settings-nav .s-item:hover { background: #f7f9fc; }
+  .settings-nav .s-item.active { background: #eef4fd; color: var(--navy); font-weight: 600; border-left: 3px solid var(--amber); padding-left: 17px; }
+  .settings-panel { flex: 1; padding: 26px 30px; }
+  .settings-panel h2 { font-size: 18px; font-weight: 600; color: var(--navy); }
+  .settings-panel .sub { font-size: 13px; color: #999; margin: 4px 0 22px; }
+  .setting-block { border-top: 1px solid #f0f0f0; padding: 20px 0; }
+  .setting-row { display: flex; gap: 14px; align-items: flex-start; }
+  .setting-row .cb { width: 20px; height: 20px; accent-color: var(--amber); margin-top: 1px; flex-shrink: 0; }
+  .setting-row .s-text h4 { font-size: 14.5px; font-weight: 600; color: #2b2b2b; }
+  .setting-row .s-text p { font-size: 13px; color: #777; margin-top: 4px; line-height: 1.5; max-width: 620px; }
+  .default-tag { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 10px; background: #e6f4ea; color: var(--green); font-size: 11px; font-weight: 700; vertical-align: middle; }
+
+  /* ---- Create project view (focused) ---- */
+  .form-card { max-width: 760px; margin: 0 auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 26px 30px; }
+  .form-card h3 { font-size: 15px; color: var(--navy); font-weight: 600; margin-bottom: 4px; }
+  .form-card .card-sub { font-size: 12.5px; color: #999; margin-bottom: 20px; }
+  .form-field { margin-bottom: 20px; }
+  .form-field input[type=text] { width: 100%; padding: 11px 12px; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 13px; }
+  .form-field input.error, .cc-box.error { border-color: var(--red); }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--green); color: #fff; padding: 12px 22px; border-radius: 8px; font-size: 13.5px; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,0.2); z-index: 700; opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+
+  .note { margin-top: 22px; padding: 14px 18px; background: #f0f4fa; border: 1px solid #cdd9ec; border-radius: 8px; font-size: 12.5px; color: #48576e; line-height: 1.6; }
+  .note b { color: var(--navy); }
+</style>
+</head>
+<body>
+
+<!-- Prototype view switcher -->
+<div class="proto-bar">
+  <span class="proto-label">PROTOTYPE</span>
+  <button class="active" data-view="list" onclick="switchView('list',this)">1 · Projects (locked)</button>
+  <button data-view="settings" onclick="switchView('settings',this)">2 · Settings toggle</button>
+  <button data-view="create" onclick="switchView('create',this)">3 · Create — validation</button>
+</div>
+
+<!-- ============ VIEW 1: PROJECTS LIST ============ -->
+<div class="view active" id="view-list">
+  <div class="layout">
+    <div class="sidebar">
+      <div class="sidebar-org"><div class="org-badge">C</div><span>Cookie's Civil</span></div>
+      <div class="sidebar-item active"><span class="icon">📁</span> Projects</div>
+      <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+      <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+      <div class="sidebar-item"><span class="icon">📋</span> Leave</div>
+      <div class="sidebar-item"><span class="icon">📅</span> Scheduler</div>
+      <div class="sidebar-item"><span class="icon">🛒</span> Purchase Order</div>
+      <div class="sidebar-item"><span class="icon">💰</span> Bills</div>
+      <div class="sidebar-item"><span class="icon">⚙️</span> Settings</div>
+    </div>
+    <div class="main">
+      <div class="top-bar">
+        <h1>Projects</h1>
+        <div class="top-actions">
+          <button class="btn btn-outline btn-icon">⬆ Import Projects</button>
+          <button class="btn btn-primary btn-icon">＋ Add Project</button>
+        </div>
+      </div>
+      <div class="list-tabs">
+        <div class="list-tab active">PROJECT</div>
+        <div class="list-tab">DRAFT</div>
+      </div>
+      <div class="content">
+        <div class="banner">
+          <span class="b-ico">🔒</span>
+          <div><b>2 projects need cost centres.</b> Projects imported without a cost centre are locked so time and costs can't be booked to the wrong place. Assign a cost centre to unlock each one.</div>
+        </div>
+        <div class="toolbar">
+          <span class="chip">📅 Sun 21/01/2024 – Sun 21/01/2029</span>
+          <span class="chip">▼ Filters</span>
+          <span class="spacer"></span>
+          <span class="search">🔍 Search</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Job Number</th><th>Project Name</th><th>Type</th><th>Status</th>
+              <th>Start Date</th><th>Client</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="projRows">
+            <tr class="locked" data-proj="VAR011">
+              <td class="job-num"><span class="lock-ico">🔒</span>VAR011</td>
+              <td>Residential House Foundation</td>
+              <td><span class="type-pill">Civil</span></td>
+              <td><span class="badge badge-locked">🔒 Locked</span></td>
+              <td>Mon 26/05/2025</td>
+              <td>—</td>
+              <td class="actions-cell"><button class="assign-btn" onclick="openModal('VAR011','Residential House Foundation')">🔓 Assign Cost Centres</button></td>
+            </tr>
+            <tr class="locked" data-proj="VAR010">
+              <td class="job-num"><span class="lock-ico">🔒</span>VAR010</td>
+              <td>VAR010</td>
+              <td><span class="type-pill">Civil</span></td>
+              <td><span class="badge badge-locked">🔒 Locked</span></td>
+              <td>Mon 07/07/2025</td>
+              <td>—</td>
+              <td class="actions-cell"><button class="assign-btn" onclick="openModal('VAR010','VAR010')">🔓 Assign Cost Centres</button></td>
+            </tr>
+            <tr>
+              <td class="job-num">VAR006</td><td>Little Collins Roadworks</td>
+              <td><span class="type-pill">Civil</span></td>
+              <td><span class="badge badge-active">Active</span></td>
+              <td>Thu 20/03/2025</td><td>VicRoads</td>
+              <td class="actions-cell"><button class="kebab">⋮</button></td>
+            </tr>
+            <tr>
+              <td class="job-num">VAR005</td><td>Bar Beach Curb Works</td>
+              <td><span class="type-pill">Civil</span></td>
+              <td><span class="badge badge-active">Active</span></td>
+              <td>Fri 21/02/2025</td><td>Newcastle</td>
+              <td class="actions-cell"><button class="kebab">⋮</button></td>
+            </tr>
+            <tr>
+              <td class="job-num">VAR004</td><td>Bourke Street Roadworks</td>
+              <td><span class="type-pill">Civil</span></td>
+              <td><span class="badge badge-active">Active</span></td>
+              <td>Sun 25/06/2023</td><td>VicRoads</td>
+              <td class="actions-cell"><button class="kebab">⋮</button></td>
+            </tr>
+            <tr>
+              <td class="job-num">VAR003</td><td>House Slab Construction</td>
+              <td><span class="type-pill">Civil</span></td>
+              <td><span class="badge badge-active">Active</span></td>
+              <td>Wed 15/01/2025</td><td>—</td>
+              <td class="actions-cell"><button class="kebab">⋮</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ VIEW 2: SETTINGS ============ -->
+<div class="view" id="view-settings">
+  <div class="layout">
+    <div class="sidebar">
+      <div class="sidebar-org"><div class="org-badge">C</div><span>Cookie's Civil</span></div>
+      <div class="sidebar-item"><span class="icon">📁</span> Projects</div>
+      <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+      <div class="sidebar-item"><span class="icon">⏱</span> Timesheet</div>
+      <div class="sidebar-item active"><span class="icon">⚙️</span> Settings</div>
+    </div>
+    <div class="main">
+      <div class="top-bar">
+        <h1>Other Settings</h1>
+        <div class="top-actions">
+          <button class="btn btn-outline">Cancel</button>
+          <button class="btn btn-primary" onclick="showToast('Settings saved')">Save</button>
+        </div>
+      </div>
+      <div class="content">
+        <div class="settings-wrap">
+          <div class="settings-nav">
+            <div class="s-item active">Cost Centre Settings</div>
+            <div class="s-item">Cost Tracking Settings</div>
+            <div class="s-item">Project Settings</div>
+            <div class="s-item">Timesheet Settings</div>
+            <div class="s-item">Bill Settings</div>
+            <div class="s-item">Claim Settings</div>
+          </div>
+          <div class="settings-panel">
+            <h2>Cost Centre Settings</h2>
+            <div class="sub">Control how cost centres are used across projects.</div>
+
+            <div class="setting-block">
+              <div class="setting-row">
+                <input type="checkbox" class="cb" id="mandatoryCC" checked>
+                <div class="s-text">
+                  <h4>Require cost centres to create a new project <span class="default-tag">ON BY DEFAULT</span></h4>
+                  <p>Every new project must have at least one cost centre before it can be created or activated. Projects imported in bulk without a cost centre are <b>locked</b> until one is assigned, so workers and timesheet approvers can never book costs to a project with no cost centre.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="setting-block">
+              <div class="setting-row">
+                <input type="checkbox" class="cb" id="applyExisting">
+                <div class="s-text">
+                  <h4>Also lock existing projects that have no cost centre</h4>
+                  <p>When turned on, the rule is applied retroactively — any current project missing a cost centre is locked until one is assigned. Off by default so existing work isn't disrupted.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="note">
+          <b>Behaviour when ON:</b> projects created via the claim schedule + budget flow, or as a one-off with a cost centre entered on the setup screen, are created already unlocked. Only bulk-imported projects without a cost centre arrive locked. Turning this <b>OFF</b> restores the current behaviour (cost centre optional, no locking).
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ VIEW 3: CREATE PROJECT (validation) ============ -->
+<div class="view" id="view-create">
+  <div class="layout">
+    <div class="sidebar">
+      <div class="sidebar-org"><div class="org-badge">C</div><span>Cookie's Civil</span></div>
+      <div class="sidebar-item active"><span class="icon">📁</span> Projects</div>
+      <div class="sidebar-item"><span class="icon">📊</span> Dashboard</div>
+      <div class="sidebar-item"><span class="icon">⚙️</span> Settings</div>
+    </div>
+    <div class="main">
+      <div class="top-bar">
+        <div class="top-bar-left"><button class="back-btn">←</button><h1>Add Project</h1></div>
+        <div class="top-actions">
+          <button class="btn btn-outline">Save as Draft</button>
+          <button class="btn btn-primary" id="createBtn" onclick="tryCreate()">Add Project</button>
+        </div>
+      </div>
+      <div class="content">
+        <div class="form-card">
+          <h3>Project Details</h3>
+          <div class="card-sub">Fields shortened for this prototype — focus is the cost centre rule.</div>
+
+          <div class="form-field">
+            <label class="field-label">Project Name <span class="req">*</span></label>
+            <input type="text" id="cpName" value="New Depot Access Road">
+          </div>
+
+          <div class="form-field">
+            <label class="field-label">Cost Centre <span class="req">*</span></label>
+            <div class="cc-box" id="cpCcBox" onclick="toggleCreateOpts()">
+              <span class="cc-placeholder" id="cpPlaceholder">Select cost centre(s)…</span>
+              <div id="cpChips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+            </div>
+            <div class="field-error" id="cpError">⚠ At least one cost centre is required to create a project.</div>
+            <div class="cc-options" id="cpOpts" style="display:none;">
+              <label class="cc-opt"><input type="checkbox" value="Labour"          onchange="syncCreate()"> Labour</label>
+              <label class="cc-opt"><input type="checkbox" value="Plant & Equipment" onchange="syncCreate()"> Plant &amp; Equipment</label>
+              <label class="cc-opt"><input type="checkbox" value="Materials"       onchange="syncCreate()"> Materials</label>
+              <label class="cc-opt"><input type="checkbox" value="Subcontractors"  onchange="syncCreate()"> Subcontractors</label>
+              <label class="cc-opt"><input type="checkbox" value="Site Establishment" onchange="syncCreate()"> Site Establishment</label>
+              <label class="cc-opt"><input type="checkbox" value="Preliminaries"   onchange="syncCreate()"> Preliminaries</label>
+            </div>
+          </div>
+
+          <div class="note">
+            <b>Rule (setting ON):</b> the <b>Add Project</b> button stays disabled and the form can't be submitted until at least one cost centre is selected. Try clicking Add Project with none selected.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: assign cost centres ============ -->
+<div class="modal-overlay" id="ccModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2>Assign Cost Centres</h2>
+        <p id="modalProjLabel">VAR011 · Residential House Foundation</p>
+      </div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="field-label">Cost Centre <span class="req">*</span></label>
+      <div class="cc-box" id="mCcBox">
+        <span class="cc-placeholder" id="mPlaceholder">No cost centres selected</span>
+        <div id="mChips" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+      </div>
+      <div class="field-error" id="mError">⚠ Select at least one cost centre to unlock this project.</div>
+      <div class="cc-options">
+        <label class="cc-opt"><input type="checkbox" value="Labour"            onchange="syncModal()"> Labour</label>
+        <label class="cc-opt"><input type="checkbox" value="Plant & Equipment" onchange="syncModal()"> Plant &amp; Equipment</label>
+        <label class="cc-opt"><input type="checkbox" value="Materials"         onchange="syncModal()"> Materials</label>
+        <label class="cc-opt"><input type="checkbox" value="Subcontractors"    onchange="syncModal()"> Subcontractors</label>
+        <label class="cc-opt"><input type="checkbox" value="Site Establishment" onchange="syncModal()"> Site Establishment</label>
+        <label class="cc-opt"><input type="checkbox" value="Preliminaries"     onchange="syncModal()"> Preliminaries</label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAndUnlock()">Save &amp; Unlock</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  function switchView(v, el){
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+    document.getElementById('view-'+v).classList.add('active');
+    document.querySelectorAll('.proto-bar button').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active');
+    window.scrollTo(0,0);
+  }
+  function showToast(msg){
+    const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'),2200);
+  }
+
+  /* ---- Modal ---- */
+  let currentProj=null;
+  function openModal(job,name){
+    currentProj=job;
+    document.getElementById('modalProjLabel').textContent = job+' · '+name;
+    document.querySelectorAll('#ccModal .cc-opt input').forEach(c=>c.checked=false);
+    syncModal(true);
+    document.getElementById('mError').classList.remove('show');
+    document.getElementById('mCcBox').classList.remove('error');
+    document.getElementById('ccModal').classList.add('open');
+  }
+  function closeModal(){ document.getElementById('ccModal').classList.remove('open'); }
+  function selectedIn(sel){ return [...document.querySelectorAll(sel)].filter(c=>c.checked).map(c=>c.value); }
+  function chipHtml(v){ return '<span class="cc-chip">'+v+' <span class="x">×</span></span>'; }
+  function syncModal(){
+    const vals=selectedIn('#ccModal .cc-opt input');
+    document.getElementById('mChips').innerHTML = vals.map(chipHtml).join('');
+    document.getElementById('mPlaceholder').style.display = vals.length? 'none':'block';
+  }
+  function saveAndUnlock(){
+    const vals=selectedIn('#ccModal .cc-opt input');
+    if(!vals.length){
+      document.getElementById('mError').classList.add('show');
+      document.getElementById('mCcBox').classList.add('error');
+      return;
+    }
+    const row=document.querySelector('tr[data-proj="'+currentProj+'"]');
+    if(row){
+      row.classList.remove('locked');
+      row.querySelector('.job-num').innerHTML = currentProj;
+      row.querySelector('td:nth-child(4)').innerHTML = '<span class="badge badge-active">Active</span>';
+      row.querySelector('.actions-cell').innerHTML = '<button class="kebab">⋮</button>';
+    }
+    // update banner count
+    const remaining=document.querySelectorAll('#projRows tr.locked').length;
+    const banner=document.querySelector('#view-list .banner');
+    if(remaining===0){ banner.style.display='none'; }
+    else { banner.querySelector('b').textContent = remaining+' project'+(remaining>1?'s':'')+' need cost centres.'; }
+    closeModal();
+    showToast(currentProj+' unlocked — cost centres assigned');
+  }
+
+  /* ---- Create project validation ---- */
+  function toggleCreateOpts(){
+    const o=document.getElementById('cpOpts');
+    o.style.display = o.style.display==='none' ? 'block':'none';
+  }
+  function syncCreate(){
+    const vals=selectedIn('#cpOpts input');
+    document.getElementById('cpChips').innerHTML = vals.map(chipHtml).join('');
+    document.getElementById('cpPlaceholder').style.display = vals.length? 'none':'block';
+    const btn=document.getElementById('createBtn');
+    if(vals.length){
+      document.getElementById('cpError').classList.remove('show');
+      document.getElementById('cpCcBox').classList.remove('error');
+      btn.classList.remove('btn-disabled');
+    }
+  }
+  function tryCreate(){
+    const vals=selectedIn('#cpOpts input');
+    if(!vals.length){
+      document.getElementById('cpError').classList.add('show');
+      document.getElementById('cpCcBox').classList.add('error');
+      document.getElementById('createBtn').classList.add('btn-disabled');
+      return;
+    }
+    showToast('Project created with '+vals.length+' cost centre'+(vals.length>1?'s':''));
+  }
+  // start disabled to reflect the rule
+  document.getElementById('createBtn').classList.add('btn-disabled');
+</script>
+</body>
+</html>
