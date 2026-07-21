@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Cost-Centre Allocation before Approval</title>
+<style>
+  :root{ --navy:#143666; --amber:#F19100; --amber-dk:#d97f00; --green:#0F8A0F; --red:#d2281b; }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  body{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#eef0f3; color:#2b2b2b; }
+
+  /* proto switcher */
+  .proto-bar{ position:sticky; top:0; z-index:600; display:flex; align-items:center; gap:8px; padding:8px 16px; background:#0c1f3d; color:#fff; font-size:13px; }
+  .proto-bar .lbl{ font-weight:700; opacity:.7; margin-right:6px; letter-spacing:.5px; }
+  .proto-bar button{ padding:6px 14px; border:1px solid rgba(255,255,255,.25); border-radius:6px; background:transparent; color:#cdd6e4; font-size:12px; font-weight:600; cursor:pointer; }
+  .proto-bar button.active{ background:var(--amber); border-color:var(--amber); color:#fff; }
+  .proto-bar button:hover:not(.active){ background:rgba(255,255,255,.08); }
+  .proto-hint{ margin-left:auto; opacity:.6; font-size:11.5px; }
+
+  .view{ display:none; }
+  .view.active{ display:block; }
+
+  /* ============ MOBILE FRAME ============ */
+  .stage{ display:flex; justify-content:center; padding:26px 16px 60px; }
+  .phone{ width:390px; background:#f5f6f8; border-radius:34px; box-shadow:0 12px 40px rgba(20,40,80,.22); overflow:hidden; border:10px solid #10182a; position:relative; min-height:800px; }
+  .statusbar{ display:flex; align-items:center; justify-content:space-between; padding:10px 22px 6px; background:#fff; font-size:12px; font-weight:700; }
+  .nav{ display:flex; align-items:center; padding:12px 16px; background:#fff; border-bottom:1px solid #ececec; }
+  .nav .back{ font-size:22px; color:var(--amber); cursor:pointer; margin-right:12px; }
+  .nav h1{ font-size:17px; font-weight:600; flex:1; color:var(--navy); }
+
+  .screen{ display:none; padding-bottom:120px; }
+  .screen.active{ display:block; }
+
+  .sub-tabs{ display:flex; background:#fff; border-bottom:1px solid #ececec; }
+  .sub-tab{ flex:1; text-align:center; padding:12px 0; font-size:13px; font-weight:600; color:#8a8a8a; border-bottom:2px solid transparent; }
+  .sub-tab.active{ color:var(--amber); border-bottom-color:var(--amber); }
+  .sub-tab .pill{ display:inline-block; min-width:18px; padding:0 5px; margin-left:5px; border-radius:9px; background:#eef1f5; color:#5a6472; font-size:11px; font-weight:700; }
+
+  .list-head{ padding:14px 16px 4px; font-size:12px; font-weight:700; color:#8a8a8a; text-transform:uppercase; letter-spacing:.4px; }
+  .ts-card{ margin:8px 16px; background:#fff; border-radius:12px; border:1px solid #eaeaea; padding:14px; cursor:pointer; }
+  .ts-card.warn{ border-left:4px solid var(--amber); }
+  .ts-card.ok{ border-left:4px solid var(--green); }
+  .ts-top{ display:flex; align-items:center; gap:10px; }
+  .avatar{ width:38px; height:38px; border-radius:50%; background:#dbe4f2; color:var(--navy); font-weight:700; display:flex; align-items:center; justify-content:center; font-size:14px; }
+  .ts-top .who{ flex:1; }
+  .ts-top .who .nm{ font-size:14.5px; font-weight:600; }
+  .ts-top .who .rl{ font-size:12px; color:#999; }
+  .ts-top .hrs{ text-align:right; font-size:14px; font-weight:700; color:var(--navy); }
+  .ts-body{ margin-top:10px; font-size:13px; color:#555; }
+  .ts-body .prj{ font-weight:600; color:#333; }
+  .ts-flags{ margin-top:10px; display:flex; align-items:center; gap:8px; }
+  .flag{ display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:700; padding:4px 9px; border-radius:12px; }
+  .flag-warn{ background:#fdeecd; color:#8a5b00; }
+  .flag-ok{ background:#e6f4ea; color:var(--green); }
+  .status-txt{ margin-left:auto; font-size:12px; font-weight:700; }
+  .st-unapp{ color:var(--amber); }
+  .st-app{ color:var(--green); }
+
+  /* detail */
+  .card{ margin:12px 16px; background:#fff; border-radius:12px; border:1px solid #eaeaea; padding:16px; }
+  .card h3{ font-size:12px; font-weight:700; color:#8a8a8a; text-transform:uppercase; letter-spacing:.4px; margin-bottom:10px; }
+  .kv{ display:flex; justify-content:space-between; align-items:center; padding:7px 0; }
+  .kv .k{ font-size:13px; color:#888; }
+  .kv .v{ font-size:14px; font-weight:600; }
+  .worker-head{ padding:16px 16px 4px; }
+  .worker-head .wn{ font-size:20px; font-weight:700; color:var(--navy); }
+  .worker-head .wr{ font-size:13px; color:#999; }
+  .badge{ display:inline-block; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:700; }
+  .badge-unapp{ background:#fdeecd; color:#8a5b00; }
+
+  .time-grid{ display:flex; justify-content:space-between; text-align:center; }
+  .time-grid .tg{ flex:1; }
+  .time-grid .tg .lab{ font-size:11px; color:#999; }
+  .time-grid .tg .val{ font-size:16px; font-weight:700; color:var(--navy); margin-top:3px; }
+  .time-grid .tg .val.big{ font-size:22px; }
+
+  /* allocation meter */
+  .alloc-meter{ display:flex; gap:10px; margin-bottom:12px; }
+  .meter-box{ flex:1; border-radius:10px; padding:12px; text-align:center; }
+  .meter-box .m-lab{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; }
+  .meter-box .m-val{ font-size:19px; font-weight:800; margin-top:3px; }
+  .m-assigned{ background:#e9f5ec; } .m-assigned .m-lab{ color:var(--green); } .m-assigned .m-val{ color:var(--green); }
+  .m-unassigned{ background:#fdeceb; } .m-unassigned .m-lab{ color:var(--red); } .m-unassigned .m-val{ color:var(--red); }
+  .m-unassigned.clear{ background:#e9f5ec; } .m-unassigned.clear .m-lab{ color:var(--green);} .m-unassigned.clear .m-val{ color:var(--green);}
+
+  .progress{ height:8px; border-radius:4px; background:#f0e0df; overflow:hidden; margin-bottom:14px; }
+  .progress .bar{ height:100%; width:0%; background:var(--amber); transition:width .3s, background .3s; }
+  .progress .bar.full{ background:var(--green); }
+
+  .alloc-row{ display:flex; align-items:center; gap:10px; padding:12px 0; border-top:1px solid #f2f2f2; }
+  .alloc-row .cc-name{ flex:1; font-size:14px; font-weight:600; }
+  .alloc-row .cc-res{ font-size:12px; color:#999; margin-top:2px; font-weight:400; }
+  .alloc-row .cc-dur{ font-size:14px; font-weight:700; color:var(--navy); }
+  .alloc-row .cc-del{ color:#c4c4c4; font-size:18px; cursor:pointer; }
+  .alloc-empty{ text-align:center; padding:16px 8px; color:#aaa; font-size:13px; }
+
+  .btn-dashed{ display:block; width:100%; padding:12px; border:1.5px dashed var(--amber); border-radius:10px; background:#fff; color:var(--amber); font-size:14px; font-weight:700; cursor:pointer; margin-top:6px; }
+  .btn-dashed:active{ background:#fff8ef; }
+
+  .approve-hint{ display:flex; align-items:center; gap:8px; margin:0 16px 8px; font-size:12.5px; color:#8a5b00; background:#fdeecd; border:1px solid #f0c675; border-radius:8px; padding:10px 12px; }
+  .approve-hint.ok{ color:var(--green); background:#e9f5ec; border-color:#a9d6b4; }
+
+  /* fixed action bar (mobile) */
+  .action-bar{ position:absolute; bottom:0; left:0; right:0; display:flex; gap:10px; padding:12px 16px 16px; background:#fff; border-top:1px solid #ececec; }
+  .btn{ flex:1; padding:14px; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer; border:1px solid transparent; }
+  .btn-reject{ background:#fff; border-color:var(--red); color:var(--red); flex:0 0 96px; }
+  .btn-approve{ background:var(--amber); color:#fff; }
+  .btn-approve:active{ background:var(--amber-dk); }
+  .btn-approve:disabled, .btn-approve.disabled{ background:#f0cfa0; cursor:not-allowed; }
+
+  /* bottom sheet */
+  .sheet-overlay{ position:absolute; inset:0; background:rgba(15,25,45,.45); display:none; z-index:50; }
+  .sheet-overlay.open{ display:block; }
+  .sheet{ position:absolute; bottom:0; left:0; right:0; background:#fff; border-radius:18px 18px 0 0; padding:18px 18px 22px; transform:translateY(100%); transition:transform .28s; }
+  .sheet.open{ transform:translateY(0); }
+  .sheet-grip{ width:40px; height:4px; border-radius:2px; background:#e0e0e0; margin:0 auto 14px; }
+  .sheet h2{ font-size:17px; font-weight:700; color:var(--navy); margin-bottom:4px; }
+  .sheet .s-sub{ font-size:12.5px; color:#999; margin-bottom:16px; }
+  .fld{ margin-bottom:14px; }
+  .fld label{ display:block; font-size:12px; font-weight:700; color:#5a6472; margin-bottom:6px; }
+  .fld label .req{ color:var(--red); }
+  .fld select, .fld input{ width:100%; padding:12px; border:1px solid #d3d7dd; border-radius:9px; font-size:14px; background:#fff; }
+  .fld select:focus, .fld input:focus{ outline:none; border-color:var(--amber); }
+  .dur-row{ display:flex; gap:10px; align-items:flex-end; }
+  .dur-row .fld{ flex:1; margin-bottom:0; }
+  .remaining-chip{ font-size:12px; color:var(--amber); font-weight:700; cursor:pointer; white-space:nowrap; padding:12px 4px; }
+  .sheet-actions{ display:flex; gap:10px; margin-top:18px; }
+  .sheet-actions .btn{ flex:1; }
+  .btn-outline{ background:#fff; border:1px solid #d0d0d0; color:#555; }
+
+  /* success modal */
+  .modal-ov{ position:absolute; inset:0; background:rgba(15,25,45,.5); display:none; align-items:center; justify-content:center; z-index:80; }
+  .modal-ov.open{ display:flex; }
+  .modal{ width:80%; background:#fff; border-radius:16px; padding:28px 22px; text-align:center; }
+  .modal .ic{ width:56px; height:56px; border-radius:50%; background:#e9f5ec; color:var(--green); display:flex; align-items:center; justify-content:center; font-size:28px; margin:0 auto 14px; }
+  .modal h3{ font-size:18px; font-weight:700; color:var(--navy); }
+  .modal p{ font-size:13px; color:#888; margin:8px 0 18px; }
+  .modal .btn-approve{ width:100%; }
+
+  /* ============ WEB VIEW ============ */
+  .web-wrap{ display:flex; min-height:calc(100vh - 41px); }
+  .sidebar{ width:200px; background:var(--navy); color:#c9d3e2; flex-shrink:0; padding-top:14px; }
+  .sidebar-org{ display:flex; align-items:center; gap:10px; padding:6px 16px 14px; border-bottom:1px solid rgba(255,255,255,.08); margin-bottom:8px; }
+  .sidebar-org .b{ width:30px; height:30px; border-radius:50%; background:#2a4a80; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .sidebar-org span{ color:#fff; font-weight:600; font-size:13.5px; }
+  .s-item{ display:flex; gap:11px; padding:9px 16px; font-size:13px; cursor:pointer; }
+  .s-item:hover{ background:rgba(255,255,255,.06); }
+  .s-item.active{ background:var(--amber); color:#fff; }
+  .web-main{ flex:1; display:flex; flex-direction:column; }
+  .web-top{ display:flex; align-items:center; justify-content:space-between; padding:16px 26px; background:#fff; border-bottom:1px solid #e5e7eb; }
+  .web-top-left{ display:flex; align-items:center; gap:12px; }
+  .web-top-left .back{ font-size:20px; color:#666; cursor:pointer; }
+  .web-top h1{ font-size:18px; font-weight:600; color:var(--navy); }
+  .web-actions{ display:flex; align-items:center; gap:10px; }
+  .wbtn{ padding:9px 18px; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; border:1px solid transparent; }
+  .wbtn-save{ background:#f0f0f0; color:#999; }
+  .wbtn-approve{ background:var(--amber); color:#fff; }
+  .wbtn-approve:disabled,.wbtn-approve.disabled{ background:#f0cfa0; cursor:not-allowed; }
+  .wbtn-reject{ background:#fff; border-color:var(--red); color:var(--red); }
+  .web-body{ padding:24px 26px 60px; overflow-y:auto; }
+  .web-card{ background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:22px 24px; max-width:1000px; margin-bottom:16px; }
+  .web-card h3{ font-size:12px; font-weight:700; color:#8a8a8a; text-transform:uppercase; letter-spacing:.4px; margin-bottom:14px; }
+  .wname{ font-size:20px; font-weight:700; color:var(--navy); }
+  .wrole{ font-size:13px; color:#999; }
+  .alloc-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .alloc-head .left{ display:flex; align-items:center; gap:14px; }
+  .alloc-head h3{ margin:0; }
+  .alloc-head .add-new{ padding:7px 14px; border:1px solid #d0d0d0; border-radius:6px; background:#fff; font-size:12.5px; font-weight:700; color:var(--navy); cursor:pointer; }
+  .alloc-head .hours{ display:flex; gap:26px; font-size:13px; }
+  .alloc-head .hours b{ font-weight:700; }
+  .h-assigned b{ color:var(--green); } .h-unassigned b{ color:var(--red); } .h-unassigned.clear b{ color:var(--green); }
+  table{ width:100%; border-collapse:collapse; }
+  thead th{ text-align:left; padding:11px 14px; font-size:12px; font-weight:700; color:#5a6472; background:#eef1f5; }
+  tbody td{ padding:12px 14px; font-size:13px; border-bottom:1px solid #f0f0f0; }
+  .wempty td{ text-align:center; color:#aaa; padding:22px; }
+  .wdel{ color:#c4c4c4; cursor:pointer; font-size:16px; }
+  .web-gate{ display:flex; align-items:center; gap:9px; font-size:13px; color:#8a5b00; background:#fdeecd; border:1px solid #f0c675; border-radius:8px; padding:11px 14px; max-width:1000px; margin-bottom:16px; }
+  .web-gate.ok{ color:var(--green); background:#e9f5ec; border-color:#a9d6b4; }
+  .web-sel{ padding:8px 10px; border:1px solid #d3d7dd; border-radius:6px; font-size:13px; }
+  .web-dur{ width:90px; padding:8px 10px; border:1px solid #d3d7dd; border-radius:6px; font-size:13px; }
+
+  .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--green); color:#fff; padding:12px 22px; border-radius:8px; font-size:13.5px; font-weight:600; box-shadow:0 6px 20px rgba(0,0,0,.2); z-index:700; opacity:0; pointer-events:none; transition:opacity .25s; }
+  .toast.show{ opacity:1; }
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <span class="lbl">PROTOTYPE</span>
+  <button class="active" onclick="switchView('mobile',this)">📱 Mobile approval</button>
+  <button onclick="switchView('web',this)">🖥 Web approval</button>
+  <span class="proto-hint">Rule: a supervisor can't approve until all time is allocated to cost centres</span>
+</div>
+
+<!-- ==================== MOBILE ==================== -->
+<div class="view active" id="view-mobile">
+  <div class="stage">
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span>●●● ▂▃▅ 100%</span></div>
+
+      <!-- SCREEN A: approvals list -->
+      <div class="screen active" id="scr-list">
+        <div class="nav"><h1>Approvals</h1></div>
+        <div class="sub-tabs">
+          <div class="sub-tab active">Timesheet <span class="pill">2</span></div>
+          <div class="sub-tab">Workers <span class="pill">1</span></div>
+        </div>
+        <div class="list-head">Tuesday, 21 Jul</div>
+        <div class="ts-card warn" onclick="goDetail()">
+          <div class="ts-top">
+            <div class="avatar">JB</div>
+            <div class="who"><div class="nm">James Baker</div><div class="rl">Labourer</div></div>
+            <div class="hrs">6h 45m</div>
+          </div>
+          <div class="ts-body"><span class="prj">(KYC-0002) Ferres Boulevard Road…</span><br>07:00 AM – 02:15 PM · 30m break</div>
+          <div class="ts-flags">
+            <span class="flag flag-warn">⚠ 6h 45m unallocated</span>
+            <span class="status-txt st-unapp">Unapproved</span>
+          </div>
+        </div>
+        <div class="list-head">Sunday, 19 Jul</div>
+        <div class="ts-card ok">
+          <div class="ts-top">
+            <div class="avatar">JB</div>
+            <div class="who"><div class="nm">James Baker</div><div class="rl">Labourer</div></div>
+            <div class="hrs">6h 45m</div>
+          </div>
+          <div class="ts-body"><span class="prj">(KYC-0002) Ferres Boulevard Road…</span><br>08:00 AM – 03:15 PM · 30m break</div>
+          <div class="ts-flags">
+            <span class="flag flag-ok">✓ Fully allocated</span>
+            <span class="status-txt st-app">Approved</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCREEN B: timesheet detail / approval -->
+      <div class="screen" id="scr-detail">
+        <div class="nav"><span class="back" onclick="goList()">←</span><h1>Worker Timesheet</h1></div>
+        <div class="worker-head">
+          <div class="wn">James Baker <span class="badge badge-unapp" style="vertical-align:middle">Unapproved</span></div>
+          <div class="wr">Labourer · Tue 21/07/2026</div>
+        </div>
+
+        <div class="card">
+          <h3>Approved time</h3>
+          <div class="time-grid">
+            <div class="tg"><div class="lab">Clock in</div><div class="val">07:00</div></div>
+            <div class="tg"><div class="lab">Clock out</div><div class="val">14:15</div></div>
+            <div class="tg"><div class="lab">Break</div><div class="val">30m</div></div>
+            <div class="tg"><div class="lab">Total</div><div class="val big">6h 45m</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Assign cost centre</h3>
+          <div class="alloc-meter">
+            <div class="meter-box m-assigned"><div class="m-lab">Assigned</div><div class="m-val" id="mAssigned">0h 0m</div></div>
+            <div class="meter-box m-unassigned" id="mUnassignedBox"><div class="m-lab">Unassigned</div><div class="m-val" id="mUnassigned">6h 45m</div></div>
+          </div>
+          <div class="progress"><div class="bar" id="mBar"></div></div>
+          <div id="mAllocList">
+            <div class="alloc-empty" id="mEmpty">No cost centres assigned yet — allocate all 6h 45m to approve.</div>
+          </div>
+          <button class="btn-dashed" onclick="openSheet()">＋ Assign cost centre</button>
+        </div>
+
+        <div class="approve-hint" id="mHint">⚠ Allocate all time to a cost centre before approving.</div>
+
+        <div class="action-bar">
+          <button class="btn btn-reject">Reject</button>
+          <button class="btn btn-approve disabled" id="mApprove" onclick="tryApproveMobile()">Approve</button>
+        </div>
+      </div>
+
+      <!-- bottom sheet: assign cost centre -->
+      <div class="sheet-overlay" id="sheetOv" onclick="closeSheet()"></div>
+      <div class="sheet" id="sheet" onclick="event.stopPropagation()">
+        <div class="sheet-grip"></div>
+        <h2>Assign cost centre</h2>
+        <div class="s-sub">Split the worker's time across the cost centres it belongs to.</div>
+        <div class="fld">
+          <label>Cost centre <span class="req">*</span></label>
+          <select id="sheetCc">
+            <option value="">Select cost centre…</option>
+            <option>Earthworks</option>
+            <option>Drainage</option>
+            <option>Kerb &amp; Channel</option>
+            <option>Pavement</option>
+            <option>Traffic Management</option>
+            <option>Site Establishment</option>
+          </select>
+        </div>
+        <div class="dur-row">
+          <div class="fld">
+            <label>Duration <span class="req">*</span></label>
+            <input type="text" id="sheetDur" placeholder="e.g. 3h 30m">
+          </div>
+          <span class="remaining-chip" id="sheetRemaining" onclick="fillRemaining()">Use remaining</span>
+        </div>
+        <div class="sheet-actions">
+          <button class="btn btn-outline" onclick="closeSheet()">Cancel</button>
+          <button class="btn btn-approve" style="background:var(--amber)" onclick="addAllocation()">Add</button>
+        </div>
+      </div>
+
+      <!-- success modal -->
+      <div class="modal-ov" id="modalOv">
+        <div class="modal">
+          <div class="ic">✓</div>
+          <h3>Timesheet approved</h3>
+          <p>6h 45m fully allocated across cost centres. James Baker's Tuesday timesheet is approved.</p>
+          <button class="btn btn-approve" onclick="closeModal()">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== WEB ==================== -->
+<div class="view" id="view-web">
+  <div class="web-wrap">
+    <div class="sidebar">
+      <div class="sidebar-org"><div class="b">K</div><span>Kerb Your Enthusiasm</span></div>
+      <div class="s-item"><span>📁</span> Projects</div>
+      <div class="s-item active"><span>⏱</span> Timesheet</div>
+      <div class="s-item"><span>📅</span> Scheduler</div>
+      <div class="s-item"><span>⚙️</span> Settings</div>
+    </div>
+    <div class="web-main">
+      <div class="web-top">
+        <div class="web-top-left"><span class="back">←</span><h1>Worker Timesheet</h1></div>
+        <div class="web-actions">
+          <span class="badge badge-unapp">Unapproved</span>
+          <button class="wbtn wbtn-save">Save</button>
+          <button class="wbtn wbtn-approve disabled" id="wApprove" onclick="tryApproveWeb()">Approve</button>
+          <button class="wbtn wbtn-reject">Reject</button>
+        </div>
+      </div>
+      <div class="web-body">
+        <div class="web-card">
+          <div class="wname">James Baker</div>
+          <div class="wrole">Labourer · Tue 21/07/2026 · (KYC-0002) Ferres Boulevard Road Reconstruction</div>
+        </div>
+
+        <div class="web-card">
+          <h3>Approved time</h3>
+          <div class="time-grid" style="max-width:560px">
+            <div class="tg"><div class="lab">Clock in</div><div class="val">07:00 AM</div></div>
+            <div class="tg"><div class="lab">Clock out</div><div class="val">02:15 PM</div></div>
+            <div class="tg"><div class="lab">Break</div><div class="val">30 mins</div></div>
+            <div class="tg"><div class="lab">Total duration</div><div class="val big">6h 45m</div></div>
+          </div>
+        </div>
+
+        <div class="web-gate" id="wGate">⚠ All 6h 45m must be allocated to a cost centre before this timesheet can be approved.</div>
+
+        <div class="web-card">
+          <div class="alloc-head">
+            <div class="left">
+              <h3>Assign Cost Centre</h3>
+              <button class="add-new" onclick="webAddRow()">＋ ADD NEW</button>
+            </div>
+            <div class="hours">
+              <span class="h-assigned">ASSIGNED HOURS: <b id="wAssigned">0h 0m</b></span>
+              <span class="h-unassigned" id="wUnassignedWrap">UNASSIGNED HOURS: <b id="wUnassigned">6h 45m</b></span>
+            </div>
+          </div>
+          <table>
+            <thead><tr><th style="width:40%">Cost Centre</th><th style="width:30%">Resource</th><th style="width:20%">Duration</th><th></th></tr></thead>
+            <tbody id="wRows">
+              <tr class="wempty" id="wEmptyRow"><td colspan="4">No cost centres assigned — use ADD NEW to allocate the 6h 45m.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const TOTAL = 405; // 6h 45m in minutes
+  function fmt(m){ return Math.floor(m/60)+'h '+(m%60)+'m'; }
+  function parseDur(s){
+    if(!s) return 0;
+    s=s.toLowerCase(); let m=0; let mm;
+    if((mm=s.match(/(\d+)\s*h/))) m+=parseInt(mm[1])*60;
+    if((mm=s.match(/(\d+)\s*m/))) m+=parseInt(mm[1]);
+    if(!/[hm]/.test(s) && /^\d+$/.test(s.trim())) m=parseInt(s.trim());
+    return m;
+  }
+  function switchView(v,el){
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+    document.getElementById('view-'+v).classList.add('active');
+    document.querySelectorAll('.proto-bar button').forEach(b=>b.classList.remove('active'));
+    el.classList.add('active'); window.scrollTo(0,0);
+  }
+  function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+
+  /* ---------- MOBILE ---------- */
+  let mAlloc=[]; // {cc,mins}
+  function goDetail(){ document.getElementById('scr-list').classList.remove('active'); document.getElementById('scr-detail').classList.add('active'); }
+  function goList(){ document.getElementById('scr-detail').classList.remove('active'); document.getElementById('scr-list').classList.add('active'); }
+  function mUsed(){ return mAlloc.reduce((s,a)=>s+a.mins,0); }
+  function openSheet(){
+    document.getElementById('sheetCc').value=''; document.getElementById('sheetDur').value='';
+    document.getElementById('sheetRemaining').textContent='Use remaining ('+fmt(TOTAL-mUsed())+')';
+    document.getElementById('sheetOv').classList.add('open'); document.getElementById('sheet').classList.add('open');
+  }
+  function closeSheet(){ document.getElementById('sheetOv').classList.remove('open'); document.getElementById('sheet').classList.remove('open'); }
+  function fillRemaining(){ document.getElementById('sheetDur').value=fmt(TOTAL-mUsed()); }
+  function addAllocation(){
+    const cc=document.getElementById('sheetCc').value; const mins=parseDur(document.getElementById('sheetDur').value);
+    if(!cc){ showToast('Select a cost centre'); return; }
+    if(mins<=0){ showToast('Enter a duration'); return; }
+    if(mUsed()+mins>TOTAL){ showToast('That exceeds the remaining '+fmt(TOTAL-mUsed())); return; }
+    mAlloc.push({cc,mins}); closeSheet(); renderMobile();
+  }
+  function delAlloc(i){ mAlloc.splice(i,1); renderMobile(); }
+  function renderMobile(){
+    const used=mUsed(); const rem=TOTAL-used;
+    const list=document.getElementById('mAllocList');
+    if(mAlloc.length===0){ list.innerHTML='<div class="alloc-empty" id="mEmpty">No cost centres assigned yet — allocate all 6h 45m to approve.</div>'; }
+    else{
+      list.innerHTML=mAlloc.map((a,i)=>`<div class="alloc-row"><div style="flex:1"><div class="cc-name">${a.cc}</div><div class="cc-res">Labour · James Baker</div></div><div class="cc-dur">${fmt(a.mins)}</div><div class="cc-del" onclick="delAlloc(${i})">✕</div></div>`).join('');
+    }
+    document.getElementById('mAssigned').textContent=fmt(used);
+    document.getElementById('mUnassigned').textContent=fmt(rem);
+    document.getElementById('mBar').style.width=(used/TOTAL*100)+'%';
+    const done=rem===0;
+    document.getElementById('mBar').classList.toggle('full',done);
+    document.getElementById('mUnassignedBox').classList.toggle('clear',done);
+    document.getElementById('mApprove').classList.toggle('disabled',!done);
+    const hint=document.getElementById('mHint');
+    if(done){ hint.classList.add('ok'); hint.textContent='✓ All time allocated — ready to approve.'; }
+    else{ hint.classList.remove('ok'); hint.textContent='⚠ '+fmt(rem)+' still unallocated — allocate all time to approve.'; }
+  }
+  function tryApproveMobile(){
+    if(TOTAL-mUsed()!==0){ showToast('Allocate all time first'); return; }
+    document.getElementById('modalOv').classList.add('open');
+  }
+  function closeModal(){ document.getElementById('modalOv').classList.remove('open'); goList(); }
+
+  /* ---------- WEB ---------- */
+  let wAlloc=[];
+  function wUsed(){ return wAlloc.reduce((s,a)=>s+a.mins,0); }
+  function webAddRow(){
+    // inline "new row" using prompt-free selects appended; simplest: add a default row user edits
+    wAlloc.push({cc:'Earthworks',mins:0});
+    renderWeb(true);
+  }
+  function renderWeb(focusLast){
+    const tb=document.getElementById('wRows');
+    if(wAlloc.length===0){ tb.innerHTML='<tr class="wempty" id="wEmptyRow"><td colspan="4">No cost centres assigned — use ADD NEW to allocate the 6h 45m.</td></tr>'; }
+    else{
+      const opts=['Earthworks','Drainage','Kerb & Channel','Pavement','Traffic Management','Site Establishment'];
+      tb.innerHTML=wAlloc.map((a,i)=>{
+        const sel=opts.map(o=>`<option ${o===a.cc?'selected':''}>${o}</option>`).join('');
+        return `<tr>
+          <td><select class="web-sel" onchange="wSetCc(${i},this.value)">${sel}</select></td>
+          <td>Labour · James Baker</td>
+          <td><input class="web-dur" placeholder="e.g. 3h 30m" value="${a.raw||''}" onchange="wSetDur(${i},this.value)"></td>
+          <td><span class="wdel" onclick="wDel(${i})">✕</span></td>
+        </tr>`;
+      }).join('');
+    }
+    const used=wUsed(); const rem=TOTAL-used;
+    document.getElementById('wAssigned').textContent=fmt(used);
+    document.getElementById('wUnassigned').textContent=fmt(rem);
+    const done=rem===0 && wAlloc.length>0;
+    document.getElementById('wUnassignedWrap').classList.toggle('clear',done);
+    document.getElementById('wApprove').classList.toggle('disabled',!done);
+    const gate=document.getElementById('wGate');
+    if(done){ gate.classList.add('ok'); gate.textContent='✓ All 6h 45m allocated — this timesheet can be approved.'; }
+    else{ gate.classList.remove('ok'); gate.textContent='⚠ '+fmt(rem)+' of 6h 45m still unallocated — allocate all time before approving.'; }
+  }
+  function wSetCc(i,v){ wAlloc[i].cc=v; }
+  function wSetDur(i,v){ const m=parseDur(v); if(wUsed()-wAlloc[i].mins+m>TOTAL){ showToast('Exceeds the 6h 45m total'); renderWeb(); return; } wAlloc[i].mins=m; wAlloc[i].raw=v; renderWeb(); }
+  function wDel(i){ wAlloc.splice(i,1); renderWeb(); }
+  function tryApproveWeb(){ if(TOTAL-wUsed()!==0||wAlloc.length===0){ showToast('Allocate all time first'); return; } showToast('Timesheet approved — 6h 45m fully allocated'); }
+
+  renderMobile(); renderWeb();
+</script>
+</body>
+</html>
