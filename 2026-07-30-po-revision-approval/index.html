@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — PO Revision & Approval Flow</title>
+<!--
+  PROTOTYPE: Improved purchase order revision flow.
+
+  Problem today: an approved PO can only be edited by a user with APPROVER
+  permissions, and the moment they hit Submit the values change — there is no
+  "proposed" state. Creators have to chase an approver to make any change.
+
+  Proposed flow:
+    1. Anyone with CREATOR access can propose an edit to an approved PO.
+    2. Submitting the edit creates a REVISION (v2, v3...) that goes to a
+       nominated approver. The PO itself keeps displaying the previously
+       approved amounts — committed values, reporting and budget are untouched.
+    3. While pending, the revision is visible side-by-side ("Approved" vs
+       "Proposed" toggle) to both creator and approver.
+    4. On approval the proposed values become the approved values and the
+       version increments. On rejection the approved values stay as they were
+       and the creator can amend and resubmit.
+
+  Use the persona switcher (top right) to move between the creator who
+  proposes the change and the approver who decides on it.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: 200px; background: #16233f; color: #ccc; flex-shrink: 0; padding-top: 16px; }
+  .sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 16px 18px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 8px; }
+  .sidebar-logo .v-icon { width: 30px; height: 30px; background: linear-gradient(135deg,#F19100,#e07a00); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; }
+  .sidebar-logo span { color: #fff; font-weight: 600; font-size: 14px; }
+  .sidebar-org { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 12.5px; color: #F19100; font-weight: 600; margin-bottom: 6px; }
+  .sidebar-org .av { width: 22px; height: 22px; border-radius: 50%; background: #F19100; color: #16233f; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; font-size: 13px; cursor: default; }
+  .sidebar-item.active { background: #F19100; color: #fff; font-weight: 600; }
+  .sidebar-item .icon { width: 16px; text-align: center; opacity: 0.7; }
+  .sidebar-sep { height: 1px; background: rgba(255,255,255,0.1); margin: 8px 16px; }
+
+  /* Top bar */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar { background: #fff; border-bottom: 1px solid #e5e5e5; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .topbar h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .topbar .back { color: #888; font-size: 18px; cursor: pointer; }
+  .persona-switch { display: flex; align-items: center; gap: 10px; }
+  .persona-switch .label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
+  .persona-btns { display: flex; border: 1px solid #d8d8d8; border-radius: 8px; overflow: hidden; }
+  .persona-btn { display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: #fff; border: none; cursor: pointer; font-size: 12.5px; color: #555; }
+  .persona-btn + .persona-btn { border-left: 1px solid #e5e5e5; }
+  .persona-btn.active { background: #16233f; color: #fff; }
+  .persona-btn .av { width: 22px; height: 22px; border-radius: 50%; background: #e3e8f0; color: #16233f; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .persona-btn.active .av { background: #F19100; color: #fff; }
+  .persona-btn small { display: block; font-size: 10.5px; opacity: 0.75; }
+
+  .content { padding: 20px 24px 60px; overflow-y: auto; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* status row */
+  .status-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .status-row .st { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .header-pill { display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border: 1px solid #d8d8d8; border-radius: 6px; background: #fff; font-size: 12.5px; color: #555; cursor: pointer; }
+
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 12px; white-space: nowrap; letter-spacing: 0.2px; }
+  .pill.approved { background: #e6f4ea; color: #0F8A0F; }
+  .pill.pending { background: #fff3e0; color: #d97d00; }
+  .pill.rejected { background: #fdecea; color: #d2281b; }
+  .pill.ver { background: #eef1f7; color: #16233f; }
+  .pill.new { background: #e6f4ea; color: #0F8A0F; }
+
+  /* banners */
+  .banner { display: flex; align-items: flex-start; gap: 13px; border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; font-size: 13px; line-height: 1.5; }
+  .banner .b-icon { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; color: #fff; flex-shrink: 0; }
+  .banner .b-body { flex: 1; }
+  .banner .b-title { font-weight: 700; margin-bottom: 3px; }
+  .banner .b-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .banner.amber { background: #fff8ec; border: 1px solid #f5d9a8; color: #6b4a10; }
+  .banner.amber .b-icon { background: #F19100; }
+  .banner.amber .b-title { color: #a3620a; }
+  .banner.red { background: #fdecea; border: 1px solid #f6c7c3; color: #7a2620; }
+  .banner.red .b-icon { background: #d2281b; }
+  .banner.red .b-title { color: #b3251c; }
+  .banner.blue { background: #eef3fb; border: 1px solid #cddcf3; color: #2c4670; }
+  .banner.blue .b-icon { background: #16233f; }
+
+  /* stat cards */
+  .stat-cards { display: flex; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .stat-card { flex: 1; min-width: 150px; background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px 16px; }
+  .stat-card .lbl { font-size: 11.5px; color: #888; margin-bottom: 5px; }
+  .stat-card .val { font-size: 17px; font-weight: 600; color: #222; }
+  .stat-card .pend { font-size: 11.5px; color: #d97d00; margin-top: 5px; font-weight: 600; }
+
+  /* meta grid */
+  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px 24px; background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; }
+  .meta .lbl { font-size: 11.5px; color: #8a8a8a; margin-bottom: 4px; }
+  .meta .val { font-size: 13.5px; color: #222; }
+
+  h2.sec { font-size: 15px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+  .sec-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .gst-note { font-size: 12px; color: #888; }
+  .gst-note b { color: #444; }
+
+  /* view toggle */
+  .view-toggle { display: inline-flex; border: 1px solid #d8d8d8; border-radius: 7px; overflow: hidden; background: #fff; }
+  .view-toggle button { padding: 7px 14px; border: none; background: #fff; font-size: 12.5px; font-weight: 600; color: #666; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .view-toggle button + button { border-left: 1px solid #e5e5e5; }
+  .view-toggle button.active { background: #16233f; color: #fff; }
+  .view-toggle button .dot { width: 7px; height: 7px; border-radius: 50%; background: #0F8A0F; }
+  .view-toggle button.pend .dot { background: #F19100; }
+
+  /* table */
+  .table-wrapper { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 900px; }
+  thead { background: #fafafa; }
+  th { text-align: left; padding: 10px 12px; font-size: 11.5px; font-weight: 600; color: #666; border-bottom: 1px solid #e5e5e5; white-space: nowrap; }
+  td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f2f2f2; vertical-align: middle; }
+  td.right, th.right { text-align: right; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.added { background: #f2fbf4; }
+  tbody tr.removed { background: #fdf4f3; }
+  tbody tr.removed td { color: #a08d8b; }
+  .idx { color: #aaa; font-size: 12px; }
+  .was { color: #b0b0b0; text-decoration: line-through; font-size: 12px; margin-right: 6px; }
+  .now { color: #0d6b0d; font-weight: 700; }
+  .now.up { color: #b3251c; }
+  .row-note { font-size: 11px; color: #8a8a8a; margin-top: 3px; }
+
+  /* totals */
+  .totals { display: flex; justify-content: flex-end; margin-top: 14px; }
+  .totals-box { min-width: 320px; background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 14px 18px; }
+  .totals-box .tr { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; color: #555; }
+  .totals-box .tr.grand { border-top: 1px solid #eee; margin-top: 6px; padding-top: 10px; font-size: 16px; font-weight: 700; color: #16233f; }
+  .totals-box .tr .delta { font-size: 12px; font-weight: 700; color: #b3251c; }
+
+  /* history */
+  .history { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px 20px; margin-top: 24px; }
+  .history h3 { font-size: 13.5px; font-weight: 700; margin-bottom: 14px; color: #444; }
+  .hitem { display: flex; gap: 12px; padding-bottom: 16px; position: relative; }
+  .hitem:not(:last-child)::before { content: ''; position: absolute; left: 12px; top: 26px; bottom: 0; width: 1px; background: #e8e8e8; }
+  .hitem .hdot { width: 25px; height: 25px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff; background: #bbb; z-index: 1; }
+  .hitem .hdot.ok { background: #0F8A0F; }
+  .hitem .hdot.no { background: #d2281b; }
+  .hitem .hdot.wait { background: #F19100; }
+  .hitem .hbody { font-size: 12.5px; color: #555; line-height: 1.5; }
+  .hitem .hbody b { color: #222; }
+  .hitem .hmeta { color: #999; font-size: 11.5px; margin-top: 2px; }
+  .hitem .hquote { font-style: italic; color: #666; background: #fafafa; border-left: 2px solid #e0e0e0; padding: 5px 10px; margin-top: 6px; border-radius: 0 4px 4px 0; }
+
+  /* footer action bar */
+  .action-bar { background: #fff; border-top: 1px solid #e5e5e5; padding: 12px 24px; display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; position: sticky; bottom: 0; }
+  .btn { padding: 9px 18px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 7px; }
+  .btn.primary { background: #F19100; color: #fff; }
+  .btn.primary:hover { background: #d97d00; }
+  .btn.primary:disabled { background: #f3d3a4; cursor: not-allowed; }
+  .btn.green { background: #0F8A0F; color: #fff; }
+  .btn.green:hover { background: #0c760c; }
+  .btn.ghost { background: #fff; border: 1px solid #d8d8d8; color: #555; }
+  .btn.ghost:hover { background: #f6f6f6; }
+  .btn.danger { background: #fff; border: 1px solid #e6b3ae; color: #d2281b; }
+  .btn.danger:hover { background: #fdecea; }
+  .btn.sm { padding: 6px 12px; font-size: 12px; }
+  .btn.link { background: none; border: none; color: #1a5cb8; text-decoration: underline; padding: 6px 2px; }
+
+  /* edit screen */
+  .edit-note { font-size: 12.5px; color: #666; }
+  input.cell, select.cell { width: 100%; padding: 7px 9px; border: 1px solid #d8d8d8; border-radius: 5px; font-size: 13px; font-family: inherit; background: #fff; }
+  input.cell:focus { outline: none; border-color: #F19100; box-shadow: 0 0 0 2px rgba(241,145,0,0.15); }
+  input.cell.num { text-align: right; width: 100px; }
+  input.cell.locked { background: #f4f4f4; color: #999; }
+  td.changed input.cell { border-color: #F19100; background: #fffaf1; }
+  .cell-was { font-size: 10.5px; color: #b0b0b0; text-decoration: line-through; margin-top: 3px; text-align: right; }
+  .del-row { background: none; border: none; color: #c58f8a; cursor: pointer; font-size: 15px; }
+  .add-item { display: inline-flex; align-items: center; gap: 7px; color: #F19100; font-weight: 600; font-size: 13px; background: none; border: none; cursor: pointer; padding: 12px 4px 4px; }
+
+  .change-summary { background: #fff8ec; border: 1px solid #f5d9a8; border-radius: 8px; padding: 12px 18px; margin-top: 16px; display: flex; align-items: center; gap: 26px; flex-wrap: wrap; }
+  .change-summary .cs { font-size: 11.5px; color: #8a6d3b; }
+  .change-summary .cs b { display: block; font-size: 15px; color: #6b4a10; margin-top: 3px; font-weight: 700; }
+  .change-summary .cs b.up { color: #b3251c; }
+  .change-summary .cs b.down { color: #0d6b0d; }
+  .change-summary .cs-list { flex: 1; min-width: 220px; font-size: 12px; color: #6b4a10; line-height: 1.6; }
+
+  /* modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(20,25,40,0.55); z-index: 100; align-items: flex-start; justify-content: center; padding: 50px 24px; overflow-y: auto; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 12px; width: 100%; max-width: 620px; box-shadow: 0 24px 60px rgba(0,0,0,0.3); }
+  .modal-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 22px 14px; border-bottom: 1px solid #eee; }
+  .modal-head h2 { font-size: 16.5px; font-weight: 700; }
+  .modal-head .sub { font-size: 12.5px; color: #888; margin-top: 4px; font-weight: 400; }
+  .modal-head .x { background: none; border: none; font-size: 22px; color: #aaa; cursor: pointer; line-height: 1; }
+  .modal-body { padding: 18px 22px 22px; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 22px; border-top: 1px solid #eee; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12.5px; font-weight: 600; color: #444; margin-bottom: 6px; }
+  .field .hint { font-size: 11.5px; color: #999; font-weight: 400; margin-top: 4px; }
+  .field select, .field textarea { width: 100%; padding: 9px 10px; border: 1px solid #d8d8d8; border-radius: 6px; font-size: 13px; font-family: inherit; }
+  .field textarea { min-height: 78px; resize: vertical; }
+  .diff-list { background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; font-size: 12.5px; line-height: 1.7; color: #555; }
+  .diff-list .dl-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 6px; }
+  .diff-list .dtot { border-top: 1px solid #e8e8e8; margin-top: 8px; padding-top: 8px; font-weight: 700; color: #222; }
+
+  /* toast */
+  .toast { position: fixed; top: 18px; right: 18px; background: #fff; border-left: 4px solid #0F8A0F; border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,0.18); padding: 14px 18px; font-size: 13px; display: none; align-items: center; gap: 11px; z-index: 200; max-width: 380px; }
+  .toast.show { display: flex; }
+  .toast.err { border-left-color: #d2281b; }
+  .toast .ti { width: 22px; height: 22px; border-radius: 50%; background: #0F8A0F; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+  .toast.err .ti { background: #d2281b; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo"><div class="v-icon">V</div><span>Varicon</span></div>
+    <div class="sidebar-org"><div class="av">KY</div>Kerb Your Enthusias…</div>
+    <div class="sidebar-item"><span class="icon">▦</span>Projects</div>
+    <div class="sidebar-item"><span class="icon">◫</span>Dashboard</div>
+    <div class="sidebar-item"><span class="icon">◷</span>Timesheet</div>
+    <div class="sidebar-item"><span class="icon">▤</span>Daywork Record</div>
+    <div class="sidebar-item active"><span class="icon">🛒</span>Purchase Order</div>
+    <div class="sidebar-item"><span class="icon">▥</span>Site Docket</div>
+    <div class="sidebar-item"><span class="icon">▩</span>Bills</div>
+    <div class="sidebar-sep"></div>
+    <div class="sidebar-item"><span class="icon">◨</span>Suppliers</div>
+    <div class="sidebar-item"><span class="icon">◧</span>User Management</div>
+    <div class="sidebar-item"><span class="icon">⚙</span>Settings</div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <h1><span class="back" onclick="goDetail()">←</span> <span id="pageTitle">Purchase Order Detail</span></h1>
+      <div class="persona-switch">
+        <span class="label">Signed in as</span>
+        <div class="persona-btns">
+          <button class="persona-btn active" id="pbCreator" onclick="setPersona('creator')">
+            <span class="av">SC</span>
+            <span style="text-align:left">Sarah Chen<small>Creator access</small></span>
+          </button>
+          <button class="persona-btn" id="pbApprover" onclick="setPersona('approver')">
+            <span class="av">JS</span>
+            <span style="text-align:left">Jim Smith<small>Can approve</small></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= DETAIL SCREEN ================= -->
+    <div class="screen active" id="screenDetail">
+      <div class="content">
+        <div class="status-row">
+          <div class="st">
+            Status: <span id="statusPills"></span>
+          </div>
+          <div>
+            <span class="header-pill">✦ AI Summary</span>
+            <span class="header-pill">⧉ Duplicate PO</span>
+            <span class="header-pill">⧉ Copy PO content to bill</span>
+          </div>
+        </div>
+
+        <div id="detailBanner"></div>
+
+        <div class="stat-cards" id="statCards"></div>
+
+        <div class="meta-grid">
+          <div class="meta"><div class="lbl">Project</div><div class="val">(KYE-0001) DTP Rural Road Resheeting Program 2026</div></div>
+          <div class="meta"><div class="lbl">Supplier</div><div class="val">Redgum Quarries &amp; Asphalt Pty Ltd</div></div>
+          <div class="meta"><div class="lbl">Order Date</div><div class="val">Wed, 29/07/2026</div></div>
+          <div class="meta"><div class="lbl">Delivery Date</div><div class="val">—</div></div>
+          <div class="meta"><div class="lbl">PO Number</div><div class="val">PO-KYE-0001-001</div></div>
+          <div class="meta"><div class="lbl">PO Title</div><div class="val">Quarry and Asphalt</div></div>
+          <div class="meta"><div class="lbl">Invoice Email</div><div class="val">accounts@kyecontracting.com.au</div></div>
+          <div class="meta"><div class="lbl">Delivery Status</div><div class="val">Not Received</div></div>
+        </div>
+
+        <div class="sec-row">
+          <h2 class="sec">Delivery Items <span id="itemsVerPill"></span></h2>
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div id="viewToggle"></div>
+            <span class="gst-note">Amounts are <b>GST - EXCLUSIVE</b></span>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:34px"></th>
+                <th>Resource</th>
+                <th>Description</th>
+                <th>Accounting Code</th>
+                <th>Cost Centre</th>
+                <th>Unit</th>
+                <th class="right">Unit Cost</th>
+                <th class="right">Order Qty</th>
+                <th class="right">Delivered Qty</th>
+                <th>Tax</th>
+                <th class="right">Total exc. GST</th>
+              </tr>
+            </thead>
+            <tbody id="detailRows"></tbody>
+          </table>
+        </div>
+
+        <div class="totals"><div class="totals-box" id="detailTotals"></div></div>
+
+        <div class="history">
+          <h3>Revision history</h3>
+          <div id="historyList"></div>
+        </div>
+      </div>
+      <div class="action-bar" id="detailActions"></div>
+    </div>
+
+    <!-- ================= EDIT SCREEN ================= -->
+    <div class="screen" id="screenEdit">
+      <div class="content">
+        <div class="status-row">
+          <div class="st">Status: <span class="pill approved">● APPROVED</span> <span class="pill ver" id="editVerPill">v1</span></div>
+          <div class="edit-note" id="editWhoNote"></div>
+        </div>
+
+        <div class="banner blue">
+          <div class="b-icon">i</div>
+          <div class="b-body">
+            <div class="b-title">You are proposing changes to an approved PO</div>
+            The PO stays at its currently approved amounts until an approver accepts your revision.
+            Nothing you change here affects committed cost, budget or the supplier's copy yet.
+          </div>
+        </div>
+
+        <div class="sec-row">
+          <h2 class="sec">Delivery Items</h2>
+          <span class="gst-note">Amounts are <b>GST - EXCLUSIVE</b></span>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:34px"></th>
+                <th style="min-width:150px">Resource</th>
+                <th style="min-width:190px">Description</th>
+                <th style="min-width:130px">Accounting Code</th>
+                <th style="min-width:120px">Cost Centre</th>
+                <th>Unit</th>
+                <th class="right">Unit Cost</th>
+                <th class="right">Order Qty</th>
+                <th class="right">Total exc. GST</th>
+                <th style="width:40px"></th>
+              </tr>
+            </thead>
+            <tbody id="editRows"></tbody>
+          </table>
+        </div>
+        <button class="add-item" onclick="addDraftItem()">＋ Add Delivery Item</button>
+
+        <div class="change-summary" id="changeSummary"></div>
+      </div>
+      <div class="action-bar">
+        <button class="btn ghost" onclick="cancelEdit()">Cancel</button>
+        <button class="btn primary" id="btnSubmitRev" onclick="openSubmitModal()">Submit revision for approval</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SUBMIT REVISION MODAL ============ -->
+<div class="modal-overlay" id="mSubmit">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2>Submit revision for approval</h2>
+        <div class="sub">PO-KYE-0001-001 · creating revision <b id="mSubmitVer">v2</b></div>
+      </div>
+      <button class="x" onclick="closeModal('mSubmit')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="diff-list" id="mSubmitDiff"></div>
+      <div class="field">
+        <label>Send to approver *</label>
+        <select id="mSubmitApprover">
+          <option>Jim Smith — Project Manager</option>
+          <option>Rachel Nguyen — Commercial Manager</option>
+        </select>
+        <div class="hint">Only users with "Can Approve" on this project are listed.</div>
+      </div>
+      <div class="field">
+        <label>Reason for change *</label>
+        <textarea id="mSubmitReason" placeholder="e.g. Quarry issued a price increase from 1 August and extra 55 MT required for the Ch. 4200 section."></textarea>
+      </div>
+      <div class="banner amber" style="margin-bottom:0">
+        <div class="b-icon">!</div>
+        <div class="b-body">
+          <div class="b-title">The PO will stay at $<span id="mSubmitHold">175,100.00</span> while this is pending</div>
+          Approved amounts, committed cost and the supplier's issued PO are unchanged until Jim approves.
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal('mSubmit')">Cancel</button>
+      <button class="btn primary" onclick="submitRevision()">Submit for approval</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ APPROVE MODAL ============ -->
+<div class="modal-overlay" id="mApprove">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2>Approve revision</h2>
+        <div class="sub" id="mApproveSub"></div>
+      </div>
+      <button class="x" onclick="closeModal('mApprove')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="diff-list" id="mApproveDiff"></div>
+      <div class="field">
+        <label>Comment (optional)</label>
+        <textarea id="mApproveComment" placeholder="Approved — price increase confirmed against quote QU-00012."></textarea>
+      </div>
+      <div class="banner blue" style="margin-bottom:0">
+        <div class="b-icon">i</div>
+        <div class="b-body">On approval the PO moves to <b id="mApproveVer">v2</b> and the new amounts become the approved amounts. A revised PO is emailed to the supplier.</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal('mApprove')">Cancel</button>
+      <button class="btn green" onclick="approveRevision()">Approve revision</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ REJECT MODAL ============ -->
+<div class="modal-overlay" id="mReject">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <h2>Reject revision</h2>
+        <div class="sub">The PO stays at its current approved amounts.</div>
+      </div>
+      <button class="x" onclick="closeModal('mReject')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Reason for rejection *</label>
+        <textarea id="mRejectReason" placeholder="e.g. Need the quarry's written price notice attached before I can approve the rate change."></textarea>
+        <div class="hint">Sarah will be notified and can amend and resubmit the revision.</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal('mReject')">Cancel</button>
+      <button class="btn danger" onclick="rejectRevision()">Reject revision</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><div class="ti">✓</div><div id="toastMsg"></div></div>
+
+<script>
+/* ---------------- state ---------------- */
+const PEOPLE = {
+  creator:  { name: 'Sarah Chen', initials: 'SC', role: 'Site Engineer · Creator access' },
+  approver: { name: 'Jim Smith',  initials: 'JS', role: 'Project Manager · Can approve' }
+};
+
+const state = {
+  persona: 'creator',
+  view: 'approved',          // approved | proposed
+  version: 1,
+  approved: [
+    { id: 1, resource: '(Material MT) Material MT', desc: 'DGB20 crushed rock base (delivered)', code: '311 - Materials', cc: 'Earthworks', unit: 'MT', cost: 38.00, qty: 2800, delivered: 0, tax: 'GST on expense' },
+    { id: 2, resource: '(Material m3) Material m3', desc: 'Bitumen prime coat emulsion',        code: '311 - Materials', cc: 'Earthworks', unit: 'm3', cost: 3.50,  qty: 3600, delivered: 0, tax: 'GST on expense' },
+    { id: 3, resource: '(Material MT) Material MT', desc: 'AC14 asphalt wearing course (delivered)', code: '311 - Materials', cc: 'Earthworks', unit: 'MT', cost: 165.00, qty: 340, delivered: 0, tax: 'GST on expense' }
+  ],
+  draft: null,
+  revision: null,            // { items, by, at, approver, reason, version }
+  lastRejected: null,
+  history: [
+    { kind: 'ok', title: 'PO approved', who: 'Jim Smith', at: '29/07/2026 09:14', body: 'Version <b>v1</b> approved — $175,100.00', quote: null },
+    { kind: 'ok', title: 'PO created', who: 'Sarah Chen', at: '29/07/2026 08:51', body: 'Purchase order raised and submitted for approval', quote: null }
+  ],
+  nextId: 4
+};
+
+/* ---------------- helpers ---------------- */
+const money = n => '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const total = items => items.reduce((s, i) => s + i.cost * i.qty, 0);
+const clone = o => JSON.parse(JSON.stringify(o));
+const byId = (items, id) => items.find(i => i.id === id);
+
+function diffLines(base, next) {
+  const out = [];
+  next.forEach(n => {
+    const b = byId(base, n.id);
+    if (!b) { out.push({ type: 'add', text: `<b>New line</b> — ${n.desc}: ${n.qty.toLocaleString()} ${n.unit} @ ${money(n.cost)} = ${money(n.cost * n.qty)}` }); return; }
+    const parts = [];
+    if (b.cost !== n.cost) parts.push(`unit cost ${money(b.cost)} → <b>${money(n.cost)}</b>`);
+    if (b.qty  !== n.qty)  parts.push(`order qty ${b.qty.toLocaleString()} → <b>${n.qty.toLocaleString()}</b>`);
+    if (b.desc !== n.desc) parts.push(`description updated`);
+    if (parts.length) out.push({ type: 'chg', text: `${b.desc}: ${parts.join(', ')}` });
+  });
+  base.forEach(b => { if (!byId(next, b.id)) out.push({ type: 'del', text: `<b>Line removed</b> — ${b.desc} (${money(b.cost * b.qty)})` }); });
+  return out;
+}
+
+function toast(msg, err) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').innerHTML = msg;
+  t.classList.toggle('err', !!err);
+  t.classList.add('show');
+  clearTimeout(window._tt);
+  window._tt = setTimeout(() => t.classList.remove('show'), 4200);
+}
+const openModal = id => document.getElementById(id).classList.add('open');
+const closeModal = id => document.getElementById(id).classList.remove('open');
+
+function setPersona(p) {
+  state.persona = p;
+  document.getElementById('pbCreator').classList.toggle('active', p === 'creator');
+  document.getElementById('pbApprover').classList.toggle('active', p === 'approver');
+  if (document.getElementById('screenEdit').classList.contains('active')) goDetail(); else render();
+}
+
+function showScreen(id, title) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.getElementById('pageTitle').textContent = title;
+  window.scrollTo(0, 0);
+  document.querySelector('.content').scrollTop = 0;
+}
+
+/* ---------------- detail render ---------------- */
+function render() {
+  const rev = state.revision;
+  const showProposed = rev && state.view === 'proposed';
+  const items = showProposed ? rev.items : state.approved;
+  const base = state.approved;
+
+  /* status pills */
+  let pills = `<span class="pill approved">● APPROVED</span> <span class="pill ver">v${state.version}</span>`;
+  if (rev) pills += ` <span class="pill pending">⏱ REVISION v${rev.version} PENDING APPROVAL</span>`;
+  else if (state.lastRejected) pills += ` <span class="pill rejected">✕ REVISION v${state.lastRejected.version} REJECTED</span>`;
+  document.getElementById('statusPills').innerHTML = pills;
+
+  /* banner */
+  const bEl = document.getElementById('detailBanner');
+  if (rev) {
+    const d = total(rev.items) - total(base);
+    const list = diffLines(base, rev.items).map(l => `<li>${l.text}</li>`).join('');
+    const mine = state.persona === 'approver';
+    bEl.innerHTML = `
+      <div class="banner amber">
+        <div class="b-icon">⏱</div>
+        <div class="b-body">
+          <div class="b-title">Revision v${rev.version} is awaiting ${mine ? 'your' : rev.approver.split(' —')[0] + "'s"} approval</div>
+          Proposed by <b>${rev.by}</b> on ${rev.at}. The PO below is still showing the <b>approved v${state.version} amounts</b>
+          (${money(total(base))}) — they will not change unless the revision is approved.
+          <div style="margin-top:8px">Proposed total <b>${money(total(rev.items))}</b>
+            <span style="color:${d >= 0 ? '#b3251c' : '#0d6b0d'};font-weight:700">(${d >= 0 ? '+' : '−'}${money(Math.abs(d)).slice(1)})</span></div>
+          <ul style="margin:8px 0 0 18px">${list}</ul>
+          ${rev.reason ? `<div style="margin-top:8px"><i>“${rev.reason}”</i></div>` : ''}
+          <div class="b-actions">
+            ${mine
+              ? `<button class="btn green sm" onclick="openApproveModal()">✓ Approve revision</button>
+                 <button class="btn danger sm" onclick="openModal('mReject')">✕ Reject revision</button>
+                 <button class="btn ghost sm" onclick="setView('proposed')">Compare side by side</button>`
+              : `<button class="btn ghost sm" onclick="editRevision()">Edit revision</button>
+                 <button class="btn ghost sm" onclick="withdrawRevision()">Withdraw revision</button>`}
+          </div>
+        </div>
+      </div>`;
+  } else if (state.lastRejected) {
+    const r = state.lastRejected;
+    bEl.innerHTML = `
+      <div class="banner red">
+        <div class="b-icon">✕</div>
+        <div class="b-body">
+          <div class="b-title">Revision v${r.version} was rejected by ${r.by} on ${r.at}</div>
+          The PO remains at its approved v${state.version} amounts (${money(total(base))}). Nothing changed.
+          <div style="margin-top:6px"><i>“${r.reason}”</i></div>
+          ${state.persona === 'creator'
+            ? `<div class="b-actions"><button class="btn primary sm" onclick="reworkRejected()">Amend and resubmit</button>
+               <button class="btn ghost sm" onclick="dismissRejected()">Dismiss</button></div>` : ''}
+        </div>
+      </div>`;
+  } else {
+    bEl.innerHTML = '';
+  }
+
+  /* stat cards */
+  const pendLine = rev ? `<div class="pend">Pending v${rev.version}: ${money(total(rev.items))}</div>` : '';
+  document.getElementById('statCards').innerHTML = `
+    <div class="stat-card"><div class="lbl">PO Total (approved)</div><div class="val">${money(total(base))}</div>${pendLine}</div>
+    <div class="stat-card"><div class="lbl">Docket Delivered</div><div class="val">$0.00</div></div>
+    <div class="stat-card"><div class="lbl">Remaining to be delivered</div><div class="val">${money(total(base))}</div></div>
+    <div class="stat-card"><div class="lbl">Billed</div><div class="val">$0.00</div></div>
+    <div class="stat-card"><div class="lbl">Remaining to be Billed</div><div class="val">${money(total(base))}</div></div>`;
+
+  /* version pill + toggle */
+  document.getElementById('itemsVerPill').innerHTML = showProposed
+    ? `<span class="pill pending">PROPOSED v${rev.version}</span>`
+    : `<span class="pill approved">APPROVED v${state.version}</span>`;
+
+  document.getElementById('viewToggle').innerHTML = rev ? `
+    <div class="view-toggle">
+      <button class="${state.view === 'approved' ? 'active' : ''}" onclick="setView('approved')"><span class="dot"></span>Approved v${state.version}</button>
+      <button class="pend ${state.view === 'proposed' ? 'active' : ''}" onclick="setView('proposed')"><span class="dot"></span>Proposed v${rev.version}</button>
+    </div>` : '';
+
+  /* rows */
+  let rows = '';
+  items.forEach((it, i) => {
+    const b = showProposed ? byId(base, it.id) : null;
+    const added = showProposed && !b;
+    const cell = (nowVal, wasVal, fmt) => {
+      if (!showProposed || !b || nowVal === wasVal) return fmt(nowVal);
+      const up = nowVal > wasVal;
+      return `<span class="was">${fmt(wasVal)}</span><span class="now ${up ? 'up' : ''}">${fmt(nowVal)}</span>`;
+    };
+    const num = v => v.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    rows += `<tr class="${added ? 'added' : ''}">
+      <td class="idx">${i + 1}</td>
+      <td>${it.resource}</td>
+      <td>${it.desc}${added ? ' <span class="pill new">NEW LINE</span>' : ''}</td>
+      <td>${it.code}</td>
+      <td>${it.cc}</td>
+      <td>${it.unit}</td>
+      <td class="right">${cell(it.cost, b ? b.cost : it.cost, v => '$' + num(v))}</td>
+      <td class="right">${cell(it.qty, b ? b.qty : it.qty, v => num(v))}</td>
+      <td class="right">${num(it.delivered || 0)}</td>
+      <td>${it.tax}</td>
+      <td class="right">${cell(it.cost * it.qty, b ? b.cost * b.qty : it.cost * it.qty, v => '$' + num(v))}</td>
+    </tr>`;
+  });
+  if (showProposed) {
+    base.forEach(b => {
+      if (byId(rev.items, b.id)) return;
+      rows += `<tr class="removed"><td class="idx">—</td><td>${b.resource}</td>
+        <td>${b.desc} <span class="pill rejected">REMOVED</span></td><td>${b.code}</td><td>${b.cc}</td><td>${b.unit}</td>
+        <td class="right">${money(b.cost)}</td><td class="right">${b.qty.toLocaleString()}</td><td class="right">0.00</td>
+        <td>${b.tax}</td><td class="right">${money(b.cost * b.qty)}</td></tr>`;
+    });
+  }
+  document.getElementById('detailRows').innerHTML = rows;
+
+  /* totals */
+  const sub = total(items), gst = sub * 0.1;
+  const d = sub - total(base);
+  document.getElementById('detailTotals').innerHTML = `
+    <div class="tr"><span>Subtotal</span><span>${money(sub)}</span></div>
+    <div class="tr"><span>Total GST 10%</span><span>${money(gst)}</span></div>
+    <div class="tr grand"><span>Total</span><span>${money(sub + gst)}</span></div>
+    ${showProposed && d !== 0 ? `<div class="tr"><span>Variance vs approved v${state.version}</span><span class="delta">${d > 0 ? '+' : '−'}${money(Math.abs(d)).slice(1)} exc. GST</span></div>` : ''}`;
+
+  /* history */
+  let h = '';
+  if (rev) h += hitem('wait', `Revision v${rev.version} submitted for approval`, rev.by, rev.at,
+    `Proposed total <b>${money(total(rev.items))}</b> · awaiting <b>${rev.approver.split(' —')[0]}</b>`, rev.reason);
+  state.history.forEach(e => h += hitem(e.kind, e.title, e.who, e.at, e.body, e.quote));
+  document.getElementById('historyList').innerHTML = h;
+
+  /* action bar */
+  const canPropose = !rev;
+  document.getElementById('detailActions').innerHTML = `
+    ${canPropose ? `<button class="btn primary" onclick="startEdit()">✎ Propose edit</button>` : ''}
+    ${rev && state.persona === 'approver' ? `<button class="btn green" onclick="openApproveModal()">✓ Approve revision v${rev.version}</button>
+        <button class="btn danger" onclick="openModal('mReject')">Reject revision</button>` : ''}
+    ${rev && state.persona === 'creator' ? `<button class="btn ghost" onclick="editRevision()">Edit revision</button>` : ''}
+    <button class="btn ghost">Download as PDF</button>
+    <button class="btn ghost">Send Email</button>
+    <button class="btn ghost">Close PO</button>`;
+}
+
+function hitem(kind, title, who, at, body, quote) {
+  const ic = kind === 'ok' ? '✓' : kind === 'no' ? '✕' : '⏱';
+  return `<div class="hitem"><div class="hdot ${kind}">${ic}</div><div class="hbody">
+    <b>${title}</b><div>${body || ''}</div>
+    <div class="hmeta">${who} · ${at}</div>
+    ${quote ? `<div class="hquote">“${quote}”</div>` : ''}
+  </div></div>`;
+}
+
+function setView(v) { state.view = v; render(); }
+function goDetail() { showScreen('screenDetail', 'Purchase Order Detail'); render(); }
+
+/* ---------------- edit screen ---------------- */
+function startEdit() {
+  state.draft = clone(state.approved);
+  openEdit();
+}
+function editRevision() { state.draft = clone(state.revision.items); openEdit(); }
+function reworkRejected() { state.draft = clone(state.lastRejected.items); openEdit(); }
+function dismissRejected() { state.lastRejected = null; render(); }
+
+function openEdit() {
+  document.getElementById('editVerPill').textContent = 'v' + state.version;
+  document.getElementById('editWhoNote').innerHTML =
+    `Editing as <b>${PEOPLE[state.persona].name}</b> — ${PEOPLE[state.persona].role}`;
+  showScreen('screenEdit', 'Propose Edit — Purchase Order');
+  renderEdit();
+}
+function cancelEdit() { state.draft = null; goDetail(); }
+
+function renderEdit() {
+  const base = state.approved, d = state.draft;
+  let rows = '';
+  d.forEach((it, i) => {
+    const b = byId(base, it.id);
+    const costChg = b && b.cost !== it.cost, qtyChg = b && b.qty !== it.qty;
+    rows += `<tr class="${b ? '' : 'added'}">
+      <td class="idx">${i + 1}</td>
+      <td><input class="cell" value="${it.resource}" onchange="setField(${it.id},'resource',this.value)"></td>
+      <td><input class="cell" value="${it.desc}" onchange="setField(${it.id},'desc',this.value)"></td>
+      <td><input class="cell" value="${it.code}" onchange="setField(${it.id},'code',this.value)"></td>
+      <td><input class="cell" value="${it.cc}" onchange="setField(${it.id},'cc',this.value)"></td>
+      <td><input class="cell locked" style="width:60px" value="${it.unit}" readonly></td>
+      <td class="right ${costChg ? 'changed' : ''}"><input class="cell num" type="number" step="0.01" value="${it.cost}" oninput="setNum(${it.id},'cost',this.value)">
+        ${costChg ? `<div class="cell-was">was $${b.cost.toFixed(2)}</div>` : ''}</td>
+      <td class="right ${qtyChg ? 'changed' : ''}"><input class="cell num" type="number" value="${it.qty}" oninput="setNum(${it.id},'qty',this.value)">
+        ${qtyChg ? `<div class="cell-was">was ${b.qty.toLocaleString()}</div>` : ''}</td>
+      <td class="right"><b>${money(it.cost * it.qty)}</b>${b && (costChg || qtyChg) ? `<div class="cell-was">was ${money(b.cost * b.qty)}</div>` : ''}</td>
+      <td><button class="del-row" title="Remove line" onclick="removeDraftItem(${it.id})">🗑</button></td>
+    </tr>`;
+  });
+  base.forEach(b => {
+    if (byId(d, b.id)) return;
+    rows += `<tr class="removed"><td class="idx">—</td><td colspan="7">${b.desc} — <b>line marked for removal</b> (${money(b.cost * b.qty)})</td>
+      <td class="right">—</td><td><button class="del-row" style="color:#0F8A0F" title="Restore line" onclick="restoreItem(${b.id})">↺</button></td></tr>`;
+  });
+  document.getElementById('editRows').innerHTML = rows;
+
+  /* change summary */
+  const lines = diffLines(base, d);
+  const delta = total(d) - total(base);
+  document.getElementById('changeSummary').innerHTML = `
+    <div class="cs">Currently approved (v${state.version})<b>${money(total(base))}</b></div>
+    <div class="cs">Proposed<b>${money(total(d))}</b></div>
+    <div class="cs">Variance<b class="${delta > 0 ? 'up' : delta < 0 ? 'down' : ''}">${delta === 0 ? '—' : (delta > 0 ? '+' : '−') + money(Math.abs(delta)).slice(1)}</b></div>
+    <div class="cs-list">${lines.length ? '<b>Changes:</b><br>' + lines.map(l => '• ' + l.text).join('<br>') : 'No changes yet — edit a value above to build the revision.'}</div>`;
+  document.getElementById('btnSubmitRev').disabled = lines.length === 0;
+}
+
+function setField(id, k, v) { byId(state.draft, id)[k] = v; renderEdit(); }
+function setNum(id, k, v) { byId(state.draft, id)[k] = parseFloat(v) || 0; renderEdit(); }
+function removeDraftItem(id) { state.draft = state.draft.filter(i => i.id !== id); renderEdit(); }
+function restoreItem(id) { state.draft.push(clone(byId(state.approved, id))); renderEdit(); }
+function addDraftItem() {
+  state.draft.push({ id: state.nextId++, resource: '(Material m2) Material m2', desc: '', code: '311 - Materials', cc: 'Earthworks', unit: 'm2', cost: 0, qty: 0, delivered: 0, tax: 'GST on expense' });
+  renderEdit();
+}
+
+/* ---------------- submit / decide ---------------- */
+function openSubmitModal() {
+  const lines = diffLines(state.approved, state.draft);
+  const delta = total(state.draft) - total(state.approved);
+  document.getElementById('mSubmitVer').textContent = 'v' + (state.version + 1);
+  document.getElementById('mSubmitHold').textContent = money(total(state.approved)).slice(1);
+  document.getElementById('mSubmitDiff').innerHTML = `<div class="dl-head">Changes in this revision</div>
+    ${lines.map(l => '• ' + l.text).join('<br>')}
+    <div class="dtot">Approved ${money(total(state.approved))} → Proposed ${money(total(state.draft))}
+      <span style="color:${delta > 0 ? '#b3251c' : '#0d6b0d'}">(${delta > 0 ? '+' : '−'}${money(Math.abs(delta)).slice(1)})</span></div>`;
+  openModal('mSubmit');
+}
+
+function submitRevision() {
+  const reason = document.getElementById('mSubmitReason').value.trim();
+  if (!reason) { toast('Add a reason for the change so the approver has context.', true); return; }
+  state.revision = {
+    version: state.version + 1,
+    items: clone(state.draft),
+    by: PEOPLE[state.persona].name,
+    at: '30/07/2026 10:42',
+    approver: document.getElementById('mSubmitApprover').value,
+    reason
+  };
+  state.lastRejected = null;
+  state.draft = null;
+  state.view = 'approved';
+  closeModal('mSubmit');
+  goDetail();
+  toast(`Revision <b>v${state.revision.version}</b> sent to ${state.revision.approver.split(' —')[0]} for approval. The PO stays at ${money(total(state.approved))} until it is approved.`);
+}
+
+function withdrawRevision() {
+  state.revision = null; state.view = 'approved'; render();
+  toast('Revision withdrawn. The PO is unchanged at its approved amounts.');
+}
+
+function openApproveModal() {
+  const rev = state.revision;
+  const lines = diffLines(state.approved, rev.items);
+  const delta = total(rev.items) - total(state.approved);
+  document.getElementById('mApproveSub').innerHTML = `PO-KYE-0001-001 · revision <b>v${rev.version}</b> proposed by ${rev.by}`;
+  document.getElementById('mApproveVer').textContent = 'v' + rev.version;
+  document.getElementById('mApproveDiff').innerHTML = `<div class="dl-head">What you are approving</div>
+    ${lines.map(l => '• ' + l.text).join('<br>')}
+    <div class="dtot">Approved ${money(total(state.approved))} → New approved total ${money(total(rev.items))}
+      <span style="color:${delta > 0 ? '#b3251c' : '#0d6b0d'}">(${delta > 0 ? '+' : '−'}${money(Math.abs(delta)).slice(1)})</span></div>
+    <div style="margin-top:8px;color:#777"><i>Reason given: “${rev.reason}”</i></div>`;
+  openModal('mApprove');
+}
+
+function approveRevision() {
+  const rev = state.revision;
+  const oldTotal = total(state.approved);
+  const comment = document.getElementById('mApproveComment').value.trim();
+  state.approved = clone(rev.items);
+  state.version = rev.version;
+  state.history.unshift({
+    kind: 'ok', title: `Revision v${rev.version} approved`, who: PEOPLE.approver.name, at: '30/07/2026 11:05',
+    body: `Approved total ${money(oldTotal)} → <b>${money(total(state.approved))}</b>. Revised PO issued to supplier.`,
+    quote: comment || null
+  });
+  state.history.splice(1, 0, {
+    kind: 'ok', title: `Revision v${rev.version} submitted`, who: rev.by, at: rev.at,
+    body: `Proposed ${money(total(state.approved))}`, quote: rev.reason
+  });
+  state.revision = null;
+  state.view = 'approved';
+  document.getElementById('mApproveComment').value = '';
+  closeModal('mApprove');
+  render();
+  toast(`Revision approved. PO is now <b>v${state.version}</b> at ${money(total(state.approved))}.`);
+}
+
+function rejectRevision() {
+  const reason = document.getElementById('mRejectReason').value.trim();
+  if (!reason) { toast('A rejection reason is required.', true); return; }
+  const rev = state.revision;
+  state.lastRejected = { version: rev.version, items: clone(rev.items), by: PEOPLE.approver.name, at: '30/07/2026 11:05', reason };
+  state.history.unshift({
+    kind: 'no', title: `Revision v${rev.version} rejected`, who: PEOPLE.approver.name, at: '30/07/2026 11:05',
+    body: `PO remains at approved v${state.version} — ${money(total(state.approved))}. No values changed.`, quote: reason
+  });
+  state.history.splice(1, 0, {
+    kind: 'wait', title: `Revision v${rev.version} submitted`, who: rev.by, at: rev.at,
+    body: `Proposed ${money(total(rev.items))}`, quote: rev.reason
+  });
+  state.revision = null;
+  state.view = 'approved';
+  document.getElementById('mRejectReason').value = '';
+  closeModal('mReject');
+  render();
+  toast('Revision rejected. The PO is unchanged.', true);
+}
+
+render();
+</script>
+</body>
+</html>
