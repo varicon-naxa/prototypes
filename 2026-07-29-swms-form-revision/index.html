@@ -214,13 +214,16 @@ body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#333;display:flex;h
 .topbar-btn.portal i{color:#6366f1}
 .topbar-btn.portal:hover{background:#eef2ff}
 
-/* Multi-client picker */
-.client-list{display:flex;flex-direction:column;gap:8px}
-.client-opt{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer}
-.client-opt:hover{border-color:#f5a623;background:#fff7ed}
-.client-opt input{width:16px;height:16px;accent-color:#f5a623}
-.co-name{font-size:13px;font-weight:600;color:#1b2a4a}
-.co-email{font-size:11px;color:#64748b;margin-top:1px}
+/* Rev number tag on a revision row */
+.rev-tag{display:inline-block;font-size:10px;font-weight:700;color:#5b21b6;background:#ede9fe;padding:1px 7px;border-radius:6px;text-transform:uppercase;letter-spacing:.4px;margin-right:6px;vertical-align:middle}
+
+/* Free-entry multi-email input (daywork-docket style) */
+.email-input-row{display:flex;gap:8px}
+.email-input-row input{flex:1}
+.email-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.email-chip{display:inline-flex;align-items:center;gap:6px;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:14px;padding:5px 6px 5px 12px;font-size:12px;font-weight:600}
+.email-chip button{background:none;border:none;color:#6366f1;cursor:pointer;font-size:12px;line-height:1;padding:2px 5px;border-radius:50%}
+.email-chip button:hover{background:#c7d2fe;color:#312e81}
 
 /* Read-only form */
 .ro-banner{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af;display:flex;gap:8px;align-items:center;margin-bottom:14px}
@@ -349,14 +352,13 @@ const sig = (name,status,date)=>({name,status,date,comment:''});
 const SEED = () => ({
   form:{ type:'SWMS', title:'SWMS — Excavating and Working in Trenches', hrcw:'Trenches deeper than 1.5 m' },
   revs:[
-    {rev:'A',status:'locked',date:'12/01/2026',by:'Sarah Chen',summary:'Initial draft based on standard SWMS template',signees:mk(6),consulted:true,active:false,reviewers:[sig('Northside JV','signed','11/01/2026')]},
-    {rev:'B',status:'locked',date:'02/02/2026',by:'Mike Jones',summary:'Updated PPE requirements after toolbox talk',signees:mk(14),consulted:true,active:false,reviewers:[sig('Northside JV','signed','01/02/2026'),sig('BuildCo (Principal Contractor)','signed','02/02/2026')]},
-    {rev:'C',status:'locked',date:'17/02/2026',by:'Sarah Chen',summary:'Added trench shoring sign-off step',signees:mk(8),consulted:true,active:true,reviewers:[sig('Northside JV','signed','16/02/2026'),sig('BuildCo (Principal Contractor)','signed','17/02/2026')]},
+    {rev:1,status:'locked',date:'12/01/2026',by:'Sarah Chen',summary:'Initial draft based on standard SWMS template',signees:mk(6),consulted:true,active:false,reviewers:[sig('safety@northsidejv.com.au','signed','11/01/2026')]},
+    {rev:2,status:'locked',date:'02/02/2026',by:'Mike Jones',summary:'Updated PPE requirements after toolbox talk',signees:mk(14),consulted:true,active:false,reviewers:[sig('safety@northsidejv.com.au','signed','01/02/2026'),sig('pc@buildco.com.au','signed','02/02/2026')]},
+    {rev:3,status:'locked',date:'17/02/2026',by:'Sarah Chen',summary:'Added trench shoring sign-off step',signees:mk(8),consulted:true,active:true,reviewers:[sig('safety@northsidejv.com.au','signed','16/02/2026'),sig('pc@buildco.com.au','signed','17/02/2026')]},
   ],
 });
 function mk(n){const names=[['JD','John Doe','Excavator Op.'],['AM','Aisha Malik','Labourer'],['TN','Tom Nguyen','Supervisor'],['RP','Rita Poudel','Spotter'],['KB','Kev Brown','Plant Op.'],['Ls','Liu Shan','Labourer']];return Array.from({length:n},(_,i)=>names[i%names.length]);}
 let S = SEED();
-let nextRev = 'D';
 
 /* ---------------- render ---------------- */
 function currentStage(){
@@ -447,7 +449,7 @@ function renderHub(){
     <div class="rev-row ${rowCls}">
       <div class="num-circle">${r.rev}</div>
       <div class="rev-info">
-        <div class="rev-summary">${r.summary}</div>
+        <div class="rev-summary"><span class="rev-tag">Rev ${r.rev}</span> ${r.summary}</div>
         <div class="rev-meta">
           <span><i class="fa-regular fa-calendar"></i>${r.date}</span>
           <span><i class="fa-regular fa-user"></i>${r.by}</span>
@@ -472,14 +474,14 @@ function statusIcon(r){
   return {locked:'fa-lock',draft:'fa-pen',under_review:'fa-hourglass-half',approved:'fa-thumbs-up',superseded:'fa-clock-rotate-left'}[r.status];
 }
 function rowActions(r){
-  const view = `<button class="rev-btn ghost" onclick="viewForm('${r.rev}')"><i class="fa-solid fa-eye"></i> View</button>`;
+  const view = `<button class="rev-btn ghost" onclick="viewForm(${r.rev})"><i class="fa-solid fa-eye"></i> View</button>`;
   if(r.status==='draft')
-    return `<button class="rev-btn" onclick="editDraft('${r.rev}')"><i class="fa-solid fa-pen"></i> Edit</button>
-            <button class="rev-btn blue" onclick="sendForReview('${r.rev}')"><i class="fa-solid fa-paper-plane"></i> Send for review</button>`;
+    return `<button class="rev-btn" onclick="editDraft(${r.rev})"><i class="fa-solid fa-pen"></i> Edit</button>
+            <button class="rev-btn blue" onclick="sendForReview(${r.rev})"><i class="fa-solid fa-paper-plane"></i> Send for review</button>`;
   if(r.status==='under_review')
     return `<button class="rev-btn" onclick="openReviewStatus()"><i class="fa-solid fa-list-check"></i> Review status</button>${view}`;
   if(r.status==='approved')
-    return `<button class="rev-btn primary" onclick="confirmLock('${r.rev}')"><i class="fa-solid fa-lock"></i> Confirm &amp; lock</button>${view}`;
+    return `<button class="rev-btn primary" onclick="confirmLock(${r.rev})"><i class="fa-solid fa-lock"></i> Confirm &amp; lock</button>${view}`;
   return view;
 }
 
@@ -495,7 +497,7 @@ function today(){return '29/07/2026';}
 /* ---------------- actions ---------------- */
 function editDraft(rev){
   openModal(`
-  <div class="m-head"><div><div class="m-title">Edit revision ${rev} (draft)</div>
+  <div class="m-head"><div><div class="m-title">Edit Rev ${rev} (draft)</div>
     <div class="m-sub">Build the SWMS and record consultation with the crew before it goes for review.</div></div>
     <button class="m-close" onclick="closeModal()">✕</button></div>
   <div class="m-body">
@@ -505,7 +507,7 @@ function editDraft(rev){
     <div class="el-list" style="margin-top:6px">
       <div class="el-item"><i class="fa-solid fa-grip-lines"></i> Task step: Excavate trench</div>
       <div class="el-item"><i class="fa-solid fa-grip-lines"></i> Hazard: Cave-in / ground collapse</div>
-      <div class="el-item"><i class="fa-solid fa-grip-lines"></i> Control: Trench shoring / benching <span class="el-new">from Rev C</span></div>
+      <div class="el-item"><i class="fa-solid fa-grip-lines"></i> Control: Trench shoring / benching <span class="el-new">from Rev 3</span></div>
       <div class="el-item"><i class="fa-solid fa-grip-lines"></i> Hazard: Adjacent underground services <span class="el-new">NEW</span></div>
       <div class="el-item"><i class="fa-solid fa-grip-lines"></i> Sign-off: Supervisor verification</div>
     </div>
@@ -518,40 +520,57 @@ function editDraft(rev){
   </div>`,true);
 }
 
-/* Send to one OR MORE clients (daywork-docket style external verification). */
+/* Send to one OR MORE client emails (free entry, daywork-docket style). */
+let sendEmails=[];
 function sendForReview(rev){
+  sendEmails=[];
   openModal(`
-  <div class="m-head"><div><div class="m-title">Send revision ${rev} for review</div>
-    <div class="m-sub">Send to one or more clients / principal contractors to review and sign off before the SWMS goes live.</div></div>
+  <div class="m-head"><div><div class="m-title">Send Rev ${rev} for review</div>
+    <div class="m-sub">Add one or more client / principal-contractor emails to review and sign off before the SWMS goes live.</div></div>
     <button class="m-close" onclick="closeModal()">✕</button></div>
   <div class="m-body">
-    <div class="field"><label>Send to (select one or more)</label>
-      <div class="client-list">
-        ${CLIENTS.map((c,i)=>`<label class="client-opt"><input type="checkbox" class="cl-chk" value="${i}" ${i===0?'checked':''}>
-          <div><div class="co-name">${c.name}</div><div class="co-email">${c.email}</div></div></label>`).join('')}
-      </div></div>
+    <div class="field"><label>Client emails</label>
+      <div class="email-input-row">
+        <input id="emailInput" type="email" placeholder="name@company.com.au" onkeydown="if(event.key==='Enter'){event.preventDefault();addEmail();}">
+        <button class="btn" type="button" onclick="addEmail()"><i class="fa-solid fa-plus"></i> Add</button>
+      </div>
+      <div class="email-chips" id="emailChips"></div>
+    </div>
     <div class="field"><label>Message (optional)</label><textarea>Please review the updated trench SWMS — added hazard rows for adjacent services.</textarea></div>
-    <div class="info-line"><i class="fa-solid fa-circle-info"></i> Each recipient gets a secure link to verify without a Varicon login (daywork-docket style).</div>
+    <div class="info-line"><i class="fa-solid fa-circle-info"></i> Each email gets a secure link to verify without a Varicon login (daywork-docket style).</div>
   </div>
   <div class="m-foot">
     <button class="btn" onclick="closeModal()">Cancel</button>
-    <button class="btn primary" onclick="doSend('${rev}')"><i class="fa-solid fa-paper-plane"></i> Send for review</button>
+    <button class="btn primary" onclick="doSend(${rev})"><i class="fa-solid fa-paper-plane"></i> Send for review</button>
   </div>`);
+  renderEmailChips();document.getElementById('emailInput').focus();
+}
+function addEmail(){
+  const inp=document.getElementById('emailInput');const v=(inp.value||'').trim();
+  if(!v)return;
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){toast('Enter a valid email address.');return;}
+  if(!sendEmails.includes(v))sendEmails.push(v);
+  inp.value='';renderEmailChips();inp.focus();
+}
+function removeEmail(i){sendEmails.splice(i,1);renderEmailChips();}
+function renderEmailChips(){
+  const el=document.getElementById('emailChips');if(!el)return;
+  el.innerHTML=sendEmails.map((e,i)=>`<span class="email-chip">${e}<button type="button" onclick="removeEmail(${i})">✕</button></span>`).join('');
 }
 function doSend(rev){
-  const picked=[...document.querySelectorAll('.cl-chk:checked')].map(c=>CLIENTS[+c.value]);
-  if(!picked.length){toast('Select at least one client.');return;}
+  addEmail(); // capture anything typed but not yet added
+  if(!sendEmails.length){toast('Add at least one client email.');return;}
   const r=S.revs.find(x=>x.rev===rev);
-  r.reviewers=picked.map(c=>({name:c.name,status:'pending',date:null,comment:''}));
+  r.reviewers=sendEmails.map(e=>({name:e,status:'pending',date:null,comment:''}));
   r.status='under_review';
-  closeModal();renderAll();toast('Sent to '+picked.length+' client'+(picked.length>1?'s':'')+' for review.');
+  closeModal();renderAll();toast('Sent to '+sendEmails.length+' recipient'+(sendEmails.length>1?'s':'')+' for review.');
 }
 
 /* Read-only view of a revision's form (viewing versions never allows editing). */
 function viewForm(rev){
   const r=S.revs.find(x=>x.rev===rev);
   openModal(`
-  <div class="m-head"><div><div class="m-title">Revision ${rev} — view only</div>
+  <div class="m-head"><div><div class="m-title">Rev ${rev} — view only</div>
     <div class="m-sub">${r.summary} · ${r.by} · ${r.date}</div></div>
     <button class="m-close" onclick="closeModal()">✕</button></div>
   <div class="m-body">
@@ -570,20 +589,21 @@ function rvLabel(s){return {pending:'Pending',signed:'Signed',rejected:'Rejected
 function rvBg(s){return {pending:'#fef3c7',signed:'#dcfce7',rejected:'#fee2e2'}[s];}
 function rvFg(s){return {pending:'#92400e',signed:'#166534',rejected:'#b91c1c'}[s];}
 function openReviewStatus(){
-  const rows=S.revs.filter(r=>r.reviewers&&r.reviewers.length).slice().reverse();
+  const r=S.revs.find(x=>x.status==='under_review');
+  const done = r ? r.reviewers.filter(x=>x.status==='signed').length : 0;
   openModal(`
   <div class="m-head"><div><div class="m-title">Client review status</div>
-    <div class="m-sub">Who each revision was sent to, and where every client is at.</div></div>
+    <div class="m-sub">${r?`Rev ${r.rev} · ${done}/${r.reviewers.length} signed`:'Current in-review revision only.'}</div></div>
     <button class="m-close" onclick="closeModal()">✕</button></div>
   <div class="m-body">
-    ${rows.length?rows.map(r=>`
+    ${r?`
       <div class="rs-block">
-        <div class="rs-head">Revision ${r.rev} <span class="status-chip ${r.active?'active':STATUS[r.status].cls}" style="background:${chipBg(r.active?'active':STATUS[r.status].cls)};color:${chipFg(r.active?'active':STATUS[r.status].cls)}">${r.active?'Active (locked)':STATUS[r.status].label}</span></div>
+        <div class="rs-head">Rev ${r.rev} <span class="status-chip under_review" style="background:${chipBg('under_review')};color:${chipFg('under_review')}">Under review</span></div>
         <div class="rs-sub">${r.summary}</div>
         ${r.reviewers.map(rv=>`<div class="rs-row"><div class="sg-avatar">${initials(rv.name)}</div>
           <div style="flex:1;min-width:0"><div class="sg-name">${rv.name}</div>${rv.comment?`<div class="sg-role">“${rv.comment}”</div>`:''}</div>
           <span class="status-chip" style="background:${rvBg(rv.status)};color:${rvFg(rv.status)}">${rvLabel(rv.status)}${rv.date?' · '+rv.date:''}</span></div>`).join('')}
-      </div>`).join(''):'<div style="color:#94a3b8;font-style:italic;padding:6px">No revisions have been sent for review yet.</div>'}
+      </div>`:'<div style="color:#94a3b8;font-style:italic;padding:6px">No revision is currently under review.</div>'}
   </div>
   <div class="m-foot"><button class="btn" onclick="closeModal()">Close</button></div>`,true);
 }
@@ -610,7 +630,7 @@ function renderPortal(rev){
       <div class="ext-note"><i class="fa-solid fa-lock"></i> You're reviewing this SWMS via a secure link — no Varicon login required.</div>
       <div class="field"><label>Reviewing as</label><select id="whoSel" onchange="portalWho(this.value)">${opts}</select></div>
       <h3 style="font-size:16px;color:#1b2a4a;margin:8px 0 2px">${S.form.title}</h3>
-      <div class="m-sub" style="margin-bottom:12px">Revision ${rev.rev} · ${rev.summary} · Northside Tunnel Upgrade</div>
+      <div class="m-sub" style="margin-bottom:12px">Rev ${rev.rev} · ${rev.summary} · Northside Tunnel Upgrade</div>
       ${roFormHTML()}
       <div class="field" style="margin-top:16px"><label>Comment (optional)</label><textarea id="cCmt" placeholder="Add a comment for the H&S manager..."></textarea></div>
       <div class="field"><label>Signature</label>
@@ -639,38 +659,39 @@ function closeExt(){document.getElementById('extOverlay').classList.remove('open
 function confirmLock(rev){
   const prev = S.revs.find(r=>r.active);
   openModal(`
-  <div class="m-head"><div><div class="m-title">Confirm &amp; lock Revision ${rev}</div>
+  <div class="m-head"><div><div class="m-title">Confirm &amp; lock Rev ${rev}</div>
     <div class="m-sub">This freezes the revision and makes it the active SWMS.</div></div>
     <button class="m-close" onclick="closeModal()">✕</button></div>
   <div class="m-body">
     <div class="warn-box"><i class="fa-solid fa-triangle-exclamation"></i><div>
-      Once locked, Revision ${rev} <b>cannot be edited</b> — future changes create a new revision.
-      ${prev?`Revision <b>${prev.rev}</b> becomes <b>Superseded</b>, and all workers must <b>re-sign</b> the new version before continuing work.`:''}
+      Once locked, Rev ${rev} <b>cannot be edited</b> — future changes create a new revision.
+      ${prev?`Rev <b>${prev.rev}</b> becomes <b>Superseded</b>, and all workers must <b>re-sign</b> the new version before continuing work.`:''}
     </div></div>
     <div class="info-line" style="margin-top:14px"><i class="fa-solid fa-file-signature"></i> A PDF copy is shared with the Principal Contractor before work starts.</div>
   </div>
   <div class="m-foot">
     <button class="btn" onclick="closeModal()">Cancel</button>
-    <button class="btn green" onclick="doLock('${rev}')"><i class="fa-solid fa-lock"></i> Confirm &amp; lock</button>
+    <button class="btn green" onclick="doLock(${rev})"><i class="fa-solid fa-lock"></i> Confirm &amp; lock</button>
   </div>`);
 }
 function doLock(rev){
   S.revs.forEach(r=>{if(r.active){r.active=false;r.status='superseded';}});
   const r=S.revs.find(x=>x.rev===rev);r.status='locked';r.active=true;r.date=today();
-  closeModal();renderAll();toast('Revision '+rev+' locked and now Active. Workers must re-sign.');
+  closeModal();renderAll();toast('Rev '+rev+' locked and now Active. Workers must re-sign.');
 }
 
 function newRevision(){
   const active=S.revs.find(r=>r.active);
+  const next=S.revs.length+1;
   openModal(`
-  <div class="m-head"><div><div class="m-title">Start Revision ${nextRev}</div>
+  <div class="m-head"><div><div class="m-title">Start Rev ${next}</div>
     <div class="m-sub">A new revision is required when the work changes, a new hazard appears, controls are revised, or the SWMS isn't being followed.</div></div>
     <button class="m-close" onclick="closeModal()">✕</button></div>
   <div class="m-body">
     <div class="field"><label>Reason for revision</label>
       <select><option>Work / method changed</option><option>New hazard identified</option><option>Control measure revised</option><option>SWMS not being followed</option></select></div>
     <div class="field"><label>Summary of change</label><input id="nrSummary" value="New draft revision"></div>
-    <div class="info-line"><i class="fa-solid fa-copy"></i> Cloned from active Revision ${active?active.rev:'—'}. The active version keeps working until this one is approved &amp; locked.</div>
+    <div class="info-line"><i class="fa-solid fa-copy"></i> Cloned from active Rev ${active?active.rev:'—'}. The active version keeps working until this one is approved &amp; locked.</div>
   </div>
   <div class="m-foot">
     <button class="btn" onclick="closeModal()">Cancel</button>
@@ -679,12 +700,12 @@ function newRevision(){
 }
 function doNewRev(){
   const summary=document.getElementById('nrSummary').value||'New draft revision';
-  S.revs.push({rev:nextRev,status:'draft',date:today(),by:'Alec Neill',summary,signees:[],consulted:false,clientSigned:false,active:false});
-  nextRev=String.fromCharCode(nextRev.charCodeAt(0)+1);
-  closeModal();renderAll();toast('Draft revision created. Build → consult → send for review.');
+  const next=S.revs.length+1;
+  S.revs.push({rev:next,status:'draft',date:today(),by:'Alec Neill',summary,signees:[],consulted:false,active:false,reviewers:[]});
+  closeModal();renderAll();toast('Draft Rev '+next+' created. Build → consult → send for review.');
 }
 
-function resetDemo(){S=SEED();nextRev='D';closeModal();renderAll();toast('Demo reset.');}
+function resetDemo(){S=SEED();closeModal();renderAll();toast('Demo reset.');}
 
 renderAll();
 </script>
