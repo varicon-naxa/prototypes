@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>*{margin:0;padding:0;}img,svg{display:block;max-width:100%;}button,input,select{font:inherit;color:inherit;}</style>
+</head>
+<body>
+<title>Clickable prototype — Varicon worker selection</title>
+
+<style>
+  :root {
+    --ground:      #F7F6F4;
+    --surface:     #FFFFFF;
+    --ink:         #243859;
+    --ink-2:       #56637E;
+    --ink-3:       #8A93A8;
+    --line:        #E4E1DB;
+    --accent:      #F37A21;
+    --accent-ink:  #C25A11;
+    --accent-soft: #FFF3E8;
+    --gold:        #FBAD35;
+    --good:        #2F6B4F;
+    --good-soft:   #E6F0EA;
+    --bezel:       #10151F;
+    --shadow-lg:   0 22px 54px rgba(16,21,31,.24);
+    --shadow-sm:   0 1px 2px rgba(36,56,89,.08);
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #151B27; --surface: #1D2534; --ink: #EDF0F6; --ink-2: #A9B3C6;
+      --ink-3: #7A8599; --line: #2E384B; --accent: #FF8C3A; --accent-ink: #FFA463;
+      --accent-soft: #35251A; --good: #7FBF9E; --good-soft: #1A2A22;
+      --shadow-lg: 0 22px 54px rgba(0,0,0,.6); --shadow-sm: 0 1px 2px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #151B27; --surface: #1D2534; --ink: #EDF0F6; --ink-2: #A9B3C6;
+    --ink-3: #7A8599; --line: #2E384B; --accent: #FF8C3A; --accent-ink: #FFA463;
+    --accent-soft: #35251A; --good: #7FBF9E; --good-soft: #1A2A22;
+    --shadow-lg: 0 22px 54px rgba(0,0,0,.6); --shadow-sm: 0 1px 2px rgba(0,0,0,.35);
+  }
+  :root[data-theme="light"] {
+    --ground: #F7F6F4; --surface: #FFFFFF; --ink: #243859; --ink-2: #56637E;
+    --ink-3: #8A93A8; --line: #E4E1DB; --accent: #F37A21; --accent-ink: #C25A11;
+    --accent-soft: #FFF3E8; --good: #2F6B4F; --good-soft: #E6F0EA;
+    --shadow-lg: 0 22px 54px rgba(16,21,31,.24); --shadow-sm: 0 1px 2px rgba(36,56,89,.08);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); font-size: 16px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 34px 22px 80px; }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--ink-3); margin: 0 0 9px;
+  }
+  h1 {
+    font-size: clamp(26px, 3.6vw, 36px); line-height: 1.08; letter-spacing: -.022em;
+    font-weight: 800; font-stretch: 92%; margin: 0 0 12px; text-wrap: balance;
+  }
+  .lede { font-size: 16.5px; color: var(--ink-2); max-width: 60ch; margin: 0; }
+
+  header.masthead { border-bottom: 1px solid var(--line); padding-bottom: 24px; margin-bottom: 34px; }
+
+  .layout { display: flex; gap: 50px; align-items: flex-start; flex-wrap: wrap; }
+  .col-phone { flex: 0 0 auto; }
+  .col-side  { flex: 1 1 300px; min-width: 280px; padding-top: 4px; }
+
+  /* ---------- flow rail ---------- */
+  .rail { list-style: none; margin: 0 0 28px; padding: 0; display: grid; gap: 2px; }
+  .rail li {
+    display: grid; grid-template-columns: 26px 1fr; gap: 13px; align-items: start;
+    padding: 9px 12px; border-radius: 8px; color: var(--ink-3);
+    transition: background .18s ease, color .18s ease;
+  }
+  .rail li .no {
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    width: 22px; height: 22px; border-radius: 50%;
+    display: grid; place-items: center; margin-top: 1px;
+    background: transparent; border: 1.5px solid currentColor;
+  }
+  .rail li .lbl { font-size: 14.5px; font-weight: 600; line-height: 1.35; }
+  .rail li .say { font-size: 12.5px; font-weight: 400; color: var(--ink-3); display: block; margin-top: 1px; }
+  .rail li.done { color: var(--ink-2); }
+  .rail li.done .no { background: var(--good-soft); border-color: transparent; color: var(--good); }
+  .rail li.here { background: var(--accent-soft); color: var(--accent-ink); }
+  .rail li.here .no { background: var(--accent); border-color: transparent; color: #fff; }
+  .rail li.here .say { color: var(--accent-ink); opacity: .85; }
+
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+  .btn {
+    font-family: inherit; font-size: 13.5px; font-weight: 650;
+    padding: 9px 15px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    box-shadow: var(--shadow-sm);
+  }
+  .btn:hover { border-color: var(--ink-3); }
+  .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+  .btn:focus-visible, .device button:focus-visible, .device [tabindex]:focus-visible,
+  .device input:focus-visible, .device select:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px;
+  }
+
+  .sidenote {
+    border-left: 3px solid var(--gold); background: var(--surface);
+    border-radius: 0 8px 8px 0; padding: 14px 18px; font-size: 14px; color: var(--ink-2);
+  }
+  .sidenote b { color: var(--ink); font-weight: 650; }
+  .sidenote p { margin: 0; }
+  .sidenote p + p { margin-top: 8px; }
+
+  /* ---------- device ---------- */
+  .device {
+    position: relative; width: 342px; background: var(--bezel);
+    border-radius: 42px; padding: 11px; box-shadow: var(--shadow-lg);
+  }
+  .screen {
+    position: relative; background: #FFFFFF; border-radius: 32px; overflow: hidden;
+    height: 700px; color: #243859; font-size: 14px; line-height: 1.4;
+  }
+  .device-cap {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .06em;
+    color: var(--ink-3); text-align: center; margin-top: 14px;
+  }
+
+  .pane {
+    position: absolute; inset: 0; display: none; flex-direction: column; background: #fff;
+  }
+  .pane.on { display: flex; }
+
+  .statusbar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 13px 20px 7px; font-size: 12.5px; font-weight: 650; flex: 0 0 auto;
+  }
+  .statusbar.dark { color: #fff; }
+  .statusbar .right { display: flex; gap: 6px; align-items: center; opacity: .9; font-size: 11px; }
+  .batt { border: 1.4px solid currentColor; border-radius: 3px; width: 20px; height: 11px; position: relative; }
+  .batt::after { content:""; position: absolute; inset: 1.6px; width: 62%; background: currentColor; border-radius: 1px; }
+
+  .navy-top { background: #243859; color: #fff; flex: 0 0 auto; }
+  .navy-bar {
+    display: flex; align-items: center; gap: 14px; padding: 8px 16px 16px; color: #fff;
+  }
+  .navy-bar .t { font-size: 19px; font-weight: 700; flex: 1; letter-spacing: -.01em; }
+  .navy-bar .ico { opacity: .95; display: grid; place-items: center; }
+
+  .helpbar {
+    display: flex; align-items: center; gap: 10px; padding: 11px 16px;
+    background: #FDF3E4; font-size: 13px; flex: 0 0 auto;
+  }
+  .helpbar .q {
+    width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #fff;
+    display: grid; place-items: center; font-size: 12px; font-weight: 700; flex: 0 0 auto;
+  }
+  .helpbar a { color: var(--accent-ink); font-weight: 650; }
+  .helpbar .x { margin-left: auto; color: #243859; opacity: .7; }
+
+  .body { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
+  .body::-webkit-scrollbar { width: 0; }
+
+  .projname { font-size: 21px; font-weight: 750; letter-spacing: -.016em; padding: 18px 16px 6px; line-height: 1.2; }
+
+  .tabs { display: flex; border-bottom: 1px solid #E8E6E1; padding: 0 16px; gap: 26px; flex: 0 0 auto; }
+  .tab { padding: 13px 0 10px; font-size: 13.5px; font-weight: 700; color: #8A93A8; letter-spacing: .01em; }
+  .tab.on { color: var(--accent-ink); box-shadow: inset 0 -3px 0 var(--accent); }
+
+  .filters { display: flex; gap: 9px; padding: 13px 16px; overflow-x: auto; flex: 0 0 auto; scrollbar-width: none; }
+  .filters::-webkit-scrollbar { height: 0; }
+  .fchip {
+    flex: 0 0 auto; padding: 8px 15px; border-radius: 999px; font-size: 13px; font-weight: 650;
+    background: #EEEFF2; color: #6C778E; white-space: nowrap;
+  }
+  .fchip.on { background: #243859; color: #fff; }
+
+  .daybar {
+    display: flex; align-items: center; gap: 11px; padding: 11px 16px;
+    background: #F4F5F7; border-bottom: 2px solid #DDDFE4; flex: 0 0 auto;
+  }
+  .daybar .d { font-size: 13.5px; font-weight: 750; letter-spacing: .03em; flex: 1; }
+  .daybar .n {
+    background: #243859; color: #fff; border-radius: 999px; min-width: 24px; height: 22px;
+    display: grid; place-items: center; font-size: 12px; font-weight: 700; padding: 0 7px;
+  }
+
+  .tcard { padding: 14px 16px; border-bottom: 1px solid #F1EFEB; }
+  .tcard .top { display: flex; align-items: center; gap: 11px; }
+  .tcard .nm { font-size: 15.5px; font-weight: 700; flex: 1; }
+  .tcard .mid { display: flex; gap: 13px; margin-top: 9px; align-items: flex-start; }
+  .tcard .lab { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; color: #8A93A8; font-weight: 600; }
+  .tcard .tm { font-size: 14px; font-weight: 600; margin-top: 2px; }
+  .tcard .hrs { font-size: 13.5px; color: #56637E; margin-top: 2px; }
+  .tcard .state {
+    font-size: 12px; font-weight: 650; padding: 4px 10px; border-radius: 5px; margin-left: auto; align-self: flex-end;
+  }
+  .state.un  { background: #FDF3E4; color: #A9762B; }
+  .state.ap  { background: #E6F0EA; color: var(--good); }
+
+  .avatar {
+    width: 44px; height: 44px; border-radius: 50%; background: #E9EBEF; color: #6C778E;
+    display: grid; place-items: center; font-size: 14px; font-weight: 700; flex: 0 0 auto;
+  }
+
+  .fab {
+    position: absolute; right: 18px; bottom: 22px; width: 60px; height: 60px; border-radius: 50%;
+    background: var(--gold); color: #fff; border: 0; cursor: pointer;
+    display: grid; place-items: center; box-shadow: 0 6px 18px rgba(243,122,33,.42); z-index: 5;
+  }
+
+  /* --- add timesheet --- */
+  .light-bar { display: flex; align-items: center; gap: 14px; padding: 8px 16px 14px; flex: 0 0 auto; }
+  .light-bar .t { font-size: 19px; font-weight: 750; letter-spacing: -.014em; flex: 1; }
+
+  .crumbs { display: flex; align-items: center; gap: 11px; padding: 16px 16px 4px; font-size: 13.5px; color: #8A93A8; }
+  .crumbs .dot { width: 5px; height: 5px; border-radius: 50%; background: #C9CDD6; }
+
+  .grp-head {
+    display: flex; align-items: baseline; justify-content: space-between; padding: 16px 16px 10px;
+  }
+  .grp-head .lbl {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .13em;
+    text-transform: uppercase; color: #8A93A8; font-weight: 600;
+  }
+  .grp-head .act { font-size: 13.5px; font-weight: 650; color: var(--accent-ink); }
+
+  .field { margin: 0 16px 14px; }
+  .field .cap {
+    font-size: 11.5px; color: #8A93A8; font-weight: 600; margin-bottom: 5px; display: block;
+  }
+  .inputbox {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    border: 1.5px solid #DDDCD7; border-radius: 9px; padding: 13px 13px;
+    background: #fff; font-size: 15px; font-family: inherit; color: #243859;
+    text-align: left; cursor: pointer;
+  }
+  .inputbox.tappable:hover { border-color: var(--accent); background: #FFFCF8; }
+  .inputbox .ph { color: #8A93A8; flex: 1; }
+  .inputbox .val { flex: 1; font-weight: 600; }
+
+  .empty {
+    margin: 6px 16px; padding: 26px 20px; text-align: center;
+    border: 1.5px dashed #DFDDD8; border-radius: 11px; background: #FAFAF8;
+  }
+  .empty .ic { color: #C9CDD6; margin-bottom: 10px; }
+  .empty .h { font-size: 14.5px; font-weight: 650; margin-bottom: 4px; }
+  .empty .s { font-size: 13px; color: #8A93A8; }
+
+  .wcard { margin: 0 16px 10px; border: 1.5px solid #E8E6E1; border-radius: 11px; overflow: hidden; background: #fff; }
+  .wcard .hd {
+    display: flex; align-items: center; gap: 12px; padding: 12px 13px; width: 100%;
+    background: #fff; border: 0; font-family: inherit; text-align: left; cursor: pointer; color: inherit;
+  }
+  .wcard .hd:hover { background: #FAFAF8; }
+  .wcard .nm { font-size: 15px; font-weight: 700; }
+  .wcard .rl { font-size: 12.5px; color: #8A93A8; margin-top: 1px; }
+  .wcard .sum { font-size: 12.5px; color: var(--accent-ink); font-weight: 650; margin-top: 2px; }
+  .wcard .chev { color: #A9AEB9; transition: transform .2s ease; }
+  .wcard.open .chev { transform: rotate(90deg); }
+  .wcard .bd { display: none; padding: 4px 13px 15px; border-top: 1px solid #F1EFEB; }
+  .wcard.open .bd { display: block; }
+
+  .timegrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .timegrid label { font-size: 11.5px; color: #8A93A8; font-weight: 650; display: block; margin-bottom: 4px; }
+  .timegrid input, .timegrid select {
+    width: 100%; border: 1.5px solid #DDDCD7; border-radius: 8px; padding: 9px 10px;
+    font-family: inherit; font-size: 14px; color: #243859; background: #fff;
+  }
+  .totline {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 12px; padding: 10px 12px; background: #FFF6EC; border-radius: 8px;
+  }
+  .totline .k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent-ink); font-weight: 600; }
+  .totline .v { font-size: 15.5px; font-weight: 750; color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+
+  .footbar {
+    flex: 0 0 auto; display: flex; gap: 11px; padding: 13px 16px 18px;
+    border-top: 1px solid #E8E6E1; background: #fff;
+  }
+  .btn-ghost, .btn-solid {
+    flex: 1; padding: 14px 10px; border-radius: 10px; font-family: inherit;
+    font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+  .btn-ghost { background: #fff; border: 1.5px solid #DDDCD7; color: #56637E; }
+  .btn-solid { background: var(--accent); border: 0; color: #fff; }
+  .btn-solid[disabled] { background: #EDEBE7; color: #A9AEB9; cursor: not-allowed; }
+
+  /* --- bottom sheet --- */
+  .scrim {
+    position: absolute; inset: 0; background: rgba(16,21,31,.45);
+    opacity: 0; pointer-events: none; transition: opacity .24s ease; z-index: 8;
+  }
+  .scrim.on { opacity: 1; pointer-events: auto; }
+
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 9;
+    background: #fff; border-radius: 20px 20px 0 0;
+    height: 92%; display: flex; flex-direction: column;
+    transform: translateY(102%); transition: transform .3s cubic-bezier(.32,.72,0,1);
+    box-shadow: 0 -8px 30px rgba(16,21,31,.2);
+  }
+  .sheet.on { transform: translateY(0); }
+  .grab { width: 38px; height: 4px; border-radius: 2px; background: #C5C9D2; margin: 9px auto 3px; flex: 0 0 auto; }
+
+  .sheet-bar { display: flex; align-items: center; padding: 10px 14px 12px; flex: 0 0 auto; }
+  .sheet-bar .t { flex: 1; text-align: center; font-size: 16.5px; font-weight: 750; letter-spacing: -.01em; }
+  .txt-btn {
+    font-family: inherit; font-size: 14.5px; font-weight: 650; color: #56637E;
+    background: none; border: 0; cursor: pointer; padding: 4px 2px; min-width: 56px; text-align: left;
+  }
+  .txt-btn.right { text-align: right; color: var(--accent-ink); }
+
+  .searchrow { padding: 0 14px 12px; flex: 0 0 auto; }
+  .searchbox {
+    display: flex; align-items: center; gap: 9px; border: 1.5px solid #DDDCD7;
+    border-radius: 9px; padding: 10px 12px; background: #FAFAF8; color: #8A93A8; font-size: 14px;
+  }
+  .searchbox input {
+    border: 0; background: none; font-family: inherit; font-size: 14px; color: #243859;
+    flex: 1; padding: 0; outline: none;
+  }
+
+  .togrow {
+    display: flex; align-items: center; justify-content: flex-end; gap: 9px;
+    padding: 0 14px 11px; font-size: 13px; font-weight: 600; color: #46536E; flex: 0 0 auto;
+  }
+  .sw { width: 38px; height: 21px; border-radius: 11px; background: var(--gold); position: relative; }
+  .sw::after { content:""; position: absolute; top: 2.5px; right: 2.5px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+
+  .segrow { display: flex; gap: 8px; padding: 0 14px 12px; flex: 0 0 auto; }
+  .seg {
+    flex: 1; text-align: center; padding: 9px 4px; border-radius: 8px; font-size: 13px; font-weight: 650;
+    border: 0; font-family: inherit; cursor: pointer;
+  }
+  .seg.on { background: #243859; color: #fff; }
+  .seg.off { background: #E7E8EC; color: #6C778E; }
+
+  .listhead {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 8px 14px 6px; flex: 0 0 auto;
+  }
+  .listhead .lbl {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: .13em;
+    text-transform: uppercase; color: #8A93A8; font-weight: 600;
+  }
+
+  .rows { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
+  .rows::-webkit-scrollbar { width: 0; }
+
+  .wrow {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    padding: 11px 15px 11px 12px; border: 0; border-left: 3px solid transparent;
+    border-bottom: 1px solid #F1EFEB; background: #fff; cursor: pointer;
+    font-family: inherit; font-size: inherit; color: inherit; text-align: left;
+    transition: background .14s ease, border-color .14s ease;
+  }
+  .wrow[aria-pressed="true"] { background: #FFF6EC; border-left-color: var(--accent); }
+  .wrow:hover { background: #FAF9F6; }
+  .wrow[aria-pressed="true"]:hover { background: #FFF1E2; }
+
+  .av {
+    position: relative; width: 38px; height: 38px; border-radius: 50%;
+    background: #E9EBEF; color: #6C778E; display: grid; place-items: center;
+    font-size: 12.5px; font-weight: 700; flex: 0 0 auto; transition: box-shadow .14s ease;
+  }
+  .wrow[aria-pressed="true"] .av { box-shadow: 0 0 0 2px var(--accent); background: #FDE7D2; color: var(--accent-ink); }
+  .av .bdg {
+    position: absolute; right: -3px; bottom: -3px; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--accent); color: #fff; display: none; place-items: center; border: 2px solid #FFF6EC;
+  }
+  .wrow[aria-pressed="true"] .av .bdg { display: grid; }
+
+  .who { flex: 1 1 auto; min-width: 0; }
+  .who .nm { font-size: 14.5px; font-weight: 650; }
+  .who .sub { font-size: 12px; color: #8A93A8; margin-top: 1px; }
+  .wrow[aria-pressed="true"] .who .sub { color: var(--accent-ink); font-weight: 650; }
+
+  .cbox {
+    width: 21px; height: 21px; border-radius: 5px; border: 1.8px solid #C3C7D0;
+    background: #fff; display: grid; place-items: center; flex: 0 0 auto; color: transparent;
+  }
+  .wrow[aria-pressed="true"] .cbox { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .noresult { padding: 34px 20px; text-align: center; color: #8A93A8; font-size: 13.5px; }
+
+  .sheet-foot {
+    flex: 0 0 auto; border-top: 1px solid #E8E6E1; background: #fff;
+    padding: 10px 14px 16px; box-shadow: 0 -6px 18px rgba(36,56,89,.07);
+  }
+  .tray { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 10px; scrollbar-width: none; }
+  .tray::-webkit-scrollbar { height: 0; }
+  .tray:empty { display: none; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+    background: #FFF3E8; border: 1px solid #F6C89B; color: var(--accent-ink);
+    border-radius: 999px; padding: 5px 6px 5px 11px; font-size: 12.5px; font-weight: 650; white-space: nowrap;
+  }
+  .pill button {
+    width: 17px; height: 17px; border-radius: 50%; border: 0; background: #F0BC8C; color: #fff;
+    cursor: pointer; display: grid; place-items: center; padding: 0; font-family: inherit; font-size: 12px;
+  }
+  .cta {
+    width: 100%; border: 0; border-radius: 10px; padding: 15px 12px;
+    font-size: 15.5px; font-weight: 750; font-family: inherit;
+    background: var(--accent); color: #fff; cursor: pointer;
+  }
+  .cta[disabled] { background: #EDEBE7; color: #A9AEB9; cursor: not-allowed; }
+
+  /* toast */
+  .toast {
+    position: absolute; left: 50%; bottom: 78px; transform: translate(-50%, 14px);
+    background: #2F6B4F; color: #fff; border-radius: 999px; padding: 11px 20px;
+    font-size: 13.5px; font-weight: 650; display: flex; align-items: center; gap: 9px;
+    opacity: 0; pointer-events: none; transition: opacity .22s ease, transform .22s ease; z-index: 20;
+    box-shadow: 0 6px 20px rgba(0,0,0,.25); white-space: nowrap;
+  }
+  .toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+  /* tap hint */
+  .hot { position: absolute; border-radius: 12px; pointer-events: none; z-index: 7; display: none; }
+  body.hints .hot { display: block; }
+  .hot::after {
+    content: ""; position: absolute; inset: -4px; border-radius: 14px;
+    border: 2.5px solid var(--accent); animation: pulse 1.8s ease-out infinite;
+  }
+  @keyframes pulse {
+    0%   { opacity: 0; transform: scale(.96); }
+    35%  { opacity: 1; }
+    100% { opacity: 0; transform: scale(1.06); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, .sheet, .scrim, .toast { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Varicon mobile · Timesheet · clickable prototype</p>
+    <h1>Add a timesheet, pick your crew</h1>
+    <p class="lede">
+      The whole flow, tappable — from the timesheet list through the redesigned worker picker
+      and out the other side. Selection state, counts and the confirm button all behave for real.
+    </p>
+  </header>
+
+  <div class="layout">
+
+    <div class="col-phone">
+      <div class="device">
+        <div class="screen" id="screen">
+
+          <!-- ============== PANE 1 : TIMESHEET LIST ============== -->
+          <div class="pane on" id="pane-list">
+            <div class="navy-top">
+              <div class="statusbar dark">
+                <span>11:37</span>
+                <span class="right"><span>WiFi</span><span class="batt"></span></span>
+              </div>
+              <div class="navy-bar">
+                <span class="ico">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                </span>
+                <span class="t">Timesheet</span>
+                <span class="ico"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>
+                <span class="ico"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v7l-4 2v-9z"/></svg></span>
+                <span class="ico"><svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></span>
+              </div>
+            </div>
+
+            <div class="helpbar">
+              <span class="q">?</span>
+              <span>Need Help on Timesheets? <a href="#" onclick="return false;">Click Here</a></span>
+              <span class="x">✕</span>
+            </div>
+
+            <div class="body">
+              <div class="projname">DTP Rural Road Resheeting Program 2026</div>
+              <div class="tabs">
+                <span class="tab on" id="tabTs">TIMESHEET(1)</span>
+                <span class="tab" id="tabEmp">EMPLOYEES(1)</span>
+              </div>
+              <div class="filters">
+                <span class="fchip on" id="fAll">All&nbsp; (1)</span>
+                <span class="fchip" id="fApp">Approved&nbsp; (0)</span>
+                <span class="fchip" id="fUn">Unapproved&nbsp; (1)</span>
+              </div>
+              <div class="daybar">
+                <span style="width:19px; height:19px; border:1.8px solid #A9AEB9; border-radius:4px;"></span>
+                <span class="d">WEDNESDAY, 29 JUL</span>
+                <span class="n" id="dayCount">1</span>
+              </div>
+              <div id="tsList"></div>
+              <div style="height: 90px;"></div>
+            </div>
+
+            <button class="fab" id="fab" aria-label="Add timesheet">
+              <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+            <span class="hot" id="hot-fab" style="right:18px; bottom:22px; width:60px; height:60px; border-radius:50%;"></span>
+
+            <div class="toast" id="toast">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+              <span id="toastMsg">Added successfully</span>
+            </div>
+          </div>
+
+          <!-- ============== PANE 2 : ADD TIMESHEET ============== -->
+          <div class="pane" id="pane-add">
+            <div class="statusbar">
+              <span>11:37</span>
+              <span class="right"><span>WiFi</span><span class="batt"></span></span>
+            </div>
+
+            <div class="light-bar">
+              <button class="txt-btn" id="addBack" style="min-width:auto;" aria-label="Back">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+              </button>
+              <span class="t">Add Timesheet</span>
+            </div>
+
+            <div class="helpbar">
+              <span class="q">?</span>
+              <span>Need Help on Creating Timesheets? <a href="#" onclick="return false;">Click Here</a></span>
+              <span class="x">✕</span>
+            </div>
+
+            <div class="body">
+              <div class="crumbs">
+                <span>DTP Rural Road Resheeting Program 2026</span>
+                <span class="dot"></span>
+                <span>KYE-0001</span>
+              </div>
+
+              <div class="grp-head">
+                <span class="lbl">Timesheet details</span>
+                <span class="act">Copy from previous</span>
+              </div>
+
+              <div class="field">
+                <span class="cap">Date *</span>
+                <div class="inputbox">
+                  <span class="val">29/07/2026</span>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8A93A8" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+                </div>
+              </div>
+
+              <div class="field" style="position:relative;">
+                <span class="cap">Workers</span>
+                <button class="inputbox tappable" id="openSheet">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8A93A8" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.4"/><path d="M3.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M17 11h5M19.5 8.5v5"/></svg>
+                  <span class="ph" id="pickerLabel">Add workers to this timesheet</span>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#A9AEB9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+                <span class="hot" id="hot-picker" style="left:0; right:0; top:20px; height:50px;"></span>
+              </div>
+
+              <div class="grp-head" id="wHead" style="display:none;">
+                <span class="lbl" id="wHeadLbl">On this timesheet</span>
+                <button class="txt-btn right act" id="bulkBtn" style="min-width:auto; font-size:13.5px;">Set times for all</button>
+              </div>
+
+              <div id="emptyState" class="empty">
+                <div class="ic">
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="8" r="3.6"/><path d="M2.5 20c0-3.4 2.9-5.6 6.5-5.6s6.5 2.2 6.5 5.6"/><path d="M18 10h4M20 8v4"/></svg>
+                </div>
+                <div class="h">No workers yet</div>
+                <div class="s">Tap <b>Add workers</b> above to pick your crew for the day.</div>
+              </div>
+
+              <div id="wCards"></div>
+              <div style="height: 16px;"></div>
+            </div>
+
+            <div class="footbar">
+              <button class="btn-ghost" id="cancelAdd">Cancel</button>
+              <button class="btn-solid" id="saveExit" disabled>Save &amp; exit</button>
+            </div>
+
+            <!-- bottom sheet lives inside this pane -->
+            <div class="scrim" id="scrim"></div>
+            <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Select workers">
+              <div class="grab"></div>
+
+              <div class="sheet-bar">
+                <button class="txt-btn" id="sheetCancel">Cancel</button>
+                <span class="t">Select workers</span>
+                <span style="min-width:56px;"></span>
+              </div>
+
+              <div class="searchrow">
+                <div class="searchbox">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                  <input type="text" id="search" placeholder="Search by name" autocomplete="off" />
+                </div>
+              </div>
+
+              <div class="togrow">
+                <span>Show all employees</span>
+                <span class="sw"></span>
+              </div>
+
+              <div class="segrow">
+                <button class="seg on"  id="segOn">On this project</button>
+                <button class="seg off" id="segOff">Everyone else</button>
+              </div>
+
+              <div class="listhead">
+                <span class="lbl" id="listLbl">On this project</span>
+                <button class="txt-btn right" id="selAll" style="font-size:13px;">Select all</button>
+              </div>
+
+              <div class="rows" id="rows"></div>
+
+              <div class="sheet-foot">
+                <div class="tray" id="tray"></div>
+                <button class="cta" id="cta" disabled>Select workers to add</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <p class="device-cap">iPhone · 342 × 700</p>
+    </div>
+
+    <div class="col-side">
+      <ol class="rail" id="rail">
+        <li data-step="1"><span class="no">1</span><span class="lbl">Timesheet list<span class="say">Tap the + button</span></span></li>
+        <li data-step="2"><span class="no">2</span><span class="lbl">Add timesheet<span class="say">Tap Add workers</span></span></li>
+        <li data-step="3"><span class="no">3</span><span class="lbl">Select workers<span class="say">Tap rows, then Add</span></span></li>
+        <li data-step="4"><span class="no">4</span><span class="lbl">Enter times<span class="say">Open a worker card</span></span></li>
+        <li data-step="5"><span class="no">5</span><span class="lbl">Saved<span class="say">Back on the list</span></span></li>
+      </ol>
+
+      <div class="controls">
+        <button class="btn" id="restart">Restart flow</button>
+        <button class="btn" id="hintBtn" aria-pressed="true">Tap hints: on</button>
+        <a class="btn" href="compare.html" style="text-decoration:none; display:inline-block;">Before / after &rarr;</a>
+      </div>
+
+      <div class="sidenote">
+        <p><b>What to watch.</b> On step 3, a picked row tints, grows an orange rail and a ticked avatar — you can see your crew without reading checkboxes.</p>
+        <p>The button at the bottom counts as you go: <b>Add 3 workers</b>. Cancel is a word, not an arrow, so nothing is ambiguous about leaving.</p>
+        <p>Try the search, <b>Select all</b>, and removing someone from a chip in the tray.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var TICK    = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+  var TICK_SM = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+  var CHEV    = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
+
+  var ROSTER = [
+    { id: 'sg', name: 'Sandy Groundes',  role: 'Plant operator',  here: true  },
+    { id: 'wk', name: 'Wayne Kerr',      role: 'Leading hand',    here: true  },
+    { id: 'tb', name: 'Trent Ballard',   role: 'Labourer',        here: true  },
+    { id: 'kh', name: 'Kylie Hutchens',  role: 'Traffic control', here: true  },
+    { id: 'mf', name: 'Mo Farrugia',     role: 'Grader operator', here: true  },
+    { id: 'bn', name: 'Brett Nankervis', role: 'Truck driver',    here: true  },
+    { id: 'ds', name: 'Dane Sutcliffe',  role: 'Roller operator', here: false },
+    { id: 'pr', name: 'Priya Raman',     role: 'Site engineer',   here: false }
+  ];
+
+  var state = {
+    step: 1,
+    pane: 'list',
+    tab: 'here',
+    query: '',
+    picked: {},          // id -> true, live inside the sheet
+    added: [],           // committed worker objects on the timesheet
+    times: {},           // id -> {start, finish, brk}
+    saved: []            // rows on the timesheet list
+  };
+
+  state.saved.push({
+    id: 'jb', name: 'James Baker', initials: 'JB',
+    start: '7:00 AM', finish: '11:30 AM', hrs: '4h 0m', brk: '30m',
+    status: 'un', label: 'SUBMITTED TIME'
+  });
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function initials(n) {
+    return n.split(/\s+/).map(function (p) { return p[0]; }).join('').slice(0, 2).toUpperCase();
+  }
+
+  function fmt12(hhmm) {
+    var bits = hhmm.split(':');
+    var h = parseInt(bits[0], 10), m = bits[1];
+    var ap = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12; if (h12 === 0) { h12 = 12; }
+    return h12 + ':' + m + ' ' + ap;
+  }
+
+  function durMins(start, finish, brk) {
+    var s = start.split(':'), f = finish.split(':');
+    var mins = (parseInt(f[0], 10) * 60 + parseInt(f[1], 10)) - (parseInt(s[0], 10) * 60 + parseInt(s[1], 10));
+    mins -= parseInt(brk, 10);
+    return mins > 0 ? mins : 0;
+  }
+
+  function hm(mins) { return Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm'; }
+
+  /* ---------------- navigation ---------------- */
+
+  function show(pane) {
+    state.pane = pane;
+    $('pane-list').classList.toggle('on', pane === 'list');
+    $('pane-add').classList.toggle('on', pane === 'add');
+  }
+
+  function setStep(n) {
+    state.step = n;
+    var items = $('rail').querySelectorAll('li');
+    Array.prototype.forEach.call(items, function (li) {
+      var s = parseInt(li.dataset.step, 10);
+      li.classList.toggle('here', s === n);
+      li.classList.toggle('done', s < n);
+    });
+    $('hot-fab').style.display    = (n === 1) ? '' : 'none';
+    $('hot-picker').style.display = (n === 2) ? '' : 'none';
+  }
+
+  function toast(msg) {
+    $('toastMsg').textContent = msg;
+    var t = $('toast');
+    t.classList.add('on');
+    setTimeout(function () { t.classList.remove('on'); }, 2400);
+  }
+
+  /* ---------------- timesheet list ---------------- */
+
+  function renderList() {
+    var host = $('tsList');
+    host.innerHTML = '';
+
+    state.saved.forEach(function (r) {
+      var card = document.createElement('div');
+      card.className = 'tcard';
+      card.innerHTML =
+        '<div class="top">' +
+          '<span style="width:19px;height:19px;border:1.8px solid #A9AEB9;border-radius:4px;flex:0 0 auto;"></span>' +
+          '<span class="nm">' + r.name + '</span>' +
+        '</div>' +
+        '<div class="mid">' +
+          '<span class="avatar">' + r.initials + '</span>' +
+          '<span>' +
+            '<span class="lab">' + r.label + '</span>' +
+            '<div class="tm">' + r.start + ' - ' + r.finish + '</div>' +
+            '<div class="hrs">' + r.hrs + ' &nbsp;·&nbsp; break ' + r.brk + '</div>' +
+          '</span>' +
+          '<span class="state ' + r.status + '">' + (r.status === 'ap' ? 'Approved' : 'Unapproved') + '</span>' +
+        '</div>';
+      host.appendChild(card);
+    });
+
+    $('dayCount').textContent = String(state.saved.length);
+    $('tabTs').textContent  = 'TIMESHEET(' + state.saved.length + ')';
+    $('tabEmp').textContent = 'EMPLOYEES(' + state.saved.length + ')';
+    $('fAll').innerHTML = 'All&nbsp; (' + state.saved.length + ')';
+    var unapproved = state.saved.filter(function (r) { return r.status === 'un'; }).length;
+    $('fUn').innerHTML  = 'Unapproved&nbsp; (' + unapproved + ')';
+    $('fApp').innerHTML = 'Approved&nbsp; (' + (state.saved.length - unapproved) + ')';
+  }
+
+  /* ---------------- the sheet ---------------- */
+
+  function visibleRoster() {
+    var q = state.query.trim().toLowerCase();
+    return ROSTER.filter(function (w) {
+      if (state.tab === 'here' && !w.here) { return false; }
+      if (state.tab === 'away' && w.here)  { return false; }
+      if (q && w.name.toLowerCase().indexOf(q) === -1 && w.role.toLowerCase().indexOf(q) === -1) { return false; }
+      return true;
+    });
+  }
+
+  function renderSheet() {
+    var host = $('rows');
+    host.innerHTML = '';
+    var vis = visibleRoster();
+
+    if (!vis.length) {
+      host.innerHTML = '<div class="noresult">No one matches &ldquo;' + state.query + '&rdquo;.</div>';
+    }
+
+    vis.forEach(function (w) {
+      var on = !!state.picked[w.id];
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'wrow';
+      b.setAttribute('aria-pressed', String(on));
+      b.innerHTML =
+        '<span class="av">' + initials(w.name) + '<span class="bdg">' + TICK_SM + '</span></span>' +
+        '<span class="who">' +
+          '<span class="nm">' + w.name + '</span>' +
+          '<span class="sub">' + (on ? 'Added' : w.role) + '</span>' +
+        '</span>' +
+        '<span class="cbox">' + TICK + '</span>';
+      b.addEventListener('click', function () {
+        if (state.picked[w.id]) { delete state.picked[w.id]; } else { state.picked[w.id] = true; }
+        renderSheet();
+      });
+      host.appendChild(b);
+    });
+
+    // tray
+    var tray = $('tray');
+    tray.innerHTML = '';
+    var pickedList = ROSTER.filter(function (w) { return state.picked[w.id]; });
+    pickedList.forEach(function (w) {
+      var pill = document.createElement('span');
+      pill.className = 'pill';
+      pill.appendChild(document.createTextNode(w.name));
+      var x = document.createElement('button');
+      x.type = 'button';
+      x.textContent = '×';
+      x.setAttribute('aria-label', 'Remove ' + w.name);
+      x.addEventListener('click', function (e) {
+        e.stopPropagation();
+        delete state.picked[w.id];
+        renderSheet();
+      });
+      pill.appendChild(x);
+      tray.appendChild(pill);
+    });
+
+    var n = pickedList.length;
+    var cta = $('cta');
+    cta.disabled = n === 0;
+    cta.textContent = n === 0 ? 'Select workers to add' : 'Add ' + n + ' worker' + (n === 1 ? '' : 's');
+
+    var allVisOn = vis.length > 0 && vis.every(function (w) { return state.picked[w.id]; });
+    $('selAll').textContent = allVisOn ? 'Clear all' : 'Select all';
+    $('listLbl').textContent = (state.tab === 'here' ? 'On this project' : 'Everyone else') + ' · ' + vis.length;
+  }
+
+  function openSheet() {
+    state.picked = {};
+    state.added.forEach(function (w) { state.picked[w.id] = true; });
+    state.query = '';
+    $('search').value = '';
+    renderSheet();
+    $('scrim').classList.add('on');
+    $('sheet').classList.add('on');
+    setStep(3);
+  }
+
+  function closeSheet() {
+    $('scrim').classList.remove('on');
+    $('sheet').classList.remove('on');
+  }
+
+  /* ---------------- add-timesheet screen ---------------- */
+
+  function renderAdd() {
+    var host = $('wCards');
+    host.innerHTML = '';
+
+    var any = state.added.length > 0;
+    $('emptyState').style.display = any ? 'none' : '';
+    $('wHead').style.display      = any ? '' : 'none';
+    $('saveExit').disabled        = !any;
+    $('pickerLabel').textContent  = any
+      ? state.added.length + ' worker' + (state.added.length === 1 ? '' : 's') + ' selected'
+      : 'Add workers to this timesheet';
+    $('pickerLabel').className = any ? 'val' : 'ph';
+    $('wHeadLbl').textContent = 'On this timesheet · ' + state.added.length;
+
+    state.added.forEach(function (w) {
+      var t = state.times[w.id];
+      var mins = durMins(t.start, t.finish, t.brk);
+
+      var card = document.createElement('div');
+      card.className = 'wcard';
+      card.innerHTML =
+        '<button class="hd" type="button">' +
+          '<span class="av" style="width:38px;height:38px;">' + initials(w.name) + '</span>' +
+          '<span style="flex:1;">' +
+            '<span class="nm">' + w.name + '</span>' +
+            '<div class="rl">' + w.role + '</div>' +
+            '<div class="sum">' + fmt12(t.start) + ' – ' + fmt12(t.finish) + ' · ' + hm(mins) + '</div>' +
+          '</span>' +
+          '<span class="chev">' + CHEV + '</span>' +
+        '</button>' +
+        '<div class="bd">' +
+          '<div class="timegrid">' +
+            '<div><label>Start</label><input type="time" value="' + t.start + '" data-k="start" /></div>' +
+            '<div><label>Finish</label><input type="time" value="' + t.finish + '" data-k="finish" /></div>' +
+            '<div><label>Break</label><select data-k="brk">' +
+              '<option value="0">None</option>' +
+              '<option value="30">30 min</option>' +
+              '<option value="45">45 min</option>' +
+              '<option value="60">60 min</option>' +
+            '</select></div>' +
+            '<div><label>Cost centre</label><select><option>Resheeting</option><option>Traffic control</option><option>Establishment</option></select></div>' +
+          '</div>' +
+          '<div class="totline"><span class="k">Total for the day</span><span class="v">' + hm(mins) + '</span></div>' +
+        '</div>';
+
+      card.querySelector('.hd').addEventListener('click', function () {
+        var wasOpen = card.classList.contains('open');
+        Array.prototype.forEach.call(host.querySelectorAll('.wcard'), function (c) { c.classList.remove('open'); });
+        if (!wasOpen) { card.classList.add('open'); setStep(4); }
+      });
+
+      card.querySelector('select[data-k="brk"]').value = String(t.brk);
+
+      Array.prototype.forEach.call(card.querySelectorAll('[data-k]'), function (inp) {
+        inp.addEventListener('change', function () {
+          var k = inp.dataset.k;
+          state.times[w.id][k] = (k === 'brk') ? parseInt(inp.value, 10) : inp.value;
+          var open = card.classList.contains('open');
+          renderAdd();
+          if (open) {
+            var again = host.querySelectorAll('.wcard')[state.added.indexOf(w)];
+            if (again) { again.classList.add('open'); }
+          }
+        });
+      });
+
+      host.appendChild(card);
+    });
+  }
+
+  /* ---------------- wiring ---------------- */
+
+  $('fab').addEventListener('click', function () {
+    state.added = [];
+    state.times = {};
+    renderAdd();
+    show('add');
+    setStep(2);
+  });
+
+  $('openSheet').addEventListener('click', openSheet);
+
+  $('sheetCancel').addEventListener('click', function () {
+    closeSheet();
+    setStep(state.added.length ? 4 : 2);
+  });
+
+  $('scrim').addEventListener('click', function () {
+    closeSheet();
+    setStep(state.added.length ? 4 : 2);
+  });
+
+  $('cta').addEventListener('click', function () {
+    var picked = ROSTER.filter(function (w) { return state.picked[w.id]; });
+    state.added = picked;
+    picked.forEach(function (w) {
+      if (!state.times[w.id]) { state.times[w.id] = { start: '07:00', finish: '15:30', brk: 30 }; }
+    });
+    Object.keys(state.times).forEach(function (id) {
+      if (!state.picked[id]) { delete state.times[id]; }
+    });
+    closeSheet();
+    renderAdd();
+    setStep(4);
+  });
+
+  $('selAll').addEventListener('click', function () {
+    var vis = visibleRoster();
+    var allOn = vis.length > 0 && vis.every(function (w) { return state.picked[w.id]; });
+    vis.forEach(function (w) {
+      if (allOn) { delete state.picked[w.id]; } else { state.picked[w.id] = true; }
+    });
+    renderSheet();
+  });
+
+  $('search').addEventListener('input', function (e) {
+    state.query = e.target.value;
+    renderSheet();
+  });
+
+  $('segOn').addEventListener('click', function () {
+    state.tab = 'here';
+    $('segOn').className = 'seg on'; $('segOff').className = 'seg off';
+    renderSheet();
+  });
+  $('segOff').addEventListener('click', function () {
+    state.tab = 'away';
+    $('segOff').className = 'seg on'; $('segOn').className = 'seg off';
+    renderSheet();
+  });
+
+  $('bulkBtn').addEventListener('click', function () {
+    state.added.forEach(function (w) { state.times[w.id] = { start: '07:00', finish: '15:30', brk: 30 }; });
+    renderAdd();
+  });
+
+  function leaveAdd() {
+    show('list');
+    setStep(1);
+  }
+
+  $('addBack').addEventListener('click', leaveAdd);
+  $('cancelAdd').addEventListener('click', leaveAdd);
+
+  $('saveExit').addEventListener('click', function () {
+    state.added.forEach(function (w) {
+      var t = state.times[w.id];
+      state.saved.push({
+        id: w.id, name: w.name, initials: initials(w.name),
+        start: fmt12(t.start), finish: fmt12(t.finish),
+        hrs: hm(durMins(t.start, t.finish, t.brk)),
+        brk: t.brk + 'm', status: 'un', label: 'SUBMITTED TIME'
+      });
+    });
+    var n = state.added.length;
+    renderList();
+    show('list');
+    setStep(5);
+    toast(n + ' timesheet' + (n === 1 ? '' : 's') + ' added');
+    setTimeout(function () { if (state.step === 5) { setStep(1); } }, 2600);
+  });
+
+  $('restart').addEventListener('click', function () {
+    state.added = []; state.times = {}; state.picked = {};
+    state.query = ''; state.tab = 'here';
+    state.saved = [{
+      id: 'jb', name: 'James Baker', initials: 'JB',
+      start: '7:00 AM', finish: '11:30 AM', hrs: '4h 0m', brk: '30m',
+      status: 'un', label: 'SUBMITTED TIME'
+    }];
+    $('segOn').className = 'seg on'; $('segOff').className = 'seg off';
+    closeSheet();
+    renderList(); renderAdd();
+    show('list'); setStep(1);
+  });
+
+  $('hintBtn').addEventListener('click', function () {
+    var on = document.body.classList.toggle('hints');
+    this.setAttribute('aria-pressed', String(on));
+    this.textContent = 'Tap hints: ' + (on ? 'on' : 'off');
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && $('sheet').classList.contains('on')) {
+      closeSheet();
+      setStep(state.added.length ? 4 : 2);
+    }
+  });
+
+  document.body.classList.add('hints');
+  renderList();
+  renderAdd();
+  setStep(1);
+})();
+</script>
+</body>
+</html>
