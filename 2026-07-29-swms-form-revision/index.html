@@ -217,6 +217,18 @@ body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#333;display:flex;h
 /* Rev number tag on a revision row */
 .rev-tag{display:inline-block;font-size:10px;font-weight:700;color:#5b21b6;background:#ede9fe;padding:1px 7px;border-radius:6px;text-transform:uppercase;letter-spacing:.4px;margin-right:6px;vertical-align:middle}
 
+/* SWMS subcategory forms list */
+.list-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.list-title{font-size:16px;font-weight:700;color:#1b2a4a}
+.list-sub{font-size:12px;color:#64748b;margin-top:2px}
+.form-list{background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
+.form-row{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid #f1f5f9;cursor:pointer;transition:background .1s}
+.form-row:last-child{border-bottom:none}
+.form-row:hover{background:#fafbfd}
+.form-row-title{font-size:14px;font-weight:700;color:#1b2a4a}
+.form-row-sub{font-size:12px;color:#64748b;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.type-locked{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:#475569;background:#f8fafc;border:1px solid #eef1f5;border-radius:8px;padding:10px 12px;line-height:1.5}
+
 /* Free-entry multi-email input (daywork-docket style) */
 .email-input-row{display:flex;gap:8px}
 .email-input-row input{flex:1}
@@ -295,13 +307,7 @@ body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#333;display:flex;h
       <div class="primary-tab active"><i class="fa-solid fa-folder-tree"></i> Project Forms</div>
     </div>
 
-    <div class="breadcrumbs">
-      <span class="crumb">All Projects</span><span class="sep">›</span>
-      <span class="crumb">Northside Tunnel Upgrade</span><span class="sep">›</span>
-      <span class="crumb">Health &amp; Safety</span><span class="sep">›</span>
-      <span class="crumb">SWMS</span><span class="sep">›</span>
-      <span class="crumb current">SWMS — Excavating and Working in Trenches · Revisions</span>
-    </div>
+    <div class="breadcrumbs" id="crumbs"></div>
 
     <div class="context-bar">
       <span class="cb-name">Northside Tunnel Upgrade</span>
@@ -331,38 +337,39 @@ const STATUS = {
 };
 const STAGES = ['Create','Build & consult','Review & sign','Lock','Worker sign-on','Submit / work','Revise'];
 
-// Clients/reviewers the SWMS can be sent to (external — verify without a Varicon login).
-const CLIENTS = [
-  {name:'Northside JV', email:'safety@northsidejv.com.au'},
-  {name:'BuildCo (Principal Contractor)', email:'pc@buildco.com.au'},
-  {name:'Independent Safety Auditor', email:'audit@whs-partners.com.au'},
-  {name:'Client Rep — M. Turner', email:'m.turner@northsidejv.com.au'},
-];
 // Read-only form content shown when viewing any revision.
 const FORM_ELEMENTS = [
   {q:'Task step', a:'Excavate trench to 1.8 m depth along gridline B'},
   {q:'Hazard', a:'Cave-in / ground collapse'},
   {q:'Risk rating', a:'High'},
   {q:'Control measures', a:'Trench shoring / benching · exclusion zone · spotter present'},
-  {q:'Adjacent services', a:'Locate & pothole before excavation (added in Rev D)'},
+  {q:'Adjacent services', a:'Locate & pothole before excavation'},
   {q:'PPE required', a:'Hard hat · hi-vis · steel caps · gloves'},
   {q:'Supervisor sign-off', a:'Required before entry'},
 ];
 const sig = (name,status,date)=>({name,status,date,comment:''});
-const SEED = () => ({
-  form:{ type:'SWMS', title:'SWMS — Excavating and Working in Trenches', hrcw:'Trenches deeper than 1.5 m' },
-  revs:[
+function mk(n){const names=[['JD','John Doe','Excavator Op.'],['AM','Aisha Malik','Labourer'],['TN','Tom Nguyen','Supervisor'],['RP','Rita Poudel','Spotter'],['KB','Kev Brown','Plant Op.'],['Ls','Liu Shan','Labourer']];return Array.from({length:n},(_,i)=>names[i%names.length]);}
+
+// SWMS forms in the "SWMS" subcategory of this project. Each has its own revisions.
+const SEED_FORMS = () => ([
+  { id:1, title:'SWMS — Excavating and Working in Trenches', hrcw:'Trenches deeper than 1.5 m', revs:[
     {rev:1,status:'locked',date:'12/01/2026',by:'Sarah Chen',summary:'Initial draft based on standard SWMS template',signees:mk(6),consulted:true,active:false,reviewers:[sig('safety@northsidejv.com.au','signed','11/01/2026')]},
     {rev:2,status:'locked',date:'02/02/2026',by:'Mike Jones',summary:'Updated PPE requirements after toolbox talk',signees:mk(14),consulted:true,active:false,reviewers:[sig('safety@northsidejv.com.au','signed','01/02/2026'),sig('pc@buildco.com.au','signed','02/02/2026')]},
     {rev:3,status:'locked',date:'17/02/2026',by:'Sarah Chen',summary:'Added trench shoring sign-off step',signees:mk(8),consulted:true,active:true,reviewers:[sig('safety@northsidejv.com.au','signed','16/02/2026'),sig('pc@buildco.com.au','signed','17/02/2026')]},
-  ],
-});
-function mk(n){const names=[['JD','John Doe','Excavator Op.'],['AM','Aisha Malik','Labourer'],['TN','Tom Nguyen','Supervisor'],['RP','Rita Poudel','Spotter'],['KB','Kev Brown','Plant Op.'],['Ls','Liu Shan','Labourer']];return Array.from({length:n},(_,i)=>names[i%names.length]);}
-let S = SEED();
+  ]},
+  { id:2, title:'SWMS — Working at Heights', hrcw:'Work where a person could fall > 2 m', revs:[
+    {rev:1,status:'locked',date:'18/06/2025',by:'Mike Jones',summary:'Initial Working at Heights SWMS',signees:mk(9),consulted:true,active:true,reviewers:[sig('safety@northsidejv.com.au','signed','17/06/2025')]},
+  ]},
+]);
+let FORMS = SEED_FORMS();
+let curId = 1;          // currently opened form
+let view = 'list';      // 'list' (SWMS subcategory) | 'hub' (one form's revisions)
+let nextFormId = 3;
+function cf(){return FORMS.find(f=>f.id===curId);}
 
 /* ---------------- render ---------------- */
 function currentStage(){
-  const cur = S.revs.find(r=>['draft','under_review','approved'].includes(r.status));
+  const cur = cf().revs.find(r=>['draft','under_review','approved'].includes(r.status));
   if(!cur) return 4; // locked & active — handed to workers (sign-on / fill happens on mobile/timesheet)
   if(cur.status==='draft') return 1;
   if(cur.status==='under_review') return 2;
@@ -410,19 +417,19 @@ function chipBg(c){return {active:'#dcfce7',locked:'#dcfce7',draft:'#fef3c7',und
 function chipFg(c){return {active:'#166534',locked:'#166534',draft:'#92400e',under_review:'#1e40af',approved:'#3730a3',superseded:'#94a3b8'}[c];}
 
 function renderHub(){
-  const total = S.revs.length;
-  const locked = S.revs.filter(r=>r.status==='locked').length;
-  const signees = S.revs.reduce((a,r)=>a+r.signees.length,0);
-  const active = S.revs.find(r=>r.active);
-  const hasOpenDraft = S.revs.some(r=>['draft','under_review','approved'].includes(r.status));
+  const total = cf().revs.length;
+  const locked = cf().revs.filter(r=>r.status==='locked').length;
+  const signees = cf().revs.reduce((a,r)=>a+r.signees.length,0);
+  const active = cf().revs.find(r=>r.active);
+  const hasOpenDraft = cf().revs.some(r=>['draft','under_review','approved'].includes(r.status));
 
   let html = `
   <div class="rev-form-header">
     <div class="rfh-top">
       <div class="rfh-icon"><i class="fa-solid fa-helmet-safety"></i></div>
       <div class="rfh-info">
-        <div class="rfh-title">${S.form.title} <span class="tag swms">SWMS</span></div>
-        <div class="rfh-sub">Northside Tunnel Upgrade · Health &amp; Safety · SWMS &nbsp;·&nbsp; HRCW: ${S.form.hrcw}</div>
+        <div class="rfh-title">${cf().title} <span class="tag swms">SWMS</span></div>
+        <div class="rfh-sub">Northside Tunnel Upgrade · Health &amp; Safety · SWMS &nbsp;·&nbsp; HRCW: ${cf().hrcw}</div>
       </div>
     </div>
     <div class="rfh-bottom">
@@ -440,7 +447,7 @@ function renderHub(){
   }
 
   html += `<div class="rev-list">`;
-  S.revs.forEach(r=>{
+  cf().revs.forEach(r=>{
     const rowCls = r.active?'current locked-rev':(r.status==='locked'?'locked-rev':(r.status==='superseded'?'superseded':(['draft','under_review','approved'].includes(r.status)?'current':'')));
     const st = STATUS[r.status];
     const statusLabel = r.active? 'Active (locked)' : st.label;
@@ -485,7 +492,83 @@ function rowActions(r){
   return view;
 }
 
-function renderAll(){renderHub();}
+function statusChipHTML(r){
+  const cls=r.active?'active':STATUS[r.status].cls;
+  const label=r.active?'Active (locked)':STATUS[r.status].label;
+  return `<span class="rev-status ${cls}"><i class="fa-solid ${statusIcon(r)}"></i>${label}</span>`;
+}
+/* ---------- subcategory forms list ---------- */
+function renderList(){
+  const rows=FORMS.map(f=>{
+    const active=f.revs.find(r=>r.active);
+    const open=f.revs.find(r=>['draft','under_review','approved'].includes(r.status));
+    const chip=open?statusChipHTML(open):(active?statusChipHTML(active):`<span class="rev-status draft"><i class="fa-solid fa-pen"></i>Draft</span>`);
+    return `<div class="form-row" onclick="openForm(${f.id})">
+      <div class="rfh-icon" style="width:40px;height:40px;font-size:16px"><i class="fa-solid fa-helmet-safety"></i></div>
+      <div style="flex:1;min-width:0">
+        <div class="form-row-title">${f.title} <span class="tag swms">SWMS</span></div>
+        <div class="form-row-sub">${f.revs.length} revision${f.revs.length>1?'s':''} · ${active?'Active: Rev '+active.rev:'no active version'} · HRCW: ${f.hrcw}</div>
+      </div>
+      ${chip}
+      <i class="fa-solid fa-chevron-right" style="color:#cbd5e1"></i>
+    </div>`;
+  }).join('');
+  document.getElementById('hub').innerHTML=`
+    <div class="list-head">
+      <div><div class="list-title">SWMS forms</div><div class="list-sub">Health &amp; Safety › SWMS · Northside Tunnel Upgrade</div></div>
+      <button class="btn primary" onclick="openCreateForm()"><i class="fa-solid fa-plus"></i> Create SWMS form</button>
+    </div>
+    <div class="form-list">${rows}</div>`;
+}
+/* ---------- navigation ---------- */
+function renderCrumbs(){
+  let c=`<span class="crumb" onclick="backToList()">All Projects</span><span class="sep">›</span>
+    <span class="crumb" onclick="backToList()">Northside Tunnel Upgrade</span><span class="sep">›</span>
+    <span class="crumb" onclick="backToList()">Health &amp; Safety</span><span class="sep">›</span>`;
+  if(view==='list') c+=`<span class="crumb current">SWMS</span>`;
+  else c+=`<span class="crumb" onclick="backToList()">SWMS</span><span class="sep">›</span><span class="crumb current">${cf().title} · Revisions</span>`;
+  document.getElementById('crumbs').innerHTML=c;
+}
+function backToList(){view='list';renderApp();}
+function openForm(id){curId=id;view='hub';renderApp();}
+function renderApp(){renderCrumbs();view==='list'?renderList():renderHub();}
+function renderAll(){renderApp();}
+
+/* ---------- create a new SWMS form (Save as draft → Rev 1 in Draft) ---------- */
+function openCreateForm(){
+  openModal(`
+  <div class="m-head"><div><div class="m-title">Create Site-Specific Form</div>
+    <div class="m-sub">New form in Health &amp; Safety › SWMS · Northside Tunnel Upgrade.</div></div>
+    <button class="m-close" onclick="closeModal()">✕</button></div>
+  <div class="m-body">
+    <div class="field"><label>Form name</label><input id="nfTitle" value="SWMS — "></div>
+    <div class="field"><label>Form type</label>
+      <div class="type-locked"><span class="tag swms">SWMS</span> Set automatically — this form lives in the SWMS subcategory, so it uses the revision &amp; client sign-off workflow.</div></div>
+    <div class="field"><label>High-risk construction work (HRCW)</label><input id="nfHrcw" placeholder="e.g. Work near energised services"></div>
+    <label style="font-size:13px;font-weight:600;color:#1b2a4a">Start from</label>
+    <div class="type-grid" style="margin-top:6px">
+      <div class="type-card swms sel"><div class="tc-ico"><i class="fa-solid fa-pen-ruler"></i></div><div class="tc-n">Start from scratch</div><div class="tc-d">Build the SWMS elements yourself.</div></div>
+      <div class="type-card general"><div class="tc-ico"><i class="fa-solid fa-copy"></i></div><div class="tc-n">Use a template</div><div class="tc-d">Start from a standard SWMS template.</div></div>
+    </div>
+    <div class="consult-box" style="margin-top:14px"><i class="fa-solid fa-circle-info"></i>
+      <div>Saving as draft creates the form and its <b>first revision (Rev 1)</b> in <b>Draft</b>. It won't be live until it is reviewed, signed and locked.</div></div>
+  </div>
+  <div class="m-foot">
+    <button class="btn" onclick="closeModal()">Cancel</button>
+    <button class="btn primary" onclick="doSaveAsDraft()"><i class="fa-solid fa-floppy-disk"></i> Save as draft</button>
+  </div>`,true);
+  setTimeout(()=>{const i=document.getElementById('nfTitle');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},30);
+}
+function doSaveAsDraft(){
+  const title=(document.getElementById('nfTitle').value||'').trim()||'Untitled SWMS form';
+  const hrcw=(document.getElementById('nfHrcw').value||'').trim()||'To be specified';
+  const id=nextFormId++;
+  FORMS.push({id,title,hrcw,revs:[
+    {rev:1,status:'draft',date:today(),by:'Alec Neill',summary:'Initial draft',signees:[],consulted:false,active:false,reviewers:[]}
+  ]});
+  curId=id;view='hub';closeModal();renderApp();
+  toast('“'+title+'” created — Rev 1 is in Draft.');
+}
 
 /* ---------------- modal helpers ---------------- */
 function openModal(html,wide){document.getElementById('modal').className='modal'+(wide?' wide':'');document.getElementById('modal').innerHTML=html;document.getElementById('overlay').classList.add('open');}
@@ -560,7 +643,7 @@ function renderEmailChips(){
 function doSend(rev){
   addEmail(); // capture anything typed but not yet added
   if(!sendEmails.length){toast('Add at least one client email.');return;}
-  const r=S.revs.find(x=>x.rev===rev);
+  const r=cf().revs.find(x=>x.rev===rev);
   r.reviewers=sendEmails.map(e=>({name:e,status:'pending',date:null,comment:''}));
   r.status='under_review';
   closeModal();renderAll();toast('Sent to '+sendEmails.length+' recipient'+(sendEmails.length>1?'s':'')+' for review.');
@@ -568,7 +651,7 @@ function doSend(rev){
 
 /* Read-only view of a revision's form (viewing versions never allows editing). */
 function viewForm(rev){
-  const r=S.revs.find(x=>x.rev===rev);
+  const r=cf().revs.find(x=>x.rev===rev);
   openModal(`
   <div class="m-head"><div><div class="m-title">Rev ${rev} — view only</div>
     <div class="m-sub">${r.summary} · ${r.by} · ${r.date}</div></div>
@@ -589,7 +672,7 @@ function rvLabel(s){return {pending:'Pending',signed:'Signed',rejected:'Rejected
 function rvBg(s){return {pending:'#fef3c7',signed:'#dcfce7',rejected:'#fee2e2'}[s];}
 function rvFg(s){return {pending:'#92400e',signed:'#166534',rejected:'#b91c1c'}[s];}
 function openReviewStatus(){
-  const r=S.revs.find(x=>x.status==='under_review');
+  const r=cf().revs.find(x=>x.status==='under_review');
   const done = r ? r.reviewers.filter(x=>x.status==='signed').length : 0;
   openModal(`
   <div class="m-head"><div><div class="m-title">Client review status</div>
@@ -611,7 +694,7 @@ function openReviewStatus(){
 /* External client portal (separate, logged-out page — demo only). */
 let portalWhoIdx=0;
 function openClientPortal(){
-  const rev=S.revs.find(r=>r.status==='under_review');
+  const rev=cf().revs.find(r=>r.status==='under_review');
   const ext=document.getElementById('extOverlay');
   if(!rev){
     ext.innerHTML=extShell(`<div class="ext-empty"><i class="fa-regular fa-circle-check" style="font-size:34px;color:#16a34a"></i>
@@ -629,7 +712,7 @@ function renderPortal(rev){
     <div class="ext-card">
       <div class="ext-note"><i class="fa-solid fa-lock"></i> You're reviewing this SWMS via a secure link — no Varicon login required.</div>
       <div class="field"><label>Reviewing as</label><select id="whoSel" onchange="portalWho(this.value)">${opts}</select></div>
-      <h3 style="font-size:16px;color:#1b2a4a;margin:8px 0 2px">${S.form.title}</h3>
+      <h3 style="font-size:16px;color:#1b2a4a;margin:8px 0 2px">${cf().title}</h3>
       <div class="m-sub" style="margin-bottom:12px">Rev ${rev.rev} · ${rev.summary} · Northside Tunnel Upgrade</div>
       ${roFormHTML()}
       <div class="field" style="margin-top:16px"><label>Comment (optional)</label><textarea id="cCmt" placeholder="Add a comment for the H&S manager..."></textarea></div>
@@ -642,7 +725,7 @@ function renderPortal(rev){
     </div>`);
 }
 function portalAct(kind){
-  const rev=S.revs.find(r=>r.status==='under_review');if(!rev)return;
+  const rev=cf().revs.find(r=>r.status==='under_review');if(!rev)return;
   const rv=rev.reviewers[portalWhoIdx];const cmt=(document.getElementById('cCmt')||{}).value||'';
   rv.comment=cmt;rv.date=today();
   if(kind==='reject'){rv.status='rejected';rev.status='draft';closeExt();renderAll();toast('Client rejected — revision returned to draft.');return;}
@@ -657,7 +740,7 @@ function extShell(inner){return `
 function closeExt(){document.getElementById('extOverlay').classList.remove('open');}
 
 function confirmLock(rev){
-  const prev = S.revs.find(r=>r.active);
+  const prev = cf().revs.find(r=>r.active);
   openModal(`
   <div class="m-head"><div><div class="m-title">Confirm &amp; lock Rev ${rev}</div>
     <div class="m-sub">This freezes the revision and makes it the active SWMS.</div></div>
@@ -675,14 +758,14 @@ function confirmLock(rev){
   </div>`);
 }
 function doLock(rev){
-  S.revs.forEach(r=>{if(r.active){r.active=false;r.status='superseded';}});
-  const r=S.revs.find(x=>x.rev===rev);r.status='locked';r.active=true;r.date=today();
+  cf().revs.forEach(r=>{if(r.active){r.active=false;r.status='superseded';}});
+  const r=cf().revs.find(x=>x.rev===rev);r.status='locked';r.active=true;r.date=today();
   closeModal();renderAll();toast('Rev '+rev+' locked and now Active. Workers must re-sign.');
 }
 
 function newRevision(){
-  const active=S.revs.find(r=>r.active);
-  const next=S.revs.length+1;
+  const active=cf().revs.find(r=>r.active);
+  const next=cf().revs.length+1;
   openModal(`
   <div class="m-head"><div><div class="m-title">Start Rev ${next}</div>
     <div class="m-sub">A new revision is required when the work changes, a new hazard appears, controls are revised, or the SWMS isn't being followed.</div></div>
@@ -700,12 +783,12 @@ function newRevision(){
 }
 function doNewRev(){
   const summary=document.getElementById('nrSummary').value||'New draft revision';
-  const next=S.revs.length+1;
-  S.revs.push({rev:next,status:'draft',date:today(),by:'Alec Neill',summary,signees:[],consulted:false,active:false,reviewers:[]});
+  const next=cf().revs.length+1;
+  cf().revs.push({rev:next,status:'draft',date:today(),by:'Alec Neill',summary,signees:[],consulted:false,active:false,reviewers:[]});
   closeModal();renderAll();toast('Draft Rev '+next+' created. Build → consult → send for review.');
 }
 
-function resetDemo(){S=SEED();closeModal();renderAll();toast('Demo reset.');}
+function resetDemo(){FORMS=SEED_FORMS();curId=1;view='list';nextFormId=3;closeModal();closeExt();renderApp();toast('Demo reset.');}
 
 renderAll();
 </script>
