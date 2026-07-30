@@ -634,17 +634,17 @@ function renderSettings(){
     <div class="set-head"><div class="set-title">Form type</div>
       <div class="set-sub">Determines how this form behaves. SWMS forms use the revision &amp; client sign-off workflow.</div></div>
     <div class="set-body">
-      <div class="type-grid">
-        <div class="type-card swms ${d.type==='SWMS'?'sel':''}" onclick="setType('SWMS')">
-          <div class="tc-ico"><i class="fa-solid fa-helmet-safety"></i></div>
-          <div class="tc-n">SWMS <i class="fa-solid ${d.type==='SWMS'?'fa-circle-check':'fa-circle'} tc-radio"></i></div>
-          <div class="tc-d">Safe Work Method Statement. Uses revisions: Draft → client review &amp; sign → lock. Locked version is what workers acknowledge &amp; work under.</div>
-        </div>
-        <div class="type-card general ${d.type==='GENERAL'?'sel':''}" onclick="setType('GENERAL')">
-          <div class="tc-ico"><i class="fa-solid fa-file-lines"></i></div>
-          <div class="tc-n">General <i class="fa-solid ${d.type==='GENERAL'?'fa-circle-check':'fa-circle'} tc-radio"></i></div>
-          <div class="tc-d">Standard form. Simple draft → publish. No revisions, client sign-off or worker sign-on.</div>
-        </div>
+      <div class="field" style="max-width:360px;margin-bottom:0">
+        <label>Form type</label>
+        <select class="set-select" style="width:100%" onchange="setType(this.value)">
+          <option value="GENERAL" ${d.type==='GENERAL'?'selected':''}>General</option>
+          <option value="SWMS" ${d.type==='SWMS'?'selected':''}>SWMS (Safe Work Method Statement)</option>
+        </select>
+      </div>
+      <div class="tc-d" style="margin-top:10px;max-width:640px">
+        ${d.type==='SWMS'
+          ? 'Uses the revision workflow: Draft → client review &amp; sign → lock. The locked version is what workers acknowledge &amp; work under.'
+          : 'Standard form. Simple draft → publish. No revisions, client sign-off or worker sign-on.'}
       </div>
     </div>
   </div>
@@ -681,15 +681,18 @@ function openCreateForm(){
   <div class="m-body">
     <div class="field"><label>Form name</label><input id="nfTitle" value="SWMS — "></div>
     <div class="field"><label>Form type</label>
-      <div class="type-locked"><span class="tag swms">SWMS</span> Set automatically — this form lives in the SWMS subcategory, so it uses the revision &amp; client sign-off workflow.</div></div>
-    <div class="field"><label>High-risk construction work (HRCW)</label><input id="nfHrcw" placeholder="e.g. Work near energised services"></div>
+      <select id="nfType" class="set-select" style="width:100%" onchange="updateCreateFormType()">
+        <option value="SWMS" selected>SWMS (Safe Work Method Statement)</option>
+        <option value="GENERAL">General</option>
+      </select></div>
+    <div class="field" id="nfHrcwField"><label>High-risk construction work (HRCW)</label><input id="nfHrcw" placeholder="e.g. Work near energised services"></div>
     <label style="font-size:13px;font-weight:600;color:#1b2a4a">Start from</label>
     <div class="type-grid" style="margin-top:6px">
       <div class="type-card swms sel"><div class="tc-ico"><i class="fa-solid fa-pen-ruler"></i></div><div class="tc-n">Start from scratch</div><div class="tc-d">Build the SWMS elements yourself.</div></div>
       <div class="type-card general"><div class="tc-ico"><i class="fa-solid fa-copy"></i></div><div class="tc-n">Use a template</div><div class="tc-d">Start from a standard SWMS template.</div></div>
     </div>
     <div class="consult-box" style="margin-top:14px"><i class="fa-solid fa-circle-info"></i>
-      <div>Saving as draft creates the form and its <b>first revision (Rev 1)</b> in <b>Draft</b>. It won't be live until it is reviewed, signed and locked.</div></div>
+      <div id="nfConsultText">Saving as draft creates the form and its <b>first revision (Rev 1)</b> in <b>Draft</b>. It won't be live until it is reviewed, signed and locked.</div></div>
   </div>
   <div class="m-foot">
     <button class="btn" onclick="closeModal()">Cancel</button>
@@ -697,15 +700,25 @@ function openCreateForm(){
   </div>`,true);
   setTimeout(()=>{const i=document.getElementById('nfTitle');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},30);
 }
+function updateCreateFormType(){
+  const type=document.getElementById('nfType').value;
+  const isSwms=type==='SWMS';
+  // HRCW only applies to SWMS forms.
+  document.getElementById('nfHrcwField').style.display=isSwms?'':'none';
+  document.getElementById('nfConsultText').innerHTML=isSwms
+    ? 'Saving as draft creates the form and its <b>first revision (Rev 1)</b> in <b>Draft</b>. It won\'t be live until it is reviewed, signed and locked.'
+    : 'This is a <b>General</b> form — saving as draft uses the standard <b>draft → publish</b> flow. No revisions, client sign-off or worker sign-on.';
+}
 function doSaveAsDraft(){
-  const title=(document.getElementById('nfTitle').value||'').trim()||'Untitled SWMS form';
+  const title=(document.getElementById('nfTitle').value||'').trim()||'Untitled form';
+  const type=document.getElementById('nfType').value||'SWMS';
   const hrcw=(document.getElementById('nfHrcw').value||'').trim()||'To be specified';
   const id=nextFormId++;
-  FORMS.push({id,title,hrcw,revs:[
+  FORMS.push({id,title,type,hrcw,revs:[
     {rev:1,status:'draft',date:today(),by:'Alec Neill',summary:'Initial draft',signees:[],consulted:false,active:false,reviewers:[]}
   ]});
   curId=id;view='hub';closeModal();renderApp();
-  toast('“'+title+'” created — Rev 1 is in Draft.');
+  toast('“'+title+'” created ('+type+') — Rev 1 is in Draft.');
 }
 
 /* ---------------- modal helpers ---------------- */
