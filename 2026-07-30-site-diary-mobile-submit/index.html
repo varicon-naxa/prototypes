@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Site Diary Mobile: Sections &amp; Submit</title>
+<!--
+  PROTOTYPE: Site Diary on mobile — two changes.
+
+  1. HIDE LABOUR AND TASKS BY DEFAULT. Both the hub section list and the left
+     rail only show the sections a crew actually fills in. Labour and Tasks are
+     off by default and can be switched back on per project from
+     "Manage sections" (⋯ on the hub).
+
+  2. SUBMIT FROM ANYWHERE. Today you have to navigate back to the previous
+     screen to submit the diary. Here every section screen carries the same
+     sticky footer: a "visited x of y" progress line and a Sign and submit
+     button, so once you've been through the sections you submit from where
+     you are. The footer nudges you to the next unvisited section, and the
+     button goes solid once every visible section has been opened.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+         background: #dfe4ec; color: #16233f; display: flex; justify-content: center;
+         align-items: flex-start; min-height: 100vh; padding: 24px 12px; gap: 26px; }
+
+  /* device frame */
+  .phone { width: 390px; height: 800px; background: #eef2f7; border-radius: 38px; overflow: hidden;
+           position: relative; box-shadow: 0 20px 60px rgba(20,35,63,0.32); border: 9px solid #10182c;
+           display: flex; flex-direction: column; flex-shrink: 0; }
+  .statusbar { background: #1e3050; color: #fff; font-size: 12px; font-weight: 600; padding: 9px 20px 6px;
+               display: flex; justify-content: space-between; flex-shrink: 0; }
+  .navbar { background: #1e3050; color: #fff; display: flex; align-items: center; gap: 12px;
+            padding: 10px 14px 14px; flex-shrink: 0; }
+  .navbar .nb-back { font-size: 21px; cursor: pointer; width: 22px; }
+  .navbar h1 { font-size: 19px; font-weight: 600; flex: 1; }
+  .navbar .nb-act { font-size: 17px; opacity: 0.9; cursor: pointer; padding: 0 4px; }
+
+  .body { flex: 1; display: flex; min-height: 0; }
+  .rail { width: 76px; background: #fff; border-right: 1px solid #e3e8ef; overflow-y: auto; flex-shrink: 0;
+          padding: 6px 0 14px; }
+  .rail::-webkit-scrollbar { display: none; }
+  .rail-item { padding: 9px 2px; text-align: center; cursor: pointer; }
+  .rail-item .ri-ic { width: 42px; height: 34px; margin: 0 auto 3px; border-radius: 17px; display: flex;
+                      align-items: center; justify-content: center; font-size: 16px; }
+  .rail-item.active .ri-ic { background: #F19100; }
+  .rail-item .ri-lb { font-size: 10px; color: #56637a; line-height: 1.15; padding: 0 2px;
+                      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rail-item.active .ri-lb { color: #16233f; font-weight: 700; }
+
+  .scroll { flex: 1; overflow-y: auto; min-width: 0; }
+  .scroll::-webkit-scrollbar { display: none; }
+  .pad { padding: 14px 16px 20px; }
+
+  .proj { font-size: 19px; font-weight: 700; line-height: 1.25; padding: 14px 16px 2px; }
+  .pdate { color: #67748c; padding: 4px 16px 12px; font-size: 13.5px; }
+
+  /* hub */
+  .export { margin: 10px 14px 0; border: 1px solid #dbe1ea; background: #fff; border-radius: 9px;
+            padding: 11px; text-align: center; font-size: 14.5px; font-weight: 600; }
+  .datestrip { background: #fff; margin: 10px 0 0; padding: 10px 14px 12px; }
+  .datestrip .dtop { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .datestrip .dtop b { font-size: 15px; }
+  .today-pill { background: #eef2f9; color: #16233f; font-size: 12.5px; font-weight: 600;
+                padding: 6px 13px; border-radius: 14px; }
+  .dweek { display: flex; justify-content: space-between; text-align: center; }
+  .dweek div { width: 13%; }
+  .dweek .dl { font-size: 11px; color: #8b96a8; margin-bottom: 5px; }
+  .dweek .dn { font-size: 14px; padding: 6px 0; border-radius: 50%; }
+  .dweek .dn.sel { background: #F19100; color: #fff; font-weight: 700; }
+  .dweek .dn.dim { color: #b8c0cd; }
+
+  .quickadd { margin: 12px 14px 0; background: linear-gradient(100deg,#22355a,#2f4a78); color: #fff;
+              border-radius: 12px; padding: 13px 14px; display: flex; align-items: center; gap: 12px; }
+  .quickadd .qa-ic { width: 38px; height: 38px; border-radius: 9px; background: rgba(255,255,255,0.14);
+                     display: flex; align-items: center; justify-content: center; font-size: 17px; }
+  .quickadd b { font-size: 15.5px; display: block; }
+  .quickadd small { font-size: 11.5px; opacity: 0.75; }
+  .quickadd .chev { margin-left: auto; opacity: 0.7; }
+
+  .sec-card { background: #fff; border-radius: 12px; margin: 11px 14px 0; padding: 15px 15px;
+              display: flex; align-items: center; gap: 13px; cursor: pointer; }
+  .sec-card .sc-ic { width: 26px; text-align: center; font-size: 17px; color: #3d4d69; flex-shrink: 0; }
+  .sec-card .sc-tx { flex: 1; min-width: 0; }
+  .sec-card .sc-tx b { font-size: 16px; font-weight: 600; display: block; }
+  .sec-card .sc-tx small { font-size: 12.5px; color: #7c8798; display: block; margin-top: 2px; }
+  .sec-card .sc-right { display: flex; align-items: center; gap: 8px; color: #a8b2c1; }
+  .visited-tick { color: #0F8A0F; font-size: 13px; font-weight: 700; }
+  .hidden-note { margin: 14px 14px 0; font-size: 12px; color: #8791a1; text-align: center; line-height: 1.5; }
+  .hidden-note a { color: #c47a00; font-weight: 600; text-decoration: none; border-bottom: 1px solid #f0d3a2; }
+
+  /* sticky footer */
+  .footer { background: #fff; border-top: 1px solid #e2e7ee; padding: 9px 14px 14px; flex-shrink: 0;
+            box-shadow: 0 -6px 18px rgba(20,35,63,0.07); }
+  .fprog { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+  .fbar { flex: 1; height: 5px; background: #e7ecf3; border-radius: 3px; overflow: hidden; }
+  .fbar i { display: block; height: 100%; background: #F19100; border-radius: 3px; transition: width 0.25s; }
+  .fbar i.done { background: #0F8A0F; }
+  .fprog span { font-size: 11.5px; color: #7c8798; white-space: nowrap; }
+  .frow { display: flex; gap: 9px; }
+  .btn { border: none; border-radius: 9px; font-size: 15px; font-weight: 700; padding: 13px 14px;
+         cursor: pointer; font-family: inherit; }
+  .btn.primary { background: #F19100; color: #fff; flex: 1; }
+  .btn.primary.ready { background: #0F8A0F; }
+  .btn.soft { background: #fdf0da; color: #a86c00; flex: 1; }
+  .btn.ghost { background: #fff; border: 1px solid #d6dde6; color: #3d4d69; font-weight: 600;
+               flex: 0 0 42%; font-size: 14px; }
+  .btn.wide { width: 100%; }
+  .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  /* generic section content */
+  .card { background: #fff; border-radius: 11px; padding: 14px 15px; margin-bottom: 11px; }
+  .card h4 { font-size: 15.5px; font-weight: 600; margin-bottom: 3px; }
+  .card p { font-size: 13px; color: #7c8798; line-height: 1.5; }
+  .card .kv { display: flex; justify-content: space-between; font-size: 13.5px; padding: 4px 0; color: #4b586e; }
+  .card .kv b { color: #16233f; }
+  .chips { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 9px; }
+  .chip { font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: 12px; background: #eef2f9; color: #4b586e; }
+  .chip.g { background: #e7f5e9; color: #0F8A0F; }
+  .chip.a { background: #fdf0da; color: #a86c00; }
+  .seg { display: flex; gap: 8px; margin-bottom: 12px; }
+  .seg span { font-size: 12.5px; font-weight: 600; padding: 7px 14px; border-radius: 16px; background: #fff; color: #6b7789; }
+  .seg span.on { background: #1e3050; color: #fff; }
+  .editor { background: #fff; border: 1px solid #dfe5ed; border-radius: 11px; padding: 13px; margin-bottom: 11px; }
+  .editor .ed-t { font-size: 15.5px; font-weight: 600; margin-bottom: 8px; }
+  .editor textarea { width: 100%; border: none; resize: none; font-family: inherit; font-size: 13.5px;
+                     min-height: 74px; outline: none; color: #16233f; }
+  .editor textarea::placeholder { color: #a8b2c1; font-style: italic; }
+  .addbtn { width: 100%; border: 1px dashed #e0b978; background: #fffaf1; color: #b57500; font-weight: 700;
+            font-size: 14px; padding: 12px; border-radius: 10px; cursor: pointer; font-family: inherit; }
+
+  /* sheet */
+  .sheet-wrap { position: absolute; inset: 0; background: rgba(16,24,44,0.5); display: none;
+                align-items: flex-end; z-index: 30; }
+  .sheet-wrap.open { display: flex; }
+  .sheet { background: #fff; width: 100%; border-radius: 18px 18px 0 0; padding: 16px 18px 20px;
+           max-height: 88%; overflow-y: auto; }
+  .sheet .grip { width: 40px; height: 4px; background: #dde3ec; border-radius: 2px; margin: 0 auto 14px; }
+  .sheet h3 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+  .sheet .sh-sub { font-size: 12.5px; color: #7c8798; margin-bottom: 15px; line-height: 1.5; }
+  .togrow { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid #f0f3f7; }
+  .togrow .tr-ic { width: 26px; text-align: center; font-size: 16px; color: #3d4d69; }
+  .togrow .tr-tx { flex: 1; }
+  .togrow .tr-tx b { font-size: 14.5px; font-weight: 600; display: block; }
+  .togrow .tr-tx small { font-size: 11.5px; color: #8791a1; }
+  .toggle { width: 46px; height: 27px; border-radius: 14px; background: #d8dee7; position: relative;
+            cursor: pointer; flex-shrink: 0; transition: background 0.18s; }
+  .toggle.on { background: #0F8A0F; }
+  .toggle.locked { opacity: 0.4; cursor: not-allowed; }
+  .toggle i { position: absolute; top: 3px; left: 3px; width: 21px; height: 21px; border-radius: 50%;
+              background: #fff; transition: left 0.18s; box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+  .toggle.on i { left: 22px; }
+  .sigpad { border: 1.5px dashed #cfd7e2; border-radius: 11px; height: 108px; display: flex; align-items: center;
+            justify-content: center; color: #a8b2c1; font-size: 13px; margin-bottom: 13px; cursor: pointer; }
+  .sigpad.signed { border-style: solid; border-color: #0F8A0F; background: #f4fbf5; color: #0F8A0F;
+                   font-family: 'Snell Roundhand', cursive; font-size: 27px; }
+  .sum { background: #f6f8fb; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  .sum .sr { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; color: #55617a; }
+  .sum .sr b { color: #16233f; }
+
+  .banner { display: flex; gap: 10px; align-items: flex-start; background: #e7f5e9; border-radius: 10px;
+            margin: 12px 14px 0; padding: 12px 14px; font-size: 13px; color: #1d6b23; line-height: 1.45; }
+  .banner b { display: block; }
+
+  .toast { position: absolute; left: 14px; right: 14px; bottom: 96px; background: #16233f; color: #fff;
+           border-radius: 10px; padding: 12px 15px; font-size: 13px; display: none; z-index: 40;
+           box-shadow: 0 10px 28px rgba(0,0,0,0.3); }
+  .toast.show { display: block; }
+
+  /* side notes */
+  .notes { max-width: 330px; font-size: 13px; color: #33405a; line-height: 1.6; padding-top: 8px; }
+  .notes h2 { font-size: 16px; margin-bottom: 10px; color: #16233f; }
+  .notes h3 { font-size: 13px; margin: 16px 0 5px; color: #16233f; }
+  .notes ul { margin: 0 0 0 17px; }
+  .notes li { margin-bottom: 5px; }
+  .notes code { background: #fff; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  @media (max-width: 800px) { body { flex-direction: column; align-items: center; } .notes { max-width: 390px; } }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="statusbar"><span>13:47</span><span>▮▮▮ ⌁ 74</span></div>
+
+  <!-- nav -->
+  <div class="navbar">
+    <span class="nb-back" id="navBack" onclick="goBack()">‹</span>
+    <h1 id="navTitle">Site Diary</h1>
+    <span class="nb-act" id="navKebab" onclick="openSheet('sheetSections')">⋯</span>
+  </div>
+
+  <div class="body">
+    <!-- left rail (section screens only) -->
+    <div class="rail" id="rail" style="display:none"></div>
+
+    <div class="scroll" id="scroll"></div>
+  </div>
+
+  <!-- sticky footer -->
+  <div class="footer" id="footer"></div>
+
+  <!-- manage sections sheet -->
+  <div class="sheet-wrap" id="sheetSections">
+    <div class="sheet">
+      <div class="grip"></div>
+      <h3>Manage sections</h3>
+      <div class="sh-sub">Choose which sections appear in this project's diary and in the side rail.
+        Labour and Tasks are off by default — switch them on if your crew records them here.</div>
+      <div id="toggleList"></div>
+      <button class="btn primary wide" style="margin-top:16px" onclick="closeSheet('sheetSections')">Done</button>
+    </div>
+  </div>
+
+  <!-- sign and submit sheet -->
+  <div class="sheet-wrap" id="sheetSubmit">
+    <div class="sheet">
+      <div class="grip"></div>
+      <h3>Sign and submit</h3>
+      <div class="sh-sub">DTP Rural Road Resheeting Program 2026 · Wed, 29 Jul 2026</div>
+      <div class="sum" id="submitSummary"></div>
+      <div class="sigpad" id="sigpad" onclick="sign()">Tap to sign</div>
+      <button class="btn primary wide" id="btnConfirm" onclick="submitDiary()" disabled>Submit diary</button>
+      <button class="btn ghost wide" style="flex:none;margin-top:9px" onclick="closeSheet('sheetSubmit')">Cancel</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<div class="notes">
+  <h2>Site Diary — mobile</h2>
+  <p>Two changes to the diary on mobile.</p>
+  <h3>1. Labour and Tasks hidden by default</h3>
+  <p>Neither appears in the hub list or the side rail out of the box. Tap <b>⋯ → Manage sections</b> on the hub to switch them back on per project.</p>
+  <h3>2. Submit from any section</h3>
+  <p>Every section screen carries the same sticky footer as the hub: a visited-progress line and a
+     <b>Sign and submit</b> button. No more backing out to the previous screen to submit. The footer
+     points at the next unvisited section, and the button turns green once every visible section has
+     been opened.</p>
+  <h3>Try it</h3>
+  <ul>
+    <li>Note the hub list — no Labour, no Tasks.</li>
+    <li>Open Diary, then use the rail to move through sections; watch the footer count.</li>
+    <li>Hit <b>Sign and submit</b> from inside a section.</li>
+    <li>⋯ → Manage sections → turn Labour on and see it appear in both places.</li>
+  </ul>
+</div>
+
+<script>
+/* ---------------- sections ---------------- */
+const SECTIONS = [
+  { id:'diary',     name:'Diary',               rail:'Diary',     icon:'🗨', sub:'No notes yet' },
+  { id:'photos',    name:'Photos',              rail:'Photos',    icon:'🖼', sub:'No. of photos: 0' },
+  { id:'timecard',  name:'Timecard',            rail:'Timecard',  icon:'🕐', sub:'Labour: 3 · Total hours: 24h 0m' },
+  { id:'plant',     name:'Plant and Equipment', rail:'Plant an…', icon:'🚜', sub:'On field: 1' },
+  { id:'labour',    name:'Labour',              rail:'Labour',    icon:'👷', sub:'On field: 1', optional:true },
+  { id:'materials', name:'Materials',           rail:'Materials', icon:'📦', sub:'No. of material used: 2' },
+  { id:'dockets',   name:'Site Dockets',        rail:'Site Doc…', icon:'🧾', sub:'Site dockets: 1' },
+  { id:'misc',      name:'Miscellaneous',       rail:'Miscell…',  icon:'💬', sub:'No entries yet' },
+  { id:'tasks',     name:'Tasks',               rail:'Tasks',     icon:'✓',  sub:'No tasks recorded', optional:true },
+  { id:'weather',   name:'Weather',             rail:'Weather',   icon:'🌙', sub:'Not recorded' },
+  { id:'forms',     name:'Forms',               rail:'Forms',     icon:'📄', sub:'0 submitted' }
+];
+
+const state = {
+  screen: 'hub',           // hub | <section id>
+  enabled: {},             // id -> bool
+  visited: new Set(),
+  signed: false,
+  submitted: false
+};
+SECTIONS.forEach(s => state.enabled[s.id] = !s.optional);   // Labour + Tasks off by default
+
+const visible = () => SECTIONS.filter(s => state.enabled[s.id]);
+const visitedCount = () => visible().filter(s => state.visited.has(s.id)).length;
+const allVisited = () => visitedCount() === visible().length;
+const nextUnvisited = () => visible().find(s => !state.visited.has(s.id));
+const sec = id => SECTIONS.find(s => s.id === id);
+
+/* ---------------- render ---------------- */
+function render() {
+  const onHub = state.screen === 'hub';
+  document.getElementById('navTitle').textContent = onHub ? 'Site Diary' : sec(state.screen).name;
+  document.getElementById('navKebab').style.display = onHub ? 'block' : 'none';
+  document.getElementById('rail').style.display = onHub ? 'none' : 'block';
+  if (!onHub) renderRail();
+  document.getElementById('scroll').innerHTML = onHub ? hubHTML() : sectionHTML(state.screen);
+  document.getElementById('scroll').scrollTop = 0;
+  renderFooter();
+}
+
+function renderRail() {
+  document.getElementById('rail').innerHTML = visible().map(s => `
+    <div class="rail-item ${s.id === state.screen ? 'active' : ''}" onclick="openSection('${s.id}')">
+      <div class="ri-ic">${s.icon}</div>
+      <div class="ri-lb">${s.rail}</div>
+    </div>`).join('');
+}
+
+function hubHTML() {
+  const cards = visible().map(s => `
+    <div class="sec-card" onclick="openSection('${s.id}')">
+      <div class="sc-ic">${s.icon}</div>
+      <div class="sc-tx"><b>${s.name}</b><small>${s.sub}</small></div>
+      <div class="sc-right">${state.visited.has(s.id) ? '<span class="visited-tick">✓</span>' : ''}›</div>
+    </div>`).join('');
+
+  const off = SECTIONS.filter(s => !state.enabled[s.id]).map(s => s.name);
+
+  return `
+    ${state.submitted ? `<div class="banner"><span>✓</span><div><b>Submitted by James Baker</b>Wed, 29 Jul 2026 at 13:52 — awaiting approval.</div></div>` : ''}
+    <div class="export">⤓ &nbsp;Export</div>
+    <div class="proj">DTP Rural Road Resheeting Program 2026</div>
+    <div class="datestrip">
+      <div class="dtop"><b>Wed, 29 Jul 2026 📅</b><span class="today-pill">Today</span></div>
+      <div class="dweek">
+        <div><div class="dl">S</div><div class="dn dim">26</div></div>
+        <div><div class="dl">M</div><div class="dn">27</div></div>
+        <div><div class="dl">T</div><div class="dn">28</div></div>
+        <div><div class="dl">W</div><div class="dn sel">29</div></div>
+        <div><div class="dl">T</div><div class="dn">30</div></div>
+        <div><div class="dl">F</div><div class="dn dim">31</div></div>
+        <div><div class="dl">S</div><div class="dn dim">1</div></div>
+      </div>
+    </div>
+    <div class="quickadd">
+      <div class="qa-ic">⚡</div>
+      <div><b>Quick Add</b><small>Notes · Plant · Material · Misc · Weather in 3 min</small></div>
+      <div class="chev">›</div>
+    </div>
+    ${cards}
+    ${off.length ? `<div class="hidden-note">${off.join(' and ')} ${off.length > 1 ? 'are' : 'is'} hidden for this project.
+      <a onclick="openSheet('sheetSections')">Manage sections</a></div>` : ''}
+    <div style="height:14px"></div>`;
+}
+
+function sectionHTML(id) {
+  const s = sec(id);
+  const head = `<div class="proj">DTP Rural Road Resheeting Program 2026</div><div class="pdate">29 Jul 2026</div>`;
+  const bodies = {
+    diary: `
+      <div class="editor"><div class="ed-t">Diary</div>
+        <textarea placeholder="Write your diary entry here..."></textarea></div>
+      <div class="card"><h4>Possible change of Scope 🔔</h4><p>No notes yet</p></div>
+      <div class="card"><h4>Works complete out of scope 🔔</h4><p>No notes yet</p></div>
+      <div class="card"><h4>HSEQ Incidents 🔔</h4><p>No notes yet</p></div>
+      <div class="card"><h4>Delays on Site 🔔</h4><p>No notes yet</p></div>`,
+    photos: `
+      <div class="card" style="text-align:center;padding:34px 15px"><p>No photos added for this day</p></div>
+      <button class="addbtn">＋ Add photos</button>`,
+    timecard: `
+      <div class="seg"><span class="on">All (3)</span><span>Approved (3)</span><span>Unapproved (0)</span></div>
+      <div class="card"><h4>James Baker</h4><div class="kv"><span>7:00 AM – 2:45 PM</span><b>7h 15m</b></div>
+        <div class="chips"><span class="chip g">Approved</span><span class="chip">Break 30m</span></div></div>
+      <div class="card"><h4>Sandy Groundes</h4><div class="kv"><span>7:00 AM – 3:30 PM</span><b>8h 0m</b></div>
+        <div class="chips"><span class="chip g">Approved</span><span class="chip">Break 30m</span></div></div>
+      <div class="card"><h4>Wayne Kerr</h4><div class="kv"><span>7:00 AM – 3:30 PM</span><b>8h 0m</b></div>
+        <div class="chips"><span class="chip g">Approved</span><span class="chip">Break 30m</span></div></div>`,
+    plant: `
+      <div class="seg"><span class="on">All (1)</span><span>Operating (1)</span><span>Stand down (0)</span></div>
+      <div class="card"><div class="chips" style="margin:0 0 7px"><span class="chip a">Dry Hire</span></div>
+        <h4>Excavator 20t (EQ-001)</h4><div class="kv"><span>Kerb Your Enthusiasm Contracting</span><b>07h 15m</b></div>
+        <div class="chips"><span class="chip">WBS unassigned</span></div></div>
+      <button class="addbtn">＋ Add new</button>`,
+    labour: `
+      <div class="card"><h4>Sub-contract crew — Redgum</h4><div class="kv"><span>On field</span><b>1</b></div>
+        <div class="chips"><span class="chip">WBS assigned</span></div></div>
+      <button class="addbtn">＋ Add labour</button>`,
+    materials: `
+      <div class="card"><h4>Material MT</h4><div class="kv"><span>Quantity</span><b>522.00</b></div>
+        <div class="chips"><span class="chip g">WBS Assigned (2)</span></div></div>
+      <div class="card"><h4>Material m3</h4><div class="kv"><span>Quantity</span><b>600.00</b></div>
+        <div class="chips"><span class="chip g">WBS Assigned (1)</span></div></div>`,
+    dockets: `
+      <div class="seg"><span class="on">All (1)</span><span>Needs action (0)</span><span>Complete (1)</span></div>
+      <div class="card"><h4>DD-0006 · Redgum Quarries &amp; Asphalt</h4><p>30 Jul 2026</p>
+        <div class="chips"><span class="chip g">PO Assigned</span><span class="chip g">WBS Assigned</span>
+          <span class="chip a">To be paid</span></div></div>`,
+    misc: `
+      <div class="card" style="text-align:center;padding:34px 15px"><p>No miscellaneous entries for this day</p></div>
+      <button class="addbtn">＋ Add entry</button>`,
+    tasks: `
+      <div class="card" style="text-align:center;padding:34px 15px"><p>No tasks recorded for this day</p></div>
+      <button class="addbtn">＋ Add task</button>`,
+    weather: `
+      <div class="card"><h4>Conditions</h4>
+        <div class="kv"><span>Morning</span><b>Fine, 9°C</b></div>
+        <div class="kv"><span>Afternoon</span><b>Partly cloudy, 17°C</b></div>
+        <div class="kv"><span>Rainfall</span><b>0 mm</b></div>
+        <div class="kv"><span>Time lost</span><b>None</b></div></div>`,
+    forms: `
+      <div class="seg"><span class="on">Submit form</span><span>Responses</span></div>
+      <div class="card"><h4>Health &amp; Safety</h4><p>SWMS, permits, inductions and incident reporting</p>
+        <div class="chips"><span class="chip a">0 forms</span><span class="chip">6 subcategories</span></div></div>
+      <div class="card"><h4>Plant &amp; Equipment</h4><p>Prestart, maintenance and daily logs</p>
+        <div class="chips"><span class="chip a">0 forms</span><span class="chip">2 subcategories</span></div></div>
+      <div class="card"><h4>Quality</h4><p>QA checks, inspections, RFIs and ITPs</p>
+        <div class="chips"><span class="chip a">0 forms</span><span class="chip">4 subcategories</span></div></div>`
+  };
+  return head + `<div class="pad" style="padding-top:2px">${bodies[id] || ''}</div>`;
+}
+
+function renderFooter() {
+  const f = document.getElementById('footer');
+  const total = visible().length, done = visitedCount(), ready = allVisited();
+
+  if (state.submitted) {
+    f.innerHTML = `<div class="fprog"><span style="color:#0F8A0F;font-weight:700">✓ Submitted — awaiting approval</span></div>
+      <button class="btn soft wide" onclick="reopen()">Reopen</button>`;
+    return;
+  }
+
+  const next = nextUnvisited();
+  const label = ready ? 'All sections visited' : `${done} of ${total} sections visited`;
+  const nextBtn = (state.screen !== 'hub' && next)
+    ? `<button class="btn ghost" onclick="openSection('${next.id}')">Next: ${next.rail} ›</button>` : '';
+
+  f.innerHTML = `
+    <div class="fprog">
+      <div class="fbar"><i class="${ready ? 'done' : ''}" style="width:${(done / total) * 100}%"></i></div>
+      <span>${label}</span>
+    </div>
+    <div class="frow">
+      ${nextBtn}
+      <button class="btn primary ${ready ? 'ready' : ''}" onclick="openSubmit()">Sign and submit</button>
+    </div>`;
+}
+
+/* ---------------- actions ---------------- */
+function openSection(id) { state.screen = id; state.visited.add(id); render(); }
+function goBack() { if (state.screen === 'hub') { toast('Back to the project'); return; } state.screen = 'hub'; render(); }
+
+function openSheet(id) {
+  if (id === 'sheetSections') renderToggles();
+  document.getElementById(id).classList.add('open');
+}
+function closeSheet(id) { document.getElementById(id).classList.remove('open'); render(); }
+
+function renderToggles() {
+  document.getElementById('toggleList').innerHTML = SECTIONS.map(s => {
+    const on = state.enabled[s.id];
+    const locked = s.id === 'diary';
+    return `<div class="togrow">
+      <div class="tr-ic">${s.icon}</div>
+      <div class="tr-tx"><b>${s.name}</b><small>${locked ? 'Always shown' : (s.optional ? 'Off by default' : 'Shown by default')}</small></div>
+      <div class="toggle ${on ? 'on' : ''} ${locked ? 'locked' : ''}" onclick="${locked ? '' : `toggleSection('${s.id}')`}"><i></i></div>
+    </div>`;
+  }).join('');
+}
+
+function toggleSection(id) {
+  state.enabled[id] = !state.enabled[id];
+  if (!state.enabled[id]) {
+    state.visited.delete(id);
+    if (state.screen === id) state.screen = 'hub';
+  }
+  renderToggles();
+  renderFooter();
+}
+
+function openSubmit() {
+  const total = visible().length, done = visitedCount();
+  const skipped = visible().filter(s => !state.visited.has(s.id)).map(s => s.name);
+  document.getElementById('submitSummary').innerHTML = `
+    <div class="sr"><span>Sections visited</span><b>${done} of ${total}</b></div>
+    <div class="sr"><span>Labour on site</span><b>3 · 24h 0m</b></div>
+    <div class="sr"><span>Plant on field</span><b>1</b></div>
+    <div class="sr"><span>Materials used</span><b>2</b></div>
+    <div class="sr"><span>Site dockets</span><b>1</b></div>
+    ${skipped.length ? `<div class="sr" style="color:#a86c00;margin-top:6px"><span>Not opened</span><b>${skipped.join(', ')}</b></div>` : ''}`;
+  openSheet('sheetSubmit');
+}
+
+function sign() {
+  state.signed = true;
+  const p = document.getElementById('sigpad');
+  p.classList.add('signed');
+  p.textContent = 'James Baker';
+  document.getElementById('btnConfirm').disabled = false;
+}
+
+function submitDiary() {
+  state.submitted = true;
+  closeSheet('sheetSubmit');
+  state.screen = 'hub';
+  render();
+  toast('Site diary submitted for approval.');
+}
+
+function reopen() {
+  state.submitted = false; state.signed = false;
+  const p = document.getElementById('sigpad');
+  p.classList.remove('signed'); p.textContent = 'Tap to sign';
+  document.getElementById('btnConfirm').disabled = true;
+  render();
+  toast('Diary reopened for editing.');
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(window._t); window._t = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+render();
+</script>
+</body>
+</html>
