@@ -399,9 +399,36 @@ const SEED_FORMS = () => ([
 ]);
 let FORMS = SEED_FORMS();
 let curId = 1;          // currently opened form
-let view = 'list';      // 'list' | 'hub' | 'settings'
+let view = 'list';      // 'projects' | 'pcats' | 'psubs' | 'list' | 'hub' | 'settings'
 let nextFormId = 3;
 function cf(){return FORMS.find(f=>f.id===curId);}
+
+// --- Project Forms hierarchy (navigation-only drill-down for the breadcrumb) ---
+const PROJECTS=[
+  {id:'p1',name:'Northside Tunnel Upgrade',code:'NTU-2026'},
+  {id:'p2',name:'Riverside Bridge Duplication',code:'RBD-2025'},
+  {id:'p3',name:'Airport Rail Link',code:'ARL-2026'},
+];
+const CATS=[
+  {id:'c1',name:'Health & Safety',color:'#ef4444',icon:'fa-shield-halved'},
+  {id:'c2',name:'Quality',color:'#3b82f6',icon:'fa-clipboard-check'},
+  {id:'c3',name:'Environment',color:'#22c55e',icon:'fa-leaf'},
+];
+// Subcategories per category — only Health & Safety › SWMS drills into the
+// revision list; the rest are navigable placeholders (out of prototype scope).
+const SUBS={
+  c1:[
+    {id:'s-swms',name:'SWMS',icon:'fa-helmet-safety',swms:true},
+    {id:'s-insp',name:'Inspections',icon:'fa-magnifying-glass'},
+    {id:'s-incident',name:'Incident Reports',icon:'fa-triangle-exclamation'},
+  ],
+  c2:[{id:'s-itp',name:'ITPs',icon:'fa-clipboard-list'},{id:'s-check',name:'Checklists',icon:'fa-list-check'}],
+  c3:[{id:'s-env',name:'Environmental Controls',icon:'fa-leaf'}],
+};
+let curProject='p1';    // selected project
+let curCategory='c1';   // selected category
+function proj(){return PROJECTS.find(p=>p.id===curProject);}
+function catObj(){return CATS.find(c=>c.id===curCategory);}
 
 // Form-settings screen (matches the builder's Settings tab). Form Type is the headline setting.
 const ASSIGN_DEFS = [
@@ -570,24 +597,87 @@ function renderList(){
   }).join('');
   document.getElementById('hub').innerHTML=`
     <div class="list-head">
-      <div><div class="list-title">SWMS forms</div><div class="list-sub">Health &amp; Safety › SWMS · Northside Tunnel Upgrade</div></div>
+      <div><div class="list-title">SWMS forms</div><div class="list-sub">${catObj().name} › SWMS · ${proj().name}</div></div>
       <button class="btn primary" onclick="openCreateForm()"><i class="fa-solid fa-plus"></i> Create SWMS form</button>
     </div>
     <div class="form-list">${rows}</div>`;
 }
+
+/* ---------- Project Forms drill-down (navigation only) ---------- */
+function drillRow(onclick,iconBg,iconColor,icon,title,sub,tag){
+  return `<div class="form-row" onclick="${onclick}">
+    <div class="rfh-icon" style="width:40px;height:40px;font-size:15px;background:${iconBg};color:${iconColor}"><i class="fa-solid ${icon}"></i></div>
+    <div style="flex:1;min-width:0">
+      <div class="form-row-title">${title}${tag||''}</div>
+      <div class="form-row-sub">${sub}</div>
+    </div>
+    <i class="fa-solid fa-chevron-right" style="color:#cbd5e1"></i>
+  </div>`;
+}
+function renderProjects(){
+  const rows=PROJECTS.map(p=>drillRow(
+    `openProject('${p.id}')`,'#eef2ff','#4338ca','fa-folder-open',p.name,p.code)).join('');
+  document.getElementById('hub').innerHTML=
+    `<div class="list-head"><div><div class="list-title">All Projects</div><div class="list-sub">Select a project to view its forms</div></div></div>
+     <div class="form-list">${rows}</div>`;
+}
+function renderProjectCategories(){
+  const rows=CATS.map(c=>{
+    const n=(SUBS[c.id]||[]).length;
+    return drillRow(`openCategory('${c.id}')`,c.color+'22',c.color,c.icon,c.name,
+      `${n} subcategor${n===1?'y':'ies'}`);
+  }).join('');
+  document.getElementById('hub').innerHTML=
+    `<div class="list-head"><div><div class="list-title">${proj().name}</div><div class="list-sub">Form categories</div></div></div>
+     <div class="form-list">${rows}</div>`;
+}
+function renderProjectSubcategories(){
+  const rows=(SUBS[curCategory]||[]).map(s=>drillRow(
+    `openSub('${s.id}',${!!s.swms})`,
+    s.swms?'#ede9fe':'#f1f5f9', s.swms?'#6d28d9':'#64748b', s.icon, s.name,
+    s.swms?`${FORMS.length} form${FORMS.length===1?'':'s'}`:'—',
+    s.swms?' <span class="tag swms">SWMS</span>':'')).join('');
+  document.getElementById('hub').innerHTML=
+    `<div class="list-head"><div><div class="list-title">${catObj().name}</div><div class="list-sub">${proj().name} · Subcategories</div></div></div>
+     <div class="form-list">${rows}</div>`;
+}
+
 /* ---------- navigation ---------- */
 function renderCrumbs(){
-  let c=`<span class="crumb" onclick="backToList()">All Projects</span><span class="sep">›</span>
-    <span class="crumb" onclick="backToList()">Northside Tunnel Upgrade</span><span class="sep">›</span>
-    <span class="crumb" onclick="backToList()">Health &amp; Safety</span><span class="sep">›</span>`;
-  if(view==='list') c+=`<span class="crumb current">SWMS</span>`;
-  else if(view==='settings') c+=`<span class="crumb" onclick="backToList()">SWMS</span><span class="sep">›</span><span class="crumb" onclick="openForm(${cf().id})">${cf().title}</span><span class="sep">›</span><span class="crumb current">Settings</span>`;
-  else c+=`<span class="crumb" onclick="backToList()">SWMS</span><span class="sep">›</span><span class="crumb current">${cf().title} · Revisions</span>`;
+  const sep=`<span class="sep">›</span>`;
+  const all=`<span class="crumb" onclick="goProjects()">All Projects</span>`;
+  const projC=`<span class="crumb" onclick="goCategories()">${proj().name}</span>`;
+  const catC=`<span class="crumb" onclick="goSubcategories()">${catObj().name}</span>`;
+  const swmsC=`<span class="crumb" onclick="backToList()">SWMS</span>`;
+  let c;
+  if(view==='projects') c=`<span class="crumb current">All Projects</span>`;
+  else if(view==='pcats') c=`${all}${sep}<span class="crumb current">${proj().name}</span>`;
+  else if(view==='psubs') c=`${all}${sep}${projC}${sep}<span class="crumb current">${catObj().name}</span>`;
+  else if(view==='list') c=`${all}${sep}${projC}${sep}${catC}${sep}<span class="crumb current">SWMS</span>`;
+  else if(view==='settings') c=`${all}${sep}${projC}${sep}${catC}${sep}${swmsC}${sep}<span class="crumb" onclick="openForm(${cf().id})">${cf().title}</span>${sep}<span class="crumb current">Settings</span>`;
+  else c=`${all}${sep}${projC}${sep}${catC}${sep}${swmsC}${sep}<span class="crumb current">${cf().title} · Revisions</span>`;
   document.getElementById('crumbs').innerHTML=c;
+}
+function goProjects(){view='projects';renderApp();}
+function openProject(id){curProject=id;view='pcats';renderApp();}
+function goCategories(){view='pcats';renderApp();}
+function openCategory(id){curCategory=id;view='psubs';renderApp();}
+function goSubcategories(){view='psubs';renderApp();}
+function openSub(id,isSwms){
+  if(isSwms){view='list';renderApp();}
+  else toast('This subcategory is outside the SWMS prototype scope.');
 }
 function backToList(){view='list';renderApp();}
 function openForm(id){curId=id;view='hub';renderApp();}
-function renderApp(){renderCrumbs();if(view==='list')renderList();else if(view==='settings')renderSettings();else renderHub();}
+function renderApp(){
+  renderCrumbs();
+  if(view==='projects')renderProjects();
+  else if(view==='pcats')renderProjectCategories();
+  else if(view==='psubs')renderProjectSubcategories();
+  else if(view==='list')renderList();
+  else if(view==='settings')renderSettings();
+  else renderHub();
+}
 function renderAll(){renderApp();}
 
 /* ---------- Form settings page (matches the builder's Settings tab) ---------- */
@@ -939,7 +1029,7 @@ function doNewRev(){
   closeModal();renderAll();toast('Draft Rev '+next+' created. Build → consult → send for review.');
 }
 
-function resetDemo(){FORMS=SEED_FORMS();curId=1;view='list';nextFormId=3;closeModal();closeExt();renderApp();toast('Demo reset.');}
+function resetDemo(){FORMS=SEED_FORMS();curId=1;view='list';nextFormId=3;curProject='p1';curCategory='c1';closeModal();closeExt();renderApp();toast('Demo reset.');}
 
 renderAll();
 </script>
