@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<!--
+  Project Forms inside the Project page — prototype
+  Adds a "Forms" tab to the project workspace with two sub-tabs:
+    • Form submissions (default) — mirrors /forms/submissions (filters + export), project-scoped
+    • Project forms — mirrors the Project Forms drill-in from the 2026-04-17-forms-home prototype
+  Everything is scoped to a single project: "(Tasmania) Construction".
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Forms — (Tasmania) Construction · Varicon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#1b2a4a;font-size:14px}
+button{font-family:'Inter',sans-serif}
+
+/* ---------- Project top bar ---------- */
+.topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:14px 24px;display:flex;align-items:center;gap:14px}
+.back-btn{width:32px;height:32px;border:none;background:transparent;color:#1b2a4a;font-size:18px;cursor:pointer;border-radius:6px}
+.back-btn:hover{background:#f1f5f9}
+.proj-name{font-size:19px;font-weight:700;color:#1b2a4a;display:flex;align-items:center;gap:8px;cursor:pointer}
+.proj-name .caret{font-size:13px;color:#94a3b8}
+
+/* ---------- Project tab bar ---------- */
+.proj-tabbar{background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:stretch;padding:0 12px}
+.proj-tab-scroll{width:34px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#94a3b8;cursor:pointer;border-right:1px solid #eef1f5}
+.proj-tabs{display:flex;overflow-x:auto;flex:1}
+.proj-tabs::-webkit-scrollbar{height:0}
+.proj-tab{padding:14px 22px;font-size:14px;font-weight:600;color:#475569;cursor:pointer;white-space:nowrap;border-right:1px solid #f1f5f9;display:flex;align-items:center;gap:8px;transition:background .1s}
+.proj-tab:hover{background:#f8fafc}
+.proj-tab.active{background:#1b2a4a;color:#fff}
+.proj-tab .beta{background:#f5a623;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;text-transform:uppercase;letter-spacing:.3px}
+
+/* ---------- Forms workspace ---------- */
+.workspace{padding:18px 24px 48px}
+.forms-secondary{display:flex;gap:0;border-bottom:1px solid #e2e8f0;margin-bottom:18px}
+.sec-tab{padding:11px 20px;font-size:14px;font-weight:500;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;display:flex;align-items:center;gap:8px;transition:all .12s}
+.sec-tab:hover{color:#1b2a4a}
+.sec-tab.active{color:#1b2a4a;font-weight:600;border-bottom-color:#f5a623}
+.sec-tab .cnt{background:#f1f5f9;color:#64748b;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}
+.sec-tab.active .cnt{background:#fef3c7;color:#b45309}
+
+/* ---------- Filter row ---------- */
+.filter-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.f-select{padding:8px 12px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;font-size:13px;color:#475569;font-family:'Inter',sans-serif;cursor:pointer;min-width:150px}
+.search-box{position:relative}
+.search-box input{padding:8px 12px 8px 34px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;font-size:13px;font-family:'Inter',sans-serif;width:230px}
+.search-box i{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:13px}
+.spacer{margin-left:auto}
+.btn{padding:8px 14px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;font-size:13px;font-weight:600;color:#475569;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all .12s}
+.btn:hover{background:#f8fafc}
+.btn.primary{background:#f5a623;border-color:#f5a623;color:#fff}
+.btn.primary:hover{background:#e09612}
+.btn.ghost{border-color:transparent;background:transparent;color:#64748b}
+.btn.ghost:hover{background:#f1f5f9;color:#1b2a4a}
+.export-wrap{position:relative}
+.export-menu{position:absolute;right:0;top:calc(100% + 6px);background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 24px rgba(15,23,42,.12);min-width:180px;z-index:30;overflow:hidden;display:none}
+.export-menu.open{display:block}
+.export-menu .em-head{padding:9px 14px;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid #f1f5f9}
+.export-menu .em-item{padding:11px 14px;font-size:13px;color:#1b2a4a;cursor:pointer;display:flex;align-items:center;gap:10px}
+.export-menu .em-item:hover{background:#f8fafc}
+.export-menu .em-item i{width:16px;color:#f5a623}
+
+/* ---------- Table ---------- */
+.table-wrap{background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead{background:#f8fafc}
+th{text-align:left;padding:12px 16px;font-size:12px;font-weight:600;color:#64748b;border-bottom:1px solid #e2e8f0;white-space:nowrap}
+th.c,td.c{text-align:center}
+td{padding:13px 16px;font-size:13px;color:#1b2a4a;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+tbody tr{transition:background .1s;cursor:pointer}
+tbody tr:hover{background:#fafbfd}
+.sub-id{font-weight:600;color:#475569;font-variant-numeric:tabular-nums}
+.cell-title{font-weight:600;color:#1b2a4a}
+.muted{color:#94a3b8}
+.star{color:#e2e8f0;cursor:pointer;font-size:15px}
+.star.on{color:#f5a623}
+.tag{display:inline-block;padding:3px 9px;border-radius:12px;background:#e2e8f0;color:#475569;font-size:11px;font-weight:600;margin:1px 3px 1px 0;white-space:nowrap}
+.tag.prestart{background:#fef3c7;color:#a16207}
+.tag.swms{background:#ddd6fe;color:#5b21b6}
+.tag.hse{background:#fee2e2;color:#991b1b}
+.tag.plant{background:#d1fae5;color:#065f46}
+.tag.take5{background:#e0e7ff;color:#3730a3}
+.tag.quality{background:#cffafe;color:#155e75}
+.tag.incident{background:#fecaca;color:#991b1b}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:14px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill::before{content:'';width:6px;height:6px;border-radius:50%}
+.pill.approved{background:#dcfce7;color:#166534}.pill.approved::before{background:#16a34a}
+.pill.submitted{background:#dbeafe;color:#1e40af}.pill.submitted::before{background:#2563eb}
+.pill.review{background:#fef3c7;color:#a16207}.pill.review::before{background:#d97706}
+.pill.rejected{background:#fee2e2;color:#991b1b}.pill.rejected::before{background:#dc2626}
+.pill.draft{background:#f1f5f9;color:#64748b}.pill.draft::before{background:#94a3b8}
+.who{display:flex;align-items:center;gap:9px}
+.avatar{width:28px;height:28px;border-radius:50%;background:#e0e7ff;color:#3730a3;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+
+/* ---------- Table footer ---------- */
+.tfoot{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;font-size:13px;color:#64748b;flex-wrap:wrap;gap:12px}
+.pager{display:flex;align-items:center;gap:4px}
+.pg{width:30px;height:30px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;color:#475569;font-size:13px}
+.pg.active{background:#1b2a4a;color:#fff;border-color:#1b2a4a}
+.pg:disabled{opacity:.4;cursor:default}
+
+/* ---------- Project forms drill-in ---------- */
+.crumbs{display:flex;align-items:center;gap:8px;font-size:13px;color:#64748b;margin-bottom:16px;flex-wrap:wrap}
+.crumbs .crumb{cursor:pointer;padding:3px 6px;border-radius:4px;display:flex;align-items:center;gap:6px}
+.crumbs .crumb:hover{color:#1b2a4a}
+.crumbs .crumb.current{color:#1b2a4a;font-weight:600;cursor:default}
+.crumbs .sep{opacity:.5;font-size:11px}
+.crumbs .home{color:#f5a623}
+.create-banner{margin:0 0 18px;padding:14px 20px;background:linear-gradient(135deg,#f5a623,#f7c948);border:none;border-radius:8px;color:#1b2a4a;font-size:14px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;justify-content:center;gap:10px;letter-spacing:.3px;box-shadow:0 2px 6px rgba(245,166,35,.25);width:100%}
+.create-banner:hover{background:linear-gradient(135deg,#e09612,#f0be3a)}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:18px;cursor:pointer;transition:all .12s;position:relative}
+.card:hover{border-color:#f5a623;box-shadow:0 4px 14px rgba(15,23,42,.06);transform:translateY(-1px)}
+.card-ico{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:12px}
+.card-name{font-size:15px;font-weight:700;color:#1b2a4a}
+.card-desc{font-size:12px;color:#64748b;margin-top:4px;line-height:1.5}
+.card-meta{display:flex;gap:14px;margin-top:14px;font-size:12px;color:#64748b}
+.card-meta b{color:#1b2a4a}
+.card-arrow{position:absolute;top:18px;right:18px;color:#cbd5e1}
+.card:hover .card-arrow{color:#f5a623}
+.pf-subtabs{display:flex;gap:0;border-bottom:1px solid #e2e8f0;background:#fff;border-radius:8px 8px 0 0;padding:0 6px}
+.pf-subtab{padding:12px 20px;font-size:13px;font-weight:500;color:#64748b;cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:6px}
+.pf-subtab.active{color:#f5a623;font-weight:600;border-bottom-color:#f5a623}
+.pf-subtab .count{color:#94a3b8;font-size:12px}
+.pf-table .table-wrap{border-radius:0 0 8px 8px;border-top:none}
+.assigned{color:#475569;font-size:12px}
+.resp-val{font-weight:700;color:#1b2a4a}
+.resp-val.zero{color:#94a3b8;font-weight:500}
+.empty{padding:48px;text-align:center;color:#94a3b8;background:#fff;border:1px solid #e2e8f0;border-radius:8px}
+
+/* ---------- toast ---------- */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1b2a4a;color:#fff;padding:12px 20px;border-radius:8px;font-size:13px;font-weight:500;opacity:0;pointer-events:none;transition:all .25s;z-index:100;box-shadow:0 8px 24px rgba(15,23,42,.25)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.note{font-size:12px;color:#94a3b8;margin-top:2px}
+</style>
+</head>
+<body>
+
+<!-- Project top bar -->
+<div class="topbar">
+  <button class="back-btn" title="Back"><i class="fa-solid fa-arrow-left"></i></button>
+  <div class="proj-name">(Tasmania) Construction <i class="fa-solid fa-chevron-down caret"></i></div>
+</div>
+
+<!-- Project tab bar -->
+<div class="proj-tabbar">
+  <div class="proj-tab-scroll"><i class="fa-solid fa-chevron-left"></i></div>
+  <div class="proj-tabs" id="projTabs"></div>
+  <div class="proj-tab-scroll"><i class="fa-solid fa-chevron-right"></i></div>
+</div>
+
+<!-- Forms workspace -->
+<div class="workspace">
+  <div class="forms-secondary" id="secTabs"></div>
+  <div id="panel"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ==================== data (project-scoped) ==================== */
+const PROJECT = { name:'(Tasmania) Construction', status:'Active', pm:'James Whitfield' };
+
+const PROJECT_TABS = ['Dashboard','Budget Overview','Daily Cost Tracking','Claim','Subcontract','Variation Register','Report','Forms'];
+
+/* ---- Project forms hierarchy ---- */
+const CATS = [
+  { id:'hs',   name:'Health & Safety',   color:'#ef4444', icon:'fa-shield-halved' },
+  { id:'qa',   name:'Quality',           color:'#0891b2', icon:'fa-clipboard-check' },
+  { id:'env',  name:'Environment',       color:'#22c55e', icon:'fa-leaf' },
+  { id:'plant',name:'Plant & Equipment', color:'#7c3aed', icon:'fa-truck-monster' },
+];
+const SUBS = {
+  hs:[
+    {id:'prestart', name:'Daily Prestart / Toolbox Talk', icon:'fa-mug-hot',           color:'#f5a623'},
+    {id:'swms',     name:'SWMS',                          icon:'fa-helmet-safety',      color:'#7c3aed'},
+    {id:'take5',    name:'Take 5 / JSA',                  icon:'fa-list-check',         color:'#4338ca'},
+    {id:'incident', name:'Incident Reports',              icon:'fa-triangle-exclamation',color:'#dc2626'},
+  ],
+  qa:[
+    {id:'itp',      name:'ITPs',        icon:'fa-clipboard-list', color:'#0891b2'},
+    {id:'checklist',name:'Checklists',  icon:'fa-list',           color:'#0e7490'},
+  ],
+  env:[ {id:'envctrl', name:'Environmental Controls', icon:'fa-leaf', color:'#22c55e'} ],
+  plant:[ {id:'preop', name:'Pre-operational Checks', icon:'fa-gears', color:'#7c3aed'} ],
+};
+// forms per subcategory id
+const FORMS = {
+  prestart:[
+    {title:'Daily Prestart Checklist', by:'Sarah Chen',  edited:'2 days ago', assigned:'All workers',         resp:42, status:'P', tag:'prestart'},
+    {title:'Toolbox Talk Record',      by:'Mike Jones',  edited:'5 days ago', assigned:'Supervisors',         resp:18, status:'P', tag:'prestart'},
+    {title:'Site Sign-on Sheet',       by:'Sarah Chen',  edited:'1 day ago',  assigned:'All workers',         resp:57, status:'P', tag:'hse'},
+  ],
+  swms:[
+    {title:'SWMS — Excavation & Trenching', by:'Sarah Chen', edited:'12 Jan 2026', assigned:'Civil crew',   resp:6, status:'P', tag:'swms'},
+    {title:'SWMS — Working at Heights',      by:'Mike Jones', edited:'18 Jun 2025', assigned:'All workers',  resp:9, status:'P', tag:'swms'},
+    {title:'SWMS — Concrete Pour',           by:'Alec Neill', edited:'Draft',       assigned:'Not assigned', resp:0, status:'D', tag:'swms'},
+  ],
+  take5:[
+    {title:'Take 5 / JSA', by:'Liam Carter', edited:'today', assigned:'All workers', resp:88, status:'P', tag:'take5'},
+  ],
+  incident:[
+    {title:'Incident / Hazard Report', by:'Sarah Chen', edited:'3 days ago', assigned:'All workers', resp:4, status:'P', tag:'incident'},
+  ],
+  itp:[ {title:'ITP — Concrete Works', by:'Priya Nair', edited:'1 wk ago', assigned:'QA team', resp:11, status:'P', tag:'quality'} ],
+  checklist:[ {title:'Quality Handover Checklist', by:'Priya Nair', edited:'Draft', assigned:'Not assigned', resp:0, status:'D', tag:'quality'} ],
+  envctrl:[ {title:'Environmental Control Checklist', by:'Dan Ruiz', edited:'4 days ago', assigned:'All workers', resp:7, status:'P', tag:'hse'} ],
+  preop:[ {title:'Plant Pre-operational Check', by:'Mike Jones', edited:'today', assigned:'Operators', resp:23, status:'P', tag:'plant'} ],
+};
+
+/* ---- Submissions (project-scoped) ---- */
+const SUBMISSIONS = [
+  {id:'SUB-1087', fav:true,  title:'Daily Prestart Checklist', cat:'Health & Safety', sub:'Daily Prestart / Toolbox Talk', tags:['prestart'],  by:'Liam Carter',  date:'28/07/2026 07:12', status:'approved'},
+  {id:'SUB-1086', fav:false, title:'Take 5 / JSA',             cat:'Health & Safety', sub:'Take 5 / JSA',                  tags:['take5'],     by:'Olivia Park',  date:'28/07/2026 06:58', status:'submitted'},
+  {id:'SUB-1085', fav:false, title:'Plant Pre-operational Check', cat:'Plant & Equipment', sub:'Pre-operational Checks',   tags:['plant'],     by:'Noah Williams',date:'28/07/2026 06:40', status:'approved'},
+  {id:'SUB-1084', fav:false, title:'Site Sign-on Sheet',       cat:'Health & Safety', sub:'Daily Prestart / Toolbox Talk', tags:['hse'],       by:'Emma Thompson',date:'27/07/2026 16:22', status:'review'},
+  {id:'SUB-1083', fav:true,  title:'Incident / Hazard Report', cat:'Health & Safety', sub:'Incident Reports',              tags:['incident'],  by:'Sarah Chen',   date:'27/07/2026 14:05', status:'review'},
+  {id:'SUB-1082', fav:false, title:'Toolbox Talk Record',      cat:'Health & Safety', sub:'Daily Prestart / Toolbox Talk', tags:['prestart'],  by:'Mike Jones',   date:'27/07/2026 07:10', status:'approved'},
+  {id:'SUB-1081', fav:false, title:'SWMS — Working at Heights', cat:'Health & Safety', sub:'SWMS',                         tags:['swms'],      by:'Jacob Lee',    date:'26/07/2026 11:47', status:'submitted'},
+  {id:'SUB-1080', fav:false, title:'ITP — Concrete Works',     cat:'Quality',         sub:'ITPs',                          tags:['quality'],   by:'Priya Nair',   date:'26/07/2026 10:15', status:'approved'},
+  {id:'SUB-1079', fav:false, title:'Take 5 / JSA',             cat:'Health & Safety', sub:'Take 5 / JSA',                  tags:['take5'],     by:'Noah Williams',date:'26/07/2026 06:52', status:'rejected'},
+  {id:'SUB-1078', fav:false, title:'Environmental Control Checklist', cat:'Environment', sub:'Environmental Controls',     tags:['hse'],       by:'Dan Ruiz',     date:'25/07/2026 15:30', status:'approved'},
+  {id:'SUB-1077', fav:false, title:'Daily Prestart Checklist', cat:'Health & Safety', sub:'Daily Prestart / Toolbox Talk', tags:['prestart'],  by:'Olivia Park',  date:'25/07/2026 07:05', status:'approved'},
+  {id:'SUB-1076', fav:false, title:'SWMS — Excavation & Trenching', cat:'Health & Safety', sub:'SWMS',                     tags:['swms'],      by:'Liam Carter',  date:'24/07/2026 08:19', status:'submitted'},
+];
+
+/* ==================== state ==================== */
+let activeProjectTab = 'Forms';
+let formsTab = 'submissions';       // 'submissions' | 'projectforms'
+// project forms drill state
+let pfLevel = 'categories';         // 'categories' | 'subcategories' | 'forms'
+let pfCat = null, pfSub = null;
+let pfStatus = 'P';                 // 'P' published | 'D' draft
+// submissions filters
+let subFilters = { form:'', status:'', respondant:'', tag:'', q:'' };
+let subPage = 1; const SUB_PER = 8;
+
+/* ==================== helpers ==================== */
+function initials(n){return n.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(()=>t.classList.remove('show'),2400);}
+function statusLabel(s){return {approved:'Approved',submitted:'Submitted',review:'In Review',rejected:'Rejected',draft:'Draft'}[s]||s;}
+
+/* ==================== project tabs ==================== */
+function renderProjectTabs(){
+  document.getElementById('projTabs').innerHTML = PROJECT_TABS.map(t=>`
+    <div class="proj-tab ${t===activeProjectTab?'active':''}" onclick="selectProjectTab('${t}')">
+      ${t}${t==='Subcontract'?'<span class="beta">Beta</span>':''}
+    </div>`).join('');
+}
+function selectProjectTab(t){
+  activeProjectTab=t; renderProjectTabs();
+  if(t==='Forms'){ renderForms(); }
+  else {
+    document.getElementById('secTabs').innerHTML='';
+    document.getElementById('panel').innerHTML=`<div class="empty"><i class="fa-regular fa-file-lines" style="font-size:26px;margin-bottom:10px;display:block"></i>“${t}” is out of scope for this prototype.<br><span class="note">This prototype focuses on the new <b>Forms</b> tab.</span></div>`;
+  }
+}
+
+/* ==================== Forms tab (two sub-tabs) ==================== */
+function renderForms(){
+  const subCount = SUBMISSIONS.length;
+  const formCount = Object.values(FORMS).flat().length;
+  document.getElementById('secTabs').innerHTML = `
+    <div class="sec-tab ${formsTab==='submissions'?'active':''}" onclick="setFormsTab('submissions')">
+      <i class="fa-regular fa-square-check"></i> Form submissions <span class="cnt">${subCount}</span></div>
+    <div class="sec-tab ${formsTab==='projectforms'?'active':''}" onclick="setFormsTab('projectforms')">
+      <i class="fa-solid fa-folder-tree"></i> Project forms <span class="cnt">${formCount}</span></div>`;
+  if(formsTab==='submissions') renderSubmissions();
+  else renderProjectForms();
+}
+function setFormsTab(t){ formsTab=t; if(t==='projectforms'){pfLevel='categories';pfCat=null;pfSub=null;} renderForms(); }
+
+/* ==================== Form submissions ==================== */
+function filteredSubmissions(){
+  return SUBMISSIONS.filter(s=>{
+    if(subFilters.form && s.title!==subFilters.form) return false;
+    if(subFilters.status && s.status!==subFilters.status) return false;
+    if(subFilters.respondant && s.by!==subFilters.respondant) return false;
+    if(subFilters.tag && !s.tags.includes(subFilters.tag)) return false;
+    if(subFilters.q){const q=subFilters.q.toLowerCase();
+      if(!(s.title.toLowerCase().includes(q)||s.by.toLowerCase().includes(q)||s.id.toLowerCase().includes(q))) return false;}
+    return true;
+  });
+}
+function renderSubmissions(){
+  const forms=[...new Set(SUBMISSIONS.map(s=>s.title))];
+  const people=[...new Set(SUBMISSIONS.map(s=>s.by))];
+  const tags=[...new Set(SUBMISSIONS.flatMap(s=>s.tags))];
+  const rows=filteredSubmissions();
+  const totalPages=Math.max(1,Math.ceil(rows.length/SUB_PER));
+  if(subPage>totalPages) subPage=totalPages;
+  const pageRows=rows.slice((subPage-1)*SUB_PER, subPage*SUB_PER);
+
+  const opt=(cur,v,l)=>`<option value="${v}" ${cur===v?'selected':''}>${l}</option>`;
+  const html=`
+  <div class="filter-row">
+    <select class="f-select" onchange="setSubFilter('form',this.value)">
+      ${opt(subFilters.form,'','All forms')}${forms.map(f=>opt(subFilters.form,f,f)).join('')}</select>
+    <select class="f-select" style="min-width:130px" onchange="setSubFilter('status',this.value)">
+      ${opt(subFilters.status,'','All statuses')}${['approved','submitted','review','rejected'].map(s=>opt(subFilters.status,s,statusLabel(s))).join('')}</select>
+    <select class="f-select" style="min-width:150px" onchange="setSubFilter('respondant',this.value)">
+      ${opt(subFilters.respondant,'','All respondants')}${people.map(p=>opt(subFilters.respondant,p,p)).join('')}</select>
+    <select class="f-select" style="min-width:120px" onchange="setSubFilter('tag',this.value)">
+      ${opt(subFilters.tag,'','All tags')}${tags.map(t=>opt(subFilters.tag,t,t)).join('')}</select>
+    <input class="f-select" style="min-width:150px;color:#64748b" type="text" placeholder="Date range" onfocus="(this.type='date')" onblur="if(!this.value)this.type='text'">
+    <button class="btn ghost" onclick="resetSubFilters()"><i class="fa-solid fa-rotate-left"></i> Reset</button>
+    <div class="spacer"></div>
+    <div class="search-box"><i class="fa-solid fa-magnifying-glass"></i>
+      <input type="text" placeholder="Search submissions" value="${subFilters.q}" oninput="setSubFilter('q',this.value)"></div>
+    <div class="export-wrap">
+      <button class="btn" onclick="toggleExport(event)"><i class="fa-solid fa-file-export"></i> Export <i class="fa-solid fa-chevron-down" style="font-size:10px"></i></button>
+      <div class="export-menu" id="exportMenu">
+        <div class="em-head">Export ${rows.length} submission${rows.length===1?'':'s'}</div>
+        <div class="em-item" onclick="doExport('CSV')"><i class="fa-solid fa-file-csv"></i> Export as CSV</div>
+        <div class="em-item" onclick="doExport('PDF')"><i class="fa-solid fa-file-pdf"></i> Export as PDF</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th class="c" style="width:40px"></th>
+        <th style="width:110px">Sub ID</th>
+        <th>Title</th>
+        <th>Category</th>
+        <th>Subcategory</th>
+        <th>Tags</th>
+        <th>Respondant</th>
+        <th>Submitted Date</th>
+        <th>Status</th>
+      </tr></thead>
+      <tbody>
+        ${pageRows.length?pageRows.map(s=>`
+        <tr onclick="toast('Open ${s.id} — submission detail (out of scope)')">
+          <td class="c"><i class="fa-solid fa-star star ${s.fav?'on':''}"></i></td>
+          <td class="sub-id">${s.id}</td>
+          <td class="cell-title">${s.title}</td>
+          <td>${s.cat}</td>
+          <td class="muted">${s.sub}</td>
+          <td>${s.tags.map(t=>`<span class="tag ${t}">${t}</span>`).join('')}</td>
+          <td><div class="who"><div class="avatar">${initials(s.by)}</div>${s.by}</div></td>
+          <td class="muted">${s.date}</td>
+          <td><span class="pill ${s.status}">${statusLabel(s.status)}</span></td>
+        </tr>`).join(''):`<tr><td colspan="9"><div class="empty" style="border:none;background:transparent">No submissions match your filters.</div></td></tr>`}
+      </tbody>
+    </table>
+  </div>
+  <div class="tfoot">
+    <div>Showing ${rows.length?((subPage-1)*SUB_PER+1):0}–${Math.min(subPage*SUB_PER,rows.length)} of ${rows.length}</div>
+    <div class="pager">
+      <button class="pg" ${subPage<=1?'disabled':''} onclick="setSubPage(${subPage-1})"><i class="fa-solid fa-chevron-left"></i></button>
+      ${Array.from({length:totalPages},(_,i)=>`<button class="pg ${subPage===i+1?'active':''}" onclick="setSubPage(${i+1})">${i+1}</button>`).join('')}
+      <button class="pg" ${subPage>=totalPages?'disabled':''} onclick="setSubPage(${subPage+1})"><i class="fa-solid fa-chevron-right"></i></button>
+    </div>
+  </div>`;
+  document.getElementById('panel').innerHTML=html;
+}
+function setSubFilter(k,v){subFilters[k]=v;subPage=1;renderSubmissions();}
+function resetSubFilters(){subFilters={form:'',status:'',respondant:'',tag:'',q:''};subPage=1;renderSubmissions();}
+function setSubPage(p){subPage=p;renderSubmissions();}
+function toggleExport(e){e.stopPropagation();document.getElementById('exportMenu').classList.toggle('open');}
+function doExport(fmt){document.getElementById('exportMenu').classList.remove('open');toast('Exporting '+filteredSubmissions().length+' submissions as '+fmt+' (demo).');}
+document.addEventListener('click',()=>{const m=document.getElementById('exportMenu');if(m)m.classList.remove('open');});
+
+/* ==================== Project forms (drill-in) ==================== */
+function renderProjectForms(){
+  const p=document.getElementById('panel');
+  let crumbs=`<div class="crumbs">
+    <span class="crumb ${pfLevel==='categories'?'current':''}" onclick="pfGoCategories()"><i class="fa-solid fa-folder-tree home"></i> ${PROJECT.name}</span>`;
+  if(pfCat){const c=CATS.find(x=>x.id===pfCat);
+    crumbs+=`<span class="sep">›</span><span class="crumb ${pfLevel==='subcategories'?'current':''}" onclick="pfGoSub('${pfCat}')">${c.name}</span>`;}
+  if(pfSub){const s=SUBS[pfCat].find(x=>x.id===pfSub);
+    crumbs+=`<span class="sep">›</span><span class="crumb current">${s.name}</span>`;}
+  crumbs+=`</div>`;
+
+  const banner=`<button class="create-banner" onclick="toast('Create Site-Specific Form wizard (out of scope)')"><i class="fa-solid fa-plus"></i> Create Site-Specific Form</button>`;
+
+  let body='';
+  if(pfLevel==='categories'){
+    body=`<div class="card-grid">${CATS.map(c=>{
+      const subs=SUBS[c.id]||[]; const forms=subs.reduce((n,s)=>n+(FORMS[s.id]||[]).length,0);
+      return `<div class="card" onclick="pfOpenCat('${c.id}')">
+        <i class="fa-solid fa-chevron-right card-arrow"></i>
+        <div class="card-ico" style="background:${c.color}1a;color:${c.color}"><i class="fa-solid ${c.icon}"></i></div>
+        <div class="card-name">${c.name}</div>
+        <div class="card-meta"><span><b>${subs.length}</b> subcategories</span><span><b>${forms}</b> forms</span></div>
+      </div>`;}).join('')}</div>`;
+  } else if(pfLevel==='subcategories'){
+    const subs=SUBS[pfCat]||[];
+    body=`<div class="card-grid">${subs.map(s=>{
+      const forms=(FORMS[s.id]||[]); const pub=forms.filter(f=>f.status==='P').length;
+      return `<div class="card" onclick="pfOpenSub('${s.id}')">
+        <i class="fa-solid fa-chevron-right card-arrow"></i>
+        <div class="card-ico" style="background:${s.color}1a;color:${s.color}"><i class="fa-solid ${s.icon}"></i></div>
+        <div class="card-name">${s.name}</div>
+        <div class="card-meta"><span><b>${pub}</b> forms</span></div>
+      </div>`;}).join('')}</div>`;
+  } else {
+    const forms=(FORMS[pfSub]||[]);
+    const pub=forms.filter(f=>f.status==='P'), draft=forms.filter(f=>f.status==='D');
+    const show=pfStatus==='P'?pub:draft;
+    body=`
+    <div class="pf-subtabs">
+      <div class="pf-subtab ${pfStatus==='P'?'active':''}" onclick="pfSetStatus('P')">Published <span class="count">${pub.length}</span></div>
+      <div class="pf-subtab ${pfStatus==='D'?'active':''}" onclick="pfSetStatus('D')">Draft <span class="count">${draft.length}</span></div>
+    </div>
+    <div class="pf-table"><div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Title</th><th>Created By</th><th>Last edited</th><th>Assigned To</th>
+          <th class="c" style="width:150px">Responses (Project)</th><th class="c" style="width:70px">Actions</th>
+        </tr></thead>
+        <tbody>
+          ${show.length?show.map(f=>`
+          <tr onclick="toast('Open “${f.title}” in form builder (out of scope)')">
+            <td class="cell-title">${f.title} <span class="tag ${f.tag}">${f.tag}</span></td>
+            <td><div class="who"><div class="avatar">${initials(f.by)}</div>${f.by}</div></td>
+            <td class="muted">${f.edited}</td>
+            <td class="assigned">${f.assigned}</td>
+            <td class="c"><span class="resp-val ${f.resp===0?'zero':''}">${f.resp}</span></td>
+            <td class="c"><i class="fa-solid fa-ellipsis-vertical" style="color:#94a3b8"></i></td>
+          </tr>`).join(''):`<tr><td colspan="6"><div class="empty" style="border:none;background:transparent">No ${pfStatus==='P'?'published':'draft'} forms here.</div></td></tr>`}
+        </tbody>
+      </table>
+    </div></div>`;
+  }
+  p.innerHTML = crumbs + banner + body;
+}
+function pfGoCategories(){pfLevel='categories';pfCat=null;pfSub=null;renderProjectForms();}
+function pfOpenCat(id){pfCat=id;pfLevel='subcategories';pfSub=null;renderProjectForms();}
+function pfGoSub(id){pfCat=id;pfLevel='subcategories';pfSub=null;renderProjectForms();}
+function pfOpenSub(id){pfSub=id;pfLevel='forms';pfStatus='P';renderProjectForms();}
+function pfSetStatus(s){pfStatus=s;renderProjectForms();}
+
+/* ==================== init ==================== */
+renderProjectTabs();
+renderForms();
+</script>
+</body>
+</html>
