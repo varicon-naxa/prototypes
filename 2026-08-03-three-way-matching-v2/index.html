@@ -800,6 +800,215 @@ table.calc{border-collapse:separate;border-spacing:0}
     <button class="btn btn-p" onclick="go('step5')">Step 5 · When it disagrees →</button>
   </div>
 </section>
+<!-- ============ 5 · VARIANCE ============ -->
+<section class="sec" id="sec-step5">
+  <div class="step-pill"><span class="dot"></span>Step 5 of 6 · The decision points</div>
+  <h2 class="page-t">When the legs disagree</h2>
+  <p class="lede">A flagged line is not an error — it is a question that needs an owner. The engine's job ends at
+    "these numbers differ by this much"; deciding what to do is a human act with money attached. What matters for the
+    build is that each flag has a <strong>bounded set of resolutions</strong>, and that whichever one is chosen gets
+    recorded.</p>
+
+  <div id="flow-5"></div>
+
+  <h3 class="sub"><span class="bar"></span>The four flags and what closes them</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:135px">Flag</th><th style="width:210px">What it means</th><th>Resolutions available</th><th style="width:120px">Blocks approval?</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="pill warn">price variance</span></td>
+          <td>Billed amount ≠ PO rate × docket qty, beyond tolerance</td>
+          <td><strong>Accept once</strong> — pay it, PO rate unchanged, variance logged against the line.<br>
+            <strong>Update the PO rate</strong> — accept and re-baseline, so future bills match.<br>
+            <strong>Reject the line</strong> — send back to the supplier.</td>
+          <td><span class="pill warn">Soft — needs a choice</span></td>
+        </tr>
+        <tr>
+          <td><span class="pill warn">qty variance</span></td>
+          <td>Billed qty ≠ summed docket qty</td>
+          <td><strong>Chase the docket</strong> — a delivery probably wasn't captured.<br>
+            <strong>Bill short</strong> — reduce to the docketed quantity and let the supplier re-bill.<br>
+            <strong>Accept over-receipt</strong> — goods arrived, PO ceiling exceeded, needs authority.</td>
+          <td><span class="pill warn">Soft — needs a choice</span></td>
+        </tr>
+        <tr>
+          <td><span class="pill warn">off-PO</span></td>
+          <td>No PO line to take a rate from</td>
+          <td><strong>Code it manually</strong> — cost centre + accounting code, cost still lands correctly.<br>
+            <strong>Promote onto the PO</strong> — if it recurs, budget it next time.<br>
+            <strong>Reject the line</strong> — never ordered and never received.</td>
+          <td><span class="pill bad">Yes — must be coded</span></td>
+        </tr>
+        <tr>
+          <td><span class="pill bad">missing-docket</span></td>
+          <td>PO line matched, but no received quantity exists</td>
+          <td><strong>Chase site</strong> — capture the docket, then re-run the match.<br>
+            <strong>Manual receipt confirmation</strong> — named person attests delivery, recorded in the audit log.<br>
+            <strong>Reject</strong> — if the goods never arrived.</td>
+          <td><span class="pill warn">Policy — see below</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="anno q" style="margin-top:20px">
+    <div class="an-h">▲ Open decision · does a missing docket block payment?</div>
+    <p>This is the biggest unanswered policy question in the feature, and it is a <em>business</em> decision, not a
+      technical one. Today nothing prevents billing against a PO with no docket — <span class="jira">PICBR-1495</span>
+      shows un-docketed bill lines not only exist but silently drop out of Daily Cost Tracking, which is the worst of
+      both worlds: paid <em>and</em> invisible.</p>
+    <p style="margin-top:9px">Three positions, and the prototype can demonstrate any of them:</p>
+    <ul style="margin:8px 0 0 18px;font-size:12.5px;color:var(--text-2);line-height:1.6">
+      <li><strong>Hard block</strong> — maximum control, but AP stalls whenever the crew is slow, and pressure to
+        fabricate dockets appears. Not recommended.</li>
+      <li><strong>Soft warning + attestation</strong> — approver explicitly confirms receipt, name recorded. Keeps the
+        audit trail honest without stopping the business. <em>Recommended default.</em></li>
+      <li><strong>Per-tenant setting</strong> — likely where this lands, given every other threshold in the feature is
+        tenant-configurable. Costs a settings surface and a migration decision on the default.</li>
+    </ul>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>The ambiguity case, which has no clean answer</h3>
+  <div class="banner warn">
+    <div class="b-ico">?</div>
+    <div><div class="b-t">Two PO lines share a rate — which one does this bill line belong to?</div>
+      <div class="b-d">If 32 MPa and 40 MPa concrete are both priced at $220/m³ and the bill says only
+        <em>"concrete supply"</em>, matching on rate is genuinely ambiguous. The engine must not pick one silently:
+        the two lines have different cost centres and different remaining order quantities, so a coin-flip
+        misallocates cost. Return both candidates and make the user choose — the same instinct
+        <span class="jira">VDP-140</span> applies to PO inference.</div></div>
+  </div>
+
+  <div class="grid-2" style="margin-top:6px">
+    <div class="card card-p">
+      <h4 class="sub2">Proposed matching precedence</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-bottom:9px">Bill line → PO line, in order.
+        First unambiguous hit wins; ties escalate to the user.</p>
+      <div class="kv" style="grid-template-columns:26px 1fr;gap:7px 12px">
+        <dt>1</dt><dd>Explicit PO line reference on the bill (rare, but decisive)</dd>
+        <dt>2</dt><dd>Resource / description exact match</dd>
+        <dt>3</dt><dd>Description fuzzy match <strong>+</strong> rate match</dd>
+        <dt>4</dt><dd>Rate match alone — <strong>only if unique</strong> across open PO lines</dd>
+        <dt>5</dt><dd>Otherwise: return candidates, flag <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">ambiguous</code></dd>
+      </div>
+      <p class="foot-note" style="margin-top:11px">Not in <span class="jira">VDP-139</span> — it specifies the output
+        shape but not how a bill line finds its PO line. Worth adding before implementation.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">Rate variance is asymmetric</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">Billed <em>above</em> the PO rate is a
+        commercial problem — someone is being charged more than was agreed. Billed <em>below</em> is not; it is a
+        discount, and blocking it wastes everyone's time.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">So the tolerance should almost
+        certainly be <strong>one-sided</strong>: flag overs, pass unders. The Sandbox has a toggle for this because it
+        is a real choice — symmetric tolerance is defensible if you care about data quality and want to know when a
+        supplier's pricing drifts either way.</p>
+      <p class="foot-note" style="margin-top:10px">Also relevant: supplier rates are truncated at 2 decimal places
+        internally, causing per-cent discrepancies on large quantities (<span class="jira">PICBR-1184</span>). A
+        rounding allowance isn't optional — without one, a 10,000-unit line fails on arithmetic noise.</p>
+    </div>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('step4')">← Step 4 · The match</button>
+    <button class="btn btn-p" onclick="go('step6')">Step 6 · Approve &amp; downstream →</button>
+  </div>
+</section>
+
+<!-- ============ 6 · DOWNSTREAM ============ -->
+<section class="sec" id="sec-step6">
+  <div class="step-pill"><span class="dot"></span>Step 6 of 6 · Consequences</div>
+  <h2 class="page-t">Approve — and what the match sets in motion</h2>
+  <p class="lede">The match is not an end in itself. Its output feeds the approval chain, the cost tracking that drives
+    budget and forecast, and the push to Xero or MYOB. Which means a wrong match is not a display bug — it is wrong
+    money in the accounting system and a wrong forecast for the project.</p>
+
+  <div id="flow-6"></div>
+
+  <div class="frame">
+    <div class="frame-bar"><div class="dots"><i></i><i></i><i></i></div>Bill · INV-BORAL-9912
+      <div class="sp"></div><span class="meta">$2,420.00 incl. GST</span></div>
+    <div class="frame-body">
+      <h4 class="sub2" style="margin-top:0">Approval chain</h4>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">
+        <div style="flex:1;min-width:180px;padding:12px 14px;border:1px solid var(--green);background:#f1fbf2;border-radius:8px;display:flex;gap:10px;align-items:center">
+          <div style="width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">✓</div>
+          <div><div style="font-weight:600;color:var(--primary);font-size:12.5px">Priya Raman</div>
+            <div style="font-size:11px;color:var(--muted)">AP Officer · matched</div>
+            <div style="font-size:10.5px;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Approved 14 May</div></div></div>
+        <div style="flex:1;min-width:180px;padding:12px 14px;border:1px solid var(--secondary);background:var(--amber-bg);border-radius:8px;display:flex;gap:10px;align-items:center">
+          <div style="width:26px;height:26px;border-radius:50%;background:var(--secondary);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">2</div>
+          <div><div style="font-weight:600;color:var(--primary);font-size:12.5px">Alec Neill</div>
+            <div style="font-size:11px;color:var(--muted)">Project Manager</div>
+            <div style="font-size:10.5px;font-weight:800;color:var(--amber);text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Awaiting you</div></div></div>
+        <div style="flex:1;min-width:180px;padding:12px 14px;border:1px solid var(--divider);border-radius:8px;display:flex;gap:10px;align-items:center">
+          <div style="width:26px;height:26px;border-radius:50%;background:#E8EAEF;color:var(--muted);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">3</div>
+          <div><div style="font-weight:600;color:var(--primary);font-size:12.5px">James Baker</div>
+            <div style="font-size:11px;color:var(--muted)">Commercial Manager</div></div></div>
+      </div>
+
+      <div class="banner ok" style="margin-bottom:0">
+        <div class="b-ico">✓</div>
+        <div><div class="b-t">Match status carried into the approval decision</div>
+          <div class="b-d">The approver sees <span class="pill ok">matched</span> and does not have to re-derive it.
+            That is the entire 60%-faster claim — the second and third approvers stop doing the first approver's work
+            again.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Three downstream consumers</h3>
+  <div class="grid-3">
+    <div class="card card-p">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+        <div style="width:30px;height:30px;border-radius:7px;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:15px">📊</div>
+        <div style="font-size:13.5px;font-weight:700">Daily Cost Tracking</div></div>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.6">Approved bill lines land on their cost centre and
+        drive cost-to-date, budget variance and forecast. The cost-centre split from the docket is what makes this
+        accurate — 5 m³ to the slab, 3 m³ to the access road.</p>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:9px"><span class="jira">PICBR-1495</span>:
+        bill lines <em>not</em> linked to a docket are currently not tracked here at all. Matching is what closes that hole.</p>
+    </div>
+    <div class="card card-p">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+        <div style="width:30px;height:30px;border-radius:7px;background:#E1F5FE;color:#0288d1;display:flex;align-items:center;justify-content:center;font-size:15px">⇄</div>
+        <div style="font-size:13.5px;font-weight:700">Xero / MYOB</div></div>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.6">On reaching <span class="pill warn">Awaiting Payment</span>
+        the bill pushes out. Sync trigger is a tenant setting; recommended config is after the final approver, so
+        nothing unmatched leaves Varicon.</p>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:9px">Match status is a sibling of sync
+        status, and <span class="jira">VDP-138</span> flags surfacing both on one list as an open UX call. AP officers
+        already can't filter on sync status (<span class="jira">VDP-90</span>) — don't repeat that.</p>
+    </div>
+    <div class="card card-p">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+        <div style="width:30px;height:30px;border-radius:7px;background:var(--blue-bg);color:var(--blue);display:flex;align-items:center;justify-content:center;font-size:15px">📋</div>
+        <div style="font-size:13.5px;font-weight:700">The PO itself</div></div>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.6">Billed quantity accumulates against each PO line,
+        driving the fully-billed prompt and the short-close path. A PO can only be closed confidently if its billed
+        quantities are trustworthy.</p>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:9px">The PO summary's "Docket Delivered"
+        amount is the closest thing today to a received-vs-ordered rollup — and it doesn't update when a linked docket
+        is created (<span class="jira">PICBR-1321</span>).</p>
+    </div>
+  </div>
+
+  <div class="anno bug">
+    <div class="an-h">✖ No path back once matched and approved</div>
+    <p>A rejected bill currently has <strong>no legal route back to Awaiting Approval</strong> even after the reject
+      reason is fixed — the workaround is delete-and-recreate (<span class="jira">PICBR-1750</span>). Add a match to
+      that and it gets worse: re-matching after a data correction is explicitly out of scope for
+      <span class="jira">VDP-134</span>, so if a docket is fixed <em>after</em> the bill was matched, the stored match
+      result is stale and nothing recomputes it. <span class="jira">VDP-141</span> says match status is "recomputed on
+      edit" — but an edit to the <em>docket</em> is not an edit to the bill. That gap needs closing.</p>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('step5')">← Step 5 · Disagreement</button>
+    <button class="btn btn-p" onclick="go('sandbox')">Open the Sandbox →</button>
+  </div>
+</section>
 <!--SECTIONS-->
   </main>
 </div>
