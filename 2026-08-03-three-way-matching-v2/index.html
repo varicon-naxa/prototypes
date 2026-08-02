@@ -615,6 +615,191 @@ table.calc{border-collapse:separate;border-spacing:0}
     <button class="btn btn-p" onclick="go('step3')">Step 3 · Bill arrives →</button>
   </div>
 </section>
+<!-- ============ 3 · BILL ============ -->
+<section class="sec" id="sec-step3">
+  <div class="step-pill"><span class="dot"></span>Step 3 of 6 · The claim</div>
+  <h2 class="page-t">The bill lands and Varicon works out what it relates to</h2>
+  <p class="lede">Before anything can be compared, the bill has to be attached to the right PO. This is inference, not
+    matching — and it is allowed to fail. <span class="jira">VDP-140</span> is explicit that uncertain inference
+    <em>returns candidates rather than guessing</em>, which is the correct instinct: a confidently wrong PO link is
+    worse than an unresolved one.</p>
+
+  <div id="flow-3"></div>
+
+  <div class="frame">
+    <div class="frame-bar"><div class="dots"><i></i><i></i><i></i></div>Reconcile Supplier Bill · Step 1 of 2
+      <div class="sp"></div><span class="meta">INV-BORAL-9912.pdf · 214 KB</span></div>
+    <div class="frame-body">
+      <div style="display:flex;flex-direction:column;gap:9px;max-width:640px">
+        <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:#f1fbf2;border:1px solid var(--green);border-radius:6px">
+          <span style="color:var(--green);font-weight:700">✓</span>
+          <div style="flex:1"><div style="font-size:12.5px;font-weight:500">Read the bill</div>
+            <div style="font-size:11px;color:var(--muted)">Supplier, dates, 3 line items, subtotal and GST extracted</div></div>
+          <span class="pill neutral">1.2s</span></div>
+        <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:#f1fbf2;border:1px solid var(--green);border-radius:6px">
+          <span style="color:var(--green);font-weight:700">✓</span>
+          <div style="flex:1"><div style="font-size:12.5px;font-weight:500">Inferred the Purchase Order</div>
+            <div style="font-size:11px;color:var(--muted)">PO-VAR12-0042 — explicit PO number printed on the bill</div></div>
+          <span class="pill ok">High confidence</span></div>
+        <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:#f1fbf2;border:1px solid var(--green);border-radius:6px">
+          <span style="color:var(--green);font-weight:700">✓</span>
+          <div style="flex:1"><div style="font-size:12.5px;font-weight:500">Gathered docket quantities</div>
+            <div style="font-size:11px;color:var(--muted)">2 unbilled dockets found against this PO · 8.00 m³ total</div></div>
+          <span class="pill ok">2 dockets</span></div>
+      </div>
+
+      <h4 class="sub2" style="margin-top:22px">How the PO gets inferred — in priority order</h4>
+      <div class="tbl-wrap" style="box-shadow:none;max-width:820px">
+        <table>
+          <thead><tr><th style="width:34px" class="c">#</th><th>Signal</th><th>Confidence</th><th>When it fails</th></tr></thead>
+          <tbody>
+            <tr><td class="c"><strong>1</strong></td><td><strong>PO number printed on the bill</strong></td>
+              <td><span class="pill ok">High</span></td><td>Supplier omits it, or OCR misreads a digit</td></tr>
+            <tr><td class="c"><strong>2</strong></td><td>Supplier + project match</td>
+              <td><span class="pill warn">Medium</span></td><td>Several open POs with the same supplier on one project</td></tr>
+            <tr><td class="c"><strong>3</strong></td><td>Line-item similarity to recent PO lines</td>
+              <td><span class="pill warn">Low</span></td><td>Generic descriptions — "concrete supply" fits anything</td></tr>
+            <tr><td class="c"><strong>—</strong></td><td><em>None resolved</em></td>
+              <td><span class="pill bad">Unmatched</span></td><td>Return candidates and let the AP officer choose</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="banner bad">
+    <div class="b-ico">!</div>
+    <div><div class="b-t">Do not trust OCR output as a match input without a second leg</div>
+      <div class="b-d">OCR on bills already misbehaves in production in ways that would poison a match:
+        <span class="jira">VDP-1334</span> <strong>fabricates a line item that isn't on the invoice</strong> (Moore Civil),
+        <span class="jira">VDP-234</span> assigns the wrong supplier entirely, and <span class="jira">VDP-694</span>
+        reads credit notes as invoices. This is precisely the argument <em>for</em> three-way matching: the docket and PO
+        are independent of the OCR, so an invented bill line lands as <code>off-PO</code> with no docket behind it —
+        visible, rather than silently paid.</div></div>
+  </div>
+
+  <div class="anno q">
+    <div class="an-h">▲ Open decision · already-billed dockets</div>
+    <p>The single largest double-pay exposure. <span class="jira">VDP-134</span>'s acceptance criteria say the linking
+      modal should <em>"filter out dockets already billed in earlier invoices by default"</em> — but "by default"
+      implies the filter can be turned off, and nothing specifies what happens to a <strong>partially</strong> billed
+      docket. If 8 m³ was received and only 5 m³ billed last month, does the docket reappear with 3 m³ available?
+      The engine needs a per-docket-line consumed quantity, which <span class="jira">VDP-141</span>'s schema does not
+      currently carry.</p>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('step2')">← Step 2 · Delivery</button>
+    <button class="btn btn-p" onclick="go('step4')">Step 4 · The match →</button>
+  </div>
+</section>
+
+<!-- ============ 4 · THE MATCH ============ -->
+<section class="sec" id="sec-step4">
+  <div class="step-pill"><span class="dot"></span>Step 4 of 6 · The comparison</div>
+  <h2 class="page-t">The match, with the arithmetic shown</h2>
+  <p class="lede">This is the screen v1 got wrong — it showed a green tick and a banner saying "clean 3-way match",
+    which tells you the verdict but not the reasoning. An AP officer who cannot see <em>why</em> a line passed cannot
+    defend it, and a developer cannot test it. So every number below is traced to the leg it came from.</p>
+
+  <div id="flow-4"></div>
+
+  <div class="banner ok">
+    <div class="b-ico">✓</div>
+    <div><div class="b-t">Matched — 3 of 3 lines within tolerance</div>
+      <div class="b-d">Auto-matched <strong>INV-BORAL-9912</strong> to <strong>PO-VAR12-0042</strong> across
+        <strong>2 dockets</strong>. Rates taken from the PO, quantities summed from the dockets. The off-PO wash-out
+        fee matched a custom docket item, so it is evidenced even though it was never ordered.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Line-by-line derivation</h3>
+  <div class="tbl-wrap">
+    <table class="calc">
+      <thead>
+        <tr>
+          <th style="width:30px" class="c">#</th>
+          <th>Bill line</th>
+          <th class="r">PO rate<div style="font-weight:400;font-size:10px;text-transform:none;letter-spacing:0;color:var(--muted)">authority</div></th>
+          <th class="r">Docket qty<div style="font-weight:400;font-size:10px;text-transform:none;letter-spacing:0;color:var(--muted)">authority</div></th>
+          <th class="r">Expected<div style="font-weight:400;font-size:10px;text-transform:none;letter-spacing:0;color:var(--muted)">rate × qty</div></th>
+          <th class="r">Billed qty</th><th class="r">Billed rate</th><th class="r">Billed amount</th>
+          <th class="r">Variance</th><th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="vok">
+          <td class="c" style="color:var(--disabled)">1</td>
+          <td><strong>32 MPa Concrete</strong><div class="t-sub">N32-20-80 · <span class="tag po">PO line 1</span> <span class="tag dk">2 dockets</span></div></td>
+          <td class="r num">$220.00</td>
+          <td class="r num">8.00 m³<div class="t-sub">5.00 + 3.00</div></td>
+          <td class="r num"><strong>$1,760.00</strong></td>
+          <td class="r num">8.00</td><td class="r num">$220.00</td><td class="r num">$1,760.00</td>
+          <td class="r"><span class="delta zero">$0.00</span></td>
+          <td><span class="pill ok">✓ Match</span></td>
+        </tr>
+        <tr class="vok">
+          <td class="c" style="color:var(--disabled)">2</td>
+          <td><strong>Wash-out service</strong><div class="t-sub"><span class="tag off">Off-PO</span> <span class="tag dk">Custom docket item</span></div></td>
+          <td class="r" style="color:var(--disabled)">—</td>
+          <td class="r num">1 ea</td>
+          <td class="r" style="color:var(--disabled)">n/a</td>
+          <td class="r num">1</td><td class="r num">$80.00</td><td class="r num">$80.00</td>
+          <td class="r"><span class="delta zero">—</span></td>
+          <td><span class="pill ok">✓ Evidenced</span><div class="t-sub">Qty verified, rate unverifiable</div></td>
+        </tr>
+        <tr class="vok">
+          <td class="c" style="color:var(--disabled)">3</td>
+          <td><strong>Concrete pump hire</strong><div class="t-sub">4 hrs · <span class="tag po">PO line 3</span> <span class="tag dk">1 docket</span></div></td>
+          <td class="r num">$145.00</td>
+          <td class="r num">4.00 hr</td>
+          <td class="r num"><strong>$580.00</strong></td>
+          <td class="r num">4.00</td><td class="r num">$145.00</td><td class="r num">$580.00</td>
+          <td class="r"><span class="delta zero">$0.00</span></td>
+          <td><span class="pill ok">✓ Match</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--blue-bg);box-shadow:inset 0 0 0 1px var(--blue)"></i>from PO — rate authority</span>
+    <span><i style="background:var(--green-bg);box-shadow:inset 0 0 0 1px var(--green)"></i>from docket — qty authority</span>
+    <span><i style="background:var(--purple-bg);box-shadow:inset 0 0 0 1px var(--purple)"></i>from bill — being tested</span>
+    <span><i style="background:var(--secondary)"></i>off-PO — no rate authority exists</span>
+  </div>
+
+  <div class="grid-2" style="margin-top:24px">
+    <div class="card card-p">
+      <h4 class="sub2">Line 2 is the interesting one</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">The wash-out fee has <strong>no PO line</strong>,
+        so there is no rate to check against — <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">expected_price</code>
+        is genuinely <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">null</code>, not zero. But the crew
+        recorded it on the docket, so the <em>quantity</em> is independently confirmed.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">That is a weaker guarantee than
+        lines 1 and 3, and the UI should not pretend otherwise. "Evidenced" ≠ "Matched". A two-way check dressed up as
+        a three-way one is exactly the theatre worth avoiding.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">Why this bill needed no human judgement</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">Every rate equalled the PO rate exactly and every
+        quantity equalled the docket sum exactly, so no tolerance was consulted. Tolerances only matter on the boundary
+        — and the boundary is where all the disagreement lives.</p>
+      <div style="margin-top:12px"><button class="btn btn-p btn-sm" onclick="go('sandbox')">Push it off the boundary →</button></div>
+    </div>
+  </div>
+
+  <div class="anno">
+    <div class="an-h">◆ Design note · this replaces the v1 Add Bill table</div>
+    <p>v1 reused the production Add Bill layout, which puts thirteen editable columns in front of the user and hides the
+      comparison inside two of them ("Docket qty" and "PO unit cost"). The derivation is the <em>point</em> of the
+      screen, so in v2 it gets its own read-only table and the editable coding grid comes after. <span class="jira">VDP-137</span>
+      says "match the prototype's layout closely" — it should be pointed at this one.</p>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('step3')">← Step 3 · Bill arrives</button>
+    <button class="btn btn-p" onclick="go('step5')">Step 5 · When it disagrees →</button>
+  </div>
+</section>
 <!--SECTIONS-->
   </main>
 </div>
