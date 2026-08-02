@@ -317,6 +317,304 @@ table.calc{border-collapse:separate;border-spacing:0}
 <div class="shell">
   <nav class="rail" id="rail"></nav>
   <main class="main" id="main">
+<!-- ============ 0 · OVERVIEW ============ -->
+<section class="sec active" id="sec-overview">
+  <div class="step-pill"><span class="dot"></span>Overview</div>
+  <h2 class="page-t">Three documents, one question: should we pay this?</h2>
+  <p class="lede">A supplier bill is a <em>claim</em>. On its own it proves nothing — it is the supplier's
+    assertion about what they sent and what it costs. Three-way matching answers the claim with two
+    independent records that Varicon already holds: what we <strong>authorised</strong>, and what the site crew
+    <strong>actually received</strong>. When all three agree, the bill is safe to pay. When they disagree, the
+    disagreement itself is the useful output.</p>
+
+  <div class="legs">
+    <div class="leg po">
+      <div class="lg-h"><div class="lg-ico">📋</div><div>
+        <div class="lg-n">Purchase Order</div><div class="lg-q">What we authorised</div></div></div>
+      <p>Line items, order quantities and — critically — the <strong>agreed rate</strong>. Locked at PO approval,
+        so it is the price authority.</p>
+      <div class="lg-src">Raised in the office · approved through the PO workflow</div>
+    </div>
+    <div class="leg dk">
+      <div class="lg-h"><div class="lg-ico">🚚</div><div>
+        <div class="lg-n">Delivery Docket</div><div class="lg-q">What actually arrived</div></div></div>
+      <p>Received quantities, captured against PO lines. Independent of the supplier's paperwork, so it is the
+        <strong>quantity authority</strong>.</p>
+      <div class="lg-src">Captured on-site, on a phone, by the crew who took delivery</div>
+    </div>
+    <div class="leg bl">
+      <div class="lg-h"><div class="lg-ico">🧾</div><div>
+        <div class="lg-n">Supplier Bill</div><div class="lg-q">What is being claimed</div></div></div>
+      <p>Quantities and rates the supplier says we owe. <strong>Evidence, not authority</strong> — it is the thing
+        being tested, never the thing we trust.</p>
+      <div class="lg-src">Arrives by email or PDF · read by OCR</div>
+    </div>
+  </div>
+
+  <div class="anno">
+    <div class="an-h">◆ Why the direction matters</div>
+    <p>The match is not a three-way average — it is a one-way test. Rate comes from the PO, quantity comes from the
+      docket, and the bill is checked <em>against</em> the product of those two. Getting this backwards (letting the
+      bill set the rate because it "looks close") is what makes matching theatre instead of control.</p>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>The rule, stated once</h3>
+  <div class="formula">
+    <div class="fm-l">Expected value of a bill line</div>
+    <div class="fm-r">
+      <span class="tok po">PO unit rate</span>
+      <span class="op">×</span>
+      <span class="tok dk">Σ docket quantities</span>
+      <span class="op">=</span>
+      <span class="tok ex">Expected amount</span>
+    </div>
+    <div class="fm-n">Every flag in the engine is a comparison against that one number. <code>price variance</code>
+      is billed amount minus expected amount. <code>qty variance</code> is billed quantity minus summed docket
+      quantity. <code>off-PO</code> means no PO line to take a rate from. <code>missing-docket</code> means no
+      docket quantity to multiply by. There is no fifth kind of problem.</div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Where this sits in the build</h3>
+  <div class="grid-2">
+    <div class="card card-p">
+      <h4 class="sub2">The engine contract</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.6;margin-bottom:10px">
+        <span class="jira">VDP-139</span> already specifies the output shape. This prototype is built to it rather
+        than inventing a parallel model — per bill line the engine returns:</p>
+      <div class="kv" style="grid-template-columns:150px 1fr">
+        <dt>matched_po_line</dt><dd>which PO line supplied the rate</dd>
+        <dt>matched_dockets</dt><dd>which dockets supplied the quantity</dd>
+        <dt>expected_qty</dt><dd>sum of docket quantities</dd>
+        <dt>expected_price</dt><dd>PO rate × expected qty</dd>
+        <dt>variance_flags</dt><dd>qty · price · off-PO · missing-docket</dd>
+      </div>
+      <p style="font-size:12.5px;color:var(--text-2);margin-top:11px;line-height:1.6">Aggregated to a bill-level
+        <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">match_status</code> of
+        <span class="pill ok">matched</span> <span class="pill warn">partial</span> <span class="pill bad">unmatched</span>.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">What is genuinely undecided</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.6">
+        No tolerance value is documented anywhere in the wiki — not a percentage, not a dollar cap, not a rounding
+        allowance. <span class="jira">VDP-139</span> says thresholds are <em>"configurable per tenant"</em> and adds
+        the instruction: <em>"get the variance threshold defaults reviewed by finance before implementing."</em></p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.6;margin-top:10px">
+        That review has not happened. So the numbers in the Sandbox are a <strong>proposal to argue with</strong>,
+        not a spec to build. Turning the knobs and watching which bills flip status is the fastest way to have that
+        argument.</p>
+      <div style="margin-top:13px"><button class="btn btn-p btn-sm" onclick="go('sandbox')">Open the Sandbox →</button></div>
+    </div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>The cost of not having it</h3>
+  <div class="grid-3">
+    <div class="card card-p">
+      <div style="font-size:26px;font-weight:700;color:var(--primary)">3 tabs</div>
+      <p style="font-size:12.5px;color:var(--text-2);margin-top:6px;line-height:1.55">AP officers today open Bills,
+        Dockets and POs side by side and reconcile by eye. Confirmed at Tierra Group, AKJ Services and TJ Constructions.</p>
+    </div>
+    <div class="card card-p">
+      <div style="font-size:26px;font-weight:700;color:var(--primary)">Months of dockets</div>
+      <p style="font-size:12.5px;color:var(--text-2);margin-top:6px;line-height:1.55">Auto-link surfaces dockets
+        already consumed by earlier invoices — TJ Constructions had to deselect back to January on one quarry invoice.
+        That is the double-pay exposure.</p>
+    </div>
+    <div class="card card-p">
+      <div style="font-size:26px;font-weight:700;color:var(--primary)">Weeks late</div>
+      <p style="font-size:12.5px;color:var(--text-2);margin-top:6px;line-height:1.55">Discrepancies surface in a
+        month-end reconciliation pass, after the money is committed — not at the moment the bill lands.</p>
+    </div>
+  </div>
+  <p class="foot-note">Framing from a prospect call, on why dockets never reach the office in the first place:
+    dockets <em>"get lost in the Ute under the seat through the washing machine"</em>. The mobile capture step
+    (<span class="jira">VDP-123</span>) exists because the paper leg of this chain is the one that physically fails.</p>
+
+  <div class="nav-foot">
+    <span style="font-size:12px;color:var(--muted)">Supersedes the matching screens in <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">2026-05-07-site-dockets-flow</code></span>
+    <button class="btn btn-p" onclick="go('step1')">Start the walkthrough →</button>
+  </div>
+</section>
+
+<!-- ============ 1 · PO ============ -->
+<section class="sec" id="sec-step1">
+  <div class="step-pill"><span class="dot"></span>Step 1 of 6 · The authority leg</div>
+  <h2 class="page-t">A PO is raised and approved</h2>
+  <p class="lede">Nothing can be matched until someone has authorised the spend. The PO contributes the
+    <strong>rate</strong> to the match — and because rates are locked at approval, the PO is what makes a later
+    price variance meaningful rather than a matter of opinion.</p>
+
+  <div id="flow-1"></div>
+
+  <div class="frame">
+    <div class="frame-bar"><div class="dots"><i></i><i></i><i></i></div>Purchase Order · PO-VAR12-0042
+      <div class="sp"></div><span class="meta">Troughton Rd Upgrade · Stage 2</span></div>
+    <div class="frame-body">
+      <div style="display:flex;gap:26px;flex-wrap:wrap;margin-bottom:16px">
+        <div><div class="ph-lbl">Supplier</div><div style="font-size:14px;font-weight:500">BORAL Concrete</div></div>
+        <div><div class="ph-lbl">Raised</div><div style="font-size:14px;font-weight:500">02 May 2026</div></div>
+        <div><div class="ph-lbl">Status</div><div style="margin-top:2px"><span class="pill ok">✓ Approved · Active</span></div></div>
+        <div><div class="ph-lbl">Committed value</div><div style="font-size:14px;font-weight:700">$14,240.00</div></div>
+      </div>
+      <div class="tbl-wrap" style="box-shadow:none">
+        <table>
+          <thead><tr><th style="width:34px" class="c">#</th><th>Resource</th><th>Cost centre</th>
+            <th>Accounting code</th><th>Unit</th><th class="r">Order qty</th><th class="r">Unit rate</th><th class="r">Line value</th></tr></thead>
+          <tbody>
+            <tr><td class="c" style="color:var(--disabled)">1</td>
+              <td><strong>32 MPa Concrete</strong><div class="t-sub">N32-20-80</div></td>
+              <td>CC-104 — Concrete Works</td><td>5-1200</td><td>m³</td>
+              <td class="r num">40.00</td><td class="r num"><strong>$220.00</strong></td><td class="r num">$8,800.00</td></tr>
+            <tr><td class="c" style="color:var(--disabled)">2</td>
+              <td><strong>40 MPa Concrete</strong><div class="t-sub">N40-20-80</div></td>
+              <td>CC-104 — Concrete Works</td><td>5-1200</td><td>m³</td>
+              <td class="r num">12.00</td><td class="r num"><strong>$260.00</strong></td><td class="r num">$3,120.00</td></tr>
+            <tr><td class="c" style="color:var(--disabled)">3</td>
+              <td><strong>Concrete pump hire</strong><div class="t-sub">Boom pump incl. operator</div></td>
+              <td>CC-104 — Concrete Works</td><td>5-1450</td><td>hour</td>
+              <td class="r num">16.00</td><td class="r num"><strong>$145.00</strong></td><td class="r num">$2,320.00</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4 class="sub2" style="margin-top:20px">Approval chain</h4>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:190px;padding:12px 14px;border:1px solid var(--green);background:#f1fbf2;border-radius:8px;display:flex;gap:10px;align-items:center">
+          <div style="width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center">✓</div>
+          <div><div style="font-weight:600;color:var(--primary);font-size:12.5px">Marcus Webb</div>
+            <div style="font-size:11px;color:var(--muted)">Site Manager · raised</div></div></div>
+        <div style="flex:1;min-width:190px;padding:12px 14px;border:1px solid var(--green);background:#f1fbf2;border-radius:8px;display:flex;gap:10px;align-items:center">
+          <div style="width:26px;height:26px;border-radius:50%;background:var(--green);color:#fff;font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center">✓</div>
+          <div><div style="font-weight:600;color:var(--primary);font-size:12.5px">Alec Neill</div>
+            <div style="font-size:11px;color:var(--muted)">Project Manager · tier 1</div>
+            <div style="font-size:10.5px;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin-top:3px">Approved 02 May</div></div></div>
+        <div style="flex:1;min-width:190px;padding:12px 14px;border:1px solid var(--divider);border-radius:8px;display:flex;gap:10px;align-items:center">
+          <div style="width:26px;height:26px;border-radius:50%;background:#E8EAEF;color:var(--muted);font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center">3</div>
+          <div><div style="font-weight:600;color:var(--primary);font-size:12.5px">Not required</div>
+            <div style="font-size:11px;color:var(--muted)">Under tier-2 threshold</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="anno">
+    <div class="an-h">◆ What the match takes from here</div>
+    <p>Only two things: the <strong>unit rate</strong> per line, and the <strong>order quantity</strong> as a ceiling
+      for over-receipt checks. Cost centre and accounting code ride along as coding defaults — though see the open
+      question below on whether that default should come from the PO at all.</p>
+  </div>
+
+  <div class="anno q">
+    <div class="an-h">▲ Open decision · cost centre source of truth</div>
+    <p><span class="jira">CQ-2680</span> and AKJ Services (Pylon #13061) both ask that cost centre default from the
+      <strong>docket, not the PO</strong> — because the crew on site knows which cost centre the concrete actually
+      went into, and a single PO often feeds several. No decision has been recorded either way. This prototype
+      defaults from the docket where a docket exists, and falls back to the PO where one doesn't. It is arguably a
+      prerequisite for <span class="jira">VDP-134</span>, not a follow-up.</p>
+  </div>
+
+  <div class="anno bug">
+    <div class="an-h">✖ Live bug that corrupts this leg</div>
+    <p><span class="jira">PICBR-912</span> — editing a delivery docket's received quantity <strong>silently
+      overwrites the PO's order quantity</strong>. If the authority leg can be rewritten by the leg it is supposed to
+      check, the match proves nothing. This has to be fixed before the engine can be trusted; it was last seen
+      <em>Paused</em> at High priority.</p>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('overview')">← Overview</button>
+    <button class="btn btn-p" onclick="go('step2')">Step 2 · Delivery →</button>
+  </div>
+</section>
+
+<!-- ============ 2 · DOCKET ============ -->
+<section class="sec" id="sec-step2">
+  <div class="step-pill"><span class="dot"></span>Step 2 of 6 · The evidence leg</div>
+  <h2 class="page-t">Concrete arrives — the crew captures the docket</h2>
+  <p class="lede">This is the leg that fails in the real world, and the reason it fails is physical: the paper docket
+    never reaches the office. Capturing it on a phone at the point of delivery is what makes the other two legs
+    checkable at all. The docket contributes the <strong>quantity</strong>.</p>
+
+  <div id="flow-2"></div>
+
+  <div class="side-by">
+    <div class="phone">
+      <div class="ph-status"><span>9:41</span><span>▮▮▮ ✦</span></div>
+      <div class="ph-nav"><span>←</span><span>Process Docket</span></div>
+      <div class="ph-body">
+        <div style="background:#ede7f6;border:1px solid #b39ddb;border-radius:8px;padding:10px 12px;margin-bottom:11px">
+          <div style="font-size:11.5px;font-weight:700;color:#4527a0">✦ We've read this docket</div>
+          <div style="font-size:11px;color:var(--text-2);margin-top:2px;line-height:1.45">Check the details below and confirm.</div>
+        </div>
+        <div class="ph-card">
+          <div class="ph-lbl">Supplier</div><div class="ph-val">BORAL Concrete <span class="tag bl" style="margin-left:4px">OCR</span></div>
+        </div>
+        <div class="ph-card">
+          <div class="ph-lbl">Purchase order</div><div class="ph-val">PO-VAR12-0042</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Matched on supplier + project</div>
+        </div>
+        <div class="ph-card">
+          <div class="ph-lbl" style="margin-bottom:7px">Delivery items</div>
+          <div class="ph-row"><div><div style="font-weight:500">32 MPa Concrete</div>
+            <div style="font-size:10.5px;color:var(--muted)">CC-104 · Concrete Works</div></div>
+            <div style="font-weight:700">5.0 m³</div></div>
+          <div class="ph-row"><div><div style="font-weight:500">32 MPa Concrete</div>
+            <div style="font-size:10.5px;color:var(--muted)">CC-101 · Earthworks</div></div>
+            <div style="font-weight:700">3.0 m³</div></div>
+          <div class="ph-row"><div><div style="font-weight:500">Wash-out fee</div>
+            <div style="font-size:10.5px;color:var(--muted)">Not on PO</div></div>
+            <div style="font-weight:700">1 ea</div></div>
+        </div>
+        <div class="ph-card">
+          <div class="ph-lbl">Docket reference</div><div class="ph-val">BOR-88421</div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Photo attached · 08 May 9:38am</div>
+        </div>
+        <button class="ph-btn">Confirm docket</button>
+      </div>
+    </div>
+    <div class="expl">
+      <h4 class="sub2">What the crew is actually doing</h4>
+      <p style="font-size:13px;color:var(--text-2);line-height:1.65;margin-bottom:14px">Photographing the docket takes
+        five seconds; OCR fills supplier, quantity, units, date and ticket reference. The part that needs a human is
+        <strong>splitting the load across cost centres</strong> — 8 m³ turned up on one truck but 5 went into the
+        slab and 3 into the access road. Nobody in the office can reconstruct that later.</p>
+
+      <h4 class="sub2">Two things worth noticing</h4>
+      <div class="banner plain" style="margin-bottom:11px">
+        <div class="b-ico">Σ</div>
+        <div><div class="b-t">One PO line can gather quantity from many dockets</div>
+          <div class="b-d">A 40 m³ PO line might be filled by five pours over three weeks. <code>expected_qty</code>
+            is the <em>sum</em> across every docket linked to that line — which is why a bill covering three dockets
+            still matches cleanly.</div></div>
+      </div>
+      <div class="banner warn" style="margin-bottom:0">
+        <div class="b-ico">＋</div>
+        <div><div class="b-t">Dockets can carry items that aren't on the PO</div>
+          <div class="b-d">The wash-out fee is real, was incurred, and was never ordered. Capturing it here is what
+            lets an off-PO bill line auto-match later instead of landing on the AP officer as a mystery charge.
+            It needs its own cost centre, since there's no PO line to inherit from.</div></div>
+      </div>
+
+      <div class="anno" style="margin-top:16px">
+        <div class="an-h">◆ Over-receipt is a warning, not a block</div>
+        <p>The only over-delivery control that exists today is a soft prompt when delivered qty exceeds ordered qty
+          (<span class="jira">PICBR-1577</span>). Deliberate: over-delivery is usually legitimate on civil jobs, and
+          blocking the docket would just push the crew to record nothing. The check belongs at bill approval, where
+          someone can accept it — not on a phone in a concrete truck.</p>
+      </div>
+
+      <div class="anno bug">
+        <div class="an-h">✖ Live bug · unapproved POs are linkable</div>
+        <p><span class="jira">PICBR-1565</span> — dockets on POs that <strong>haven't cleared approval</strong> stay
+          selectable, so a bill can be matched against unauthorised spend. <span class="jira">CQ-2709</span> asks for
+          this to be blocked at docket creation.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('step1')">← Step 1 · PO</button>
+    <button class="btn btn-p" onclick="go('step3')">Step 3 · Bill arrives →</button>
+  </div>
+</section>
 <!--SECTIONS-->
   </main>
 </div>
