@@ -87,6 +87,35 @@ Consequences for the build:
   tenant-wide, but add a nullable `supplier_id` now and resolve most-specific-wins. Free while
   unused; a migration on live financial config if deferred.
 
+## Quote-OCR POs cut both ways
+
+VDP-118 now lets a PO be created by scanning a supplier quote (parser VDP-122, shared OCR service
+VDP-121). Two consequences for matching, and the second is easy to miss:
+
+**Good — it improves coverage.** The biggest cause of an unmatchable bill is that no PO was ever
+raised, because raising one was friction. Removing that friction means more spend arrives with an
+authority leg. It should also lift the clean-match rate directly: when PO rates were parsed from the
+supplier's own quote, the supplier's later bill is far likelier to agree to the cent. Worth measuring
+as **clean-match rate segmented by PO origin**.
+
+**Bad — it puts OCR inside the authority leg.** The whole argument for the PO being the *rate
+authority* is that it's human-approved and locked. If its rates were machine-read, that's weaker, and
+the failure is silent: OCR reads $2,200 as $220, the supplier bills the correct figure, and matching
+flags it as a price variance against the erroneous PO. The AP officer investigates the right bill
+instead of the wrong PO. Worse, if docket quantities happen to line up, you get a clean match at the
+wrong price.
+
+**Three-way matching only checks internal consistency — it cannot detect a wrong PO.** Mitigations,
+in order of value:
+
+1. **PO approval is the control point.** It's the only human gate between OCR and a locked rate.
+   Approvers should see OCR-derived rates marked as such, not indistinguishable from verified ones.
+2. **Keep the quote attached and reachable from the match screen.** "Compare against the original
+   quote" should be one click, so wrong-PO becomes the first cheap hypothesis, not the last.
+3. **Store rate provenance on the PO line** (`manual | quote_ocr | quote_edited | resource`). Lets
+   the engine say "billed rate differs from a PO rate that was OCR-derived and never manually edited"
+   — which points at the culprit. One field, set at creation; do it while the PO OCR work is warm.
+
 ## Structure
 
 | Section | Content |
