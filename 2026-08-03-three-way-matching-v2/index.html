@@ -1253,6 +1253,165 @@ table.calc{border-collapse:separate;border-spacing:0}
     <button class="btn btn-p" onclick="go('step5')">Step 6 · When it disagrees →</button>
   </div>
 </section>
+<!-- ============ SCOPE & EVIDENCE ============ -->
+<section class="sec" id="sec-scope">
+  <div class="step-pill"><span class="dot"></span>Model · what is matchable</div>
+  <h2 class="page-t">Scope — the evidence leg is polymorphic</h2>
+  <p class="lede">Everything up to here assumed the evidence leg is a delivery docket: goods arriving in discrete drops.
+    External plant hire and ABN labour both break that, and not superficially — plant accrues over <em>time</em> with no
+    delivery event, and labour is evidenced by an <em>approved timesheet</em>. The right answer is not three parallel
+    workflows. It is one engine that <strong>does not know or care</strong> which kind of evidence it is reading.</p>
+
+  <h3 class="sub"><span class="bar"></span>Four spend types, one comparison</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:150px">Spend type</th><th>Rate authority</th><th>Evidence leg</th><th style="width:110px">Unit</th>
+        <th style="width:112px">In scope?</th></tr></thead>
+      <tbody>
+        <tr class="vok"><td><strong>Material supply</strong><div class="t-sub">concrete, aggregate, steel</div></td>
+          <td>PO line rate</td><td>Delivery docket — received qty per PO line</td><td>m³, t, ea</td>
+          <td><span class="pill ok">Launch</span></td></tr>
+        <tr class="vok"><td><strong>External plant hire</strong><div class="t-sub">wet and dry</div></td>
+          <td>PO line rate, or hire agreement</td><td>Plant docket / chargeable hours or days on site</td><td>hr, day, wk</td>
+          <td><span class="pill ok">Launch</span></td></tr>
+        <tr class="vok"><td><strong>ABN labour</strong><div class="t-sub">workers invoicing under own ABN</div></td>
+          <td>PO per worker or engagement</td><td><strong>Approved timesheet</strong> — already through an approval workflow</td><td>hr, day</td>
+          <td><span class="pill ok">Launch</span></td></tr>
+        <tr><td><strong>Subcontract works</strong><div class="t-sub">lump sum / schedule of rates</div></td>
+          <td>Subcontract schedule</td><td>Progress claim assessment — a judgement, not a measurement</td><td>% or qty</td>
+          <td><span class="pill bad">Out of scope</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="banner bad">
+    <div class="b-ico">✖</div>
+    <div><div class="b-t">Subcontract progress claims must be explicitly excluded, not merely unhandled</div>
+      <div class="b-d">A progress claim has no docket and never will — the "evidence" is a QS assessing percentage
+        complete, which is an opinion formed at claim time, not an independent record captured beforehand. If matching
+        runs indiscriminately over every bill, every progress claim flags
+        <code style="background:rgba(0,0,0,.06);padding:1px 6px;border-radius:3px">missing_docket</code> forever. That
+        creates a permanent false-positive class large enough to discredit the feature, and it is the single most likely
+        way this ships broken. <strong>Scope must be a property of the bill, resolved at creation.</strong></div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Why the engine shouldn't know the difference</h3>
+  <div class="grid-2">
+    <div class="card card-p">
+      <h4 class="sub2">The comparison is identical in all three cases</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65"><strong>Authorised rate × evidenced quantity =
+        expected amount.</strong> That holds whether the quantity is 8 m³ of concrete, 37 hours of excavator, or 76 hours
+        of a carpenter's time. The units differ; the arithmetic does not.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">So the engine stays exactly as
+        specified in <span class="jira">VDP-139</span>. What changes is only <em>where the evidenced quantity comes
+        from</em> — and that belongs behind an abstraction, not inside the matching logic.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">This is a schema decision, not a later feature</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">The allocation ledger must point at a
+        <strong>generic evidence line</strong>, not at <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">DocketLine</code>
+        specifically. Build it docket-only and adding plant hire means migrating live financial allocation data — exactly
+        the migration worth avoiding.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">Cost of doing it now: one extra
+        table and a source discriminator. Cost of doing it later: a data migration over rows that money has already
+        flowed through.</p>
+    </div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Implementation — an evidence projection</h3>
+  <p style="font-size:13px;color:var(--text-2);max-width:82ch;margin-bottom:12px;line-height:1.6">Three ways to model
+    this in Django, and the obvious one is the wrong one.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:170px">Approach</th><th>Problem</th><th style="width:120px">Verdict</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Generic FK</strong><div class="t-sub">content_type + object_id</div></td>
+          <td>The hot query is <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">Sum()</code> of evidenced
+            quantity per PO line. A GenericForeignKey cannot be joined or aggregated across in one query, so this forces
+            per-type queries and reintroduces the N+1 the design exists to avoid.</td>
+          <td><span class="pill bad">Reject</span></td></tr>
+        <tr><td><strong>Multi-table inheritance</strong></td>
+          <td>Joins work, but couples the matching app's migrations to every evidence-producing app. Adding a spend type
+            becomes a cross-app migration.</td>
+          <td><span class="pill warn">Workable</span></td></tr>
+        <tr style="background:#F2F7FD"><td><strong>Evidence projection</strong><div class="t-sub">concrete table</div></td>
+          <td>A real table owned by the matching app. Each domain writes into it when its record is confirmed. One join,
+            fast aggregates, no polymorphic query pain. Cost is a dual write — mitigated by writing inside the source's
+            own transaction plus a periodic reconciliation check.</td>
+          <td><span class="pill ok">Recommended</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="json">
+<span class="c"># matching/models.py — the evidence projection. Every spend type writes here</span>
+<span class="c"># on confirm, inside the source record's own transaction.</span>
+
+<span class="b">class</span> <span class="k">EvidenceSource</span>(models.TextChoices):
+    DOCKET    = <span class="s">"docket"</span>,    <span class="s">"Delivery docket"</span>          <span class="c"># goods received</span>
+    PLANT     = <span class="s">"plant"</span>,     <span class="s">"Plant docket / hours"</span>      <span class="c"># chargeable time on hire</span>
+    TIMESHEET = <span class="s">"timesheet"</span>, <span class="s">"Approved timesheet"</span>        <span class="c"># ABN labour hours</span>
+
+<span class="b">class</span> <span class="k">EvidenceLine</span>(models.Model):
+    <span class="c">"""What was actually received, in whatever form. The matching engine reads</span>
+<span class="c">    only this — it never touches DocketLine, PlantRecord or TimesheetEntry."""</span>
+    po_line      = models.ForeignKey(POLine, on_delete=PROTECT, related_name=<span class="s">"evidence"</span>)
+    source       = models.CharField(max_length=<span class="n">12</span>, choices=EvidenceSource.choices)
+    source_id    = models.PositiveBigIntegerField()   <span class="c"># row id in the owning table</span>
+    quantity     = models.DecimalField(max_digits=<span class="n">14</span>, decimal_places=<span class="n">4</span>)
+    unit         = models.CharField(max_length=<span class="n">12</span>)
+    cost_centre  = models.ForeignKey(CostCentre, null=<span class="b">True</span>, on_delete=PROTECT)
+    occurred_on  = models.DateField()                 <span class="c"># delivery date / work date</span>
+    confirmed_at = models.DateTimeField()
+    confirmed_by = models.ForeignKey(User, null=<span class="b">True</span>, on_delete=SET_NULL)
+
+    <span class="b">class</span> <span class="k">Meta</span>:
+        constraints = [
+            models.UniqueConstraint(fields=[<span class="s">"source"</span>, <span class="s">"source_id"</span>],
+                                    name=<span class="s">"uniq_evidence_source_row"</span>),
+        ]
+        indexes = [models.Index(fields=[<span class="s">"po_line"</span>, <span class="s">"source"</span>])]
+
+<span class="c"># BillLineDocketAllocation becomes BillLineEvidenceAllocation, pointing here.</span>
+<span class="c"># Nothing else in the engine changes — available_by_po_line() aggregates</span>
+<span class="c"># EvidenceLine.quantity exactly as it aggregated DocketLine.received_qty.</span>
+</div>
+  <p class="foot-note">The <code>unit</code> field is carried for display and validation, not arithmetic — the engine
+    must <strong>refuse to match across mismatched units</strong> rather than coerce them. A bill in days against evidence
+    in hours is a real scenario on plant hire, and silently multiplying by 8 is how you build a bug nobody can find.
+    Flag it as a unit conflict and make someone choose.</p>
+
+  <h3 class="sub"><span class="bar"></span>How scope gets resolved on a bill</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:34px" class="c">#</th><th>Rule</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td class="c"><strong>1</strong></td><td>Bill is linked to a <strong>subcontract</strong> rather than a PO</td>
+          <td><span class="pill neutral">Not matchable</span> — progress claim path, no flags raised</td></tr>
+        <tr><td class="c"><strong>2</strong></td><td>Bill is linked to a <strong>PO</strong></td>
+          <td><span class="pill ok">Matchable</span> — evidence type follows the PO's spend type</td></tr>
+        <tr><td class="c"><strong>3</strong></td><td>No PO, but <strong>evidence exists</strong> for this supplier/project</td>
+          <td><span class="pill warn">Partially matchable</span> — quantity verifiable, rate is not. See below</td></tr>
+        <tr><td class="c"><strong>4</strong></td><td>No PO and no evidence</td>
+          <td><span class="pill bad">Unmatchable</span> — manual coding, per-client whether permitted</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="anno">
+    <div class="an-h">◆ Rule 1 needs a real field, not an inference</div>
+    <p>Do not infer "this is a progress claim" from the absence of a PO — that is indistinguishable from rule 3 and 4.
+      The bill needs an explicit <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">matching_scope</code>
+      set when it is created (or when its PO/subcontract link is made), defaulting from the linked document's type. An
+      un-scoped bill should be treated as unmatchable and reported, never guessed at.</p>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('credits')">← Credit notes</button>
+    <button class="btn btn-p" onclick="go('nopo')">Evidence without a PO →</button>
+  </div>
+</section>
+
 <!-- ============ CREDIT NOTES ============ -->
 <section class="sec" id="sec-credits">
   <div class="step-pill"><span class="dot"></span>Reverse flow · credit notes</div>
