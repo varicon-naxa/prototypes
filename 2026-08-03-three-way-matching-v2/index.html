@@ -1709,7 +1709,349 @@ table.calc{border-collapse:separate;border-spacing:0}
 </div>
 
 <script>
-<!--SCRIPT-->
+/* ---------------- navigation ---------------- */
+const NAV = [
+  {g:'Concept'},
+  {id:'overview',   n:'·', t:'Overview',            s:'The rule, stated once'},
+  {g:'Walkthrough'},
+  {id:'step1',      n:'1', t:'PO raised',           s:'The rate authority'},
+  {id:'step2',      n:'2', t:'Docket captured',     s:'The qty authority'},
+  {id:'step3',      n:'3', t:'Bill arrives',        s:'OCR + PO inference'},
+  {id:'step4',      n:'4', t:'The match',           s:'Arithmetic shown'},
+  {id:'prevbills',  n:'5', t:'Previously billed',   s:'The consumption check'},
+  {id:'step5',      n:'6', t:'When it disagrees',   s:'Flags & resolutions'},
+  {id:'step6',      n:'7', t:'Approve & downstream',s:'Cost tracking, Xero'},
+  {g:'Tools'},
+  {id:'sandbox',    n:'▶', t:'Sandbox',             s:'Live engine'},
+  {id:'engineering',n:'⌘', t:'Engineering notes',   s:'Django feasibility'},
+  {g:'Reference'},
+  {id:'scenarios',  n:'◇', t:'Scenario matrix',     s:'The seven cases'},
+  {id:'spec',       n:'§', t:'Spec & decisions',    s:'Open questions'},
+];
+let current = 'overview';
+
+function buildRail(){
+  document.getElementById('rail').innerHTML = NAV.map(x => x.g
+    ? `<div class="rail-h">${x.g}</div>`
+    : `<div class="rail-item" id="rl-${x.id}" onclick="go('${x.id}')">
+         <span class="n">${x.n}</span>
+         <span class="rl-t"><span>${x.t}</span><span class="rl-s">${x.s}</span></span></div>`).join('');
+}
+
+function go(id){
+  document.querySelectorAll('.sec').forEach(s => s.classList.remove('active'));
+  const sec = document.getElementById('sec-' + id);
+  if(sec) sec.classList.add('active');
+  document.querySelectorAll('.rail-item').forEach(r => r.classList.remove('active'));
+  const rl = document.getElementById('rl-' + id);
+  if(rl) rl.classList.add('active');
+  current = id;
+  window.scrollTo({top:0, behavior:'instant'});
+}
+
+/* ---------------- flow strip ---------------- */
+const FLOW = [
+  {k:'step1',    s:'01', t:'PO approved',        w:'rate + order qty locked'},
+  {k:'step2',    s:'02', t:'Docket captured',    w:'received qty, per cost centre'},
+  {k:'step3',    s:'03', t:'Bill read',          w:'OCR + PO inferred'},
+  {k:'step4',    s:'04', t:'Matched',            w:'rate × qty compared'},
+  {k:'prevbills',s:'05', t:'Prior bills netted', w:'what is still available'},
+  {k:'step5',    s:'06', t:'Flags resolved',     w:'human decisions, logged'},
+  {k:'step6',    s:'07', t:'Approved',           w:'cost tracking + Xero'},
+];
+function buildFlows(){
+  const order = FLOW.map(f => f.k);
+  const targets = {step1:'flow-1',step2:'flow-2',step3:'flow-3',step4:'flow-4',prevbills:'flow-5p',step5:'flow-5',step6:'flow-6'};
+  Object.entries(targets).forEach(([key, elId]) => {
+    const el = document.getElementById(elId);
+    if(!el) return;
+    const at = order.indexOf(key);
+    el.className = 'flow';
+    el.innerHTML = FLOW.map((f,i) => {
+      const cls = i === at ? 'on' : (i < at ? 'done' : '');
+      return `<div class="flow-n ${cls}" onclick="go('${f.k}')" style="cursor:pointer">
+        <span class="f-s">${f.s}</span><span class="f-t">${f.t}</span><span class="f-w">${f.w}</span></div>`;
+    }).join('');
+  });
+}
+
+/* ---------------- sandbox engine ---------------- */
+const $ = id => document.getElementById(id);
+const money = n => (n<0?'-':'') + '$' + Math.abs(n).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});
+const qty = n => n.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+const INPUTS = ['i-poRate','i-poQty','i-poApproved','i-poExists','i-dkA','i-dkB','i-prevQty','i-crQty',
+                'i-draftQty','i-blQty','i-blRate','i-tolPct','i-tolAbs','i-tolMode','i-tolDir','i-tolQty','i-mdPolicy'];
+
+const PRESETS = {
+  clean:    {'i-poRate':220,'i-poQty':40,'i-poExists':1,'i-poApproved':1,'i-dkA':5,'i-dkB':3,'i-prevQty':0,'i-crQty':0,'i-draftQty':0,'i-blQty':8,'i-blRate':220},
+  dup:      {'i-poRate':220,'i-poQty':40,'i-poExists':1,'i-poApproved':1,'i-dkA':5,'i-dkB':3,'i-prevQty':8,'i-crQty':0,'i-draftQty':0,'i-blQty':8,'i-blRate':220},
+  rate:     {'i-poRate':220,'i-poQty':40,'i-poExists':1,'i-poApproved':1,'i-dkA':5,'i-dkB':3,'i-prevQty':0,'i-crQty':0,'i-draftQty':0,'i-blQty':8,'i-blRate':235},
+  nodocket: {'i-poRate':220,'i-poQty':40,'i-poExists':1,'i-poApproved':1,'i-dkA':0,'i-dkB':0,'i-prevQty':0,'i-crQty':0,'i-draftQty':0,'i-blQty':8,'i-blRate':220},
+  offpo:    {'i-poRate':220,'i-poQty':40,'i-poExists':0,'i-poApproved':1,'i-dkA':1,'i-dkB':0,'i-prevQty':0,'i-crQty':0,'i-draftQty':0,'i-blQty':1,'i-blRate':80},
+  credit:   {'i-poRate':220,'i-poQty':40,'i-poExists':1,'i-poApproved':1,'i-dkA':5,'i-dkB':3,'i-prevQty':8,'i-crQty':3,'i-draftQty':0,'i-blQty':3,'i-blRate':220},
+};
+function preset(k){ Object.entries(PRESETS[k]).forEach(([id,v]) => { $(id).value = v; }); compute(); }
+
+function compute(){
+  const v = id => parseFloat($(id).value) || 0;
+  const poExists = $('i-poExists').value === '1';
+  const poApproved = $('i-poApproved').value === '1';
+  const poRate = v('i-poRate'), poQty = v('i-poQty');
+  const dkTotal = v('i-dkA') + v('i-dkB');
+  const prevBilled = v('i-prevQty') - v('i-crQty');
+  const draftQty = v('i-draftQty');
+  const blQty = v('i-blQty'), blRate = v('i-blRate');
+  const tol = {pct:v('i-tolPct'), abs:v('i-tolAbs'), mode:$('i-tolMode').value,
+               dir:$('i-tolDir').value, qtyAbs:v('i-tolQty'), md:$('i-mdPolicy').value};
+
+  const available = dkTotal - prevBilled;
+  const billedAmount = +(blQty * blRate).toFixed(2);
+  const flags = [];
+
+  let expectedQty = null, expectedPrice = null, qtyVar = null, priceVar = null, band = null;
+
+  if(!poExists){
+    flags.push('off_po');
+  } else {
+    if(!poApproved) flags.push('po_not_approved');
+    expectedQty = available;
+    expectedPrice = +(poRate * Math.max(expectedQty,0)).toFixed(2);
+    qtyVar = +(blQty - expectedQty).toFixed(4);
+    priceVar = +(billedAmount - expectedPrice).toFixed(2);
+
+    if(dkTotal === 0){
+      flags.push('missing_docket');
+    } else if(available <= 0 && blQty > 0){
+      flags.push('over_consumed');
+    } else if(blQty > available + tol.qtyAbs){
+      flags.push('over_consumed');
+    } else if(Math.abs(qtyVar) > tol.qtyAbs){
+      flags.push('qty_variance');
+    }
+
+    if(prevBilled + blQty > poQty) flags.push('over_po_ceiling');
+
+    band = tol.mode === 'max'
+      ? Math.max(expectedPrice * tol.pct / 100, tol.abs)
+      : Math.min(expectedPrice * tol.pct / 100, tol.abs);
+    band = +band.toFixed(2);
+    const breach = tol.dir === 'over' ? priceVar > band : Math.abs(priceVar) > band;
+    if(breach && dkTotal > 0) flags.push('price_variance');
+  }
+
+  const blocking = flags.filter(f => f === 'over_consumed' || f === 'off_po' ||
+    f === 'po_not_approved' || f === 'over_po_ceiling' || (f === 'missing_docket' && tol.md === 'block'));
+  let status = 'matched', vClass = 'ok', vIco = '✓', vTitle = 'Matched', vWhy = '';
+  if(!poExists){
+    status = 'unmatched'; vClass = 'bad'; vIco='✖'; vTitle='Unmatched';
+    vWhy = 'No PO line, so there is no rate authority. The quantity may still be evidenced by a custom docket item, but this line must be coded manually before approval.';
+  } else if(blocking.length){
+    status = 'partial'; vClass = 'bad'; vIco='!'; vTitle='Blocked';
+    vWhy = 'A blocking flag is present — this cannot be approved as-is.';
+    if(flags.includes('over_consumed')) vWhy = 'Billed quantity exceeds what remains after prior bills. This is the duplicate-payment case and should be a hard stop, not a tolerance question.';
+    else if(flags.includes('over_po_ceiling')) vWhy = 'Cumulative billing would exceed the authorised order quantity. Needs a PO variation, not an approval override.';
+    else if(flags.includes('po_not_approved')) vWhy = 'The PO has not cleared approval, so there is no authorised spend to match against (PICBR-1565).';
+    else if(flags.includes('missing_docket')) vWhy = 'No docket evidence exists and policy is set to hard block.';
+  } else if(flags.length){
+    status = 'partial'; vClass = 'warn'; vIco='⚠'; vTitle='Partial';
+    vWhy = 'Flagged but resolvable — needs a human decision, which gets recorded against the line.';
+    if(flags.includes('price_variance')) vWhy = `Billed ${money(priceVar)} over the expected amount, outside the ${money(band)} band. Accept once, update the PO rate, or reject the line.`;
+    else if(flags.includes('qty_variance')) vWhy = `Billed quantity differs from available by ${qty(qtyVar)}. Usually an uncaptured docket — chase site before paying.`;
+    else if(flags.includes('missing_docket')) vWhy = 'No docket recorded against this PO line. Delivery is unverified — chase the docket or record a named attestation.';
+  } else {
+    vWhy = `Rate matches the PO, quantity matches the dockets net of prior billing, and cumulative billing stays inside the authorised ${qty(poQty)} units. Safe to approve.`;
+  }
+
+  /* verdict */
+  $('sb-verdict').innerHTML = `<div class="verdict ${vClass}">
+    <div class="v-badge"><span class="vb-ico">${vIco}</span>${vTitle}</div>
+    <div class="v-why">${vWhy}</div>
+    <div><span class="pill ${vClass==='ok'?'ok':(vClass==='bad'?'bad':'warn')}">match_status: ${status}</span></div></div>`;
+
+  /* derivation */
+  const row = (l,val,sub,tag) => `<tr><td style="width:46%"><strong>${l}</strong>${sub?`<div class="t-sub">${sub}</div>`:''}</td>
+    <td class="r num" style="font-size:13px">${val}</td><td style="width:130px">${tag||''}</td></tr>`;
+  let calc = '';
+  calc += row('PO unit rate', poExists ? money(poRate) : '—', poExists?'locked at PO approval':'no PO line exists', '<span class="tag po">PO</span>');
+  calc += row('Docket qty received', qty(dkTotal), `Docket A ${qty(v('i-dkA'))} + Docket B ${qty(v('i-dkB'))}`, '<span class="tag dk">Docket</span>');
+  calc += row('Less previously billed', prevBilled ? '−' + qty(prevBilled) : qty(0),
+    v('i-crQty') ? `${qty(v('i-prevQty'))} billed − ${qty(v('i-crQty'))} credited` : 'approved prior bills', '<span class="tag" style="background:#ede7f6;color:#5e35b1">Prior</span>');
+  calc += `<tr style="background:#F2F7FD"><td><strong>Available quantity</strong><div class="t-sub">the evidence ceiling</div></td>
+    <td class="r num" style="font-size:14px;font-weight:700;color:${available<0?'var(--red)':'var(--primary)'}">${qty(available)}</td><td></td></tr>`;
+  if(poExists) calc += row('Expected amount', money(expectedPrice), `${money(poRate)} × ${qty(Math.max(available,0))}`, '<span class="tag ex" style="background:var(--secondary);color:#fff">Expected</span>');
+  calc += row('Billed quantity', qty(blQty), '', '<span class="tag bl">Bill</span>');
+  calc += row('Billed unit rate', money(blRate), '', '<span class="tag bl">Bill</span>');
+  calc += row('Billed amount', money(billedAmount), `${qty(blQty)} × ${money(blRate)}`, '<span class="tag bl">Bill</span>');
+  if(poExists){
+    const dcls = priceVar > 0 ? 'up' : (priceVar < 0 ? 'down' : 'zero');
+    calc += `<tr class="${flags.includes('price_variance')?'vbad':'vok'}"><td><strong>Price variance</strong>
+      <div class="t-sub">tolerance band ±${money(band)} · ${tol.mode==='max'?'greater':'lesser'} of ${tol.pct}% and ${money(tol.abs)}</div></td>
+      <td class="r"><span class="delta ${dcls}">${money(priceVar)}</span></td>
+      <td>${flags.includes('price_variance')?'<span class="pill bad">Outside</span>':'<span class="pill ok">Within</span>'}</td></tr>`;
+    const qcls = qtyVar > 0 ? 'up' : (qtyVar < 0 ? 'down' : 'zero');
+    calc += `<tr class="${(flags.includes('qty_variance')||flags.includes('over_consumed'))?'vbad':'vok'}"><td><strong>Quantity variance</strong>
+      <div class="t-sub">tolerance ±${qty(tol.qtyAbs)} units</div></td>
+      <td class="r"><span class="delta ${qcls}">${qty(qtyVar)}</span></td>
+      <td>${(flags.includes('qty_variance')||flags.includes('over_consumed'))?'<span class="pill bad">Outside</span>':'<span class="pill ok">Within</span>'}</td></tr>`;
+  }
+  $('sb-calc').innerHTML = calc;
+
+  /* ledger */
+  const cum = prevBilled + blQty;
+  const pct = poQty ? Math.min(100, (cum / poQty) * 100) : 0;
+  $('sb-ledger').innerHTML = `
+    <tr><td style="width:46%"><strong>Ordered</strong><div class="t-sub">authorisation ceiling</div></td>
+      <td class="r num">${qty(poQty)}</td><td style="width:130px"></td></tr>
+    <tr><td><strong>Received to date</strong><div class="t-sub">confirmed dockets</div></td>
+      <td class="r num">${qty(dkTotal)}</td><td>${dkTotal>poQty?'<span class="pill warn">Over-receipt</span>':''}</td></tr>
+    <tr><td><strong>Billed before this</strong><div class="t-sub">net of credit notes</div></td>
+      <td class="r num">${qty(prevBilled)}</td><td></td></tr>
+    <tr><td><strong>On draft bills</strong><div class="t-sub">advisory reservation only</div></td>
+      <td class="r num">${qty(draftQty)}</td><td>${draftQty>0?'<span class="pill info">Reserved</span>':''}</td></tr>
+    <tr><td><strong>This bill</strong></td><td class="r num" style="font-weight:700">${qty(blQty)}</td><td></td></tr>
+    <tr style="background:#F2F7FD"><td><strong>Cumulative billed</strong>
+      <div class="t-sub"><div style="height:5px;background:#E0E0E0;border-radius:3px;margin-top:5px;max-width:220px">
+        <div style="height:5px;width:${pct}%;background:${cum>poQty?'var(--red)':(cum>dkTotal?'var(--secondary)':'var(--green)')};border-radius:3px"></div></div>
+        ${qty(cum)} of ${qty(poQty)} ordered · ${qty(dkTotal)} received</div></td>
+      <td class="r num" style="font-weight:700;color:${cum>dkTotal?'var(--red)':'var(--green)'}">${qty(cum)}</td>
+      <td>${cum>poQty?'<span class="pill bad">Over PO</span>':(cum>dkTotal?'<span class="pill bad">Over docket</span>':'<span class="pill ok">Within both</span>')}</td></tr>`;
+
+  /* flags */
+  const FLAG_TEXT = {
+    off_po:['bad','No PO line — no rate authority. Must be coded manually before approval.'],
+    po_not_approved:['bad','The PO has not cleared approval (PICBR-1565 allows this today; it should not).'],
+    missing_docket:[tol.md==='block'?'bad':'warn', tol.md==='block'?'No docket evidence — hard blocked by policy.':(tol.md==='warn'?'No docket evidence — approver must attest to receipt.':'No docket evidence — allowed silently by policy.')],
+    qty_variance:['warn','Billed quantity differs from available. Likely an uncaptured docket.'],
+    price_variance:['warn','Billed amount outside the tolerance band. Accept once, update the PO rate, or reject.'],
+    over_consumed:['bad','Exceeds docketed quantity net of prior bills — the duplicate-payment case.'],
+    over_po_ceiling:['bad','Cumulative billing exceeds the authorised order quantity. Needs a PO variation.'],
+  };
+  $('sb-flags').innerHTML = flags.length
+    ? flags.map(f => `<div class="banner ${FLAG_TEXT[f][0]}" style="margin-bottom:9px;padding:11px 15px">
+        <div class="b-ico" style="width:26px;height:26px;font-size:13px">${FLAG_TEXT[f][0]==='bad'?'✖':'⚠'}</div>
+        <div><div class="b-t" style="font-size:13px"><code style="background:rgba(0,0,0,.06);padding:1px 6px;border-radius:3px">${f}</code></div>
+        <div class="b-d" style="margin-top:3px">${FLAG_TEXT[f][1]}</div></div></div>`).join('')
+    : `<div class="banner ok" style="margin-bottom:0;padding:11px 15px"><div class="b-ico" style="width:26px;height:26px;font-size:13px">✓</div>
+        <div><div class="b-t" style="font-size:13px">No flags</div>
+        <div class="b-d" style="margin-top:3px">Every check passed. The bill line is fully evidenced and within all ceilings.</div></div></div>`;
+
+  /* json */
+  const j = (k,v2) => `  <span class="k">"${k}"</span>: ${v2}`;
+  const numOrNull = n => n === null ? '<span class="b">null</span>' : `<span class="n">${n}</span>`;
+  $('sb-json').innerHTML = `{
+${j('bill_line_id', '<span class="s">"bl_8842"</span>')},
+${j('matched_po_line', poExists ? '<span class="s">"pol_0042_1"</span>' : '<span class="b">null</span>')},
+${j('matched_dockets', poExists && dkTotal>0 ? '[<span class="s">"dk_1104"</span>, <span class="s">"dk_1119"</span>]' : '[]')},
+${j('expected_qty', numOrNull(expectedQty===null?null:+expectedQty.toFixed(4)))},
+${j('expected_price', numOrNull(expectedPrice))},
+${j('billed_amount', `<span class="n">${billedAmount}</span>`)},
+${j('qty_variance', numOrNull(qtyVar))},
+${j('price_variance', numOrNull(priceVar))},
+${j('tolerance_band', numOrNull(band))},
+${j('variance_flags', '[' + flags.map(f=>`<span class="s">"${f}"</span>`).join(', ') + ']')},
+${j('consumption', `{ <span class="k">"received"</span>: <span class="n">${dkTotal}</span>, <span class="k">"prior_billed"</span>: <span class="n">${prevBilled}</span>, <span class="k">"available"</span>: <span class="n">${+available.toFixed(4)}</span> }`)},
+${j('status', `<span class="s">"${status}"</span>`)},
+${j('blocks_approval', blocking.length ? '<span class="b">true</span>' : '<span class="b">false</span>')}
+}`;
+}
+
+/* ---------------- scenarios ---------------- */
+const SC = [
+  {k:'clean', ic:'✓', n:'Clean match', lvl:'ok',
+   po:'ok', dk:'ok', pb:'ok', flag:'—', st:'matched',
+   what:'Bill ties exactly to PO rates and docket quantities, and nothing has been billed against those dockets before.',
+   engine:'All four checks pass. No flag raised, no tolerance consulted — exact equality on both rate and quantity.',
+   ask:'Nothing. Confirm coding and approve. This is the case that should be a single click, and the one the 60%-faster target depends on.',
+   note:'The volume case. If this is not effortless, nothing else matters.'},
+  {k:'dup', ic:'✖', n:'Already billed', lvl:'bad',
+   po:'ok', dk:'warn', pb:'bad', flag:'over_consumed', st:'partial',
+   what:'The PO has headroom and the dockets exist, but prior approved bills have already consumed all the docketed quantity.',
+   engine:'Available = received − prior billed = 0. Any positive billed quantity exceeds it, so <code>over_consumed</code> fires. A three-way check without the prior-bills leg passes this bill.',
+   ask:'Is this a genuine duplicate, or did a delivery happen that nobody docketed? Those have opposite resolutions — reject the line, or chase the missing docket and re-run.',
+   note:'The TJ Constructions failure mode, and the strongest argument for the fourth leg. Recommended as a hard block at any tolerance.'},
+  {k:'rate', ic:'⚠', n:'Rate variance', lvl:'warn',
+   po:'ok', dk:'ok', pb:'ok', flag:'price_variance', st:'partial',
+   what:'Quantities agree, but the supplier has billed above the rate agreed on the PO.',
+   engine:'<code>price_variance</code> = billed amount − (PO rate × available qty), compared against the band. Sign matters: overs flag, unders pass if direction is one-sided.',
+   ask:'Accept once (pay it, PO unchanged), update the PO rate (re-baseline so future bills match), or reject the line. Whichever is chosen must be recorded — this is a commercial decision.',
+   note:'Where the undecided tolerance actually bites. Set it too tight and AP drowns in fuel-levy noise; too loose and real increases pass silently.'},
+  {k:'qty', ic:'⚠', n:'Quantity variance', lvl:'warn',
+   po:'ok', dk:'warn', pb:'ok', flag:'qty_variance', st:'partial',
+   what:'The bill claims more units than the dockets evidence — but not beyond what prior billing left available.',
+   engine:'<code>qty_variance</code> = billed qty − available qty, beyond the qty tolerance. Distinct from <code>over_consumed</code>, which is the harder ceiling breach.',
+   ask:'Almost always "a delivery was not captured". Chase site first; bill short as a fallback. Accepting an over-receipt needs authority because it moves committed cost.',
+   note:'Recommended qty tolerance is zero. A quantity tolerance is really a request for a missing docket in disguise.'},
+  {k:'nodocket', ic:'⚠', n:'PO, no dockets', lvl:'warn',
+   po:'ok', dk:'bad', pb:'ok', flag:'missing_docket', st:'partial',
+   what:'The bill matches a PO and the rates are usable, but the site team has recorded no delivery at all.',
+   engine:'<code>expected_qty</code> = 0, so <code>expected_price</code> is 0 and every quantity is a variance. The engine reports <code>missing_docket</code> rather than a misleading price variance.',
+   ask:'Chase the docket, record a named receipt attestation, or reject if the goods never arrived. Behaviour depends on the undecided missing-docket policy.',
+   note:'Recommended: warn + attest. Hard-blocking stalls AP and pressures crews into fabricating dockets.'},
+  {k:'offpo', ic:'⚠', n:'Off-PO items', lvl:'warn',
+   po:'bad', dk:'warn', pb:'ok', flag:'off_po', st:'partial',
+   what:'Surcharges, levies and admin fees that appear on the bill and exist on no PO — sometimes evidenced by a custom docket item, sometimes not.',
+   engine:'No PO line means no rate authority, so <code>expected_price</code> is <code>null</code>, not zero. If a custom docket item matches, quantity is confirmed but the rate remains unverifiable.',
+   ask:'Code it (cost centre + accounting code) so the cost lands correctly, promote it onto the PO if it recurs, or reject if never ordered and never received.',
+   note:'"Evidenced" is a weaker guarantee than "matched" and the UI must say so. Freight is the known instance (VDP-705).'},
+  {k:'nopo', ic:'✖', n:'No PO at all', lvl:'bad',
+   po:'bad', dk:'bad', pb:'ok', flag:'off_po', st:'unmatched',
+   what:'A bill arrives from a supplier with no PO and no dockets. There is nothing to match against.',
+   engine:'PO inference returns no candidate. Bill-level status is <code>unmatched</code>; every line needs manual coding.',
+   ask:'Code every line manually, convert to a retrospective PO if the supply is ongoing, and confirm receipt with site before approving — no docket means delivery is entirely unverified.',
+   note:'Not a matching failure so much as a process failure upstream. Worth measuring as a rate: high unmatched volume means POs are not being raised.'},
+];
+
+function buildScenarios(){
+  $('sc-tabs').innerHTML = SC.map((s,i) =>
+    `<div class="sc-tab ${i===0?'active':''}" id="sct-${s.k}" onclick="showSc('${s.k}')">
+       <span class="ic">${s.ic}</span>${s.n}</div>`).join('');
+  const dot = v => `<span style="display:inline-block;width:11px;height:11px;border-radius:2px;background:${
+    v==='ok'?'var(--green)':(v==='warn'?'var(--secondary)':'var(--red)')}"></span>`;
+  $('sc-table').innerHTML = SC.map(s => `<tr>
+    <td><strong>${s.n}</strong></td><td class="c">${dot(s.po)}</td><td class="c">${dot(s.dk)}</td><td class="c">${dot(s.pb)}</td>
+    <td>${s.flag==='—'?'<span style="color:var(--muted)">—</span>':`<code style="background:#eef1f5;padding:1px 6px;border-radius:3px;font-size:11.5px">${s.flag}</code>`}</td>
+    <td><span class="pill ${s.st==='matched'?'ok':(s.st==='unmatched'?'bad':'warn')}">${s.st}</span></td></tr>`).join('');
+  showSc('clean');
+}
+
+function showSc(k){
+  const s = SC.find(x => x.k === k);
+  document.querySelectorAll('.sc-tab').forEach(t => t.classList.remove('active'));
+  $('sct-' + k).classList.add('active');
+  $('sc-body').innerHTML = `
+    <div class="banner ${s.lvl}">
+      <div class="b-ico">${s.ic}</div>
+      <div><div class="b-t">${s.n}</div><div class="b-d">${s.what}</div></div>
+    </div>
+    <div class="grid-2">
+      <div class="card card-p"><h4 class="sub2" style="margin-top:0">What the engine returns</h4>
+        <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">${s.engine}</p>
+        <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${s.flag==='—'?'<span class="pill ok">no flags</span>':`<span class="pill ${s.lvl}">${s.flag}</span>`}
+          <span style="color:var(--muted)">→</span>
+          <span class="pill ${s.st==='matched'?'ok':(s.st==='unmatched'?'bad':'warn')}">${s.st}</span></div></div>
+      <div class="card card-p"><h4 class="sub2" style="margin-top:0">What the user is asked to decide</h4>
+        <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">${s.ask}</p></div>
+    </div>
+    <div class="anno"><div class="an-h">◆ Note</div><p>${s.note}</p></div>
+    <div style="margin-top:6px"><button class="btn btn-s btn-sm" onclick="tryInSandbox('${s.k}')">Try this in the Sandbox →</button></div>`;
+}
+
+function tryInSandbox(k){
+  const map = {clean:'clean', dup:'dup', rate:'rate', qty:'clean', nodocket:'nodocket', offpo:'offpo', nopo:'offpo'};
+  go('sandbox');
+  preset(map[k] || 'clean');
+  if(k === 'qty'){ $('i-blQty').value = 10; compute(); }
+}
+
+/* ---------------- init ---------------- */
+buildRail();
+buildFlows();
+buildScenarios();
+INPUTS.forEach(id => { const el = $(id); if(el) el.addEventListener('input', compute); });
+compute();
+go('overview');
 </script>
 </body>
 </html>
