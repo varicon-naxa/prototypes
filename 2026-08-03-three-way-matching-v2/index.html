@@ -2278,6 +2278,166 @@ GST_RATE = Decimal(<span class="s">"0.10"</span>)
   </div>
 </section>
 
+<!-- ============ DISPUTES ============ -->
+<section class="sec" id="sec-disputes">
+  <div class="step-pill"><span class="dot"></span>Resolution · waiting on the supplier</div>
+  <h2 class="page-t">Disputes — a hold is an overlay, not a status</h2>
+  <p class="lede">A bill you're arguing about currently has nowhere to sit but <em>Awaiting Approval</em>, so it blocks an
+    approver who cannot action it and ages as though the delay were yours. <span class="jira">VDP-698</span> proposes a
+    hold status — but the way it should be built follows from how it needs to behave, and the answer is
+    <strong>not a new value in the status enum</strong>.</p>
+
+  <div class="banner plain">
+    <div class="b-ico">⊕</div>
+    <div><div class="b-t">Why an overlay rather than a status</div>
+      <div class="b-d">A disputed bill stays in payables aging, keeps aging normally, and can be disputed by any approver
+        in the chain. All three of those mean the dispute is <strong>orthogonal to where the bill is in its lifecycle</strong> —
+        a bill can be Awaiting Approval and disputed, Partially Approved and disputed, even Overdue and disputed. Adding
+        <code style="background:rgba(0,0,0,.06);padding:1px 6px;border-radius:3px">Disputed</code> to the status enum forces
+        a combinatorial explosion across nine existing statuses, breaks the status tabs, and loses the information about
+        where the bill actually was. A <code style="background:rgba(0,0,0,.06);padding:1px 6px;border-radius:3px">Dispute</code>
+        record attached to the bill keeps both facts intact.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Two kinds of waiting, two different owners</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:150px"></th><th style="width:220px">Parked · awaiting evidence</th><th>Disputed</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Waiting on</strong></td><td>Our own site team</td><td>The supplier</td></tr>
+        <tr><td><strong>Owner</strong></td><td>Site supervisor / PM</td><td>AP officer</td></tr>
+        <tr><td><strong>Resolved by</strong></td><td>A docket being captured</td><td>A credit note or corrected invoice</td></tr>
+        <tr><td><strong>Set by</strong></td><td><span class="pill neutral">Automatic</span></td>
+          <td><span class="pill info">Any approver in the chain</span></td></tr>
+        <tr><td><strong>In approval queue</strong></td><td><span class="pill neutral">No</span></td>
+          <td><span class="pill neutral">No</span> — moves to a Disputed view</td></tr>
+        <tr><td><strong>In payables aging</strong></td><td><span class="pill ok">Yes</span></td>
+          <td><span class="pill ok">Yes, flagged</span></td></tr>
+        <tr><td><strong>Due date</strong></td><td>Caps the parking window</td><td><span class="pill warn">Keeps running</span></td></tr>
+        <tr><td><strong>Escalates to</strong></td><td>PM, then commercial manager</td><td>Dispute aging report</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="foot-note">Both leave the approval queue, and for the same reason — nobody can approve a bill that is either
+    unproven or wrong — but they go to <em>different</em> queues with different owners. Collapsing them into one "on hold"
+    bucket would put concrete deliveries and pricing arguments in front of the same person, and only one of them can act
+    on either.</p>
+
+  <div class="banner warn">
+    <div class="b-ico">!</div>
+    <div><div class="b-t">Because the due date keeps running, Overdue must show the dispute</div>
+      <div class="b-d">A disputed bill will go overdue, and that's the correct behaviour — the supplier's terms are the
+        supplier's terms and a dispute doesn't change them. But the Overdue tab and banner then contain items that are
+        overdue <em>legitimately</em>, and without the reason on the row, AP will chase their own team about a bill that is
+        already being argued with the supplier. The disputed flag has to be visible everywhere overdue is
+        visible, or this setting creates busywork.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Dispute at line level, hold at bill level</h3>
+  <div class="grid-2">
+    <div class="card card-p">
+      <h4 class="sub2">Why the asymmetry is right</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">Disputes are almost always about <strong>one or two
+        lines</strong> out of ten — a surcharge you didn't agree to, an over-billed quantity. But payment happens at bill
+        level in every accounting system, and short-paying an invoice is messy in both Xero and MYOB.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">So: record the dispute
+        <strong>per line</strong> so the notice can be specific and the reporting is meaningful, but hold the
+        <strong>whole bill</strong> from payment. The real-world resolution is the supplier crediting the disputed line and
+        the full bill then being paid — which is cleaner than any partial-payment mechanism you could build.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">Flags that make good dispute candidates</h4>
+      <div class="kv" style="grid-template-columns:150px 1fr;gap:8px 12px">
+        <dt><code style="background:#eef1f5;padding:1px 5px;border-radius:3px">price_variance</code></dt>
+          <dd>Billed above the agreed rate — the classic dispute</dd>
+        <dt><code style="background:#eef1f5;padding:1px 5px;border-radius:3px">over_consumed</code></dt>
+          <dd>Already billed for this delivery. The strongest possible dispute, because you have the evidence</dd>
+        <dt><code style="background:#eef1f5;padding:1px 5px;border-radius:3px">qty_variance</code></dt>
+          <dd>Only after evidence is complete — otherwise it's a parked bill, not a dispute</dd>
+        <dt><code style="background:#eef1f5;padding:1px 5px;border-radius:3px">off_po</code></dt>
+          <dd>Charged for something never ordered <em>and</em> never received</dd>
+      </div>
+      <p class="foot-note" style="margin-top:11px">"Dispute this line" should be offered directly from the flag, pre-filled
+        with the variance the engine already computed. The AP officer shouldn't have to restate numbers the system knows.</p>
+    </div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>The dispute notice</h3>
+  <div class="frame">
+    <div class="frame-bar"><div class="dots"><i></i><i></i><i></i></div>Dispute notice · INV-BORAL-9915
+      <div class="sp"></div><span class="meta">Generated · not yet sent</span></div>
+    <div class="frame-body">
+      <div style="display:flex;gap:26px;flex-wrap:wrap;margin-bottom:15px">
+        <div><div class="ph-lbl">To</div><div style="font-size:13px;font-weight:500">accounts@boralconcrete.com.au</div></div>
+        <div><div class="ph-lbl">Their invoice</div><div style="font-size:13px;font-weight:500">INV-BORAL-9915</div></div>
+        <div><div class="ph-lbl">Our reference</div><div style="font-size:13px;font-weight:500">PO-VAR12-0042</div></div>
+        <div><div class="ph-lbl">Disputed</div><div style="font-size:13px;font-weight:700;color:var(--red)">$175.00 of $2,055.00</div></div>
+      </div>
+      <div class="tbl-wrap" style="box-shadow:none;margin-bottom:14px">
+        <table>
+          <thead><tr><th>Line</th><th class="r">Billed</th><th class="r">We agree</th><th class="r">Disputed</th><th>Reason</th></tr></thead>
+          <tbody>
+            <tr class="vbad"><td><strong>32 MPa Concrete</strong><div class="t-sub">5.00 m³</div></td>
+              <td class="r num">$1,175.00</td><td class="r num">$1,100.00</td><td class="r num"><strong>$75.00</strong></td>
+              <td>Billed at $235.00/m³; PO-VAR12-0042 line 1 agreed <strong>$220.00/m³</strong></td></tr>
+            <tr class="vbad"><td><strong>Out-of-hours surcharge</strong><div class="t-sub">1 ea</div></td>
+              <td class="r num">$100.00</td><td class="r num">$0.00</td><td class="r num"><strong>$100.00</strong></td>
+              <td>Not on the purchase order and not recorded on any delivery docket</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="banner plain" style="margin-bottom:14px">
+        <div class="b-ico">✎</div>
+        <div><div class="b-t">Requested action</div>
+          <div class="b-d">Please issue a credit note for <strong>$175.00</strong> against invoice INV-BORAL-9915, or
+            reissue the invoice corrected. The remaining <strong>$1,880.00</strong> is agreed and will be paid on terms.</div></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-p btn-sm">✉ Send notice</button>
+        <button class="btn btn-s btn-sm">Download PDF</button>
+        <button class="btn btn-s btn-sm">Edit before sending</button>
+      </div>
+    </div>
+  </div>
+  <p class="foot-note">Everything on that notice is already known to the system — the agreed rate comes from the PO, the
+    docket absence from the evidence ledger, the arithmetic from the engine. <strong>Generating it costs nothing and it is
+    the single most useful artefact the feature produces</strong>, because it converts "this bill looks wrong" into a
+    specific, evidenced request a supplier can act on without a phone call.</p>
+
+  <h3 class="sub"><span class="bar"></span>Closing the loop</h3>
+  <div class="banner ok">
+    <div class="b-ico">↻</div>
+    <div><div class="b-t">An arriving credit note should resolve the dispute it answers</div>
+      <div class="b-d">When a credit note arrives referencing the disputed invoice for an amount matching the disputed
+        total, link it and prompt to resolve. This is where the
+        <a onclick="go('credits')" style="color:var(--blue);cursor:pointer;font-weight:500">credit type</a> matters: a
+        dispute over a <em>rate</em> resolves with a <strong>price correction</strong> credit, which must not release
+        quantity. A dispute over goods never delivered resolves with a <strong>short delivery</strong> credit, which must.
+        The dispute reason should pre-select the credit type — the two features answer each other.</div></div>
+  </div>
+
+  <div class="anno">
+    <div class="an-h">◆ Disputes need their own aging</div>
+    <p>Since the bill keeps aging normally, the dispute's own age is invisible unless tracked separately — and a dispute
+      open 60 days is a different problem from a bill overdue 60 days. Worth a simple report: open disputes by age and by
+      supplier. A supplier who generates repeated disputes is a commercial conversation, and the total value in dispute is a
+      number a commercial manager will actually want. It also guards against the failure mode where "disputed" quietly
+      becomes where inconvenient bills go to be forgotten.</p>
+  </div>
+
+  <div class="anno q">
+    <div class="an-h">▲ Deliberately out of scope</div>
+    <p>A supplier-facing portal where suppliers see and respond to disputes directly. Confirmed as not now — it needs
+      external identity, permissions and a support surface for people who aren't Varicon customers. The generated notice
+      gets most of the value at a fraction of the cost, and email is where these conversations already happen.</p>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('waiting')">← Eventual matching</button>
+    <button class="btn btn-p" onclick="go('credits')">Credit notes →</button>
+  </div>
+</section>
+
 <!-- ============ CREDIT NOTES ============ -->
 <section class="sec" id="sec-credits">
   <div class="step-pill"><span class="dot"></span>Reverse flow · credit notes</div>
