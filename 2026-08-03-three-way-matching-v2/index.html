@@ -1592,6 +1592,175 @@ table.calc{border-collapse:separate;border-spacing:0}
         max(evidenced, minimum)</code> rather than flagging the difference.</div></div>
   </div>
 
+  <h3 class="sub"><span class="bar"></span>Rate periods — a PO line needs a rate card, not a rate</h3>
+  <div class="banner bad">
+    <div class="b-ico">÷</div>
+    <div><div class="b-t">You cannot compare a monthly rate against daily evidence without a decomposition rule</div>
+      <div class="b-d">Hire is priced by period — hour, day, week, month — and each is cheaper per unit as the period
+        lengthens. A machine on site 31 chargeable days against a <strong>$2,800/month</strong> PO rate has no computable
+        <code style="background:rgba(0,0,0,.06);padding:1px 6px;border-radius:3px">expected_price</code> until we know
+        <em>how periods combine</em>. This is not a rounding detail — <strong>without it the engine cannot produce an
+        expected amount for plant at all.</strong></div></div>
+  </div>
+  <div class="tbl-wrap">
+    <table class="calc">
+      <thead><tr><th>Rate card on the PO line</th><th class="r">Rate</th><th class="r">Min period</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Hourly</strong></td><td class="r num">$95.00</td><td class="r num">4 hrs</td>
+          <td>Wet hire only — attendance-based</td></tr>
+        <tr><td><strong>Daily</strong></td><td class="r num">$350.00</td><td class="r num">1 day</td>
+          <td>Is a "day" 8 hours or a calendar day? Must be stated</td></tr>
+        <tr><td><strong>Weekly</strong></td><td class="r num">$1,050.00</td><td class="r num">1 week</td>
+          <td><strong>Is a "week" 5 days or 7?</strong> The single most common source of hire disputes</td></tr>
+        <tr><td><strong>Monthly</strong></td><td class="r num">$2,800.00</td><td class="r num">4 weeks</td>
+          <td>Usually calendar-based, so weekends are inside it</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="grid-2" style="margin-top:16px">
+    <div class="card card-p">
+      <h4 class="sub2">Decomposition, shown not assumed</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-bottom:10px">Store a
+        <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">decomposition_rule</code> on the PO line and
+        show the working, exactly as the bill derivation does:</p>
+      <div class="json" style="font-size:11px;padding:13px 15px">31 chargeable days
+  = 1 month (28d)  $2,800.00
+  + 3 days         $1,050.00
+  ─────────────────────────
+  expected         $3,850.00</div>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">Three rules worth supporting:
+        <strong>cheapest combination</strong> (the good default — if the supplier billed more than the cheapest valid
+        decomposition, that is itself the finding), <strong>as stated in the hire agreement</strong> (e.g. "weeks then
+        days"), and <strong>as billed</strong> (accept their decomposition, verify only the arithmetic).</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">This changes the unit-mismatch rule</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">Earlier this prototype says the engine must
+        <strong>refuse to coerce mismatched units</strong> rather than silently multiply. That still holds — but a bill in
+        <em>days</em> against a <em>monthly</em> PO rate is <strong>not</strong> a unit conflict. It is a decomposition, and
+        it is the normal case for plant.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">So distinguish two failures:
+        <strong>convertible via the rate card</strong> (compute it, show the working) versus <strong>genuinely
+        incommensurable</strong> — hours billed against a PO holding only a monthly rate with no hourly rate and no stated
+        hours-per-day. The second must flag; the first must not.</p>
+    </div>
+  </div>
+  <div class="anno">
+    <div class="an-h">◆ Dry and wet hire compute evidenced quantity differently</div>
+    <p><strong>Dry hire is elapsed-minus-exclusions.</strong> The machine is yours for a period, so chargeable duration
+      starts from calendar elapsed time between on-hire and off-hire, then subtracts whatever the agreement says isn't
+      chargeable (weekends, stand-down, public holidays).</p>
+    <p style="margin-top:8px"><strong>Wet hire is sum-of-hours.</strong> Chargeable duration is the total of recorded
+      working hours; nothing is subtracted because nothing was added in the first place.</p>
+    <p style="margin-top:8px">Two genuinely different computations of the same field. Worth naming in the engine
+      (<code style="background:#eef1f5;padding:1px 5px;border-radius:3px">duration_basis: elapsed | attendance</code>)
+      rather than discovering it as a bug when the first monthly dry-hire invoice arrives.</p>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Stand-down — the site diary already holds the answer</h3>
+  <p style="font-size:13px;color:var(--text-2);max-width:82ch;margin-bottom:13px;line-height:1.6">Site diary records
+    stand-down days and why — wet weather, access blocked, waiting on another trade, client instruction. That is exactly the
+    record needed to stop paying working rates for days nothing worked, and <strong>it is already being captured</strong>.
+    The separation to hold onto is simple:</p>
+  <div class="legs" style="grid-template-columns:1fr 1fr">
+    <div class="leg dk">
+      <div class="lg-h"><div class="lg-ico">📔</div><div>
+        <div class="lg-n">Site diary</div><div class="lg-q">The fact</div></div></div>
+      <p>Work stopped on 14 May from 10am. Reason: wet weather. Plant on site: EX-220, RL-140.
+        <strong>Contemporaneous and independent of the invoice.</strong></p>
+      <div class="lg-src">Already captured today</div>
+    </div>
+    <div class="leg po">
+      <div class="lg-h"><div class="lg-ico">📋</div><div>
+        <div class="lg-n">Hire agreement / PO</div><div class="lg-q">The consequence</div></div></div>
+      <p>What a stand-down day <em>costs</em> — nothing, standby rate, or full rate. Commercial terms, not a site
+        observation.</p>
+      <div class="lg-src">New field: standdown_treatment</div>
+    </div>
+  </div>
+  <p class="foot-note">Keeping these apart matters because the same diary entry produces different money on different
+    hires. The crew records what happened; the agreement decides what it costs. Conflating them means encoding commercial
+    terms into a site diary, which nobody on site should be asked to know.</p>
+  <div class="tbl-wrap" style="margin-top:14px">
+    <table>
+      <thead><tr><th style="width:180px">standdown_treatment</th><th>Effect on expected amount</th><th>Typical of</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Not chargeable</strong></td>
+          <td>Day excluded from chargeable duration entirely</td>
+          <td>Wet hire, and negotiated dry hire</td></tr>
+        <tr style="background:#F2F7FD"><td><strong>Standby rate</strong><div class="t-sub">most common</div></td>
+          <td>Day moves to the standby PO line at its own rate</td>
+          <td>Most wet hire arrangements</td></tr>
+        <tr><td><strong>Full rate</strong></td>
+          <td>No adjustment — the machine was still committed to us</td>
+          <td>Monthly dry hire, where the period is the product</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="banner ok">
+    <div class="b-ico">★</div>
+    <div><div class="b-t">This produces the strongest dispute in the whole feature</div>
+      <div class="b-d">"Your invoice charges the working rate of $185/hr for 8 hours on 14 May. Our site diary records
+        stand-down from 10:00am for wet weather, and the hire agreement provides the standby rate of $95/hr beyond that
+        point. We agree 2 hours working and 6 hours standby — <strong>$940.00</strong> against the
+        <strong>$1,480.00</strong> billed." That is specific, evidenced, contemporaneous and dated. A supplier issues a
+        credit against that without an argument, and it is generated entirely from records Varicon already holds.</div></div>
+  </div>
+
+  <div class="anno bug">
+    <div class="an-h">✖ Two guards the diary needs before it can carry money</div>
+    <p><strong>1 · Lock diary entries once used as billing evidence.</strong> The moment a diary entry can reduce an
+      invoice, there is an incentive to back-fill it. Entries consumed by a match should be immutable, or amendable only
+      with an audited reason — otherwise the independence that makes the diary valuable evidence is exactly what gets
+      compromised.</p>
+    <p style="margin-top:8px"><strong>2 · Stand-down is not always site-wide.</strong> Rain stops earthworks while
+      concreting continues under cover. A blanket stand-down day applied to every asset on site would under-bill
+      legitimately working plant and produce disputes in the <em>supplier's</em> favour. The diary needs stand-down recorded
+      against affected activities or assets — default to all plant on site, but let the supervisor exclude.</p>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Linking the PO to a specific machine</h3>
+  <p style="font-size:13px;color:var(--text-2);max-width:82ch;margin-bottom:13px;line-height:1.6">A plant hire PO line
+    cannot just reference "excavator" as a resource. Rates differ per machine, hours are recorded against a machine, and the
+    match needs to join <strong>bill line → PO line → asset → evidence for that asset</strong>. Break that chain anywhere
+    and plant matching does not work.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:34px" class="c">#</th><th>Requirement</th><th>Why it's load-bearing</th></tr></thead>
+      <tbody>
+        <tr><td class="c"><strong>1</strong></td>
+          <td><strong>Hired plant must exist in the asset register</strong>, not only owned plant</td>
+          <td>Likely the real gap — Plant &amp; Equipment holds owned assets. A hired machine needs a record carrying its
+            supplier, on-hire and off-hire dates, and hire source</td></tr>
+        <tr style="background:#F2F7FD"><td class="c"><strong>2</strong></td>
+          <td><strong>Store the supplier's fleet or plant number</strong></td>
+          <td>The docket and the invoice both reference <em>their</em> fleet number, not our asset ID. This is the join key
+            that lets bill OCR auto-match to the right PO line — without it every plant invoice needs manual linking</td></tr>
+        <tr><td class="c"><strong>3</strong></td>
+          <td><code style="background:#eef1f5;padding:1px 5px;border-radius:3px">plant_asset</code> FK on the PO line</td>
+          <td>Nullable, populated for plant hire lines. Working and standby lines for the same machine both point at the
+            same asset</td></tr>
+        <tr><td class="c"><strong>4</strong></td>
+          <td><strong>Register the asset at PO time</strong></td>
+          <td>If the machine isn't registered before hours are recorded, site logs time against free-text and nothing
+            joins. Raising a plant hire PO should create or select the hired asset as part of the flow</td></tr>
+        <tr><td class="c"><strong>5</strong></td>
+          <td><strong>Allow mid-hire substitution</strong></td>
+          <td>Machines break down and get swapped. New fleet number, same PO line, same rates — must not require a new PO
+            or orphan the evidence already recorded</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="anno">
+    <div class="an-h">◆ Asset, engagement and evidence are three levels</div>
+    <p>Worth separating: the <strong>asset</strong> persists (this specific 20-tonne excavator, fleet EX-220), a
+      <strong>hire engagement</strong> is a period of it being ours at agreed rates (the PO line), and
+      <strong>evidence</strong> is what it did each day. The same machine hired twice in a year is one asset and two
+      engagements — collapsing those makes the second hire's consumption ledger inherit the first's history, which is the
+      kind of bug that only shows up months in.</p>
+  </div>
+
   <h3 class="sub"><span class="bar"></span>Where the evidence comes from — it mostly already exists</h3>
   <div class="grid-3">
     <div class="card card-p">
