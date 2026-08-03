@@ -47,6 +47,46 @@ Two independent ceilings, and **the tighter one governs**:
 Those are different problems with different owners, so they get different colour treatment here.
 Today the app renders both ratios red identically, which loses the distinction.
 
+## Tolerance is a customer setting, not a product constant
+
+Corrected after review: **tolerances are set at customer stage — some customers want flexibility,
+others don't.** So the deliverable is not a number, it's a configuration surface plus a defensible
+default plus onboarding guidance.
+
+The prototype offers three **postures** rather than four raw numbers, because someone configuring
+this on day one has no variance data and no intuition for whether 2% is generous or mean:
+
+| Posture | Price % | Price $ | Qty | Missing docket |
+|---|---|---|---|---|
+| **Strict** — hard gate | 0% | $0 | 0 | Block |
+| **Balanced** — default | 2% | $25 | 0 | Warn + attest |
+| **Flexible** — flow-first | 5% | $100 | 0 | Warn + attest |
+| Custom | any | any | 0 | any |
+
+**Quantity tolerance stays zero in every posture, and over-consumption is never tolerable.**
+Quantity is a matter of fact, not appetite — if 8 m³ arrived, 8 m³ is billable. A customer asking to
+relax quantity is asking to pay for undocumented deliveries, which is the thing the feature exists to
+prevent. Offer the missing-docket attestation instead.
+
+Consequences for the build:
+
+- **The Balanced defaults are the most consequential numbers in the feature**, because most tenants
+  will never change them.
+- **Existing tenants default to Balanced, not Strict.** Switching matching on and immediately
+  blocking every un-docketed bill would read as an outage.
+- **The settings page should simulate postures against the tenant's own history**: "this would have
+  flagged 14 of 208 lines last quarter; Strict would flag 61". A percentage means nothing to a new
+  customer; a weekly workload does. Cheap to build — the engine is a pure function, so replaying
+  historical bills through three tolerance sets is a background job, not new logic.
+- **Changing tolerance is a financial control change**, materially the same act as raising an
+  approval limit (cf. VDP-687). Distinct permission, audit-logged with old/new values, and
+  **forward-only** — the `tolerance_snapshot` + `effective_from` design means a widened tolerance
+  never re-verdicts history. Bills mid-approval keep the tolerance they were matched under.
+- **Scope**: VDP-139 says "per tenant" and stops. But customers wanting flexibility usually want it
+  *selectively* — generous on a trusted concrete supplier, strict on a new subcontractor. Ship
+  tenant-wide, but add a nullable `supplier_id` now and resolve most-specific-wins. Free while
+  unused; a migration on live financial config if deferred.
+
 ## Structure
 
 | Section | Content |
