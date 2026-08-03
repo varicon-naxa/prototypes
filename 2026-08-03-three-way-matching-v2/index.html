@@ -1533,6 +1533,177 @@ table.calc{border-collapse:separate;border-spacing:0}
     <button class="btn btn-p" onclick="go('scenarios')">Scenario matrix →</button>
   </div>
 </section>
+<!-- ============ SCENARIOS ============ -->
+<section class="sec" id="sec-scenarios">
+  <div class="step-pill"><span class="dot"></span>Reference · the seven cases</div>
+  <h2 class="page-t">Scenario matrix</h2>
+  <p class="lede"><span class="jira">VDP-139</span>'s acceptance criteria name six standard scenarios. Previously-billed
+    makes seven. Each one below states which flag fires, what the engine returns, and what the user is being asked to
+    decide — these are the cases the unit tests should mirror one-for-one.</p>
+
+  <div class="sc-tabs" id="sc-tabs"></div>
+  <div id="sc-body"></div>
+
+  <h3 class="sub"><span class="bar"></span>Coverage at a glance</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Scenario</th><th class="c">PO</th><th class="c">Docket</th><th class="c">Prior bills</th>
+        <th>Flag</th><th>Bill status</th></tr></thead>
+      <tbody id="sc-table"></tbody>
+    </table>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--green)"></i>present and usable</span>
+    <span><i style="background:var(--secondary)"></i>present but problematic</span>
+    <span><i style="background:var(--red)"></i>absent</span>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('engineering')">← Engineering</button>
+    <button class="btn btn-p" onclick="go('spec')">Spec &amp; open decisions →</button>
+  </div>
+</section>
+
+<!-- ============ SPEC ============ -->
+<section class="sec" id="sec-spec">
+  <div class="step-pill"><span class="dot"></span>Reference · spec appendix</div>
+  <h2 class="page-t">Spec, statuses and open decisions</h2>
+  <p class="lede">What is settled, what is proposed here, and what still needs a human to decide. The distinction matters:
+    only the first column is safe to build against without a conversation.</p>
+
+  <h3 class="sub"><span class="bar"></span>Proposed tolerance defaults</h3>
+  <div class="banner warn">
+    <div class="b-ico">▲</div>
+    <div><div class="b-t">These are a starting position for the finance review, not a decision</div>
+      <div class="b-d"><span class="jira">VDP-139</span> requires finance sign-off before implementation and no review
+        has happened. Every value below is reasoned, none is authoritative.</div></div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:190px">Setting</th><th style="width:130px">Proposed</th><th>Reasoning</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Price tolerance %</strong></td><td><span class="pill info">2%</span></td>
+          <td>Absorbs fuel levies and small index movements without absorbing a real rate rise. Below 1% and rounding
+            noise dominates; above 5% and a genuine price increase hides inside it.</td></tr>
+        <tr><td><strong>Price tolerance $</strong></td><td><span class="pill info">$25</span></td>
+          <td>Floor for small lines, where 2% is pennies. Also covers the 2-decimal rate truncation
+            (<span class="jira">PICBR-1184</span>) that makes exact equality unachievable on large quantities.</td></tr>
+        <tr><td><strong>Combine by</strong></td><td><span class="pill info">Greater of</span></td>
+          <td>The two thresholds are each meant to be forgiving; taking the lesser makes them fight and flags more than
+            either intends.</td></tr>
+        <tr><td><strong>Direction</strong></td><td><span class="pill info">Overs only</span></td>
+          <td>Being billed less than agreed is not a problem to solve. Symmetric is defensible if you want pricing drift
+            visibility — but then it is a report, not an approval blocker.</td></tr>
+        <tr><td><strong>Qty tolerance</strong></td><td><span class="pill info">0 units</span></td>
+          <td>Quantity should be exact. If 8 m³ was received, 8 m³ is billable. A quantity tolerance is really a request
+            for a missing docket, and should be handled as one.</td></tr>
+        <tr><td><strong>Missing docket</strong></td><td><span class="pill info">Warn + attest</span></td>
+          <td>Hard-blocking stalls AP and pressures crews into fabricating dockets. A named attestation in the audit log
+            preserves accountability without stopping the business.</td></tr>
+        <tr><td><strong>Over-consumption</strong></td><td><span class="pill bad">Hard block</span></td>
+          <td>The one place to be strict. Billing beyond what was received, after prior bills, is the duplicate-payment
+            case — the entire reason the feature exists. Should not be tolerable at any threshold.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Status vocabulary</h3>
+  <div class="grid-2">
+    <div class="card card-p">
+      <h4 class="sub2">Bill-level match status</h4>
+      <div class="kv" style="grid-template-columns:132px 1fr;gap:9px 14px">
+        <dt><span class="pill ok">matched</span></dt><dd>Every line within tolerance and fully evidenced</dd>
+        <dt><span class="pill warn">partial</span></dt><dd>PO resolved; one or more lines flagged</dd>
+        <dt><span class="pill bad">unmatched</span></dt><dd>No PO resolved — nothing to compare against</dd>
+        <dt><span class="pill neutral">legacy</span></dt><dd>Pre-cutover; excluded from consumption maths</dd>
+      </div>
+      <p class="foot-note" style="margin-top:11px">First three are <span class="jira">VDP-139</span>'s. The fourth is
+        proposed here and is a migration necessity, not a nicety.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">Line-level flags</h4>
+      <div class="kv" style="grid-template-columns:150px 1fr;gap:9px 14px">
+        <dt><code style="background:#eef1f5;padding:1px 5px;border-radius:3px">price_variance</code></dt><dd>Amount outside the band</dd>
+        <dt><code style="background:#eef1f5;padding:1px 5px;border-radius:3px">qty_variance</code></dt><dd>Billed qty ≠ available qty</dd>
+        <dt><code style="background:#eef1f5;padding:1px 5px;border-radius:3px">off_po</code></dt><dd>No PO line — no rate authority</dd>
+        <dt><code style="background:#eef1f5;padding:1px 5px;border-radius:3px">missing_docket</code></dt><dd>No received quantity</dd>
+        <dt><code style="background:#eef1f5;padding:1px 5px;border-radius:3px">over_consumed</code></dt><dd>Exceeds docketed minus prior bills</dd>
+        <dt><code style="background:#eef1f5;padding:1px 5px;border-radius:3px">over_po_ceiling</code></dt><dd>Exceeds authorised order qty</dd>
+        <dt><code style="background:#eef1f5;padding:1px 5px;border-radius:3px">ambiguous</code></dt><dd>Multiple candidate PO lines</dd>
+      </div>
+      <p class="foot-note" style="margin-top:11px">Last three are additions to <span class="jira">VDP-139</span>'s four.
+        They are not variants of the others — they have different resolutions and different owners.</p>
+    </div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Open decisions, ranked by how much they block</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:34px" class="c">#</th><th>Decision</th><th style="width:130px">Blocks</th><th>Recommendation</th></tr></thead>
+      <tbody>
+        <tr><td class="c"><strong>1</strong></td>
+          <td><strong>Cost centre: docket or PO?</strong><div class="t-sub"><span class="jira">CQ-2680</span> · AKJ Pylon #13061</div></td>
+          <td><span class="pill bad">Schema</span></td>
+          <td>Docket where one exists, PO as fallback. Affects the allocation model, so decide before building it.</td></tr>
+        <tr><td class="c"><strong>2</strong></td>
+          <td><strong>Partial docket consumption</strong><div class="t-sub">Implied by <span class="jira">VDP-134</span> AC #2</div></td>
+          <td><span class="pill bad">Schema</span></td>
+          <td>Must support it. Drives the flat-list → through-model change in <span class="jira">VDP-141</span>.</td></tr>
+        <tr><td class="c"><strong>3</strong></td>
+          <td><strong>Tolerance defaults</strong><div class="t-sub"><span class="jira">VDP-139</span> — finance review</div></td>
+          <td><span class="pill warn">Launch</span></td>
+          <td>Ship at zero tolerance (exact match), gather variance data, then set. Don't guess in a meeting.</td></tr>
+        <tr><td class="c"><strong>4</strong></td>
+          <td><strong>Missing-docket policy</strong></td>
+          <td><span class="pill warn">Launch</span></td>
+          <td>Warn + attest as default; per-tenant setting once there is demand.</td></tr>
+        <tr><td class="c"><strong>5</strong></td>
+          <td><strong>Draft-bill reservation</strong></td>
+          <td><span class="pill warn">Correctness</span></td>
+          <td>Advisory in UI, authoritative check in the approval transaction.</td></tr>
+        <tr><td class="c"><strong>6</strong></td>
+          <td><strong>Credit note handling</strong><div class="t-sub"><span class="jira">CQ-2696</span> · <span class="jira">VDP-694</span></div></td>
+          <td><span class="pill warn">Correctness</span></td>
+          <td>Signed quantities in the ledger from day one. Cheap now, painful later.</td></tr>
+        <tr><td class="c"><strong>7</strong></td>
+          <td><strong>Match status on the Bills list</strong><div class="t-sub"><span class="jira">VDP-138</span> open UX call</div></td>
+          <td><span class="pill neutral">UX only</span></td>
+          <td>Same list, separate column, and make it filterable — unlike sync status today.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Bugs to fix before the engine can be trusted</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:130px">Issue</th><th>Why it breaks matching</th></tr></thead>
+      <tbody>
+        <tr><td><span class="jira">PICBR-912</span></td>
+          <td>Editing a docket's received qty <strong>overwrites the PO order qty</strong>. The evidence leg can rewrite
+            the authority leg, so the comparison is meaningless. Highest priority.</td></tr>
+        <tr><td><span class="jira">PICBR-1565</span></td>
+          <td>Dockets on unapproved POs stay linkable — bills can match against unauthorised spend.</td></tr>
+        <tr><td><span class="jira">PICBR-1321</span></td>
+          <td>PO summary's "Docket Delivered" doesn't update when a linked docket is created. Existing rollup is already
+            unreliable.</td></tr>
+        <tr><td><span class="jira">PICBR-1495</span></td>
+          <td>Bill lines not linked to a docket vanish from Daily Cost Tracking — paid and invisible.</td></tr>
+        <tr><td><span class="jira">VDP-1334</span></td>
+          <td>Bill OCR fabricates line items. Matching contains the damage but the source should still be fixed.</td></tr>
+        <tr><td><span class="jira">PICBR-1750</span></td>
+          <td>Rejected bills have no route back to Awaiting Approval. Rejecting a flagged line currently strands the bill.</td></tr>
+        <tr><td><span class="jira">PICBR-1184</span></td>
+          <td>Rates truncate at 2dp, so exact equality is unachievable on large quantities. Forces the absolute
+            tolerance floor to exist.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('scenarios')">← Scenarios</button>
+    <button class="btn btn-s" onclick="go('overview')">Back to overview</button>
+  </div>
+</section>
 <!--SECTIONS-->
   </main>
 </div>
