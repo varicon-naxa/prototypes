@@ -1526,6 +1526,23 @@ table.calc{border-collapse:separate;border-spacing:0}
         indexes = [models.Index(fields=[<span class="s">"docket_line"</span>]),
                    models.Index(fields=[<span class="s">"po_line"</span>])]
 
+<span class="c"># Rate provenance — one field on the existing PO line, set at creation.</span>
+<span class="c"># Since VDP-118 lets a PO be built by OCR'ing a supplier quote, the rate</span>
+<span class="c"># authority may itself be machine-read. The engine can't detect a wrong PO,</span>
+<span class="c"># but it CAN say which hypothesis to test first.</span>
+<span class="b">class</span> <span class="k">RateSource</span>(models.TextChoices):
+    MANUAL       = <span class="s">"manual"</span>,       <span class="s">"Typed by a user"</span>
+    QUOTE_OCR    = <span class="s">"quote_ocr"</span>,    <span class="s">"Parsed from a scanned quote"</span>
+    QUOTE_EDITED = <span class="s">"quote_edited"</span>, <span class="s">"Parsed, then corrected by a user"</span>
+    RESOURCE     = <span class="s">"resource"</span>,     <span class="s">"Inherited from the resource cost sheet"</span>
+
+<span class="c"># on POLine:</span>
+<span class="c">#   rate_source = models.CharField(max_length=12, default=RateSource.MANUAL)</span>
+<span class="c">#</span>
+<span class="c"># Then a price_variance on a QUOTE_OCR rate that was never edited is a</span>
+<span class="c"># materially different finding from one on a manually-entered rate, and the</span>
+<span class="c"># UI should say so: "compare against the original quote" beats "accept once".</span>
+
 <span class="b">class</span> <span class="k">BillLineMatch</span>(models.Model):
     <span class="c">"""Cached engine verdict. Derived data — safe to delete and recompute."""</span>
     bill_line      = models.OneToOneField(BillLine, on_delete=CASCADE, related_name=<span class="s">"match"</span>)
