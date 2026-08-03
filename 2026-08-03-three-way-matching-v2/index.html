@@ -4729,6 +4729,227 @@ ${j('blocks_approval', blocking.length ? '<span class="b">true</span>' : '<span 
 }`;
 }
 
+/* ---------------- end-to-end workflow ---------------- */
+// Coding structure comes from the budget upload. Cost centres and WBS tasks are
+// alternative shapes over the same money — the PO picks one and everything downstream
+// must use it. Budget values are what 2026-04-01-budget-upload would have created.
+const BUDGET = {
+  cc: [
+    {code:'CC-101', name:'Earthworks',      budget:186000},
+    {code:'CC-104', name:'Concrete Works',  budget:242000},
+    {code:'CC-110', name:'Drainage',        budget:98000},
+  ],
+  wbs: [
+    {code:'02.30', name:'Bulk earthworks',  budget:186000},
+    {code:'04.10', name:'Slab & footings',  budget:242000},
+    {code:'03.20', name:'Stormwater',       budget:98000},
+  ],
+};
+
+const E2E = {
+  stage: 1,
+  mode: 'cc',                 // cc | wbs — set at PO creation
+  quoteRate: 220,             // OCR'd from the supplier quote
+  quoteConfidence: 'high',
+  poQty: 40,
+  splits: [                   // docket: received qty per coding line
+    {idx:0, qty:3},           // -> Earthworks / Bulk earthworks
+    {idx:1, qty:5},           // -> Concrete Works / Slab & footings
+  ],
+  billQty: 8,
+  billRate: 220,
+};
+
+const E2E_STAGES = [
+  {n:1, t:'Quote scanned',   w:'OCR reads the supplier quote'},
+  {n:2, t:'PO raised',       w:'Coding locked · rate authorised'},
+  {n:3, t:'Docket captured', w:'Received qty split by coding'},
+  {n:4, t:'Bill matched',    w:'Rate × qty · cost lands on budget'},
+];
+
+function e2eCoding(){ return BUDGET[E2E.mode]; }
+function e2eGo(n){ E2E.stage = n; renderE2E(); }
+function e2eSet(k, v){ E2E[k] = (k==='mode') ? v : (parseFloat(v)||0); renderE2E(); }
+function e2eSplit(i, v){ E2E.splits[i].qty = parseFloat(v)||0; renderE2E(); }
+function e2eSplitCode(i, v){ E2E.splits[i].idx = parseInt(v,10); renderE2E(); }
+
+function renderE2E(){
+  const st = document.getElementById('e2e-stepper');
+  if(!st) return;
+  st.className = 'flow';
+  st.innerHTML = E2E_STAGES.map(s => {
+    const cls = s.n === E2E.stage ? 'on' : (s.n < E2E.stage ? 'done' : '');
+    return `<div class="flow-n ${cls}" onclick="e2eGo(${s.n})" style="cursor:pointer">
+      <span class="f-s">0${s.n}</span><span class="f-t">${s.t}</span><span class="f-w">${s.w}</span></div>`;
+  }).join('');
+
+  const coding = e2eCoding();
+  const docketTotal = E2E.splits.reduce((a,s)=>a+s.qty,0);
+  const label = E2E.mode === 'cc' ? 'Cost Centre' : 'WBS task';
+
+  /* ---- budget impact strip: always visible, updates live ---- */
+  const committed = E2E.poQty * E2E.quoteRate;
+  const perLine = coding.map((c,i)=>{
+    const q = E2E.splits.filter(s=>s.idx===i).reduce((a,s)=>a+s.qty,0);
+    return {...c, qty:q, actual:q * E2E.quoteRate};
+  });
+  document.getElementById('e2e-budget').innerHTML = `
+    <div class="card card-p" style="margin-bottom:16px">
+      <h4 class="sub2" style="margin-top:0">Budget impact · ${label} <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">— from the budget upload</span></h4>
+      <div class="tbl-wrap" style="box-shadow:none">
+        <table><thead><tr><th>${label}</th><th class="r">Budget</th><th class="r">Committed (PO)</th>
+          <th class="r">Actual (this bill)</th><th class="r">Remaining</th></tr></thead>
+        <tbody>${perLine.map(l=>`<tr${l.qty?' class="vok"':''}>
+          <td><strong>${l.code}</strong> — ${l.name}</td>
+          <td class="r num">${money(l.budget)}</td>
+          <td class="r num" style="color:var(--muted)">${l.qty?money(0):'—'}</td>
+          <td class="r num">${l.qty ? '<strong>'+money(E2E.stage>=4?l.actual:0)+'</strong>' : '—'}</td>
+          <td class="r num">${money(l.budget - (E2E.stage>=4?l.actual:0))}</td></tr>`).join('')}
+        </tbody></table>
+      </div>
+      <p class="foot-note" style="margin-top:10px">${E2E.stage>=4
+        ? 'Cost has landed. The split came from the <strong>docket</strong>, not the PO — which is why the two lines differ.'
+        : 'Nothing lands on the budget until the bill is approved. The PO commits '+money(committed)+' but does not spend it.'}</p>
+    </div>`;
+
+  /* ---- stage panels ---- */
+  const el = document.getElementById('e2e-stage');
+  if(E2E.stage === 1){
+    el.innerHTML = `
+    <div class="frame"><div class="frame-bar"><div class="dots"><i></i><i></i><i></i></div>Scan quote → create PO
+      <div class="sp"></div><span class="meta">BORAL-QUOTE-4471.pdf</span></div>
+      <div class="frame-body">
+        <div class="banner info" style="margin-bottom:14px"><div class="b-ico">✦</div>
+          <div><div class="b-t">OCR read the quote — check before it becomes the rate authority</div>
+            <div class="b-d">These values will be <strong>locked as the authorised rate</strong> once the PO is approved,
+              and every future bill is tested against them. An OCR error here is invisible to matching forever after.</div></div></div>
+        <div class="tbl-wrap" style="box-shadow:none;margin-bottom:14px"><table>
+          <thead><tr><th>Read from quote</th><th class="r">Value</th><th>Confidence</th></tr></thead>
+          <tbody>
+            <tr><td>Supplier</td><td class="r">BORAL Concrete</td><td><span class="pill ok">High</span></td></tr>
+            <tr><td>32 MPa Concrete (N32-20-80)</td><td class="r num">
+              $<input type="number" value="${E2E.quoteRate}" step="5" onchange="e2eSet('quoteRate',this.value)"
+                style="width:80px;height:30px;padding:4px 7px;border:1px solid var(--field);border-radius:4px;text-align:right;font-family:'Roboto';font-size:12.5px" /> /m³</td>
+              <td><span class="pill ${E2E.quoteConfidence==='high'?'ok':'warn'}">${E2E.quoteConfidence==='high'?'High':'Low — verify'}</span></td></tr>
+            <tr><td>Quantity quoted</td><td class="r num">40.00 m³</td><td><span class="pill ok">High</span></td></tr>
+          </tbody></table></div>
+        <div class="anno" style="margin:0 0 14px"><div class="an-h">◆ Try it</div>
+          <p>Change the rate above to simulate an OCR misread, then step through to stage 4. The bill will flag a price
+            variance <strong>against the wrong baseline</strong> — the supplier's invoice is correct and Varicon's PO is not.
+            This is why <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">rate_source = quote_ocr</code>
+            matters: it tells the AP officer which document to doubt.</p></div>
+        <button class="btn btn-p btn-sm" onclick="e2eGo(2)">Accept &amp; continue to PO →</button>
+      </div></div>`;
+  }
+
+  if(E2E.stage === 2){
+    el.innerHTML = `
+    <div class="frame"><div class="frame-bar"><div class="dots"><i></i><i></i><i></i></div>Add Purchase Order
+      <div class="sp"></div><span class="meta">Troughton Rd · pre-filled from quote</span></div>
+      <div class="frame-body">
+        <div style="margin-bottom:16px">
+          <div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:7px">Track this PO by</div>
+          <div class="segmented" style="display:inline-flex;border:1px solid var(--field);border-radius:8px;background:#fff;padding:3px;gap:2px">
+            <button class="seg-btn" onclick="e2eSet('mode','cc')" style="padding:7px 18px;border:none;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;${E2E.mode==='cc'?'background:var(--secondary);color:var(--primary)':'background:transparent;color:var(--text-2)'}">🏷️ Cost Centre</button>
+            <button class="seg-btn" onclick="e2eSet('mode','wbs')" style="padding:7px 18px;border:none;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;${E2E.mode==='wbs'?'background:var(--secondary);color:var(--primary)':'background:transparent;color:var(--text-2)'}">🧱 WBS</button>
+          </div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:7px">Locks the coding structure for this PO and every
+            docket and bill against it. Switch it and watch the budget strip above change shape.</div>
+        </div>
+        <div class="tbl-wrap" style="box-shadow:none;margin-bottom:14px"><table>
+          <thead><tr><th>Resource</th><th>${label} <span style="color:var(--red)">*</span></th>
+            <th class="r">Order qty</th><th class="r">Unit rate</th><th class="r">Line value</th></tr></thead>
+          <tbody><tr>
+            <td><strong>32 MPa Concrete</strong><div class="t-sub">N32-20-80 · <span class="tag bl">from quote OCR</span></div></td>
+            <td>${coding[1].code} — ${coding[1].name}<div class="t-sub">default; the docket may split it</div></td>
+            <td class="r num"><input type="number" value="${E2E.poQty}" step="5" onchange="e2eSet('poQty',this.value)"
+              style="width:72px;height:30px;padding:4px 7px;border:1px solid var(--field);border-radius:4px;text-align:right;font-family:'Roboto';font-size:12.5px" /></td>
+            <td class="r num">${money(E2E.quoteRate)}</td>
+            <td class="r num"><strong>${money(E2E.poQty*E2E.quoteRate)}</strong></td>
+          </tr></tbody></table></div>
+        <div class="banner plain" style="margin-bottom:14px"><div class="b-ico">🔒</div>
+          <div><div class="b-t">Approving this PO locks the rate authority</div>
+            <div class="b-d">${money(E2E.quoteRate)}/m³ becomes the figure every future bill is tested against, and
+              ${money(E2E.poQty*E2E.quoteRate)} becomes committed cost — visible on the budget above as commitment, not spend.</div></div></div>
+        <button class="btn btn-p btn-sm" onclick="e2eGo(3)">Approve &amp; continue to delivery →</button>
+      </div></div>`;
+  }
+
+  if(E2E.stage === 3){
+    el.innerHTML = `
+    <div class="frame"><div class="frame-bar"><div class="dots"><i></i><i></i><i></i></div>Process Docket · BOR-88421
+      <div class="sp"></div><span class="meta">Captured on site · 8 May</span></div>
+      <div class="frame-body">
+        <div class="banner ok" style="margin-bottom:14px"><div class="b-ico">✂</div>
+          <div><div class="b-t">This is the only place the split can honestly be made</div>
+            <div class="b-d">One truck delivered ${qty(docketTotal)} m³, but it didn't all go to the same place. The crew who
+              took delivery are the only people who know that — nobody in the office can reconstruct it later, and the PO's
+              single default ${label.toLowerCase()} cannot express it.</div></div></div>
+        <div class="tbl-wrap" style="box-shadow:none;margin-bottom:12px"><table>
+          <thead><tr><th>${label}</th><th class="r">Received qty</th><th class="r">At PO rate</th></tr></thead>
+          <tbody>${E2E.splits.map((s,i)=>`<tr>
+            <td><select onchange="e2eSplitCode(${i},this.value)"
+              style="height:32px;padding:5px 8px;border:1px solid var(--field);border-radius:4px;font-family:'Roboto';font-size:12.5px;background:#fff">
+              ${coding.map((c,ci)=>`<option value="${ci}"${ci===s.idx?' selected':''}>${c.code} — ${c.name}</option>`).join('')}
+            </select></td>
+            <td class="r num"><input type="number" value="${s.qty}" step="1" min="0" onchange="e2eSplit(${i},this.value)"
+              style="width:72px;height:30px;padding:4px 7px;border:1px solid var(--field);border-radius:4px;text-align:right;font-family:'Roboto';font-size:12.5px" /> m³</td>
+            <td class="r num">${money(s.qty*E2E.quoteRate)}</td></tr>`).join('')}
+            <tr style="background:#F2F7FD"><td><strong>Total received</strong></td>
+              <td class="r num" style="font-weight:700;color:var(--primary)">${qty(docketTotal)} m³</td>
+              <td class="r num" style="font-weight:700">${money(docketTotal*E2E.quoteRate)}</td></tr>
+          </tbody></table></div>
+        <div class="anno" style="margin:0 0 14px"><div class="an-h">◆ Open decision, live here</div>
+          <p>Cost centre defaults from the PO today, but <span class="jira">CQ-2680</span> and AKJ Services both ask for it
+            to default from the <strong>docket</strong> — because this screen is where the truth is. Change a split above and
+            the budget strip re-apportions: that re-apportionment is the whole argument.</p></div>
+        <button class="btn btn-p btn-sm" onclick="e2eGo(4)">Confirm docket &amp; continue to bill →</button>
+      </div></div>`;
+  }
+
+  if(E2E.stage === 4){
+    const expected = docketTotal * E2E.quoteRate;
+    const billed = E2E.billQty * E2E.billRate;
+    const variance = +(billed - expected).toFixed(2);
+    const band = Math.max(expected*0.02, 25);
+    const flagged = variance > band;
+    const qtyVar = +(E2E.billQty - docketTotal).toFixed(2);
+    el.innerHTML = `
+    <div class="frame"><div class="frame-bar"><div class="dots"><i></i><i></i><i></i></div>Bill match · INV-BORAL-9912
+      <div class="sp"></div><span class="meta">PO-VAR12-0042 · 1 docket</span></div>
+      <div class="frame-body">
+        <div class="banner ${flagged||qtyVar!==0?'warn':'ok'}" style="margin-bottom:14px">
+          <div class="b-ico">${flagged||qtyVar!==0?'⚠':'✓'}</div>
+          <div><div class="b-t">${flagged||qtyVar!==0?'Partial — needs a decision':'Matched — safe to approve'}</div>
+            <div class="b-d">Rate from the PO (${money(E2E.quoteRate)}), quantity from the docket (${qty(docketTotal)} m³),
+              coding from the docket split. ${flagged?'Billed amount is outside the '+money(band)+' tolerance band.':''}
+              ${qtyVar!==0?'Billed quantity differs from evidenced by '+qty(qtyVar)+'.':''}</div></div></div>
+        <div class="tbl-wrap" style="box-shadow:none;margin-bottom:12px"><table class="calc"><tbody>
+          <tr><td style="width:46%"><strong>PO unit rate</strong><div class="t-sub">locked at PO approval · from quote OCR</div></td>
+            <td class="r num">${money(E2E.quoteRate)}</td><td style="width:120px"><span class="tag po">PO</span></td></tr>
+          <tr><td><strong>Docket quantity</strong><div class="t-sub">${E2E.splits.map(s=>coding[s.idx].code+' '+qty(s.qty)).join(' + ')}</div></td>
+            <td class="r num">${qty(docketTotal)} m³</td><td><span class="tag dk">Docket</span></td></tr>
+          <tr style="background:#F2F7FD"><td><strong>Expected</strong><div class="t-sub">${money(E2E.quoteRate)} × ${qty(docketTotal)}</div></td>
+            <td class="r num" style="font-weight:700;color:var(--primary)">${money(expected)}</td>
+            <td><span class="tag" style="background:var(--secondary);color:#fff">Expected</span></td></tr>
+          <tr><td><strong>Billed</strong></td>
+            <td class="r num"><input type="number" value="${E2E.billQty}" step="1" min="0" onchange="e2eSet('billQty',this.value)"
+              style="width:62px;height:30px;padding:4px 7px;border:1px solid var(--field);border-radius:4px;text-align:right;font-family:'Roboto';font-size:12.5px" />
+              × $<input type="number" value="${E2E.billRate}" step="5" min="0" onchange="e2eSet('billRate',this.value)"
+              style="width:72px;height:30px;padding:4px 7px;border:1px solid var(--field);border-radius:4px;text-align:right;font-family:'Roboto';font-size:12.5px" />
+              = <strong>${money(billed)}</strong></td><td><span class="tag bl">Bill</span></td></tr>
+          <tr class="${flagged?'vbad':'vok'}"><td><strong>Variance</strong><div class="t-sub">band ±${money(band)}</div></td>
+            <td class="r"><span class="delta ${variance>0?'up':(variance<0?'down':'zero')}">${money(variance)}</span></td>
+            <td>${flagged?'<span class="pill bad">price_variance</span>':'<span class="pill ok">Within</span>'}</td></tr>
+        </tbody></table></div>
+        <div class="banner plain" style="margin-bottom:0"><div class="b-ico">→</div>
+          <div><div class="b-t">On approval the cost lands on the ${label.toLowerCase()}s above — split as the docket says</div>
+            <div class="b-d">Not as the PO defaulted. That is the coding thread completing: budget structure → PO tracking
+              mode → docket split → bill → Daily Cost Tracking.</div></div></div>
+      </div></div>`;
+  }
+}
+
 /* ---------------- scenarios ---------------- */
 const SC = [
   {k:'clean', ic:'✓', n:'Clean match', lvl:'ok',
