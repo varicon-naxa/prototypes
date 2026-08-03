@@ -2115,6 +2115,169 @@ table.calc{border-collapse:separate;border-spacing:0}
   </div>
 </section>
 
+<!-- ============ GST ============ -->
+<section class="sec" id="sec-gst">
+  <div class="step-pill"><span class="dot"></span>Tax · sync variance</div>
+  <h2 class="page-t">GST — why totals drift on the way to Xero and MYOB</h2>
+  <p class="lede">This is a separate problem from matching and worth treating as one. A bill can match perfectly inside
+    Varicon and still land in Xero a few cents different — and because it is <em>cents</em>, it gets deprioritised until
+    someone tries to reconcile a month and finds hundreds of bills each slightly wrong. There are five distinct causes and
+    only one of them is really about rounding.</p>
+
+  <h3 class="sub"><span class="bar"></span>The five causes, and which actually bite</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:190px">Cause</th><th>Mechanism</th><th style="width:118px">Size</th><th style="width:120px">Frequency</th></tr></thead>
+      <tbody>
+        <tr class="vbad"><td><strong>Line vs document tax base</strong></td>
+          <td>Varicon sums per-line GST; the accounting system recomputes GST on the document total. With many lines
+            <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">Σ round(line × 0.1) ≠ round(Σ line × 0.1)</code>.</td>
+          <td>Cents</td><td><span class="pill bad">Every multi-line bill</span></td></tr>
+        <tr class="vbad"><td><strong>Rate precision at 2dp</strong></td>
+          <td>Rates truncate to 2 decimals, so extended amounts are wrong before tax is even applied — then tax amplifies
+            it. Already logged as <span class="jira">PICBR-1184</span>.</td>
+          <td>Dollars on big qty</td><td><span class="pill bad">High-quantity lines</span></td></tr>
+        <tr class="vr"><td><strong>Inclusive → exclusive round-tripping</strong></td>
+          <td>GST-inclusive entry divided by 1.1 gives repeating decimals. Converting back and forth loses a cent each
+            time, and it compounds on edit.</td>
+          <td>Cents</td><td><span class="pill warn">Inclusive-entry tenants</span></td></tr>
+        <tr class="vbad"><td><strong>Tax code mapping</strong></td>
+          <td>Varicon tax code doesn't map cleanly to a Xero <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">TaxType</code>
+            or MYOB code. Not a rounding error — <strong>the whole GST amount is wrong</strong>. See
+            <span class="jira">PICBR-1387</span>.</td>
+          <td><strong>10% of the line</strong></td><td><span class="pill warn">Config-dependent</span></td></tr>
+        <tr class="vr"><td><strong>Unregistered supplier</strong></td>
+          <td>GST applied to a supplier who isn't GST-registered, or a sole trader incorrectly charging it. Systematic
+            overstatement, and an ATO exposure rather than a reconciliation one.</td>
+          <td><strong>10% of the bill</strong></td><td><span class="pill warn">ABN labour especially</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="foot-note">Note the two red herrings: the causes that <em>feel</em> like rounding (rows 1 and 3) produce
+    cents, while the ones that produce real money (rows 2, 4 and 5) are precision and configuration faults. Chasing the
+    cents first is the natural instinct and the wrong order.</p>
+
+  <h3 class="sub"><span class="bar"></span>Fixes, in the order I'd do them</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:34px" class="c">#</th><th>Fix</th><th style="width:96px">Effort</th><th>Removes</th></tr></thead>
+      <tbody>
+        <tr style="background:#F2F7FD"><td class="c"><strong>1</strong></td>
+          <td><strong>Send explicit per-line tax amounts</strong> — don't let the accounting system derive them. Both the
+            Xero and MYOB APIs accept a line-level tax amount and will use it rather than recomputing.</td>
+          <td><span class="pill ok">Low</span></td><td>Cause 1 entirely</td></tr>
+        <tr><td class="c"><strong>2</strong></td>
+          <td><strong>Widen rate precision to 4–6dp; round only the extended amount.</strong> Store rates at full
+            precision, quantize once at the line total.</td>
+          <td><span class="pill warn">Medium</span></td><td>Cause 2, and <span class="jira">PICBR-1184</span></td></tr>
+        <tr><td class="c"><strong>3</strong></td>
+          <td><strong>Validate the tax-code map at connect time, not sync time.</strong> Fail loudly on the specific
+            unmapped code when the integration is configured or codes change — never silently send blank.</td>
+          <td><span class="pill ok">Low</span></td><td>Cause 4</td></tr>
+        <tr><td class="c"><strong>4</strong></td>
+          <td><strong>Store GST-exclusive as canonical.</strong> Convert inclusive input once at entry, keep both the
+            entered value and the canonical, and never re-derive on the fly.</td>
+          <td><span class="pill warn">Medium</span></td><td>Cause 3</td></tr>
+        <tr><td class="c"><strong>5</strong></td>
+          <td><strong>GST-registration flag per supplier.</strong> Force GST-free where unregistered, and warn when a bill
+            arrives charging GST anyway.</td>
+          <td><span class="pill ok">Low</span></td><td>Cause 5</td></tr>
+        <tr><td class="c"><strong>6</strong></td>
+          <td><strong>Pre-sync diff preview.</strong> Compute what the accounting system will see and compare before
+            pushing. Block on a material difference.</td>
+          <td><span class="pill warn">Medium</span></td><td>Turns silent drift into a pre-flight failure</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="banner ok">
+    <div class="b-ico">1</div>
+    <div><div class="b-t">Fix 1 alone should eliminate most of what you're seeing</div>
+      <div class="b-d">The line-versus-document tax base is the only cause that fires on <em>every</em> multi-line bill,
+        and it is a low-effort fix: send the tax amount you calculated instead of letting the other system calculate its
+        own. Everything downstream then agrees by construction rather than by coincidence. I'd verify this hypothesis
+        first — take a handful of drifting bills and check whether the delta equals the line-sum-versus-document-total
+        difference. If it does, that's your answer and the rest is refinement.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Money arithmetic, once, properly</h3>
+  <div class="json">
+<span class="c"># A single rounding policy, applied at defined boundaries only.</span>
+<span class="c"># Decimal throughout — float has no place anywhere near money.</span>
+
+<span class="b">from</span> decimal <span class="b">import</span> Decimal, ROUND_HALF_UP
+
+CENTS = Decimal(<span class="s">"0.01"</span>)
+RATE_PRECISION = Decimal(<span class="s">"0.000001"</span>)   <span class="c"># 6dp — rates are not currency</span>
+GST_RATE = Decimal(<span class="s">"0.10"</span>)
+
+<span class="b">def</span> <span class="k">money</span>(value):
+    <span class="c">"""ATO expects rounding to the nearest cent, half up.</span>
+<span class="c">    Python's default is banker's rounding — which is NOT what you want here</span>
+<span class="c">    and is a classic source of one-cent drift against accounting systems."""</span>
+    <span class="b">return</span> Decimal(value).quantize(CENTS, rounding=ROUND_HALF_UP)
+
+<span class="b">def</span> <span class="k">line_amounts</span>(qty, unit_rate, tax_code):
+    <span class="c"># Round ONCE, at the extended amount. Never round the rate itself.</span>
+    ex_gst = money(Decimal(qty) * Decimal(unit_rate))
+    tax    = money(ex_gst * GST_RATE) <span class="b">if</span> tax_code.applies_gst <span class="b">else</span> money(<span class="s">"0"</span>)
+    <span class="b">return</span> LineAmounts(ex_gst=ex_gst, tax=tax, inc_gst=ex_gst + tax)
+
+<span class="b">def</span> <span class="k">from_inclusive</span>(inc_gst, tax_code):
+    <span class="c">"""Convert ONCE at entry, store both. Never re-derive later —</span>
+<span class="c">    round-tripping inclusive <-> exclusive loses a cent per trip."""</span>
+    <span class="b">if not</span> tax_code.applies_gst:
+        <span class="b">return</span> money(inc_gst), money(<span class="s">"0"</span>)
+    ex_gst = money(Decimal(inc_gst) / (<span class="n">1</span> + GST_RATE))
+    <span class="b">return</span> ex_gst, money(Decimal(inc_gst) - ex_gst)   <span class="c"># tax is the remainder,</span>
+                                                     <span class="c"># so ex + tax == inc exactly</span>
+
+<span class="b">def</span> <span class="k">bill_totals</span>(lines):
+    <span class="c"># Document totals are SUMS of already-rounded lines — never recomputed</span>
+    <span class="c"># from the document subtotal. This is the contract we send to Xero/MYOB.</span>
+    subtotal = <span class="k">sum</span>((l.ex_gst <span class="b">for</span> l <span class="b">in</span> lines), Decimal(<span class="s">"0"</span>))
+    tax      = <span class="k">sum</span>((l.tax    <span class="b">for</span> l <span class="b">in</span> lines), Decimal(<span class="s">"0"</span>))
+    <span class="b">return</span> Totals(subtotal=subtotal, tax=tax, total=subtotal + tax)
+</div>
+  <p class="foot-note">The detail in <code>from_inclusive</code> is worth keeping: deriving tax as
+    <strong>inc − ex</strong> rather than <strong>ex × 0.10</strong> guarantees the three numbers reconcile exactly. Compute
+    it the other way and you can produce a bill whose own subtotal plus GST doesn't equal its total, which is the version
+    of this bug that customers notice fastest.</p>
+
+  <h3 class="sub"><span class="bar"></span>When the supplier's own total disagrees</h3>
+  <div class="banner warn">
+    <div class="b-ico">≠</div>
+    <div><div class="b-t">A supplier who rounded differently is a data question, not an arithmetic one</div>
+      <div class="b-d">Sometimes the invoice's printed total genuinely differs from the sum of its lines by a cent or two,
+        because the supplier's own system rounded elsewhere. You cannot fix their arithmetic, so decide explicitly what to
+        do: <strong>accept a bounded rounding difference</strong> (say ±$0.10) recorded as such, and treat anything larger
+        as a real discrepancy needing a human. <span class="jira">VAR-19965</span> already exists for an OCR
+        rounding-adjustment line, so the concept is in flight.</div></div>
+  </div>
+  <div class="anno bug">
+    <div class="an-h">✖ Careful how you post the adjustment</div>
+    <p>The instinct is to add a small negative line — but Xero rejects negative quantities
+      (<span class="jira">PICBR-702</span>), which is exactly the class of silent sync failure that makes bills sit unsynced.
+      Two safer options: <strong>absorb the difference into the largest line's tax amount</strong> (invisible, exact, and
+      works because you're now sending explicit per-line tax), or post to a dedicated rounding account if the tenant has
+      one configured. Adding a line item should be the last choice, not the first.</p>
+  </div>
+
+  <div class="anno">
+    <div class="an-h">◆ How this interacts with matching — match on GST-exclusive, always</div>
+    <p>PO rates are held ex-GST and dockets carry no tax at all, so <strong>ex-GST is the only basis all three legs share</strong>.
+      Every comparison in the engine must run on exclusive amounts, converting an inclusive bill once on the way in. Worth
+      stating explicitly in the spec, because the alternative — comparing an inclusive bill total against an exclusive
+      expected amount — produces a clean, plausible, entirely wrong 10% variance on every single line, and the tolerance
+      band is nowhere near wide enough to hide it. It would look like systematic supplier overcharging.</p>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('completeness')">← Evidence completeness</button>
+    <button class="btn btn-p" onclick="go('credits')">Credit notes →</button>
+  </div>
+</section>
+
 <!-- ============ CREDIT NOTES ============ -->
 <section class="sec" id="sec-credits">
   <div class="step-pill"><span class="dot"></span>Reverse flow · credit notes</div>
