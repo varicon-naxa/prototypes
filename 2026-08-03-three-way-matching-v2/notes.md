@@ -116,6 +116,70 @@ in order of value:
    the engine say "billed rate differs from a PO rate that was OCR-derived and never manually edited"
    — which points at the culprit. One field, set at creation; do it while the PO OCR work is warm.
 
+## Credit notes — quantity and value must part company
+
+VDP-694 (credit notes read as invoices) is being fixed before release, which is load-bearing here:
+a misclassified credit *adds* consumption instead of removing it, violates the ledger invariant, and
+then blocks the correct re-bill as `over_consumed` — failing in the direction that looks like the
+feature is broken. Worth a guard even after the fix: a document with a negative total should never
+enter the bill path.
+
+**The trap.** If every credit note releases consumed quantity, then a supplier who over-charged on
+*rate* and issued a price-correction credit has just re-opened 8 m³ of billable headroom — for
+concrete that was delivered, kept and already paid for. They can bill it again and it matches
+cleanly. That's a duplicate-payment route through the feature designed to prevent duplicate payments.
+Conversely, if no credit ever releases quantity, a cancel-and-rebill can never be re-billed.
+
+| Credit type | Value | Releases qty? | Received qty | Re-bill expected? |
+|---|---|---|---|---|
+| **Cancel & rebill** (most common) | −full | **Yes, fully** | unchanged | Yes, immediately |
+| **Price correction** (the trap) | −diff | **No, never** | unchanged | No |
+| **Goods returned** | −value | Yes | Reduced | No |
+| **Short delivery** | −short | Yes | Corrected down | No |
+| **Rebate / goodwill** | −value | n/a — off-PO | unchanged | No |
+
+Goods-returned and short-delivery drop *both* consumed and received quantity, so available headroom
+nets to unchanged — correctly, since nothing new became billable. Only cancel-and-rebill genuinely
+re-opens headroom, because the goods are still on site awaiting a correct invoice.
+
+**Schema consequence:** quantity and value are separate concerns. A price-correction credit is a bill
+line with a **negative amount and an allocation quantity of zero**. Signed quantities are necessary
+but *not sufficient* — the credit **type** decides whether a quantity row is written at all, and
+there is no safe default, so the type must be mandatory.
+
+**A credit note matches the bill, not the PO.** Its counterparty is the original bill, so it runs a
+credit-validation path (does it reference a real bill; does it credit no more than that bill charged),
+not the three-way engine. Its *effect* on the ledger is what the engine later reads. Conflating them
+is how you end up flagging a credit note for having no docket.
+
+Validation rules: credits ≤ billed per line; `Σ allocations` per docket line stays in
+`[0, received_qty]`; type mandatory; unlinked credits are value-only (never guess the bill);
+synced originals need an accounting-side credit note with partial allocation (CQ-2696); releasing
+quantity marks other drafts stale but never recomputes approved bills.
+
+Sandbox presets **Cancel & rebill** and **Credit trap** demonstrate the difference: identical inputs,
+one matches cleanly and one correctly blocks.
+
+## Delivery evidence is a per-client setting, independent of tolerance
+
+Whether a bill can be approved without a docket is each customer's business decision:
+
+| Setting | Behaviour |
+|---|---|
+| **Docket required** | Bill line with no received qty cannot be approved; parks until a docket arrives |
+| **Attestation required** *(default)* | Approver may proceed but must confirm receipt — name, timestamp, reason to audit log |
+| **Warn only** | Flagged, not gated |
+
+**Keep it independent of the tolerance posture.** "Flexible on cents, strict on evidence" is arguably
+the smartest setting a builder can choose — absorb the $20 fuel levy without a thought, never pay for
+concrete nobody saw arrive. Bundling it into Strict/Balanced/Flexible would forbid that combination.
+Posture *pre-selects* it; it stays independently changeable.
+
+Existing tenants default to **attestation**, not required — switching matching on and immediately
+blocking every un-docketed bill would read as an outage. "Docket required" is only workable once
+docket coverage is genuinely high; before that it stalls AP and pressures crews into back-filling
+dockets from invoices, which destroys the independence the whole check relies on.
+
 ## Structure
 
 | Section | Content |
