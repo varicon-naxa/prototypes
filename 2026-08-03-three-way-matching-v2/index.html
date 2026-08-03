@@ -1836,8 +1836,13 @@ function compute(){
       ? Math.max(expectedPrice * tol.pct / 100, tol.abs)
       : Math.min(expectedPrice * tol.pct / 100, tol.abs);
     band = +band.toFixed(2);
+    // Price variance is only meaningful when there is a real expected baseline.
+    // With no available quantity, expected is 0 and every billed amount looks like
+    // a breach — that is derivative of over_consumed / missing_docket, not a
+    // pricing problem, and reporting both sends the user chasing the wrong thing.
+    const baselineExists = available > 0 && !flags.includes('over_consumed') && !flags.includes('missing_docket');
     const breach = tol.dir === 'over' ? priceVar > band : Math.abs(priceVar) > band;
-    if(breach && dkTotal > 0) flags.push('price_variance');
+    if(breach && baselineExists) flags.push('price_variance');
   }
 
   const blocking = flags.filter(f => f === 'over_consumed' || f === 'off_po' ||
