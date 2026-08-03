@@ -307,6 +307,170 @@ Each is individually justified; collectively they're an interrogation CS will cl
 defaults, at which point the defaults *are* the product. Two questions at onboarding, three sensible
 derivations, all five editable later by someone with the permission.
 
+## Eventual matching (gap #1) — the biggest design gap
+
+The walkthrough implies PO → docket → bill. Reality is unordered: suppliers invoice same-day while
+crews process dockets at end of week, so **at bill arrival the evidence frequently doesn't exist yet.**
+
+**The key realisation:** under-evidenced and over-billed produce *identical arithmetic and mean opposite
+things*. Bill claims 8 m³, evidence shows 5 m³ = either "supplier over-billing by 3" or "third docket
+not captured yet". Only time, and whether more evidence is expected, distinguishes them.
+
+Fix: stop treating the match as a verdict computed once at arrival; treat it as a **state that improves
+as evidence lands**. New `awaiting_evidence` state, entered automatically (never a user action, or the
+default stays wrong).
+
+- **Parked bills must leave the approval queue.** A bill an approver can't action shouldn't be in front
+  of them — it ages as though the delay were theirs and the queue stops being a to-do list.
+- **Never park past the due date.** Window = `min(window, due_date − buffer)`. Otherwise you trade a
+  reconciliation problem for a late-payment one, invisibly to the supplier.
+- Three terminators, in precedence: **PO line short-closed** (cleanest — no timer), **window expires**,
+  **evidence arrives** (bill moves itself to the approval queue and notifies AP — most parked bills
+  should resolve with nobody touching them).
+
+Implementation is the same machinery as the VDP-141 recompute gap — build once. Mark stale inside the
+evidence transaction (cheap, bounded), fan out via `transaction.on_commit` so a queue failure can't roll
+back the docket, idempotent worker recomputing from current state. **Debounce per PO line** or a
+month-end bulk docket import floods the queue with overlapping jobs.
+
+## Chasing (gap #2)
+
+"Request evidence from site" action on a parked bill, plus escalation: supervisor → PM at 3 days →
+commercial manager once inside the due-date buffer. Full request history on the bill, so "we asked three
+times" is evidence rather than recollection.
+
+Four things the request must contain: a **deep link to the action** (mobile capture pre-filled — a
+supervisor sent to a bills list won't find their way), **what's actually missing** in physical terms,
+**why it matters now** (the due date — supervisors reasonably deprioritise admin without a deadline),
+and an **"it never arrived" reply path**, because sometimes the right answer is that the delivery didn't
+happen. That's a finding, not a non-response, and routes back to AP as a dispute.
+
+**Send a daily digest per person, not a message per bill.** Twenty separate emails at month end is
+indistinguishable from spam and gets filtered.
+
+Metric worth exposing: **median time-to-evidence per project.** It tells you which sites are ready for a
+stricter setting, and it's the number that predicts whether the feature will work for a given customer.
+
+## Multi-PO dockets and partial deliveries (gap #4) — recommendation
+
+**Multi-PO dockets: allow them.** The PO link belongs on the docket **line**, not the header. A docket is
+one truck's paperwork and there's no reason its contents share a PO — a general supplier drops fencing for
+one PO and formwork for another on the same run. Forcing one PO per docket makes the crew either split one
+delivery into two fictional dockets or mis-allocate half the load.
+
+This already works in the `EvidenceLine` model (each line carries its own `po_line`), so it costs nothing
+now. **The header-level PO field is the thing that's wrong** — make it a convenience default that pre-fills
+lines, not the authority. Left as-is it becomes load-bearing in queries and reports and needs unpicking later.
+
+Guards: **warn** if a docket spans projects (usually mis-keyed, corrupts two jobs' cost tracking at once —
+but shared-site deliveries do happen so don't block); **block** if it spans suppliers (impossible by
+definition — either mis-entered or two dockets photographed as one).
+
+**Partial deliveries already work** — `expected_qty` has been a sum from the start. What was missing is
+knowing when the sum is **final**, which matters because that's what ends parking:
+
+| Signal | Effect |
+|---|---|
+| Short-close (explicit) | Ends waiting immediately, no timer — **highest quality terminator** |
+| PO closed / cancelled | Same, across all lines |
+| Evidenced ≥ ordered | Ends waiting; prompt to close, don't auto-close (over-delivery is normal) |
+| Nothing — timer only | Ends waiting weakly; guesses nothing more is coming |
+
+So **PO close and matching want designing together.** A customer who short-closes diligently gets crisp
+immediate variance detection; one who never does falls back to a 7-day guess on every bill. Worth building
+the nudge: when a bill parks on a PO line that looks finished, prompt to short-close right there.
+
+Blocker: **PICBR-1321** — "Docket Delivered" doesn't update on docket creation, and that's the figure the
+implicit signal reads.
+
+## Disputes and holds (gap #3)
+
+Confirmed behaviour: stays in payables aging (flagged), due date keeps running, any approver in the chain
+can dispute, and Varicon generates a dispute notice.
+
+**Design conclusion that follows: a hold is an overlay, not a status.** Because a dispute is orthogonal to
+lifecycle position (a bill can be Awaiting Approval + disputed, Partially Approved + disputed, even Overdue
++ disputed), adding `Disputed` to the status enum forces a combinatorial explosion across nine existing
+statuses, breaks the status tabs, and loses where the bill actually was. Attach a `Dispute` record instead.
+
+**Parked ≠ disputed** — both leave the approval queue, for the same reason (nobody can approve a bill that's
+unproven or wrong), but to *different* queues:
+
+| | Parked | Disputed |
+|---|---|---|
+| Waiting on | Our site team | The supplier |
+| Owner | Supervisor / PM | AP officer |
+| Resolved by | A docket being captured | Credit note or corrected invoice |
+| Set by | Automatic | Any approver |
+| Due date | Caps the parking window | Keeps running |
+
+**Because the due date keeps running, the disputed flag must appear everywhere Overdue appears.** Otherwise
+AP chases their own team about a bill already being argued with the supplier — the setting creates busywork.
+
+**Dispute at line level, hold at bill level.** Disputes are usually one or two lines of ten, but payment is
+bill-level in every accounting system and short-paying is messy in Xero and MYOB. Record per line so the
+notice is specific; hold the whole bill. Real-world resolution is the supplier crediting the disputed line
+and the full bill then being paid — cleaner than any partial-payment mechanism.
+
+**The dispute notice is the single most useful artefact the feature produces.** Everything on it is already
+known — agreed rate from the PO, docket absence from the evidence ledger, arithmetic from the engine. It
+converts "this bill looks wrong" into a specific evidenced request a supplier can act on without a phone
+call. Generating it costs nothing.
+
+**Closing the loop:** an arriving credit note referencing the disputed invoice should link and prompt to
+resolve — and **the dispute reason should pre-select the credit type.** A rate dispute resolves with a
+*price correction* credit (must NOT release quantity); goods-never-delivered resolves with *short delivery*
+(must). The two features answer each other.
+
+Disputes need their own aging report (open disputes by age and supplier), since the bill's aging hides the
+dispute's own age — and it guards against "disputed" becoming where inconvenient bills go to be forgotten.
+
+Out of scope: supplier-facing portal. Needs external identity and a support surface for non-customers; the
+generated notice gets most of the value and email is where these conversations already happen.
+
+## GST variance on sync (gap #5)
+
+Five distinct causes, and the two that *feel* like rounding produce cents while the ones producing real
+money are precision and configuration faults. Chasing the cents first is the wrong order.
+
+| Cause | Mechanism | Size | Frequency |
+|---|---|---|---|
+| **Line vs document tax base** | Varicon sums per-line GST; accounting system recomputes on document total. `Σ round(line × 0.1) ≠ round(Σ line × 0.1)` | Cents | **Every multi-line bill** |
+| **Rate precision at 2dp** | Extended amount wrong before tax applied, then tax amplifies (PICBR-1184) | **Dollars** | High-qty lines |
+| Inclusive → exclusive round-tripping | `/1.1` gives repeating decimals; compounds on edit | Cents | Inclusive-entry tenants |
+| **Tax code mapping** | Varicon code → Xero `TaxType` / MYOB mismatch (PICBR-1387). Not rounding — whole GST wrong | **10% of line** | Config-dependent |
+| Unregistered supplier | GST applied where none should be — ATO exposure, not reconciliation | **10% of bill** | ABN labour especially |
+
+**Fix order:**
+
+1. **Send explicit per-line tax amounts** — don't let the accounting system derive them. Both Xero and MYOB
+   accept a line-level tax amount and use it rather than recomputing. Low effort, removes cause 1 entirely,
+   and cause 1 is the only one firing on every multi-line bill. **Verify this hypothesis first**: take
+   drifting bills and check whether the delta equals the line-sum-vs-document-total difference.
+2. Widen rate precision to 4–6dp; round only the extended amount. Fixes PICBR-1184.
+3. Validate the tax-code map at **connect** time, not sync time. Fail loudly on the specific unmapped code,
+   never silently send blank (cf. VDP-1340).
+4. Store GST-exclusive as canonical; convert inclusive once at entry, keep both, never re-derive.
+5. GST-registration flag per supplier; warn when a bill charges GST anyway.
+6. Pre-sync diff preview — compute what the accounting system will see, block on material difference.
+
+**Two traps:**
+
+- **Python's default is banker's rounding, not half-up.** ATO expects nearest cent, half up. This alone
+  produces one-cent drift on any amount ending in half a cent.
+- **Derive tax as `inc − ex`, not `ex × 0.10`,** when converting from inclusive. Guarantees subtotal + GST
+  = total exactly. The other way can produce a bill whose own numbers don't reconcile — the version
+  customers notice fastest.
+
+**Rounding adjustments: don't add a negative line.** Xero rejects negative quantities (PICBR-702), which is
+exactly the silent sync failure class to avoid. Absorb the difference into the largest line's tax amount
+(exact, invisible, works because you're now sending explicit per-line tax), or post to a configured rounding
+account.
+
+**For matching: compare on GST-exclusive, always.** PO rates are ex-GST and dockets carry no tax, so it's
+the only shared basis. Comparing an inclusive bill against an exclusive expected amount yields a clean,
+plausible, entirely wrong 10% variance on every line — it would read as systematic supplier overcharging.
+
 ## Structure
 
 | Section | Content |
