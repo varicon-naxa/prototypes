@@ -906,21 +906,52 @@ table.calc{border-collapse:separate;border-spacing:0}
     </table>
   </div>
 
-  <div class="anno q" style="margin-top:20px">
-    <div class="an-h">▲ Open decision · does a missing docket block payment?</div>
-    <p>This is the biggest unanswered policy question in the feature, and it is a <em>business</em> decision, not a
-      technical one. Today nothing prevents billing against a PO with no docket — <span class="jira">PICBR-1495</span>
-      shows un-docketed bill lines not only exist but silently drop out of Daily Cost Tracking, which is the worst of
-      both worlds: paid <em>and</em> invisible.</p>
-    <p style="margin-top:9px">Three positions, and the prototype can demonstrate any of them:</p>
-    <ul style="margin:8px 0 0 18px;font-size:12.5px;color:var(--text-2);line-height:1.6">
-      <li><strong>Hard block</strong> — maximum control, but AP stalls whenever the crew is slow, and pressure to
-        fabricate dockets appears. Not recommended.</li>
-      <li><strong>Soft warning + attestation</strong> — approver explicitly confirms receipt, name recorded. Keeps the
-        audit trail honest without stopping the business. <em>Recommended default.</em></li>
-      <li><strong>Per-tenant setting</strong> — likely where this lands, given every other threshold in the feature is
-        tenant-configurable. Costs a settings surface and a migration decision on the default.</li>
-    </ul>
+  <h3 class="sub"><span class="bar"></span>Delivery evidence is a per-client setting</h3>
+  <p style="font-size:13px;color:var(--text-2);max-width:82ch;margin-bottom:14px;line-height:1.6">Whether a bill can be
+    approved without a delivery docket is a <strong>business decision each customer makes for themselves</strong>, not a
+    product default. It depends on how reliably their crews capture dockets and how much control they want to trade for
+    flow — the same axis as tolerance, but a genuinely separate question.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:190px">Setting</th><th>Behaviour</th><th>Suits</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Docket required</strong><div class="t-sub">hard block</div></td>
+          <td>A bill line with no received quantity <strong>cannot be approved</strong>. It parks until a docket arrives
+            and the match re-runs.</td>
+          <td>Customers with reliable capture and high fraud/overpayment sensitivity. Only workable once docket coverage
+            is genuinely high — otherwise AP stalls and crews get pressured into back-filling dockets from invoices,
+            which destroys the independence the whole check relies on.</td></tr>
+        <tr style="background:#F2F7FD"><td><strong>Attestation required</strong><div class="t-sub">recommended default</div></td>
+          <td>Approver may proceed, but must explicitly confirm receipt. Name, timestamp and reason go to the audit log.</td>
+          <td>Most customers. Preserves accountability without stopping the business, and produces a measurable list of
+            who is attesting how often — which is the data you need to move a customer to <em>required</em> later.</td></tr>
+        <tr><td><strong>Warn only</strong><div class="t-sub">visible, not gated</div></td>
+          <td>Flagged in the UI and on the bill record, no extra step.</td>
+          <td>Customers early in rollout, or with low docket coverage, who want visibility before enforcement. A sensible
+            starting position that shouldn't be permanent.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="anno">
+    <div class="an-h">◆ Keep this independent of the tolerance posture</div>
+    <p>It is tempting to bundle this into Strict/Balanced/Flexible, but the combinations customers actually want cut
+      across: <strong>flexible on cents, strict on evidence</strong> is arguably the smartest setting a builder can
+      choose — absorb the $20 fuel levy without a second thought, but never pay for concrete nobody saw arrive. Bundling
+      forces them to accept loose evidence rules to get loose price rules. Posture should <em>pre-select</em> this, and
+      then it stays independently changeable.</p>
+  </div>
+
+  <div class="anno q">
+    <div class="an-h">▲ Still open · the escalation path, and scope</div>
+    <p><strong>Default for existing tenants:</strong> attestation, not required. Switching matching on and immediately
+      blocking every un-docketed bill would read as an outage.</p>
+    <p style="margin-top:8px"><strong>Does it need narrower scope?</strong> Plausibly per project — a big contract with
+      a dedicated site admin can sustain "required" while small maintenance jobs cannot. Same recommendation as
+      tolerance: ship tenant-wide, leave room in the model, don't build the UI until asked twice.</p>
+    <p style="margin-top:8px">Worth remembering why this matters at all: <span class="jira">PICBR-1495</span> shows
+      un-docketed bill lines don't just get paid, they silently drop out of Daily Cost Tracking — paid <em>and</em>
+      invisible. Even "warn only" is a strict improvement on today.</p>
   </div>
 
   <h3 class="sub"><span class="bar"></span>The ambiguity case, which has no clean answer</h3>
