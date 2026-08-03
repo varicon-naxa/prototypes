@@ -471,6 +471,73 @@ account.
 the only shared basis. Comparing an inclusive bill against an exclusive expected amount yields a clean,
 plausible, entirely wrong 10% variance on every line — it would read as systematic supplier overcharging.
 
+## Through AP's eyes — the disclosure question, answered per audience
+
+"Total owed, of which disputed" is right for a CFO and **wrong for AP**. An AP officer isn't producing a
+financial position — they're getting a payment run out without overpaying or being blamed for lateness.
+Their question is never "what do we owe?" but **"what can I clear, and who do I chase for the rest?"**
+
+Start from the honest premise: 148 bills, 130 overdue, 73 in Draft on a production tenant. AP is
+drowning. New flags will be experienced as more work unless the feature visibly *removes* work first.
+**The primary job of the matching UI is to clear the noise so the problems become visible.**
+
+The cut AP needs — every row has a count, a value, a named owner, and one action:
+
+| What | Bills | Value | Blocked on | Action |
+|---|---|---|---|---|
+| ✓ Ready to approve (clean match) | 38 | $96,420 | Nobody | **Approve all 38** |
+| Needs my decision | 6 | $11,280 | Me | Review |
+| Waiting on site | 14 | $18,240 | Marcus Webb +2 | Chase all |
+| Waiting on supplier (disputed) | 3 | $4,175 | BORAL +1 | Follow up |
+| Waiting on approvers | 9 | $22,600 | Alec N +3 | Nudge |
+
+No row should exist that AP can neither clear nor hand to someone.
+
+Five things that decide whether AP loves or resents this:
+
+1. **Lead with batch approve.** 38 clean matches in one action *is* the 60%-faster target, and it's the
+   moment AP decides the feature is on their side. It's also the safest batch action in the product —
+   every bill in it has been verified against two documents, more scrutiny than one-by-one gives today.
+2. **Protect them from blame.** AP gets blamed for overdue. Show days blocked and who it's blocked on —
+   "waiting 6 days on site for a docket" is AP's defence, and the system already has it. Get this right
+   and they'll adopt it for this reason alone.
+3. **Tell them the action, not the fault.** Not `price_variance $175.00` but "Billed $15/m³ above the PO
+   rate — accept, update the PO, or dispute." Flag names are for the engine and the API.
+4. **Don't add a tenth tab.** Nine already exist. Add one "why is this stuck" column and one work view —
+   match status is a filter over the existing list, the way Overdue already is.
+5. **Batch every action, not just approval.** AP works in runs, not records. A per-bill action repeated
+   forty times is how a good feature becomes the thing nobody has time for.
+
+Per audience:
+
+| Who | Headline number | Where disputed sits |
+|---|---|---|
+| CFO / commercial | Total bills owed, unreduced | "of which disputed" beneath it; plus total-in-dispute trending |
+| **AP officer** | **Ready to pay now** + blocked buckets | Its own row with a follow-up action. Total owed isn't AP's working number |
+| Project manager | Committed cost on my job | "Cost that may reduce" — still hits budget until credited |
+
+**The one metric that predicts adoption: percentage of bills that clear with no human intervention.**
+High = AP got time back. Low = it's a review queue with extra steps, and no amount of correct variance
+detection saves it. Instrument from day one; it also tells you when a tenant can move off warn-only.
+
+## Jira
+
+Created 2026-08-03:
+
+**Sub-tasks under VDP-134:**
+- VDP-1631 — evidence projection + consumption ledger (supersedes flat `matched_docket_ids`)
+- VDP-1632 — eventual matching: park awaiting evidence, re-match automatically
+- VDP-1634 — disputes as an overlay + generated dispute notice (supersedes VDP-698's status approach)
+- VDP-1635 — GST: explicit per-line tax amounts on sync
+
+**Standalone Features:**
+- VDP-1636 — external plant hire matching (chargeable hours as evidence)
+- VDP-1637 — ABN labour matching (approved timesheet as evidence)
+- VDP-1638 — RCTI: generate ABN invoices instead of matching them
+
+Build order: **VDP-1631 first** (blocks everything, and the only piece expensive to change later because
+money will have flowed through the rows). VDP-1635 is independent and fixes a live problem now.
+
 ## Structure
 
 | Section | Content |
