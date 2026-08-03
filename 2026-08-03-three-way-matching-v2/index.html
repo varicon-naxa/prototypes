@@ -2019,6 +2019,102 @@ table.calc{border-collapse:separate;border-spacing:0}
   </div>
 </section>
 
+<!-- ============ COMPLETENESS ============ -->
+<section class="sec" id="sec-completeness">
+  <div class="step-pill"><span class="dot"></span>Model · shape of the evidence</div>
+  <h2 class="page-t">Multi-PO dockets and partial deliveries</h2>
+  <p class="lede">Two shapes the wiki doesn't document, both common on civil jobs, and both with a clear recommendation.
+    They matter more than they look because <strong>"is more evidence coming?"</strong> is the question that ends parking —
+    so completeness is not a reporting nicety, it's the terminator for the state machine.</p>
+
+  <h3 class="sub"><span class="bar"></span>Can one docket span several POs?</h3>
+  <div class="banner ok">
+    <div class="b-ico">✓</div>
+    <div><div class="b-t">Recommendation: yes — because the PO link belongs on the docket <em>line</em>, not the header</div>
+      <div class="b-d">A docket is a physical piece of paper describing one truck's drop. There is no reason its contents
+        must all belong to one PO, and in practice they often don't — a general supplier delivers fencing for one PO and
+        formwork for another on the same run. Forcing one PO per docket makes the crew either split one delivery into two
+        fictional dockets or mis-allocate half the load.</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card card-p">
+      <h4 class="sub2">This already works in the evidence model</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">Each <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">EvidenceLine</code>
+        carries its own <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">po_line</code> FK, so a docket
+        producing three evidence lines against two POs needs no schema change at all. <strong>The header-level PO field is
+        the thing that's wrong</strong> — it should be a convenience default that pre-fills the lines, not the authority.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">That reframing costs nothing now.
+        Left as-is, a header-level PO becomes load-bearing in queries and reports, and unpicking it later is the migration
+        we keep trying to avoid.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">Two guards worth having</h4>
+      <div class="kv" style="grid-template-columns:22px 1fr;gap:8px 12px">
+        <dt>1</dt><dd><strong>Warn if a docket spans projects.</strong> Spanning POs is normal; spanning <em>projects</em>
+          is almost always a mis-keyed entry, and it corrupts cost tracking on two jobs at once. Warn, don't block —
+          shared-site deliveries do genuinely happen.</dd>
+        <dt>2</dt><dd><strong>Block if it spans suppliers.</strong> One docket is one supplier's paperwork by definition.
+          If two appear, the docket has been mis-entered or two dockets were photographed as one.</dd>
+      </div>
+      <p class="foot-note" style="margin-top:11px">Also relevant: <span class="jira">PICBR-1373</span> and
+        <span class="jira">PICBR-1557</span> both concern dockets and POs missing from the link modal. A line-level model
+        makes that modal's job clearer — it's picking PO lines, not POs.</p>
+    </div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Partial deliveries — already handled, with one missing signal</h3>
+  <p style="font-size:13px;color:var(--text-2);max-width:82ch;margin-bottom:13px;line-height:1.6">A 40 m³ PO line filled
+    by five pours over three weeks needs no special handling: <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">expected_qty</code>
+    is the <em>sum</em> of evidence, which the design has done from the start. What's missing is knowing when the sum is
+    <strong>final</strong>.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:180px">Completeness signal</th><th>Meaning</th><th>Effect on parking</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Evidenced ≥ ordered</strong><div class="t-sub">implicit</div></td>
+          <td>The PO line has been fully delivered. Prompt to close, don't auto-close — over-delivery is normal and the
+            line may legitimately continue.</td>
+          <td><span class="pill ok">Ends waiting</span><div class="t-sub">for quantities up to ordered</div></td></tr>
+        <tr style="background:#F2F7FD"><td><strong>Short-close</strong><div class="t-sub">explicit — the clean one</div></td>
+          <td>"That's all we're getting." A deliberate human statement that no further deliveries will arrive against this
+            line.</td>
+          <td><span class="pill ok">Ends waiting immediately</span><div class="t-sub">No timer needed</div></td></tr>
+        <tr><td><strong>PO closed / cancelled</strong></td>
+          <td>Whole PO finished. Same effect across all its lines.</td>
+          <td><span class="pill ok">Ends waiting</span></td></tr>
+        <tr class="vr"><td><strong>Nothing — timer only</strong></td>
+          <td>No signal at all; the parking window simply expires.</td>
+          <td><span class="pill warn">Ends waiting, weakly</span><div class="t-sub">Guesses that nothing more is coming</div></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="anno">
+    <div class="an-h">◆ Why this makes PO close worth designing alongside matching</div>
+    <p>Short-close was already decided as an action available to anyone in the PO's approval chain, with a soft prompt at
+      fully-billed rather than a hard auto-close. That decision now carries more weight than it did: <strong>short-close is
+      the highest-quality terminator in the parking state machine.</strong> A customer who closes POs diligently gets crisp,
+      immediate variance detection; one who never closes them falls back to a 7-day guess on every bill.</p>
+    <p style="margin-top:8px">Which suggests a nudge worth building: when a bill parks on a PO line that looks finished
+      (evidenced ≥ ordered, no activity for a while), prompt the AP officer to short-close it right there. It resolves the
+      current bill and improves every subsequent one — the same shape as retrospective PO conversion, and the same reason
+      it deserves prominence.</p>
+  </div>
+
+  <div class="anno bug">
+    <div class="an-h">✖ One blocker to be aware of</div>
+    <p><span class="jira">PICBR-1321</span> — the PO summary's "Docket Delivered" amount doesn't update when a linked
+      docket is created. That figure is the closest thing today to an evidenced-versus-ordered rollup, so it is exactly what
+      the implicit completeness signal would read. It needs to be correct before "evidenced ≥ ordered" can be trusted as a
+      trigger for anything.</p>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('waiting')">← Eventual matching</button>
+    <button class="btn btn-p" onclick="go('gst')">GST &amp; tax on sync →</button>
+  </div>
+</section>
+
 <!-- ============ CREDIT NOTES ============ -->
 <section class="sec" id="sec-credits">
   <div class="step-pill"><span class="dot"></span>Reverse flow · credit notes</div>
