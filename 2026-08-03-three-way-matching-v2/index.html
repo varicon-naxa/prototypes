@@ -1233,6 +1233,306 @@ table.calc{border-collapse:separate;border-spacing:0}
     <button class="btn btn-p" onclick="go('engineering')">Engineering notes →</button>
   </div>
 </section>
+<!-- ============ ENGINEERING ============ -->
+<section class="sec" id="sec-engineering">
+  <div class="step-pill"><span class="dot"></span>Technical · Django</div>
+  <h2 class="page-t">Feasibility and engineering notes</h2>
+  <p class="lede">Overall verdict: <strong>the matching arithmetic is easy; the consumption ledger is the hard part.</strong>
+    Nothing here needs new infrastructure — it is Django models, a pure-function service and a transactional write path.
+    The risk is not algorithmic complexity, it is concurrency, backfill and getting the schema right the first time,
+    because a consumption ledger that starts wrong is expensive to correct once money has moved through it.</p>
+
+  <h3 class="sub"><span class="bar"></span>Feasibility at a glance</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Piece</th><th style="width:110px">Difficulty</th><th style="width:110px">Risk</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Match arithmetic</strong><div class="t-sub">VDP-139 core</div></td>
+          <td><span class="pill ok">Low</span></td><td><span class="pill ok">Low</span></td>
+          <td>Pure function over three inputs. No I/O, no state. Trivially unit-testable — should be a plain module, not a model method.</td></tr>
+        <tr><td><strong>Bill line → PO line resolution</strong></td>
+          <td><span class="pill warn">Medium</span></td><td><span class="pill warn">Medium</span></td>
+          <td>Fuzzy text matching with a tie-break policy. Cheap to build, easy to get subtly wrong. Must return candidates rather than guess.</td></tr>
+        <tr><td><strong>Consumption ledger</strong><div class="t-sub">previously-billed</div></td>
+          <td><span class="pill warn">Medium</span></td><td><span class="pill bad">High</span></td>
+          <td>New through-model, new invariants, concurrency-sensitive, and needs a backfill of historical bills. This is the piece to design carefully.</td></tr>
+        <tr><td><strong>Concurrency / double-spend</strong></td>
+          <td><span class="pill warn">Medium</span></td><td><span class="pill bad">High</span></td>
+          <td>Two approvals racing the same docket quantity. Solvable with row locks, but must be deliberate — the default optimistic path allows it.</td></tr>
+        <tr><td><strong>Recompute on upstream edit</strong></td>
+          <td><span class="pill warn">Medium</span></td><td><span class="pill warn">Medium</span></td>
+          <td>Docket edits must invalidate stored match results. Signals are tempting and wrong here — see below.</td></tr>
+        <tr><td><strong>Match UI</strong><div class="t-sub">VDP-137 / 138</div></td>
+          <td><span class="pill ok">Low</span></td><td><span class="pill ok">Low</span></td>
+          <td>Read-only derivation table plus the existing coding grid. Tabs already exist in the app.</td></tr>
+        <tr><td><strong>Historical backfill</strong></td>
+          <td><span class="pill bad">High</span></td><td><span class="pill bad">High</span></td>
+          <td>Existing approved bills have no line-level docket links. Reconstructing them is guesswork; see the migration note.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Proposed models</h3>
+  <p style="font-size:13px;color:var(--text-2);max-width:82ch;margin-bottom:12px;line-height:1.6">The critical change from
+    <span class="jira">VDP-141</span>: <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">matched_docket_ids[]</code>
+    becomes an explicit through-model carrying a quantity. A flat ID list cannot express partial consumption, and partial
+    consumption is the normal case.</p>
+  <div class="json">
+<span class="c"># billing/models.py — the ledger is one row per (bill line, docket line) claim</span>
+
+<span class="b">class</span> <span class="k">BillLineDocketAllocation</span>(models.Model):
+    <span class="c">"""Consumes evidence. The sum of these per docket_line must never</span>
+<span class="c">    exceed that docket line's received quantity."""</span>
+    bill_line    = models.ForeignKey(BillLine, on_delete=CASCADE, related_name=<span class="s">"allocations"</span>)
+    docket_line  = models.ForeignKey(DocketLine, on_delete=PROTECT, related_name=<span class="s">"allocations"</span>)
+    quantity     = models.DecimalField(max_digits=<span class="n">14</span>, decimal_places=<span class="n">4</span>)  <span class="c"># signed: credit notes negative</span>
+    <span class="c"># denormalised for the hot query path — saves a join on every match</span>
+    po_line      = models.ForeignKey(POLine, on_delete=PROTECT, related_name=<span class="s">"allocations"</span>)
+
+    <span class="b">class</span> <span class="k">Meta</span>:
+        constraints = [
+            models.UniqueConstraint(fields=[<span class="s">"bill_line"</span>, <span class="s">"docket_line"</span>],
+                                    name=<span class="s">"uniq_billline_docketline"</span>),
+        ]
+        indexes = [models.Index(fields=[<span class="s">"docket_line"</span>]),
+                   models.Index(fields=[<span class="s">"po_line"</span>])]
+
+<span class="b">class</span> <span class="k">BillLineMatch</span>(models.Model):
+    <span class="c">"""Cached engine verdict. Derived data — safe to delete and recompute."""</span>
+    bill_line      = models.OneToOneField(BillLine, on_delete=CASCADE, related_name=<span class="s">"match"</span>)
+    po_line        = models.ForeignKey(POLine, null=<span class="b">True</span>, on_delete=SET_NULL)
+    expected_qty   = models.DecimalField(max_digits=<span class="n">14</span>, decimal_places=<span class="n">4</span>, null=<span class="b">True</span>)
+    expected_price = models.DecimalField(max_digits=<span class="n">14</span>, decimal_places=<span class="n">2</span>, null=<span class="b">True</span>)
+    qty_variance   = models.DecimalField(max_digits=<span class="n">14</span>, decimal_places=<span class="n">4</span>, null=<span class="b">True</span>)
+    price_variance = models.DecimalField(max_digits=<span class="n">14</span>, decimal_places=<span class="n">2</span>, null=<span class="b">True</span>)
+    flags          = models.JSONField(default=list)   <span class="c"># ["price_variance", "off_po", ...]</span>
+    status         = models.CharField(max_length=<span class="n">16</span>, choices=MatchStatus.choices)
+    <span class="c"># provenance: which tolerance set produced this verdict</span>
+    tolerance_snapshot = models.JSONField()
+    computed_at    = models.DateTimeField(auto_now=<span class="b">True</span>)
+    resolution     = models.CharField(max_length=<span class="n">32</span>, blank=<span class="b">True</span>)  <span class="c"># accept_once | update_po_rate | ...</span>
+    resolved_by    = models.ForeignKey(User, null=<span class="b">True</span>, on_delete=SET_NULL)
+
+<span class="b">class</span> <span class="k">MatchTolerance</span>(models.Model):
+    <span class="c">"""Per-tenant, per VDP-139. Versioned, never edited in place —</span>
+<span class="c">    an old verdict must stay explainable under the rules that produced it."""</span>
+    tenant        = models.ForeignKey(Tenant, on_delete=CASCADE)
+    price_pct     = models.DecimalField(max_digits=<span class="n">5</span>, decimal_places=<span class="n">2</span>, default=<span class="n">2</span>)
+    price_abs     = models.DecimalField(max_digits=<span class="n">10</span>, decimal_places=<span class="n">2</span>, default=<span class="n">25</span>)
+    combine       = models.CharField(max_length=<span class="n">4</span>, default=<span class="s">"max"</span>)
+    direction     = models.CharField(max_length=<span class="n">8</span>, default=<span class="s">"over"</span>)
+    qty_abs       = models.DecimalField(max_digits=<span class="n">10</span>, decimal_places=<span class="n">4</span>, default=<span class="n">0</span>)
+    missing_docket_policy = models.CharField(max_length=<span class="n">8</span>, default=<span class="s">"warn"</span>)
+    effective_from = models.DateTimeField()
+</div>
+
+  <div class="anno">
+    <div class="an-h">◆ Why <code>tolerance_snapshot</code> is not over-engineering</div>
+    <p>A tenant will change their tolerance. If verdicts only store <em>status</em>, then every historical
+      "matched" becomes unexplainable the moment the threshold moves — and an auditor asking "why was this passed?"
+      gets no answer. Snapshotting the tolerance onto the verdict costs one JSON column and makes every past decision
+      reproducible. Same reasoning as storing the rate on a PO line rather than looking it up live.</p>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>The engine as a pure function</h3>
+  <div class="json">
+<span class="c"># billing/matching/engine.py — no ORM access, no tenant lookups, no I/O.</span>
+<span class="c"># Callers assemble the inputs; this module only decides.</span>
+
+<span class="b">def</span> <span class="k">match_bill_line</span>(bill_line: BillLineInput, po_line: POLineInput | <span class="b">None</span>,
+                    available_qty: Decimal, tol: Tolerance) -> LineVerdict:
+    flags = []
+
+    <span class="b">if</span> po_line <span class="b">is None</span>:
+        <span class="c"># no rate authority exists — quantity may still be evidenced</span>
+        flags.append(<span class="s">"off_po"</span>)
+        <span class="b">return</span> LineVerdict(status=<span class="s">"needs_coding"</span>, expected_price=<span class="b">None</span>, flags=flags)
+
+    expected_qty   = available_qty
+    expected_price = (po_line.unit_rate * expected_qty).quantize(CENTS)
+    billed_amount  = (bill_line.qty * bill_line.unit_rate).quantize(CENTS)
+
+    qty_var   = bill_line.qty - expected_qty
+    price_var = billed_amount - expected_price
+
+    <span class="b">if</span> expected_qty == <span class="n">0</span>:
+        flags.append(<span class="s">"missing_docket"</span>)
+    <span class="b">elif</span> <span class="k">abs</span>(qty_var) > tol.qty_abs:
+        flags.append(<span class="s">"qty_variance"</span>)
+
+    <span class="c"># price band: greater/lesser of a % of expected and an absolute floor.</span>
+    <span class="c"># The absolute floor exists because rates truncate at 2dp (PICBR-1184) —</span>
+    <span class="c"># without it, large-quantity lines fail on arithmetic noise alone.</span>
+    band = (<span class="k">max</span> <span class="b">if</span> tol.combine == <span class="s">"max"</span> <span class="b">else</span> <span class="k">min</span>)(
+        expected_price * tol.price_pct / <span class="n">100</span>, tol.price_abs)
+    breach = price_var > band <span class="b">if</span> tol.direction == <span class="s">"over"</span> <span class="b">else</span> <span class="k">abs</span>(price_var) > band
+    <span class="b">if</span> breach:
+        flags.append(<span class="s">"price_variance"</span>)
+
+    <span class="b">return</span> LineVerdict(
+        expected_qty=expected_qty, expected_price=expected_price,
+        qty_variance=qty_var, price_variance=price_var, flags=flags,
+        status=<span class="s">"matched"</span> <span class="b">if not</span> flags <span class="b">else</span> <span class="s">"flagged"</span>,
+    )
+</div>
+  <p class="foot-note">Keeping this ORM-free is what makes the six <span class="jira">VDP-139</span> scenarios testable as
+    a parametrised table with no database at all — which is the difference between a suite that runs in milliseconds and
+    one nobody runs. Assemble inputs in a thin service layer above it.</p>
+
+  <h3 class="sub"><span class="bar"></span>Available quantity — the query that matters</h3>
+  <div class="json">
+<span class="c"># One aggregate per PO line, computed in the database, excluding this bill.</span>
+<span class="c"># Signed quantities mean credit notes subtract naturally — no special case.</span>
+
+<span class="b">from</span> django.db.models <span class="b">import</span> Sum, F, Value, DecimalField
+<span class="b">from</span> django.db.models.functions <span class="b">import</span> Coalesce
+
+<span class="b">def</span> <span class="k">available_by_po_line</span>(po, exclude_bill_id=<span class="b">None</span>):
+    consumed = (BillLineDocketAllocation.objects
+        .filter(po_line__purchase_order=po,
+                bill_line__bill__status__in=COMMITTED_STATUSES)   <span class="c"># approved + awaiting payment</span>
+        .exclude(bill_line__bill_id=exclude_bill_id)
+        .values(<span class="s">"po_line"</span>)
+        .annotate(qty=Coalesce(Sum(<span class="s">"quantity"</span>), Value(<span class="n">0</span>), output_field=DECIMAL)))
+
+    received = (DocketLine.objects
+        .filter(po_line__purchase_order=po, docket__status=DocketStatus.CONFIRMED)
+        .values(<span class="s">"po_line"</span>)
+        .annotate(qty=Coalesce(Sum(<span class="s">"received_qty"</span>), Value(<span class="n">0</span>), output_field=DECIMAL)))
+
+    consumed_map = {r[<span class="s">"po_line"</span>]: r[<span class="s">"qty"</span>] <span class="b">for</span> r <span class="b">in</span> consumed}
+    <span class="b">return</span> {r[<span class="s">"po_line"</span>]: r[<span class="s">"qty"</span>] - consumed_map.get(r[<span class="s">"po_line"</span>], <span class="n">0</span>)
+            <span class="b">for</span> r <span class="b">in</span> received}
+</div>
+  <div class="banner plain">
+    <div class="b-ico">N</div>
+    <div><div class="b-t">Two aggregate queries per bill, not per line</div>
+      <div class="b-d">The obvious implementation walks bill lines and asks "what's available?" each time — that is an
+        N+1 that will bite on a 40-line quarry invoice. Compute both maps once per bill and pass them into the engine.
+        Add <code>select_related("po_line", "docket")</code> on the allocation fetch. At realistic volumes (a PO with a
+        few hundred docket lines) this is a millisecond-scale query, not a performance concern.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Concurrency — where the money actually leaks</h3>
+  <div class="json">
+<span class="c"># The consumption check MUST re-run inside the approval transaction.</span>
+<span class="c"># Anything computed at page-render time is advisory only.</span>
+
+<span class="b">from</span> django.db <span class="b">import</span> transaction
+
+<span class="k">@transaction.atomic</span>
+<span class="b">def</span> <span class="k">approve_bill</span>(bill, user):
+    <span class="c"># Lock the PO first — a consistent lock order across all writers</span>
+    <span class="c"># prevents deadlocks between two bills touching overlapping POs.</span>
+    po = PurchaseOrder.objects.select_for_update().get(pk=bill.purchase_order_id)
+
+    <span class="c"># Re-derive from locked state; never trust the draft's cached verdict.</span>
+    available = available_by_po_line(po, exclude_bill_id=bill.pk)
+    verdicts  = run_match(bill, po, available, tolerance_for(bill.tenant))
+
+    <span class="b">if</span> any(v.status == <span class="s">"over_consumed"</span> <span class="b">for</span> v <span class="b">in</span> verdicts.values()):
+        <span class="c"># Someone else consumed the quantity while this sat in approval.</span>
+        <span class="b">raise</span> ConsumptionConflict(verdicts)   <span class="c"># surface, don't silently clamp</span>
+
+    persist_verdicts(bill, verdicts)
+    bill.status = BillStatus.AWAITING_PAYMENT
+    bill.save(update_fields=[<span class="s">"status"</span>])
+</div>
+  <div class="grid-2">
+    <div class="card card-p">
+      <h4 class="sub2">Why lock the PO, not the docket lines</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">Locking individual docket lines invites deadlock:
+        two bills claiming overlapping docket sets in different orders will each hold what the other wants. The PO is the
+        natural aggregate root — one lock, consistent order, and contention is低 in practice because two AP officers
+        rarely process the same PO simultaneously.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:9px">If contention ever becomes real,
+        the escape hatch is a database <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">CHECK</code>-style
+        invariant enforced by a trigger on the allocation table — belt and braces, but not needed on day one.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">Idempotency and retries</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">The <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">UniqueConstraint</code>
+        on (bill_line, docket_line) makes allocation writes idempotent — a retried approval cannot double-allocate.
+        Worth having, because the accounting sync path already retries through an SQS FIFO queue and approval
+        side-effects will inevitably get replayed.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:9px">Do <em>not</em> put the sync push
+        inside this transaction. Commit the approval, then enqueue — otherwise a slow Xero call holds a row lock on the PO.</p>
+    </div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Recomputation — resist signals</h3>
+  <div class="banner warn">
+    <div class="b-ico">⚠</div>
+    <div><div class="b-t">A <code>post_save</code> on DocketLine that recomputes matches will hurt</div>
+      <div class="b-d">It is the obvious move and it goes wrong three ways: it fires during bulk imports and fixture
+        loads, it makes a docket edit's cost unpredictable (one docket can touch many bills), and it silently mutates
+        <em>approved</em> bills' verdicts — including bills already pushed to Xero. Prefer an explicit
+        <strong>staleness marker</strong>: docket edits set <code>match_stale = True</code> on affected bill lines, and
+        recomputation happens on read, on demand, or in a queued job. Stale-but-visible beats silently-rewritten.
+        This is the gap in <span class="jira">VDP-141</span>'s "recomputed on edit" — an edit to the <em>docket</em> is
+        not an edit to the bill.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Migration and backfill</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:34px" class="c">#</th><th>Step</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td class="c"><strong>1</strong></td><td>Add tables, no behaviour change</td>
+          <td>Allocation + match + tolerance models ship empty. Zero risk, deployable independently.</td></tr>
+        <tr><td class="c"><strong>2</strong></td><td>Write allocations on new matches only</td>
+          <td>Ledger starts accumulating from a cutover date. Existing bills stay untouched.</td></tr>
+        <tr><td class="c"><strong>3</strong></td><td>Backfill where the link already exists</td>
+          <td>Bills with an existing docket link get allocations inferred pro-rata. <strong>Report, don't guess</strong> —
+            anything ambiguous stays unallocated and is listed for a human.</td></tr>
+        <tr><td class="c"><strong>4</strong></td><td>Accept a permanent "pre-cutover" cohort</td>
+          <td>Historical bills with no line-level docket link cannot be reconstructed honestly. Mark them
+            <code>legacy_unmatched</code> and exclude from consumption maths rather than inventing allocations.</td></tr>
+        <tr><td class="c"><strong>5</strong></td><td>Enable the tolerance UI last</td>
+          <td>Ship with the proposed defaults hard-coded, gather real variance distributions, <em>then</em> let tenants tune.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="foot-note">Step 4 is the uncomfortable one and worth stating plainly to stakeholders: for bills already in
+    the system, Varicon cannot retrospectively prove what was double-paid. The feature prevents future duplicates; it is
+    not a historical audit. Promising otherwise will not survive contact with the data.</p>
+
+  <h3 class="sub"><span class="bar"></span>Test strategy</h3>
+  <div class="grid-3">
+    <div class="card card-p">
+      <h4 class="sub2">Engine · pure</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.6">Parametrised table over the six
+        <span class="jira">VDP-139</span> scenarios plus boundary cases: variance exactly <em>at</em> the band, zero
+        expected qty, negative (credit) quantities, and 4dp rounding. No DB.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">Ledger · invariant</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.6">Property test: for any sequence of
+        bill/credit/void operations, <code>Σ allocations ≤ received_qty</code> per docket line, always. This single
+        invariant is the feature's correctness claim — assert it directly.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">Concurrency · real DB</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.6"><code>TransactionTestCase</code> with two threads
+        approving overlapping bills. One must succeed, one must raise <code>ConsumptionConflict</code>. Skipping this
+        test means shipping the double-pay bug the feature exists to prevent.</p>
+    </div>
+  </div>
+
+  <div class="anno q">
+    <div class="an-h">▲ Sequencing recommendation</div>
+    <p>Do <strong>not</strong> build the tolerance engine first. It is the fun part and the least valuable: with
+      tolerances at zero, exact matching already catches most of the pain. The ordering that de-risks fastest is
+      <strong>ledger → resolution → engine → tolerances</strong>. Ship the consumption check with hard equality and the
+      double-pay hole closes immediately; tolerances are a refinement on top, and by then you'll have real variance data
+      to set them from instead of guessing in a meeting.</p>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('sandbox')">← Sandbox</button>
+    <button class="btn btn-p" onclick="go('scenarios')">Scenario matrix →</button>
+  </div>
+</section>
 <!--SECTIONS-->
   </main>
 </div>
