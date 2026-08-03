@@ -1197,6 +1197,137 @@ table.calc{border-collapse:separate;border-spacing:0}
     <button class="btn btn-p" onclick="go('step5')">Step 6 · When it disagrees →</button>
   </div>
 </section>
+<!-- ============ CREDIT NOTES ============ -->
+<section class="sec" id="sec-credits">
+  <div class="step-pill"><span class="dot"></span>Reverse flow · credit notes</div>
+  <h2 class="page-t">Credit notes — where quantity and value must part company</h2>
+  <p class="lede">A credit note is not simply a negative bill, and treating it as one produces a subtle, expensive bug.
+    The question that decides everything is: <strong>does this credit return the goods, or only the money?</strong>
+    Those two cases must behave differently in the consumption ledger, and nothing in
+    <span class="jira">VDP-134</span> or <span class="jira">VDP-139</span> currently distinguishes them.</p>
+
+  <div class="banner bad">
+    <div class="b-ico">!</div>
+    <div><div class="b-t">The trap, stated plainly</div>
+      <div class="b-d">If every credit note releases consumed quantity, then a supplier who over-charged on
+        <em>rate</em> and issued a price-correction credit has just re-opened 8 m³ of billable headroom — for concrete
+        that was delivered, kept, and already paid for. The supplier can now bill that quantity again and it will
+        <strong>match cleanly</strong>. You have built a duplicate-payment route through the feature designed to prevent
+        duplicate payments. Conversely, if no credit ever releases quantity, a cancel-and-rebill can never be re-billed
+        and the bill is permanently stuck.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Five credit types, three different ledger effects</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:158px">Credit type</th><th>What happened</th><th class="c">Value</th>
+        <th class="c">Releases qty?</th><th class="c">Received qty</th><th>Re-bill expected?</th></tr></thead>
+      <tbody>
+        <tr class="vok">
+          <td><strong>Cancel &amp; rebill</strong><div class="t-sub">most common</div></td>
+          <td>The whole invoice was wrong. Supplier fully credits it and reissues a corrected one.</td>
+          <td class="c">−full</td><td class="c"><span class="pill ok">Yes — fully</span></td><td class="c">unchanged</td>
+          <td><span class="pill info">Yes, immediately</span></td></tr>
+        <tr class="vr">
+          <td><strong>Price correction</strong><div class="t-sub">the dangerous one</div></td>
+          <td>Right goods, right quantity, wrong rate. Goods were kept. Only money moves.</td>
+          <td class="c">−diff</td><td class="c"><span class="pill bad">No — never</span></td><td class="c">unchanged</td>
+          <td><span class="pill neutral">No</span></td></tr>
+        <tr class="vok">
+          <td><strong>Goods returned</strong></td>
+          <td>Material sent back — wrong mix, surplus, rejected on spec.</td>
+          <td class="c">−value</td><td class="c"><span class="pill ok">Yes</span></td>
+          <td class="c"><span class="pill warn">Reduced</span></td>
+          <td><span class="pill neutral">No</span></td></tr>
+        <tr class="vok">
+          <td><strong>Short delivery</strong></td>
+          <td>Billed for 10 m³, only 8 arrived. The docket was overstated too.</td>
+          <td class="c">−short</td><td class="c"><span class="pill ok">Yes</span></td>
+          <td class="c"><span class="pill warn">Corrected down</span></td>
+          <td><span class="pill neutral">No</span></td></tr>
+        <tr>
+          <td><strong>Rebate / goodwill</strong></td>
+          <td>Volume rebate, settlement discount, service credit. Tied to no line and no delivery.</td>
+          <td class="c">−value</td><td class="c"><span class="pill neutral">n/a — off-PO</span></td><td class="c">unchanged</td>
+          <td><span class="pill neutral">No</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="foot-note">Note the asymmetry in <strong>Goods returned</strong> and <strong>Short delivery</strong>: both
+    consumed quantity <em>and</em> received quantity drop, so available headroom nets to unchanged — correctly, since
+    nothing new became billable. Only <strong>Cancel &amp; rebill</strong> genuinely re-opens headroom, because the goods
+    are still on site awaiting a correct invoice.</p
+
+  <h3 class="sub"><span class="bar"></span>The modelling consequence</h3>
+  <div class="grid-2">
+    <div class="card card-p">
+      <h4 class="sub2">Quantity and value are separate concerns</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">This is the design point worth carrying into the
+        schema. A price-correction credit is a bill line with a <strong>negative amount and an allocation quantity of
+        zero</strong>. The ledger tracks quantity; value follows the bill lines independently.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">Earlier framing in this prototype
+        said "signed quantities handle credit notes naturally" — that is true for cancel-and-rebill and half-true
+        elsewhere. Signed quantities are necessary but not sufficient; the <em>type</em> is what decides whether a
+        quantity is written at all.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">A credit note matches the bill, not the PO</h4>
+      <p style="font-size:12.5px;color:var(--16text-2);line-height:1.65;color:var(--text-2)">A credit note's counterparty
+        is the <strong>original bill</strong>, not the PO and dockets. So it is a two-way match on a different axis:
+        does this credit reference a real bill, and does it credit no more than that bill charged?</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">That means a credit note should
+        <em>not</em> run through the three-way engine at all. It runs a credit-validation path, and its
+        <strong>effect</strong> on the ledger is what the three-way engine later reads. Conflating the two is how you end
+        up flagging a credit note for having "no docket".</p>
+    </div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Validation rules</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:34px" class="c">#</th><th>Rule</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td class="c"><strong>1</strong></td><td><strong>A credit must not exceed what was billed</strong>
+          — cumulative credits ≤ cumulative billed, per line.</td>
+          <td>Otherwise consumption goes negative and the ledger starts inventing billable headroom out of nothing.
+            Enforce as an invariant, not a warning.</td></tr>
+        <tr><td class="c"><strong>2</strong></td><td><strong>Released quantity can never exceed consumed quantity</strong>
+          for that docket line.</td>
+          <td>Σ allocations per docket line must stay in <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">[0, received_qty]</code>.
+            The single invariant worth property-testing.</td></tr>
+        <tr><td class="c"><strong>3</strong></td><td><strong>Credit type is mandatory and cannot default</strong>.</td>
+          <td>There is no safe default. Defaulting to "releases quantity" creates the duplicate-payment route above;
+            defaulting to "doesn't" strands cancel-and-rebills. Make the user say which.</td></tr>
+        <tr><td class="c"><strong>4</strong></td><td><strong>Unlinked credits are value-only</strong>.</td>
+          <td>If a credit references no bill (supplier statement credits, annual rebates), it cannot release specific
+            quantity. Treat as off-PO value and code it manually. Never guess which bill it belongs to.</td></tr>
+        <tr><td class="c"><strong>5</strong></td><td><strong>Crediting a synced bill needs an accounting-side reversal</strong>.</td>
+          <td>If the original already pushed to Xero, the credit must sync as a credit note and allocate against that
+            invoice — partial allocation included (<span class="jira">CQ-2696</span>).</td></tr>
+        <tr><td class="c"><strong>6</strong></td><td><strong>Releasing quantity must not silently un-approve anything</strong>.</td>
+          <td>A credit changes available headroom, so other draft bills' verdicts go stale. Mark them stale; do not
+            recompute approved bills.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="anno">
+    <div class="an-h">◆ Good news on sequencing</div>
+    <p>Fixing <span class="jira">VDP-694</span> (credit notes read as invoices) before release is the right call and it
+      is genuinely load-bearing here — not just an OCR accuracy issue. A credit note misclassified as an invoice
+      <em>adds</em> consumption instead of removing it: the ledger records more quantity consumed than was ever
+      delivered, the invariant in rule 2 is violated, and the correct re-bill is then blocked as
+      <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">over_consumed</code>. It fails in the direction
+      that looks like the feature is broken. Worth adding a guard even after the fix: a document whose total is negative,
+      or which contains "credit" in its type field, should never enter the bill path.</p>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('step6')">← Step 7 · Downstream</button>
+    <button class="btn btn-p" onclick="go('sandbox')">Try it in the Sandbox →</button>
+  </div>
+</section>
+
 <!-- ============ SANDBOX ============ -->
 <section class="sec" id="sec-sandbox">
   <div class="step-pill"><span class="dot"></span>Interactive · the engine, live</div>
