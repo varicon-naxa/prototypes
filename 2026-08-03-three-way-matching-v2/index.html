@@ -1492,16 +1492,41 @@ table.calc{border-collapse:separate;border-spacing:0}
     resolved_by    = models.ForeignKey(User, null=<span class="b">True</span>, on_delete=SET_NULL)
 
 <span class="b">class</span> <span class="k">MatchTolerance</span>(models.Model):
-    <span class="c">"""Per-tenant, per VDP-139. Versioned, never edited in place —</span>
-<span class="c">    an old verdict must stay explainable under the rules that produced it."""</span>
+    <span class="c">"""Set at customer onboarding, per VDP-139. Versioned, never edited in</span>
+<span class="c">    place — an old verdict must stay explainable under the rules that</span>
+<span class="c">    produced it, and widening a tolerance must never re-verdict history.</span>
+
+<span class="c">    supplier is nullable and unused at launch. Costs nothing now and avoids</span>
+<span class="c">    migrating live financial config when the per-supplier ask arrives.</span>
+<span class="c">    Resolution is most-specific-wins: supplier row, else tenant row."""</span>
     tenant        = models.ForeignKey(Tenant, on_delete=CASCADE)
+    supplier      = models.ForeignKey(Supplier, null=<span class="b">True</span>, blank=<span class="b">True</span>, on_delete=CASCADE)
+
+    <span class="c"># The posture the customer chose. Stored so the settings UI can show what</span>
+    <span class="c"># they picked rather than reverse-engineering it from four numbers.</span>
+    posture       = models.CharField(max_length=<span class="n">10</span>, default=<span class="s">"balanced"</span>)  <span class="c"># | strict | flexible | custom</span>
+
     price_pct     = models.DecimalField(max_digits=<span class="n">5</span>, decimal_places=<span class="n">2</span>, default=<span class="n">2</span>)
     price_abs     = models.DecimalField(max_digits=<span class="n">10</span>, decimal_places=<span class="n">2</span>, default=<span class="n">25</span>)
     combine       = models.CharField(max_length=<span class="n">4</span>, default=<span class="s">"max"</span>)
     direction     = models.CharField(max_length=<span class="n">8</span>, default=<span class="s">"over"</span>)
     qty_abs       = models.DecimalField(max_digits=<span class="n">10</span>, decimal_places=<span class="n">4</span>, default=<span class="n">0</span>)
     missing_docket_policy = models.CharField(max_length=<span class="n">8</span>, default=<span class="s">"warn"</span>)
+
+    <span class="c"># Versioning + audit. Changing tolerance is a financial control change:</span>
+    <span class="c"># same class of act as raising an approval limit (cf. VDP-687).</span>
     effective_from = models.DateTimeField()
+    changed_by     = models.ForeignKey(User, null=<span class="b">True</span>, on_delete=SET_NULL)
+    superseded_by  = models.OneToOneField(<span class="s">"self"</span>, null=<span class="b">True</span>, on_delete=SET_NULL,
+                                          related_name=<span class="s">"supersedes"</span>)
+
+    <span class="b">class</span> <span class="k">Meta</span>:
+        constraints = [
+            <span class="c"># one live row per scope; history distinguished by superseded_by</span>
+            models.UniqueConstraint(fields=[<span class="s">"tenant"</span>, <span class="s">"supplier"</span>],
+                                    condition=Q(superseded_by__isnull=<span class="b">True</span>),
+                                    name=<span class="s">"uniq_live_tolerance_per_scope"</span>),
+        ]
 </div>
 
   <div class="anno">
