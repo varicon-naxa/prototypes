@@ -1660,6 +1660,143 @@ table.calc{border-collapse:separate;border-spacing:0}
   </div>
 </section>
 
+<!-- ============ ABN LABOUR ============ -->
+<section class="sec" id="sec-abn">
+  <div class="step-pill"><span class="dot"></span>Spend type · ABN labour</div>
+  <h2 class="page-t">ABN workers — the easiest match in the whole feature</h2>
+  <p class="lede">A worker under their own ABN invoices for hours worked. Their PO authorises hours × rate, and the
+    evidence is an <strong>approved timesheet</strong> — which Varicon already captures, and which has already been through
+    a supervisor's approval workflow. That makes this evidence leg <em>stronger</em> than a delivery docket, not weaker.
+    Everything needed is already in the product.</p>
+
+  <div class="banner ok">
+    <div class="b-ico">✓</div>
+    <div><div class="b-t">The evidence is already approved before the invoice arrives</div>
+      <div class="b-d">A delivery docket is captured by whoever happened to take delivery, and nobody signs off that it is
+        right. A timesheet is submitted, reviewed and <strong>approved by a supervisor</strong> as a matter of course. So
+        when the invoice lands, the quantity it will be tested against has already been independently agreed — the exact
+        property three-way matching is trying to manufacture elsewhere. Here it comes free.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>The match</h3>
+  <div class="tbl-wrap">
+    <table class="calc">
+      <thead><tr><th>Leg</th><th>Source</th><th>Supplies</th><th>Already exists?</th></tr></thead>
+      <tbody>
+        <tr class="vok"><td><strong>Authority</strong></td><td>PO per worker or engagement</td>
+          <td>Hourly rate, and authorised hours as a ceiling</td>
+          <td><span class="pill ok">Yes — PO module</span></td></tr>
+        <tr class="vok"><td><strong>Evidence</strong></td><td>Approved timesheet entries for that worker on that project</td>
+          <td>Hours actually worked, already allocated to cost centres</td>
+          <td><span class="pill ok">Yes — timesheets</span></td></tr>
+        <tr class="vok"><td><strong>Claim</strong></td><td>Worker's invoice</td>
+          <td>Hours and rate claimed</td>
+          <td><span class="pill ok">Yes — bills</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="foot-note">Note the cost-centre question that was contentious for materials
+    (<span class="jira">CQ-2680</span> — docket or PO?) <strong>answers itself here</strong>: the timesheet already carries
+    the cost-centre allocation, because that is how labour cost tracking works today. Take it from the timesheet. No
+    decision needed.</p>
+
+  <h3 class="sub"><span class="bar"></span>The better idea — don't match, generate</h3>
+  <div class="banner info">
+    <div class="b-ico">★</div>
+    <div><div class="b-t">Recipient Created Tax Invoice makes the match unnecessary by construction</div>
+      <div class="b-d">Under an RCTI arrangement — ATO-recognised, requires a written agreement between the parties, and
+        already common in Australian construction — <strong>the head contractor generates the invoice</strong> from the
+        approved timesheet at the PO rate, and the worker doesn't issue one at all. There is then nothing to reconcile:
+        hours come from approved timesheets and the rate comes from the PO, so the document is correct the moment it
+        exists. You have eliminated the discrepancy rather than detected it.</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card card-p">
+      <h4 class="sub2">Why this is worth building instead of matching</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">Matching ABN invoices catches errors <em>after</em>
+        a worker has already spent time producing a document, often badly — sole traders' invoices are a well-known source
+        of wrong rates, wrong hours, missing ABNs and inconsistent GST treatment. Every one of those becomes an exception
+        for AP to chase, against a person who may not respond quickly.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">Generating removes the whole class.
+        It also removes the chase-the-subbie-for-an-invoice delay that holds up payment runs, which workers themselves
+        prefer — a rare feature where the control and the convenience point the same way.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">What it requires</h4>
+      <div class="kv" style="grid-template-columns:22px 1fr;gap:8px 12px">
+        <dt>1</dt><dd>A written RCTI agreement per worker, recorded and retained — a compliance prerequisite, not optional</dd>
+        <dt>2</dt><dd>The worker's ABN, validated, and their <strong>GST registration status</strong> — not all sole traders
+          are registered, and assuming GST on an unregistered worker's invoice is wrong in both directions</dd>
+        <dt>3</dt><dd>Generated document must be clearly marked as a recipient-created tax invoice</dd>
+        <dt>4</dt><dd>Worker visibility — they must be able to see and dispute what was generated on their behalf</dd>
+      </div>
+      <p class="foot-note" style="margin-top:11px">Point 4 matters more than it looks. Generating invoices <em>about</em>
+        someone without showing them is how you get disputes that surface at payment time instead of approval time.</p>
+    </div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Where it still goes wrong</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:170px">Problem</th><th>What happens</th><th>Treatment</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Invoices more hours than approved</strong></td>
+          <td>Worker claims 42, timesheet says 38. The commonest case, and usually a genuine disagreement about start
+            times or breaks rather than dishonesty.</td>
+          <td><code style="background:#eef1f5;padding:1px 5px;border-radius:3px">qty_variance</code>. Resolve on the
+            <em>timesheet</em>, not the bill — if the extra hours were worked, the timesheet is what's wrong, and fixing
+            the bill alone leaves labour cost tracking understated.</td></tr>
+        <tr><td><strong>Rate differs from the PO</strong></td>
+          <td>Worker bills their current rate; the PO carries an older one.</td>
+          <td><code style="background:#eef1f5;padding:1px 5px;border-radius:3px">price_variance</code>. Almost always
+            resolved by updating the PO rate — labour rates rise between engagements and the PO is simply stale.</td></tr>
+        <tr class="vr"><td><strong>Overtime / penalty rates</strong></td>
+          <td>Saturday or after-hours work at a different multiplier. The PO usually carries only the base rate.</td>
+          <td><strong>Needs PO lines per rate type</strong> — same structural pattern as plant working/standby. Without it,
+            every penalty-rate week is a price variance and the customer learns to ignore the flag.</td></tr>
+        <tr><td><strong>No PO raised</strong></td>
+          <td>Worker engaged verbally and started Monday. Extremely common.</td>
+          <td>Falls to the <a onclick="go('nopo')" style="color:var(--blue);cursor:pointer;font-weight:500">no-PO path</a> —
+            timesheet still evidences hours, so quantity is verified and only the rate is un-vouched.</td></tr>
+        <tr><td><strong>Unit mismatch</strong></td>
+          <td>Invoice in days, timesheet in hours.</td>
+          <td>Refuse to coerce. Flag a unit conflict and make someone choose — silently multiplying by 8 hides real
+            discrepancies.</td></tr>
+        <tr class="vbad"><td><strong>Timesheet approved by the worker themselves</strong></td>
+          <td>On small crews the ABN worker is sometimes also the supervisor approving their own hours.</td>
+          <td>Collapses the evidence leg entirely — self-approved evidence is not independent. Should be detected and
+            flagged, mirroring the approver-collision logic that already exists for bills.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="anno bug">
+    <div class="an-h">✖ Self-approval is the real risk here, not overcharging</div>
+    <p>The whole value of the timesheet as evidence rests on someone <em>other than the payee</em> having approved it. A
+      worker who approves their own timesheet and then invoices against it will produce a flawless three-way match every
+      time — and the feature will actively vouch for it. This is worth an explicit rule:
+      <strong>evidence approved by the payee cannot satisfy the evidence leg.</strong> Varicon already treats
+      approver-collision as a defect class for bills (<span class="jira">VDP-73</span>, items 12 and 17 in the PO
+      feedback); the same principle applies with more force here, because here it defeats a financial control rather than
+      just skipping a step.</p>
+  </div>
+
+  <div class="anno q">
+    <div class="an-h">▲ Out of scope, but worth naming once</div>
+    <p>Whether a worker is genuinely a contractor or is an employee in substance is a legal classification question with
+      real consequences, and it is <strong>not Varicon's to answer</strong>. What is relevant to this design: the records
+      created here — agreed rates, approved hours, who directed the work — are exactly the records that get examined if
+      that question is ever asked. So they should be accurate and attributable, and the product should not do anything
+      that quietly encourages treating ABN workers identically to employees. Recording facts well is the right posture;
+      offering guidance is not.</p>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('plant')">← Plant hire</button>
+    <button class="btn btn-p" onclick="go('credits')">Credit notes →</button>
+  </div>
+</section>
+
 <!-- ============ CREDIT NOTES ============ -->
 <section class="sec" id="sec-credits">
   <div class="step-pill"><span class="dot"></span>Reverse flow · credit notes</div>
