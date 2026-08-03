@@ -180,6 +180,133 @@ blocking every un-docketed bill would read as an outage. "Docket required" is on
 docket coverage is genuinely high; before that it stalls AP and pressures crews into back-filling
 dockets from invoices, which destroys the independence the whole check relies on.
 
+## Scope (gap #4) — the evidence leg is polymorphic
+
+Plant hire and ABN labour aren't three separate workflows. They're proof that the evidence leg is
+polymorphic and the engine shouldn't know which kind it's reading:
+
+| Spend type | Rate authority | Evidence leg | Unit | Scope |
+|---|---|---|---|---|
+| Material supply | PO line rate | Delivery docket | m³, t, ea | Launch |
+| External plant hire | PO / hire agreement | Plant docket, chargeable hours | hr, day, wk | Launch |
+| ABN labour | PO per worker/engagement | **Approved timesheet** | hr, day | Launch |
+| Subcontract works | Subcontract schedule | Progress claim assessment | % or qty | **Out of scope** |
+
+`Authorised rate × evidenced quantity = expected amount` holds in all three. Units differ; arithmetic
+doesn't. So VDP-139 stays as specified — only *where the quantity comes from* is abstracted.
+
+**Subcontract claims must be explicitly excluded, not merely unhandled.** A progress claim has no
+docket and never will. If matching runs indiscriminately, every claim flags `missing_docket` forever —
+a permanent false-positive class big enough to discredit the feature. Scope must be a real
+`matching_scope` field on the bill, resolved at creation, never inferred from PO absence (which is
+indistinguishable from the no-PO cases).
+
+**Schema: use an evidence projection, not a generic FK.** The hot query is `Sum()` of evidenced
+quantity per PO line, and a GenericForeignKey can't be joined or aggregated across in one query —
+it reintroduces the N+1 the design exists to avoid. Instead a concrete `EvidenceLine` table owned by
+the matching app, with `source` + `source_id`, that each domain writes into on confirm (inside the
+source's own transaction, plus a reconciliation check). `BillLineDocketAllocation` becomes
+`BillLineEvidenceAllocation`. Nothing in the engine changes.
+
+`unit` is carried for validation, not arithmetic — the engine must **refuse to match across mismatched
+units** rather than coerce. A bill in days against evidence in hours is real on plant hire, and
+silently multiplying by 8 is a bug nobody can find.
+
+## Evidence without a PO (the case I'd dropped)
+
+v1 had this and my first seven scenarios didn't. It's the inverse of "PO but no dockets" and **far more
+common** — an unauthorised delivery still arrives and the crew still does their job.
+
+Quantity is verified by the docket; only **rate authority** is missing, so `expected_price` is `null`.
+Critically, **the consumption ledger still works without a PO** (allocations hang off an evidence line
+with null `po_line`, keyed on supplier + project), so duplicate-payment protection survives entirely —
+the least-disciplined customers still get the most valuable guarantee.
+
+Resolutions: **retrospective PO conversion** (recommended — fixes this bill *and* every future one,
+so it should be one pre-filled button, not a trip to another module), approve the billed rate on trust
+with the acceptance recorded, or link to a PO raised late. A retrospective PO must be flagged
+`rate_source = bill_derived`, because its rate came from the document it will later be used to check —
+it's a baseline for future bills, **not** retroactive authorisation of this one.
+
+Per-client setting, default **allowed**. Blocking produces backdated POs raised purely to clear bills:
+same spend, fake authorisation, false audit trail.
+
+## External plant hire — time on site ≠ billable time
+
+**The core insight:** 21 days on site might be 15 working days, 2 at standby rate, 4 not charged. If
+your only evidence is on-hire/off-hire dates, the supplier's invoice for 21 days is *unarguable*.
+On-hire/off-hire is a **bracket, not evidence**. The daily record is the evidence.
+
+- **Dry hire** — equipment only, per day/week. Supplier has nobody on site so they have no usage record
+  either; they bill the term. Ceiling often genuinely firm.
+- **Wet hire** — equipment + operator, hourly. The operator's docket signed by the supervisor is the
+  **strongest evidence in the whole feature**: contemporaneous and bilaterally agreed. Ceiling usually
+  an estimate.
+
+**One asset, several rates** — this breaks description-based line matching. Working ($185/hr) vs
+standby/idle ($95/hr) need **separate PO lines**, or standby hours get billed at the working rate.
+Mobilisation/demob should be *on* the PO or it lands `off_po` every time.
+
+**Minimum hire is the one case where billed > evidenced is correct.** 5 hours worked on an 8-hour
+minimum is legitimately billed 8. Under material rules that's a `qty_variance` every week, and plant
+bills recur — the fastest route to warning fatigue in the feature. PO lines need
+`minimum_qty_per_period` so `expected_qty = max(evidenced, minimum)`.
+
+Evidence sources mostly already exist: **site diary plant record** (best — no new crew behaviour, which
+matters given the split incentive), signed plant docket, timesheet plant allocation. The one genuinely
+new thing needed is a *chargeable-hours record per hired asset per day with a working/standby split*.
+Build on `2026-06-09-equipment-cost-rate` and `2026-04-08-rollover-design-for-equip`.
+
+Per-client ceiling setting (firm / estimate / value cap), defaulting **estimate** for plant and **firm**
+for materials — overridable on the individual PO, since a customer set to "estimate" will still
+occasionally want a hard-capped plant PO.
+
+## ABN labour — the easiest match, and a better idea
+
+PO per worker/engagement authorises hours × rate; the **approved timesheet** evidences hours. This
+evidence leg is *stronger* than a delivery docket: a docket is captured by whoever took delivery and
+nobody signs it off, whereas a timesheet has already been through supervisor approval. The property
+matching tries to manufacture elsewhere comes free here. The CQ-2680 cost-centre argument also answers
+itself — the timesheet already carries the allocation.
+
+**The better idea: don't match, generate.** Under a **Recipient Created Tax Invoice** arrangement
+(ATO-recognised, requires a written agreement, already common in AU construction), the head contractor
+generates the invoice from approved timesheet × PO rate and the worker doesn't issue one. Nothing to
+reconcile — the document is correct the moment it exists. Removes the whole class of wrong-rate,
+wrong-hours, missing-ABN, inconsistent-GST sole-trader invoices, *and* removes the chase-the-subbie
+delay that holds up payment runs. Control and convenience point the same way.
+
+Requires: written RCTI agreement per worker (retained), validated ABN **and GST registration status**
+(not all sole traders are registered), clear RCTI marking, and worker visibility to see/dispute what
+was generated on their behalf — the last matters more than it looks.
+
+**The real risk is self-approval, not overcharging.** On small crews the ABN worker is sometimes also
+the supervisor approving their own hours. That produces a flawless three-way match every time and the
+feature actively vouches for it. Explicit rule needed: **evidence approved by the payee cannot satisfy
+the evidence leg.** Same principle as the existing approver-collision handling, with more force —
+here it defeats a financial control rather than skipping a step.
+
+Also needs PO lines per rate type for overtime/penalty rates (same pattern as plant working/standby).
+
+Worker classification (contractor vs employee) is a legal question and **not Varicon's to answer** —
+but the records created here are exactly what gets examined if it's ever asked, so they should be
+accurate and attributable, and the product shouldn't quietly encourage treating ABN workers identically
+to employees.
+
+## Settings sprawl — five axes is close to too many
+
+| Setting | Default | Ask at onboarding? |
+|---|---|---|
+| Tolerance posture | Balanced | **Yes** |
+| Delivery evidence | Attestation | **Yes** |
+| Bills without a PO | Allowed | No — derive |
+| PO ceiling behaviour | Firm (materials) / Estimate (plant) | No — per spend type |
+| Matching scope | All except subcontract | No — rarely varies |
+
+Each is individually justified; collectively they're an interrogation CS will click through on
+defaults, at which point the defaults *are* the product. Two questions at onboarding, three sensible
+derivations, all five editable later by someone with the permission.
+
 ## Structure
 
 | Section | Content |
