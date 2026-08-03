@@ -2438,6 +2438,185 @@ GST_RATE = Decimal(<span class="s">"0.10"</span>)
   </div>
 </section>
 
+<!-- ============ REJECTION ============ -->
+<section class="sec" id="sec-rejection">
+  <div class="step-pill"><span class="dot"></span>Integration · rejected bill workflow</div>
+  <h2 class="page-t">Rejection and resubmission — three kinds of waiting</h2>
+  <p class="lede">The rejected-bill reapproval work already in flight
+    (<code style="background:#eef1f5;padding:1px 5px;border-radius:3px">2026-07-08-rejected-bill-reapproval</code>) solves
+    the dead-end that <span class="jira">PICBR-1750</span> describes, and its <strong>"Apply credit &amp; resubmit"</strong>
+    path is the back half of the dispute flow — supplier issues a credit, bill goes back through approval carrying it. These
+    should join up rather than run as two parallel mechanisms.</p>
+
+  <div class="banner ok">
+    <div class="b-ico">✓</div>
+    <div><div class="b-t">This supersedes a blocker listed elsewhere in this prototype</div>
+      <div class="b-d"><span class="jira">PICBR-1750</span> is flagged in the walkthrough as "rejecting a flagged line
+        strands the bill". With the resubmit flow shipping, that stops being true — which matters, because rejection becomes
+        a viable resolution for a matching flag rather than a trap. The remaining work is making sure the two features know
+        about each other.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Reject, dispute or park — users will conflate these</h3>
+  <p style="font-size:13px;color:var(--text-2);max-width:82ch;margin-bottom:13px;line-height:1.6">All three start the same
+    way: a bill looks wrong. They differ entirely in <strong>whose problem it is</strong>, and getting the routing wrong
+    wastes a full cycle each time.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:130px"></th><th style="width:180px">Parked</th><th style="width:210px">Rejected</th><th>Disputed</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Problem is</strong></td><td>Nobody's — just early</td><td><strong>Ours</strong> — the bill record is wrong</td>
+          <td><strong>Theirs</strong> — the supplier billed wrong</td></tr>
+        <tr><td><strong>Goes to</strong></td><td>Site supervisor</td><td>Whoever entered / can amend it</td><td>The supplier</td></tr>
+        <tr><td><strong>Typical cause</strong></td><td>Docket not captured yet</td>
+          <td>Wrong PO linked, wrong coding, <strong>OCR misread</strong></td>
+          <td>Rate above PO, charge never ordered, already billed</td></tr>
+        <tr><td><strong>Fixed by</strong></td><td>Capturing evidence</td><td>Editing and resubmitting</td>
+          <td>Credit note or reissued invoice</td></tr>
+        <tr><td><strong>Set by</strong></td><td><span class="pill neutral">Automatic</span></td>
+          <td><span class="pill info">Any approver</span></td><td><span class="pill info">Any approver</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="banner bad">
+    <div class="b-ico">!</div>
+    <div><div class="b-t">Check the bill was read correctly before rejecting or disputing</div>
+      <div class="b-d">An OCR error and a supplier overcharging produce <strong>identical flags</strong> —
+        <span class="jira">VDP-1334</span> has bill OCR fabricating line items that were never on the invoice. Two bad
+        outcomes follow: a rejection cycle burned on a line the supplier never actually charged, or worse, a
+        <strong>dispute notice sent to a supplier about a line item our own OCR invented</strong>. That is embarrassing in a
+        way that costs real commercial goodwill. Both flows need the same cheap gate first: show the flagged line beside the
+        attachment and ask <em>"is the bill wrong, or did we read it wrong?"</em> One click, and it routes to edit rather
+        than to reject or dispute.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>The interaction that will bite — consumption on rejection</h3>
+  <div class="banner warn">
+    <div class="b-ico">⚠</div>
+    <div><div class="b-t">A rejected bill must stop consuming evidence, or its own correction gets blocked</div>
+      <div class="b-d">If a rejected bill's allocations keep counting, the docketed quantity stays consumed. The amended
+        bill is then blocked as <code style="background:rgba(0,0,0,.06);padding:1px 6px;border-radius:3px">over_consumed</code>
+        against evidence its own earlier version is holding — recreating the PICBR-1750 dead end through a completely
+        different mechanism, and much harder to diagnose because everything looks correct.</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card card-p">
+      <h4 class="sub2">The good news: the design already handles it</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">Consumption is computed with a
+        <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">bill__status__in=COMMITTED_STATUSES</code> filter,
+        so allocation rows only <em>count</em> when the bill is committed. Rejection changes status, and consumption releases
+        itself — <strong>no explicit release step, nothing to forget</strong>.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">Make consumption a function of
+        status rather than a separate action and this whole class of bug disappears. But it has to be deliberate, and it
+        needs a test.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">One subtlety worth naming</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65"><strong>Partially Approved must not count.</strong>
+        A bill rejected at tier 3 after tiers 1 and 2 approved has been part-way through the chain. Only <em>final</em>
+        approval commits consumption — otherwise a bill that never completes approval permanently holds quantity.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">So
+        <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">COMMITTED_STATUSES</code> is exactly
+        <em>Awaiting Payment</em> and <em>Paid</em> — not Awaiting Approval, not Partially Approved, not Rejected. Small
+        list, high consequence.</p>
+    </div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Resubmission must re-match, not restore</h3>
+  <p style="font-size:13px;color:var(--16text-2);line-height:1.6;color:var(--text-2);max-width:82ch;margin-bottom:13px">
+    Between rejection and resubmission, four things can have changed. The stored verdict is therefore stale by default, and
+    showing approvers the old one would be worse than showing none.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:34px" class="c">#</th><th>What changed</th><th>Consequence for the resubmitted bill</th></tr></thead>
+      <tbody>
+        <tr><td class="c"><strong>1</strong></td><td>Evidence arrived</td>
+          <td>A bill rejected for a quantity shortfall may now match cleanly. <strong>The rejection reason may no longer
+            apply</strong> — say so in the approver preview rather than making them work it out</td></tr>
+        <tr><td class="c"><strong>2</strong></td><td>Another bill consumed the quantity</td>
+          <td>The re-match can newly fail with <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">over_consumed</code>
+            even though nothing about this bill changed. Must be surfaced before resubmission, not after</td></tr>
+        <tr><td class="c"><strong>3</strong></td><td>The bill itself was edited</td>
+          <td>Lines, quantities or coding changed, so every verdict is invalid. Obvious, and the easy one to remember</td></tr>
+        <tr class="vr"><td class="c"><strong>4</strong></td><td>A credit was applied</td>
+          <td>The "Apply credit &amp; resubmit" path changes the amount payable, so the comparison changes.
+            <strong>This is the one most likely to be missed</strong>, because the credit feels like an adjustment rather
+            than a re-match trigger</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="anno">
+    <div class="an-h">◆ Concrete addition to the resubmit modal</div>
+    <p>The existing step 2 already shows a live preview of what approvers will see. That preview should include the
+      <strong>re-run match verdict</strong>, computed at that moment — so the person resubmitting finds out about a new
+      <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">over_consumed</code> before they send it, rather
+      than the next approver bouncing it straight back. It also closes the loop honestly when the reason has evaporated:
+      <em>"the shortfall that caused this rejection has since been docketed — this bill now matches."</em></p>
+    <p style="margin-top:8px">And record the verdict <strong>per attempt</strong>. Attempt 1 failed on
+      <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">price_variance</code>, attempt 2 clean — that
+      history is what makes the existing attempt counter diagnostic rather than decorative, and it answers "why did this take
+      three rounds?" without reading a timeline.</p>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Where the dispute notice fits</h3>
+  <div class="flow" style="margin-bottom:14px">
+    <div class="flow-n"><span class="f-s">01</span><span class="f-t">Flag raised</span><span class="f-w">engine finds a variance</span></div>
+    <div class="flow-n"><span class="f-s">02</span><span class="f-t">Read check</span><span class="f-w">bill wrong, or misread?</span></div>
+    <div class="flow-n on"><span class="f-s">03</span><span class="f-t">Dispute notice</span><span class="f-w">specific, evidenced ask</span></div>
+    <div class="flow-n"><span class="f-s">04</span><span class="f-t">Credit arrives</span><span class="f-w">supplier responds</span></div>
+    <div class="flow-n"><span class="f-s">05</span><span class="f-t">Apply credit &amp; resubmit</span><span class="f-w">existing flow</span></div>
+    <div class="flow-n"><span class="f-s">06</span><span class="f-t">Re-match &amp; approve</span><span class="f-w">clean by construction</span></div>
+  </div>
+  <p class="foot-note">Steps 5 and 6 already exist. Steps 1–4 are what matching adds, and the join is the credit note: the
+    dispute notice states the disputed lines and amounts, and the credit that comes back is what "Apply credit &amp;
+    resubmit" records. <strong>The dispute's stated amount should pre-fill the credit fields</strong> — ref, amount and reason
+    are all known, so nobody should retype $291.57.</p>
+
+  <div class="banner warn">
+    <div class="b-ico">→</div>
+    <div><div class="b-t">Don't require a rejection to reach the credit path</div>
+      <div class="b-d">Today "Apply credit &amp; resubmit" is reached from the Rejected tab, which means a bill must be
+        rejected to get there. But an AP officer who spots an over-charge <em>before</em> submitting shouldn't have to
+        submit it, get it rejected, and then resubmit — that's a fabricated round trip through two approvers to record a
+        credit everyone already agrees on. Applying a credit should be available wherever a bill is disputed, not only
+        after a rejection.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>The stand-down scenario needs a sixth credit type</h3>
+  <div class="banner info">
+    <div class="b-ico">6</div>
+    <div><div class="b-t">Reclassification — credit one line, re-bill another</div>
+      <div class="b-d">The hero scenario in the rejected-bill prototype is a Kennards hire bill credited because the
+        supplier <em>charged through a stand-down period</em>. That is not any of the five credit types: the plant
+        <strong>was</strong> on site, so the time is real and the evidence is valid — it was billed at the
+        <em>wrong rate</em>. Under the plant-hire model those days belong on the <strong>standby line</strong>, not the
+        working line. So the credit reduces consumption and value on one PO line while the same quantity legitimately
+        moves to another.</div></div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:158px">Credit type</th><th>Quantity effect</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr class="vr"><td><strong>Reclassification</strong><div class="t-sub">new — the 6th</div></td>
+          <td>Releases from PO line A, expected to be re-billed against PO line B. Net evidence unchanged; net value usually
+            reduced.</td>
+          <td>Stand-down days billed at the working rate, credited and re-billed at standby</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="foot-note">Worth handling explicitly, because under the "cancel &amp; rebill" type it would release quantity
+    with no expectation of where it goes — and under "price correction" it would release nothing, leaving the standby line
+    with no headroom to be billed against. Neither is right. See the
+    <a onclick="go('credits')" style="color:var(--blue);cursor:pointer;font-weight:500">credit-note section</a> for the other
+    five, and note that this is a good argument for the credit type being an explicit mandatory choice rather than inferred.</p>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('disputes')">← Disputes &amp; holds</button>
+    <button class="btn btn-p" onclick="go('credits')">Credit notes →</button>
+  </div>
+</section>
+
 <!-- ============ CREDIT NOTES ============ -->
 <section class="sec" id="sec-credits">
   <div class="step-pill"><span class="dot"></span>Reverse flow · credit notes</div>
