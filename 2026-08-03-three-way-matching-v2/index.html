@@ -1879,12 +1879,53 @@ table.calc{border-collapse:separate;border-spacing:0}
 
   <div class="banner warn">
     <div class="b-ico">$</div>
-    <div><div class="b-t">Never park a bill past its due date</div>
-      <div class="b-d">A parked bill is still a payable with a due date, and parking is invisible to the supplier. Waiting
-        for a docket until day 7 on a 7-day-terms invoice means paying late — trading a reconciliation problem for a
-        supplier-relationship one. The parking window must be
-        <code style="background:rgba(0,0,0,.06);padding:1px 6px;border-radius:3px">min(window, due_date − buffer)</code>,
-        and a bill approaching its due date while still parked has to escalate loudly rather than expire quietly.</div></div>
+    <div><div class="b-t">Don't park a bill past its due date — where the due date is still ahead</div>
+      <div class="b-d">A parked bill is still a payable, and parking is invisible to the supplier. Waiting for a docket
+        until day 7 on 7-day terms means paying late — trading a reconciliation problem for a supplier-relationship one. So
+        the window is <code style="background:rgba(0,0,0,.06);padding:1px 6px;border-radius:3px">min(window, due_date −
+        buffer)</code>, and a bill approaching its due date while parked must escalate loudly rather than expire quietly.
+        <strong>But that formula collapses when the bill is already overdue on arrival</strong> — see below, because that is
+        the common case, not the edge case.</div></div>
+  </div>
+
+  <div class="banner bad">
+    <div class="b-ico">130</div>
+    <div><div class="b-t">Reality check: on a live tenant, 130 of 148 bills were already overdue</div>
+      <div class="b-d">Observed tab counts: <strong>148 bills, 130 overdue, 73 still in Draft.</strong> If ~88% of bills are
+        past due by the time anyone processes them, then <code style="background:rgba(0,0,0,.06);padding:1px 6px;border-radius:3px">due_date
+        − buffer</code> is already negative for most of them and the rule above would mean <strong>nothing ever parks</strong>
+        — every bill with incomplete evidence goes straight to a variance, and we are back to the warning fatigue the parking
+        state exists to prevent.</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card card-p">
+      <h4 class="sub2">Revised rule</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">The due date can only discipline the window when it
+        is <strong>in the future</strong>. Split the two cases explicitly:</p>
+      <div class="kv" style="grid-template-columns:150px 1fr;gap:8px 12px;margin-top:10px">
+        <dt>Due date ahead</dt><dd>Park for <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">min(window,
+          due − buffer)</code>. Escalate as the buffer closes.</dd>
+        <dt>Already overdue</dt><dd>Park for the <strong>full window</strong>, but escalate <em>immediately</em> and flag as
+          <em>"parked, already overdue"</em> — visibly distinct from <em>"will go overdue while parked"</em>. The bill was
+          late before matching touched it; blocking it doesn't make it less late.</dd>
+      </div>
+      <p class="foot-note" style="margin-top:11px">The distinction matters for blame as much as behaviour. AP must be able to
+        see that matching didn't cause the delay.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">The uncomfortable reading</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">73 drafts and 130 overdue says the bottleneck is
+        <strong>upstream of approval</strong> — bills are sitting unprocessed past their due date before any matching exists.
+        Adding a gate to a pipeline that is already not keeping up will make the symptom worse and matching will get the
+        blame.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">Which strengthens the rollout
+        argument: <strong>launch on warn-only</strong> for a tenant like this, and treat "bills processed within terms" as a
+        health metric to watch alongside docket coverage. A customer whose AP is already behind is not a good first
+        candidate for enforcement, however much they need the control.</p>
+      <p class="foot-note" style="margin-top:10px">Caveat worth confirming: this may be a staging tenant with stale seeded
+        dates rather than a production picture. If it's real, it's the most important adoption signal in this document; if
+        it's test data, the revised parking rule stands anyway.</p>
+    </div>
   </div>
 
   <h3 class="sub"><span class="bar"></span>Implementation — one mechanism, two problems solved</h3>
