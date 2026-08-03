@@ -1797,6 +1797,228 @@ table.calc{border-collapse:separate;border-spacing:0}
   </div>
 </section>
 
+<!-- ============ EVENTUAL MATCHING ============ -->
+<section class="sec" id="sec-waiting">
+  <div class="step-pill"><span class="dot"></span>Timing · the biggest design gap</div>
+  <h2 class="page-t">Matching is eventual, not instantaneous</h2>
+  <p class="lede">The walkthrough implies an order: PO, then docket, then bill. Reality is unordered. Suppliers invoice
+    same-day while crews process dockets at the end of the week, so at the moment a bill arrives the evidence
+    <strong>frequently doesn't exist yet</strong>. If that state is reported as a discrepancy, the feature's most common
+    output on day one is a false alarm — and users will learn to dismiss the flag that matters.</p>
+
+  <div class="banner bad">
+    <div class="b-ico">Δ</div>
+    <div><div class="b-t">Under-evidenced and over-billed produce identical arithmetic and mean opposite things</div>
+      <div class="b-d">Bill claims 8 m³, evidence shows 5 m³. That is either <em>"the supplier is over-billing by 3
+        m³"</em> or <em>"the third docket hasn't been captured yet"</em> — and the numbers cannot tell you which. What
+        distinguishes them is <strong>time, and whether more evidence is expected</strong>. Treating every shortfall as a
+        variance is the fastest way to make the feature untrustworthy.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Match state, not match result</h3>
+  <p style="font-size:13px;color:var(--text-2);max-width:82ch;margin-bottom:13px;line-height:1.6">The fix is to stop
+    treating the match as a verdict computed once at arrival, and treat it as a <strong>state that improves as evidence
+    lands</strong>. A bill's match status is live.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:168px">State</th><th>Meaning</th><th style="width:150px">In approval queue?</th><th>Exits when</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pill neutral">awaiting_evidence</span><div class="t-sub">parked</div></td>
+          <td>Evidence is incomplete and <strong>more is expected</strong>. Not a discrepancy — a normal, temporary state.</td>
+          <td><span class="pill neutral">No</span><div class="t-sub">Separate queue</div></td>
+          <td>Evidence arrives, window expires, or the PO line is closed</td></tr>
+        <tr><td><span class="pill ok">matched</span></td>
+          <td>Fully evidenced and within tolerance.</td>
+          <td><span class="pill ok">Yes</span></td><td>Approved</td></tr>
+        <tr><td><span class="pill warn">partial</span></td>
+          <td>A genuine discrepancy — evidence is complete and still disagrees.</td>
+          <td><span class="pill ok">Yes</span></td><td>Resolution recorded</td></tr>
+        <tr><td><span class="pill bad">unmatched</span></td>
+          <td>No PO resolved.</td><td><span class="pill ok">Yes</span></td><td>PO linked or manually coded</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="foot-note">The important structural point: <strong>parked bills must leave the approval queue.</strong> A bill
+    an approver cannot action should not be in front of them — otherwise they scroll past it daily, it ages as though the
+    delay were theirs, and the queue stops being a to-do list. This is also why parking has to be automatic: asking a user
+    to park a bill means the default behaviour stays wrong.</p>
+
+  <h3 class="sub"><span class="bar"></span>What ends the wait</h3>
+  <div class="grid-3">
+    <div class="card card-p">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+        <div style="width:30px;height:30px;border-radius:7px;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:15px">✓</div>
+        <div style="font-size:13.5px;font-weight:700">Evidence arrives</div></div>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.6">A new confirmed docket, plant record or timesheet
+        triggers re-match. If it now matches cleanly, the bill moves itself into the approval queue and the AP officer is
+        told — <strong>they never had to come back and check</strong>.</p>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:8px">This is the payoff. Most parked bills
+        should resolve without anyone touching them.</p>
+    </div>
+    <div class="card card-p">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+        <div style="width:30px;height:30px;border-radius:7px;background:var(--amber-bg);color:var(--amber);display:flex;align-items:center;justify-content:center;font-size:15px">⏱</div>
+        <div style="font-size:13.5px;font-weight:700">The window expires</div></div>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.6">After N days with no new evidence, "waiting" becomes
+        "not coming". The shortfall converts to a real <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">qty_variance</code>
+        and the bill enters the approval queue for a decision.</p>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:8px">Per-client, default 7 days —
+        but see the due-date constraint below, which overrides it.</p>
+    </div>
+    <div class="card card-p">
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+        <div style="width:30px;height:30px;border-radius:7px;background:var(--blue-bg);color:var(--blue);display:flex;align-items:center;justify-content:center;font-size:15px">⊘</div>
+        <div style="font-size:13.5px;font-weight:700">The PO line is closed</div></div>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.6">A short-close is an explicit statement that
+        <strong>no further deliveries are coming</strong>. That is the cleanest possible terminator — it converts waiting
+        into a variance immediately, with no timer involved.</p>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:8px">Which is why PO close and matching
+        need designing together, not sequentially.</p>
+    </div>
+  </div>
+
+  <div class="banner warn">
+    <div class="b-ico">$</div>
+    <div><div class="b-t">Never park a bill past its due date</div>
+      <div class="b-d">A parked bill is still a payable with a due date, and parking is invisible to the supplier. Waiting
+        for a docket until day 7 on a 7-day-terms invoice means paying late — trading a reconciliation problem for a
+        supplier-relationship one. The parking window must be
+        <code style="background:rgba(0,0,0,.06);padding:1px 6px;border-radius:3px">min(window, due_date − buffer)</code>,
+        and a bill approaching its due date while still parked has to escalate loudly rather than expire quietly.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Implementation — one mechanism, two problems solved</h3>
+  <p style="font-size:13px;color:var(--text-2);max-width:82ch;margin-bottom:12px;line-height:1.6">This is the same
+    machinery as the recompute gap in <span class="jira">VDP-141</span> ("recomputed on edit" — but an edit to the
+    <em>docket</em> is not an edit to the bill). Build it once.</p>
+  <div class="json">
+<span class="c"># matching/services.py — evidence arrival marks affected bills stale.</span>
+<span class="c"># Never recompute synchronously inside the docket save: one docket can touch</span>
+<span class="c"># many bills, and a site user should not pay that cost (or see it fail).</span>
+
+<span class="k">@transaction.atomic</span>
+<span class="b">def</span> <span class="k">confirm_evidence</span>(evidence_line):
+    evidence_line.confirmed_at = now()
+    evidence_line.save()
+
+    <span class="c"># Mark, don't compute. Cheap, bounded, and safe inside the user's request.</span>
+    stale = (BillLine.objects
+        .filter(bill__match_state__in=[MatchState.AWAITING_EVIDENCE, MatchState.PARTIAL],
+                po_line=evidence_line.po_line)
+        .exclude(bill__status__in=COMMITTED_STATUSES))   <span class="c"># never touch approved bills</span>
+    stale.update(match_stale=<span class="b">True</span>)
+
+    <span class="c"># Fan out after commit so a queue failure can't roll back the docket.</span>
+    transaction.on_commit(<span class="b">lambda</span>: enqueue_rematch(evidence_line.po_line_id))
+
+<span class="c"># Worker. Idempotent by construction — it recomputes from current state,</span>
+<span class="c"># so replays are harmless and ordering doesn't matter.</span>
+<span class="b">def</span> <span class="k">rematch_po_line</span>(po_line_id):
+    po = POLine.objects.select_related(<span class="s">"purchase_order"</span>).get(pk=po_line_id).purchase_order
+    <span class="b">for</span> bill <span class="b">in</span> bills_awaiting(po):
+        result = run_match(bill, po, available_by_po_line(po, exclude_bill_id=bill.pk),
+                           tolerance_for(bill))
+        new_state = derive_state(result, bill)
+        <span class="b">if</span> new_state != bill.match_state:
+            bill.match_state = new_state
+            bill.save(update_fields=[<span class="s">"match_state"</span>])
+            <span class="b">if</span> new_state == MatchState.MATCHED:
+                notify_ap(bill, <span class="s">"Evidence arrived — this bill now matches and is ready to approve"</span>)
+
+<span class="c"># derive_state is where the under-evidenced / over-billed distinction lives.</span>
+<span class="b">def</span> <span class="k">derive_state</span>(result, bill):
+    shortfall = any(f == <span class="s">"qty_variance"</span> <span class="b">and</span> v.qty_variance > <span class="n">0</span>
+                    <span class="b">for</span> v <span class="b">in</span> result.lines <span class="b">for</span> f <span class="b">in</span> v.flags)
+    <span class="b">if</span> shortfall <span class="b">and</span> more_evidence_expected(bill):
+        <span class="b">return</span> MatchState.AWAITING_EVIDENCE       <span class="c"># waiting, not wrong</span>
+    <span class="b">return</span> MatchState.MATCHED <span class="b">if</span> result.clean <span class="b">else</span> MatchState.PARTIAL
+
+<span class="b">def</span> <span class="k">more_evidence_expected</span>(bill):
+    <span class="c">"""The three terminators, in precedence order."""</span>
+    <span class="b">if</span> bill.po_lines_all_closed:        <span class="b">return False</span>   <span class="c"># explicit short-close wins</span>
+    <span class="b">if</span> now() >= bill.park_expires_at:  <span class="b">return False</span>   <span class="c"># min(window, due − buffer)</span>
+    <span class="b">return True</span>
+</div>
+  <div class="anno">
+    <div class="an-h">◆ Batch the fan-out, or a bulk docket import will melt the queue</div>
+    <p>One evidence confirm is cheap. A month-end bulk docket import is thousands, each enqueueing a re-match over
+      overlapping bill sets. Debounce by PO line — collapse repeated jobs for the same PO within a short window — and cap
+      concurrency. The invariant that makes this safe is that <code>rematch_po_line</code> is idempotent and reads current
+      state, so dropping duplicate jobs is always correct.</p>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>Chasing — the parked queue needs an owner</h3>
+  <p style="font-size:13px;color:var(--text-2);max-width:82ch;margin-bottom:13px;line-height:1.6">Parking removes the
+    false alarm but does not produce the docket. Someone has to ask site for it, and the AP officer cannot — they're in the
+    office and have no relationship with the crew. So the bill needs an explicit action that reaches the person who can
+    actually resolve it.</p>
+
+  <div class="frame">
+    <div class="frame-bar"><div class="dots"><i></i><i></i><i></i></div>Bill · INV-BORAL-9917
+      <div class="sp"></div><span class="meta">Awaiting evidence · parked 3 days</span></div>
+    <div class="frame-body">
+      <div class="banner plain" style="margin-bottom:16px">
+        <div class="b-ico">⏱</div>
+        <div><div class="b-t">Waiting on delivery evidence — 3 m³ of 8 m³ not yet docketed</div>
+          <div class="b-d">Parked automatically on 11 May. Will convert to a variance on <strong>18 May</strong>, or
+            sooner if the PO line is closed. <strong>Due 20 May</strong> — 2 days of buffer.</div></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
+        <button class="btn btn-p btn-sm">✉ Request evidence from site</button>
+        <button class="btn btn-s btn-sm">Approve with attestation</button>
+        <button class="btn btn-s btn-sm">Convert to variance now</button>
+      </div>
+      <h4 class="sub2" style="margin-top:0">Request history</h4>
+      <div class="tbl-wrap" style="box-shadow:none">
+        <table>
+          <thead><tr><th>Sent</th><th>To</th><th>Role</th><th>Channel</th><th>Response</th></tr></thead>
+          <tbody>
+            <tr><td class="num">11 May 4:02pm</td><td><strong>Marcus Webb</strong></td><td>Site Supervisor</td>
+              <td>App + email</td><td><span class="pill neutral">No response</span></td></tr>
+            <tr><td class="num">14 May 9:15am</td><td><strong>Marcus Webb</strong></td><td>Site Supervisor</td>
+              <td>App + email</td><td><span class="pill warn">Viewed, no action</span></td></tr>
+            <tr class="vr"><td class="num">16 May 8:00am</td><td><strong>Alec Neill</strong></td><td>Project Manager</td>
+              <td>Email · escalated</td><td><span class="pill neutral">Pending</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card card-p">
+      <h4 class="sub2">What the request must contain</h4>
+      <div class="kv" style="grid-template-columns:22px 1fr;gap:8px 12px">
+        <dt>1</dt><dd><strong>A deep link to the action</strong>, not to the bill. "Capture the docket for
+          PO-VAR12-0042" should open mobile capture pre-filled. A supervisor sent to a bills list will not find their way.</dd>
+        <dt>2</dt><dd><strong>What's actually missing</strong> — "3 m³ of 32 MPa concrete delivered around 11 May", not
+          "evidence required".</dd>
+        <dt>3</dt><dd><strong>Why it matters now</strong> — the due date. Supervisors deprioritise admin without a deadline,
+          reasonably.</dd>
+        <dt>4</dt><dd><strong>An "it never arrived" reply path.</strong> Sometimes the right answer is that the delivery
+          didn't happen — which is a finding, not a failure to respond, and should route straight back to AP as a dispute.</dd>
+      </div>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">Send a digest, not a message per bill</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">At month end a supervisor could receive twenty
+        separate emails, which is indistinguishable from spam and gets filtered. <strong>One daily digest per person</strong>
+        listing everything outstanding, with the individual chase reserved for genuine one-offs and escalations.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">Escalation ladder:
+        supervisor → PM after 3 days → commercial manager if the due date is inside the buffer. Every step recorded on the
+        bill, so "we asked three times" is evidence rather than a recollection.</p>
+      <p class="foot-note" style="margin-top:10px">Also worth exposing as a metric: <strong>median time-to-evidence per
+        project</strong>. It tells you which sites are ready for a stricter setting and which need help — and it is the
+        number that predicts whether this feature will work for a given customer at all.</p>
+    </div>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('abn')">← ABN labour</button>
+    <button class="btn btn-p" onclick="go('completeness')">Evidence completeness →</button>
+  </div>
+</section>
+
 <!-- ============ CREDIT NOTES ============ -->
 <section class="sec" id="sec-credits">
   <div class="step-pill"><span class="dot"></span>Reverse flow · credit notes</div>
