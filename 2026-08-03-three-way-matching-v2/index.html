@@ -2234,8 +2234,15 @@ function compute(){
   const poExists = $('i-poExists').value === '1';
   const poApproved = $('i-poApproved').value === '1';
   const poRate = v('i-poRate'), poQty = v('i-poQty');
-  const dkTotal = v('i-dkA') + v('i-dkB');
-  const prevBilled = v('i-prevQty') - v('i-crQty');
+  const crType = $('i-crType').value, crQty = v('i-crQty');
+  // Credit type decides whether quantity moves at all — see the Credit notes section.
+  // price correction: value only, quantity stays consumed (releasing it would re-open
+  //   headroom for goods that were delivered, kept and paid for).
+  // cancel & rebill: releases consumption so the corrected invoice can consume it.
+  // goods returned: releases consumption AND reduces received — nets to no new headroom.
+  const relQty = crType === 'price' ? 0 : crQty;
+  const dkTotal = v('i-dkA') + v('i-dkB') - (crType === 'returned' ? crQty : 0);
+  const prevBilled = v('i-prevQty') - relQty;
   const draftQty = v('i-draftQty');
   const blQty = v('i-blQty'), blRate = v('i-blRate');
   const tol = {pct:v('i-tolPct'), abs:v('i-tolAbs'), mode:$('i-tolMode').value,
