@@ -1412,6 +1412,100 @@ table.calc{border-collapse:separate;border-spacing:0}
   </div>
 </section>
 
+<!-- ============ NO PO ============ -->
+<section class="sec" id="sec-nopo">
+  <div class="step-pill"><span class="dot"></span>Model · the inverse case</div>
+  <h2 class="page-t">Evidence without authority — dockets captured, no PO</h2>
+  <p class="lede">Someone ordered concrete over the phone because the pour couldn't wait. The crew captured the docket.
+    The bill has now arrived and there is no PO anywhere. This is <strong>the opposite failure</strong> to the one the
+    walkthrough covers, and it is far more common than "PO but no docket" — because a delivery that nobody authorised
+    still gets delivered, and the crew still does their job.</p>
+
+  <div class="banner warn">
+    <div class="b-ico">½</div>
+    <div><div class="b-t">Half the check still works — and it's the half that catches theft</div>
+      <div class="b-d">The docket independently confirms <strong>quantity</strong>. What's missing is <strong>rate
+        authority</strong> — nobody agreed a price in advance, so there is nothing to test the billed rate against.
+        That is a weaker position than a full match but a much stronger one than nothing: you can prove the goods arrived
+        and that you're not being billed twice for them. Only the price is taken on trust.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>What the engine does</h3>
+  <div class="tbl-wrap">
+    <table class="calc">
+      <thead><tr><th>Leg</th><th>Available?</th><th>What it gives</th><th>What it cannot give</th></tr></thead>
+      <tbody>
+        <tr class="vok"><td><strong>Evidence</strong><div class="t-sub">delivery docket</div></td>
+          <td><span class="pill ok">Yes</span></td>
+          <td>Quantity received, cost centre split, and consumption tracking — so a second bill for the same delivery
+            still gets caught as <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">over_consumed</code></td>
+          <td>—</td></tr>
+        <tr class="vr"><td><strong>Authority</strong><div class="t-sub">purchase order</div></td>
+          <td><span class="pill bad">No</span></td>
+          <td>—</td>
+          <td>Rate to compare against, and any spend ceiling. <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">expected_price</code>
+            is <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">null</code>, not zero</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="foot-note">Critically, <strong>the consumption ledger still functions without a PO</strong> — allocations can
+    hang off an evidence line whose <code>po_line</code> is null, keyed on supplier + project instead. Duplicate-payment
+    protection therefore survives the absence of a PO entirely, which is worth knowing: the least-disciplined customers
+    still get the feature's most valuable guarantee.</p>
+
+  <h3 class="sub"><span class="bar"></span>Three resolutions, and what each costs</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:190px">Resolution</th><th>What happens</th><th>When it's right</th></tr></thead>
+      <tbody>
+        <tr style="background:#F2F7FD"><td><strong>Convert to a retrospective PO</strong><div class="t-sub">recommended</div></td>
+          <td>Create the PO from the bill's own lines, at the billed rates, and link the existing dockets to it. The bill
+            then matches cleanly by construction — and every <em>future</em> bill from that supplier matches on rate too.</td>
+          <td>Ongoing supply, or any supplier you'll buy from again. Turns a one-off exception into a permanent fix.</td></tr>
+        <tr><td><strong>Approve the billed rate</strong></td>
+          <td>Accept the rate on trust, code the lines manually, record who accepted it. Quantity stays verified by the
+            docket; the rate is explicitly un-vouched in the audit trail.</td>
+          <td>One-off purchases, emergency work, small values. Honest about what was and wasn't verified.</td></tr>
+        <tr><td><strong>Link to an existing PO</strong></td>
+          <td>A PO was raised, just after the fact or by someone else. Link and re-match normally.</td>
+          <td>More often than you'd think — the PO exists but the bill's reference didn't resolve to it.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="anno">
+    <div class="an-h">◆ Retrospective PO conversion is the highest-value action on this screen</div>
+    <p>It should be a single button, pre-filled from the bill, not a "go and create a PO" instruction that sends the user
+      to another module and loses their place. Two reasons it earns that prominence: it fixes the current bill
+      <em>and</em> improves every future one, and it converts the customers with the worst PO discipline — the ones who
+      need matching most — into customers who get a real three-way check next month.</p>
+    <p style="margin-top:8px">One guard: a retrospective PO must be flagged as such
+      (<code style="background:#eef1f5;padding:1px 5px;border-radius:3px">rate_source = bill_derived</code>), because its
+      rate came from the very document it will be used to check. It is a baseline for future bills, <strong>not</strong>
+      retroactive authorisation of this one — and the audit trail must not let those two be confused.</p>
+  </div>
+
+  <div class="anno q">
+    <div class="an-h">▲ Per-client setting · are no-PO bills permitted at all?</div>
+    <p>Confirmed as a customer-level choice, consistent with the docket requirement. The options:</p>
+    <ul style="margin:8px 0 0 18px;font-size:12.5px;color:var(--text-2);line-height:1.6">
+      <li><strong>Allowed</strong> — code manually and proceed. Suits customers where phone orders are normal reality.</li>
+      <li><strong>Allowed with retrospective PO</strong> — must convert before approval. Enforces discipline at the one
+        moment the user is motivated to comply, because the bill is blocking.</li>
+      <li><strong>Blocked</strong> — available, but expect it to produce backdated POs raised purely to clear bills.
+        That is worse than allowing it: you get the same spend with fake authorisation and a false audit trail.</li>
+    </ul>
+    <p style="margin-top:9px">Default: <strong>allowed</strong>. A customer who has just switched matching on and finds
+      half their bills blocked will conclude the feature is broken, not that their purchasing is undisciplined —
+      even when the latter is true.</p>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('scope')">← Scope &amp; evidence</button>
+    <button class="btn btn-p" onclick="go('plant')">Plant hire →</button>
+  </div>
+</section>
+
 <!-- ============ CREDIT NOTES ============ -->
 <section class="sec" id="sec-credits">
   <div class="step-pill"><span class="dot"></span>Reverse flow · credit notes</div>
