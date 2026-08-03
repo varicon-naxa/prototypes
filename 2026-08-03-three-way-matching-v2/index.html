@@ -3665,16 +3665,105 @@ GST_RATE = Decimal(<span class="s">"0.10"</span>)
       only one who can say whether the movement is legitimate.</p>
   </div>
 
-  <div class="anno bug">
-    <div class="an-h">✖ Two real problems this design has to respect</div>
-    <p><strong>1 · Unassigned cost-centre leakage is already a live issue.</strong> Unassigned costs polluting Budget
-      Overview is documented (<span class="jira">PICBR-874</span>), and several onboarding customers default everything into
-      an "unassigned" bucket. So an unallocated docket quantity may be captured — the crew genuinely may not know — but it
-      must <strong>block bill approval</strong> rather than flow through as unassigned cost. Permissive capture, strict approval.</p>
-    <p style="margin-top:8px"><strong>2 · There is no path to re-code after approval.</strong>
-      <span class="jira">CQ-2714</span> (Christie Civil, Pylon #13753) asks for a Project Lead to edit cost centre and task on
-      an approved bill, and it's currently locked. That raises the stakes on getting coding right <em>before</em> approval,
-      which is exactly why the movement has to be surfaced on the match screen rather than discovered in a budget review.</p>
+  <h3 class="sub"><span class="bar"></span>Problem 1 · "Unassigned" is a designed default that's hard to escape</h3>
+  <p style="font-size:13px;color:var(--text-2);max-width:82ch;margin-bottom:13px;line-height:1.6">I mis-stated this
+    earlier and it's worth correcting, because the accurate version is a stronger argument. <strong>Unassigned is not a leak
+    — it is the intended default state</strong>, with its own tab in Daily Cost Tracking. Nothing lands there by accident. The
+    problem is that the product then makes it <em>hard to get out of</em>, and that is what breaks.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:150px">Issue</th><th>What actually goes wrong</th></tr></thead>
+      <tbody>
+        <tr><td><span class="jira">PICBR-874</span><div class="t-sub">In Progress · Medium</div></td>
+          <td>Narrower than I implied — a <strong>label leak, not a numeric error</strong>. <em>"Some Cost Centres appear as
+            'Unassigned Task - Cost Centre Name' while cost tracking is running at the Cost Centre level… shouldn't appear on
+            Budget Overview tab at all."</strong></em></td></tr>
+        <tr class="vbad"><td><span class="jira">PICBR-1519</span> / <span class="jira">PICBR-1517</span></td>
+          <td><strong>The one that matters most here.</strong> <em>"Coded costs reverting to 'unassigned costs' on projects
+            after an update"</em> — bills become mis-coded <strong>with no user action at all.</strong> So "get the coding right
+            before approval" is necessary but not sufficient; it can un-happen afterwards</td></tr>
+        <tr class="vr"><td><span class="jira">Beltrame</span><div class="t-sub">Pylon #12701 · on hold</div></td>
+          <td>The <em>remediation path</em> regressed: <em>"You can no longer click on the individual unassigned costs and be
+            taken to the source data. This makes resolving unassigned costs much more time consuming and difficult."</em></td></tr>
+        <tr class="vr"><td><span class="jira">PICBR-1571</span></td>
+          <td>Fixing it errors — a false <em>"Replace Material?"</em> duplication warning when editing an unassigned material
+            to assign a cost centre. The escape hatch itself is blocked</td></tr>
+        <tr class="vr"><td><span class="jira">AGS Civil</span><div class="t-sub">Pylon #11358</div></td>
+          <td><em>"Previously we could have unassigned items in the projects &amp; the costs would still come through into the
+            budget so we had an idea of where the budget was sitting… however that isn't happening now &amp; we cant track our
+            costs as efficiently."</em></td></tr>
+        <tr class="vr"><td><span class="jira">CQ-2689</span><div class="t-sub">FCTC beta · unmapped</div></td>
+          <td>Forecast <strong>won't save</strong> because the "Unassigned" cost code is <em>auto-included by Varicon even
+            though it has no cost allocated</em>. An empty bucket blocking a save</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="banner warn" style="margin-top:16px">
+    <div class="b-ico">⇄</div>
+    <div><div class="b-t">What this means for the design: blocking on unallocated only works if the fix path works</div>
+      <div class="b-d">I proposed that unallocated docket quantity should block bill approval — permissive capture, strict
+        approval. That is still right, but it puts weight on an escape path that is <strong>demonstrably broken today</strong>:
+        you can't click through to the source (Beltrame), assigning a cost centre errors (PICBR-1571), and what you do assign
+        can silently revert (PICBR-1519). <strong>Fix the way out before adding a gate that forces people through it</strong>,
+        or matching will be blamed for a pre-existing hole.</div></div>
+  </div>
+  <p class="foot-note">One correction to my earlier note: I said High Group, Quantum Civil and Yatlar "default everything into
+    an unassigned bucket" as though it were a defect. It isn't — it's the designed starting state, and what those three
+    training calls actually show is <em>confusion about it</em>. Real onboarding friction, but not a bug, and the AGS,
+    Beltrame and PICBR-1519 evidence above is what should be cited instead.</p>
+
+  <h3 class="sub"><span class="bar"></span>Problem 2 · No path to re-code after approval — and a ticket pointing the wrong way</h3>
+  <div class="banner bad">
+    <div class="b-ico">✖</div>
+    <div><div class="b-t">Two live tickets pull in opposite directions and nothing records the conflict</div>
+      <div class="b-d"><span class="jira">CQ-2714</span> asks to <strong>relax</strong> the post-approval lock for coding
+        fields. <span class="jira">VDP-1086</span> — <em>"Lock billing fields after bill entry to prevent edits"</em> — asks to
+        <strong>tighten</strong> it, and <em>earlier</em> in the lifecycle. If VDP-1086 shipped as titled it would make the
+        Christie Civil problem strictly worse. The wiki records VDP-1086 as answering "a subset of" CQ-2714's demand, which
+        reads generously; nothing flags them as contradictory. <strong>This is a decision to settle, not two tickets to
+        build.</strong></div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card card-p">
+      <h4 class="sub2">The ask, in the customer's words</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;font-style:italic">"We have instances where the
+        incorrect (or no) Cost Centre is assigned to an invoice and approved and when a PM goes to tidy things up they are
+        unable to; they then have to go back to the person who approved the Bill to fix it up which is very time intensive."</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;font-style:italic;margin-top:9px">"It would be great if
+        the Project Lead Contact was given overriding authorisation to be able to make changes after approval for
+        non-commercial elements of the Bill (eg cost centres and/or tasks) as they are the person ultimately responsible for
+        reporting on costs."</p>
+      <p class="foot-note" style="margin-top:10px">Mark Dolan, General Manager, Christie Civil — <span class="jira">CQ-2714</span>
+        / Pylon #13753, on hold. Note the reasoning: <strong>the person accountable for cost reporting cannot correct the
+        cost coding.</strong> That is the same argument this section makes for the PM owning coding variances.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">What's actually locked, and by whom</h4>
+      <div class="kv" style="grid-template-columns:126px 1fr;gap:8px 12px">
+        <dt>Trigger</dt><dd><strong>Final-level approval</strong> — not first approval</dd>
+        <dt>Scope</dt><dd><strong>The whole bill.</strong> There is no field-level distinction between commercial and
+          coding fields — inventing that taxonomy <em>is</em> the CQ-2714 request</dd>
+        <dt>Escape today</dt><dd>The final approver edits it, or <strong>Superadmin changes it on the client's behalf</strong></dd>
+        <dt>Rationale</dt><dd>By design, so edits can't undo an approver's sign-off. The customer accepts that for
+          commercial detail and finds it excessive for cost allocation</dd>
+      </div>
+      <p class="foot-note" style="margin-top:11px">Also worth knowing: <span class="jira">CQ-2714</span> is filed as
+        "adjacent to" <span class="jira">VDP-687</span> super-admin-approval-safeguards — which is <strong>closed</strong>, and
+        whose scope is the <em>opposite</em> problem (super admin <em>bypassing</em> approval). It carries no post-approval-edit
+        or cost-centre acceptance criteria. So the ask currently points at a done ticket that doesn't cover it.</p>
+    </div>
+  </div>
+  <div class="anno q">
+    <div class="an-h">▲ The decision worth making, and it's small</div>
+    <p>A field-level taxonomy — <strong>commercial fields</strong> (amount, quantity, rate, supplier, tax) stay locked at
+      final approval; <strong>coding fields</strong> (cost centre, task, accounting code) remain editable by a project-level
+      role with every change audited. That satisfies CQ-2714, gives VDP-1086 a coherent scope instead of a title with no
+      description, and resolves <span class="jira">CQ-2503</span> (Christie Civil again — no revert path once synced to Xero)
+      by making the common correction not require a revert at all.</p>
+    <p style="margin-top:8px">It also matters for matching specifically: re-coding changes which budget line bears the cost
+      but <strong>not</strong> the consumption ledger, since quantity and value are untouched. So a coding correction after
+      approval is safe in a way that a quantity correction never is — which is a principled reason to treat the two
+      differently rather than an arbitrary one.</p>
   </div>
 
   <div class="anno q">
