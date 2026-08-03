@@ -505,6 +505,57 @@ table.calc{border-collapse:separate;border-spacing:0}
       question below on whether that default should come from the PO at all.</p>
   </div>
 
+  <h3 class="sub"><span class="bar"></span>POs can now be created by scanning a quote</h3>
+  <p style="font-size:13px;color:var(--text-2);max-width:82ch;margin-bottom:14px;line-height:1.6">
+    <span class="jira">VDP-118</span> lets a user drop a supplier quote and have the PO built from it — supplier, line
+    items, units and rates parsed out (<span class="jira">VDP-122</span>) using the same OCR service the bill side reuses
+    (<span class="jira">VDP-121</span>). For matching this cuts both ways, and the second way is easy to miss.</p>
+  <div class="grid-2">
+    <div class="card card-p">
+      <h4 class="sub2" style="color:var(--green)">↑ It improves match coverage</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">The biggest cause of an unmatchable bill is
+        <em>no PO was ever raised</em> — because raising one was friction. Scanning a quote removes most of that
+        friction, so more spend arrives with an authority leg attached.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">It should also raise the clean-match
+        rate directly: when the PO's rates were parsed from the supplier's own quote, the supplier's later bill is far
+        more likely to agree with them to the cent. Quote-derived POs and bill matching are complementary in a way worth
+        measuring — <strong>clean-match rate segmented by PO origin</strong> is a good early metric.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2" style="color:var(--red)">↓ It puts OCR inside the authority leg</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">Everything on this page argues the PO is the
+        <em>rate authority</em> because it is human-approved and locked. If its rates were machine-read, that claim gets
+        weaker — and the failure is silent.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">If OCR reads a quote's
+        <strong>$2,200</strong> as <strong>$220</strong>, or transposes a rate between two lines, the PO is wrong from
+        birth. The supplier then bills the <em>correct</em> figure — and three-way matching flags it as a price variance
+        against the erroneous PO. The AP officer is now investigating the right bill instead of the wrong PO.</p>
+    </div>
+  </div>
+
+  <div class="banner warn">
+    <div class="b-ico">!</div>
+    <div><div class="b-t">Three-way matching only checks internal consistency — it cannot detect a wrong PO</div>
+      <div class="b-d">The match tests bill against PO and docket. It has no view on whether the PO faithfully reflects
+        what was actually agreed. A quote misread at PO creation produces a PO, docket and bill that are mutually
+        inconsistent in a way that <em>looks</em> like supplier overcharging, or — worse, if the docket qty happens to
+        line up — a perfectly clean match at the wrong price. Bill OCR already fabricates line items in production
+        (<span class="jira">VDP-1334</span>); the same parser now writes the authority leg.</div></div>
+  </div>
+
+  <div class="anno">
+    <div class="an-h">◆ Mitigations, in order of value</div>
+    <p><strong>1 · PO approval is the control point, and should be treated as one.</strong> It is the only human gate
+      between OCR and a locked rate. Approvers should see OCR-derived rates marked as such — the provenance chip pattern
+      already used elsewhere — rather than as ordinary typed values indistinguishable from verified ones.</p>
+    <p style="margin-top:8px"><strong>2 · Keep the quote attached and reachable from the match screen.</strong> When a
+      price variance is flagged, "compare against the original quote" should be one click, not a hunt through File
+      Manager. That makes wrong-PO the first hypothesis an AP officer can cheaply test, instead of the last.</p>
+    <p style="margin-top:8px"><strong>3 · Store rate provenance on the PO line</strong> so the engine can say something
+      more useful than "price variance": <em>"billed rate differs from a PO rate that was OCR-derived and never manually
+      edited"</em>. That points at the likely culprit. Cheap — one field, set at creation.</p>
+  </div>
+
   <div class="anno q">
     <div class="an-h">▲ Open decision · cost centre source of truth</div>
     <p><span class="jira">CQ-2680</span> and AKJ Services (Pylon #13061) both ask that cost centre default from the
@@ -1874,15 +1925,15 @@ table.calc{border-collapse:separate;border-spacing:0}
           <td><strong>Missing-docket policy</strong></td>
           <td><span class="pill warn">Launch</span></td>
           <td>Warn + attest in Balanced and Flexible; block in Strict. Carried by the posture, not a separate question.</td></tr>
-        <tr><td class="c"><strong>5</strong></td>
+        <tr><td class="c"><strong>7</strong></td>
           <td><strong>Draft-bill reservation</strong></td>
           <td><span class="pill warn">Correctness</span></td>
           <td>Advisory in UI, authoritative check in the approval transaction.</td></tr>
-        <tr><td class="c"><strong>6</strong></td>
+        <tr><td class="c"><strong>8</strong></td>
           <td><strong>Credit note handling</strong><div class="t-sub"><span class="jira">CQ-2696</span> · <span class="jira">VDP-694</span></div></td>
           <td><span class="pill warn">Correctness</span></td>
           <td>Signed quantities in the ledger from day one. Cheap now, painful later.</td></tr>
-        <tr><td class="c"><strong>7</strong></td>
+        <tr><td class="c"><strong>9</strong></td>
           <td><strong>Match status on the Bills list</strong><div class="t-sub"><span class="jira">VDP-138</span> open UX call</div></td>
           <td><span class="pill neutral">UX only</span></td>
           <td>Same list, separate column, and make it filterable — unlike sync status today.</td></tr>
