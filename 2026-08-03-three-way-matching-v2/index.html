@@ -1592,69 +1592,81 @@ table.calc{border-collapse:separate;border-spacing:0}
         max(evidenced, minimum)</code> rather than flagging the difference.</div></div>
   </div>
 
-  <h3 class="sub"><span class="bar"></span>Rate periods — a PO line needs a rate card, not a rate</h3>
-  <div class="banner bad">
-    <div class="b-ico">÷</div>
-    <div><div class="b-t">You cannot compare a monthly rate against daily evidence without a decomposition rule</div>
-      <div class="b-d">Hire is priced by period — hour, day, week, month — and each is cheaper per unit as the period
-        lengthens. A machine on site 31 chargeable days against a <strong>$2,800/month</strong> PO rate has no computable
-        <code style="background:rgba(0,0,0,.06);padding:1px 6px;border-radius:3px">expected_price</code> until we know
-        <em>how periods combine</em>. This is not a rounding detail — <strong>without it the engine cannot produce an
-        expected amount for plant at all.</strong></div></div>
+  <h3 class="sub"><span class="bar"></span>The real rate model — an hours allowance, not a period ladder</h3>
+  <div class="banner info">
+    <div class="b-ico">40</div>
+    <div><div class="b-t">Monthly hire is normally priced on an assumed 40-hour week</div>
+      <div class="b-d">The dominant structure is <strong>not</strong> a period ladder where months, weeks and days combine.
+        It is closer to a phone plan: <strong>a fixed monthly rate that includes 40 hours per week, a minimum of 4 hours per
+        day, and an excess charge for hours beyond the allowance</strong> — with the excess typically resolved at billing
+        stage rather than pre-authorised. That single fact changes what the engine has to compute.</div></div>
   </div>
   <div class="tbl-wrap">
     <table class="calc">
-      <thead><tr><th>Rate card on the PO line</th><th class="r">Rate</th><th class="r">Min period</th><th>Notes</th></tr></thead>
+      <thead><tr><th>PO line field</th><th class="r">Example</th><th>What it does</th></tr></thead>
       <tbody>
-        <tr><td><strong>Hourly</strong></td><td class="r num">$95.00</td><td class="r num">4 hrs</td>
-          <td>Wet hire only — attendance-based</td></tr>
-        <tr><td><strong>Daily</strong></td><td class="r num">$350.00</td><td class="r num">1 day</td>
-          <td>Is a "day" 8 hours or a calendar day? Must be stated</td></tr>
-        <tr><td><strong>Weekly</strong></td><td class="r num">$1,050.00</td><td class="r num">1 week</td>
-          <td><strong>Is a "week" 5 days or 7?</strong> The single most common source of hire disputes</td></tr>
-        <tr><td><strong>Monthly</strong></td><td class="r num">$2,800.00</td><td class="r num">4 weeks</td>
-          <td>Usually calendar-based, so weekends are inside it</td></tr>
+        <tr><td><strong>base_rate / base_period</strong></td><td class="r num">$2,800 / month</td>
+          <td>The fixed charge for having the machine</td></tr>
+        <tr style="background:#F2F7FD"><td><strong>included_hours_per_week</strong></td><td class="r num">40.0</td>
+          <td>The allowance the base rate buys. Everything hinges on this</td></tr>
+        <tr><td><strong>excess_hourly_rate</strong></td><td class="r num">$28.00</td>
+          <td>Charged per hour beyond the allowance</td></tr>
+        <tr><td><strong>minimum_hours_per_day</strong></td><td class="r num">4.0</td>
+          <td>A day the machine ran 2 hours still counts 4</td></tr>
+        <tr class="vr"><td><strong>week_definition</strong></td><td class="r">5 or 7 days</td>
+          <td><strong>Varies by supplier — must be a field.</strong> It sets the allowance boundary, so getting it wrong
+            mis-states every excess calculation</td></tr>
+        <tr class="vr"><td><strong>standdown_treatment</strong></td><td class="r">no default</td>
+          <td>Genuinely varies by agreement, so the PO must <strong>force the choice</strong> rather than default it</td></tr>
       </tbody>
     </table>
   </div>
   <div class="grid-2" style="margin-top:16px">
     <div class="card card-p">
-      <h4 class="sub2">Decomposition, shown not assumed</h4>
-      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-bottom:10px">Store a
-        <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">decomposition_rule</code> on the PO line and
-        show the working, exactly as the bill derivation does:</p>
-      <div class="json" style="font-size:11px;padding:13px 15px">31 chargeable days
-  = 1 month (28d)  $2,800.00
-  + 3 days         $1,050.00
-  ─────────────────────────
-  expected         $3,850.00</div>
-      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">Three rules worth supporting:
-        <strong>cheapest combination</strong> (the good default — if the supplier billed more than the cheapest valid
-        decomposition, that is itself the finding), <strong>as stated in the hire agreement</strong> (e.g. "weeks then
-        days"), and <strong>as billed</strong> (accept their decomposition, verify only the arithmetic).</p>
+      <h4 class="sub2">What the engine computes</h4>
+      <div class="json" style="font-size:11px;padding:13px 15px">per day:
+  chargeable = max(hours_run, min_per_day)
+  (unless stand-down says otherwise)
+
+per week:
+  excess = max(0, Σ chargeable − 40)
+
+expected = base_rate
+         + excess × excess_rate</div>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">Two floors and one cap, applied at
+        different granularities — <strong>the minimum is daily, the allowance is weekly.</strong> Apply the allowance monthly
+        instead and a machine that ran 60 hours one week and 20 the next shows no excess when it should show 20.</p>
     </div>
     <div class="card card-p">
-      <h4 class="sub2">This changes the unit-mismatch rule</h4>
-      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">Earlier this prototype says the engine must
-        <strong>refuse to coerce mismatched units</strong> rather than silently multiply. That still holds — but a bill in
-        <em>days</em> against a <em>monthly</em> PO rate is <strong>not</strong> a unit conflict. It is a decomposition, and
-        it is the normal case for plant.</p>
-      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">So distinguish two failures:
-        <strong>convertible via the rate card</strong> (compute it, show the working) versus <strong>genuinely
-        incommensurable</strong> — hours billed against a PO holding only a monthly rate with no hourly rate and no stated
-        hours-per-day. The second must flag; the first must not.</p>
+      <h4 class="sub2">Excess hours are legitimate, not a defect</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">Because over-hours get "sorted at billing stage",
+        the PO cannot predict them and an excess charge is an <strong>expected outcome, not a discrepancy</strong>. It should
+        surface for review with the hours shown, never hard-flag.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:10px">This is also why plant defaults to an
+        <em>estimate</em> ceiling: a hire that runs hot legitimately exceeds its PO value, and blocking it would stop work
+        over a charge everybody expects. What matters is that the excess is <em>evidenced</em> — which is precisely the check.</p>
     </div>
   </div>
   <div class="anno">
-    <div class="an-h">◆ Dry and wet hire compute evidenced quantity differently</div>
-    <p><strong>Dry hire is elapsed-minus-exclusions.</strong> The machine is yours for a period, so chargeable duration
-      starts from calendar elapsed time between on-hire and off-hire, then subtracts whatever the agreement says isn't
-      chargeable (weekends, stand-down, public holidays).</p>
-    <p style="margin-top:8px"><strong>Wet hire is sum-of-hours.</strong> Chargeable duration is the total of recorded
-      working hours; nothing is subtracted because nothing was added in the first place.</p>
-    <p style="margin-top:8px">Two genuinely different computations of the same field. Worth naming in the engine
-      (<code style="background:#eef1f5;padding:1px 5px;border-radius:3px">duration_basis: elapsed | attendance</code>)
-      rather than discovering it as a bug when the first monthly dry-hire invoice arrives.</p>
+    <div class="an-h">◆ The consequence: dry hire needs hours too</div>
+    <p>I had this wrong earlier. If a monthly dry hire includes 40 hours a week with excess beyond it, then
+      <strong>elapsed calendar time is not sufficient evidence even for dry hire</strong> — you cannot verify an excess
+      charge without knowing how many hours the machine actually ran, and the supplier has nobody on site to tell you.</p>
+    <p style="margin-top:8px">The evidence is the machine's own <strong>hour meter</strong> (service meter / SMU): an
+      on-hire reading, an off-hire reading, and ideally daily readings. That is an objective, non-negotiable number both
+      parties can read off the same dial — arguably the strongest evidence available anywhere in this feature.</p>
+    <p style="margin-top:8px">Worth checking whether the Plant &amp; Equipment module already records meter readings for
+      maintenance scheduling. If it does, <strong>the dry-hire billing evidence already exists</strong> and only needs
+      surfacing into the match.</p>
+  </div>
+  <div class="anno q">
+    <div class="an-h">▲ Where a period ladder still applies</div>
+    <p>Some agreements genuinely are period-priced — day, week and month rates that combine, with no hours allowance. Both
+      models need supporting, chosen per PO line
+      (<code style="background:#eef1f5;padding:1px 5px;border-radius:3px">charge_model: hours_allowance | period_ladder</code>).
+      For the ladder case, the decomposition question still matters — 32 days is cheaper as month + week than month + 4 days,
+      and a supplier picking the dearer valid split is itself a finding. But build
+      <strong>hours_allowance first</strong>, since it is the dominant arrangement.</p>
   </div>
 
   <h3 class="sub"><span class="bar"></span>Stand-down — the site diary already holds the answer</h3>
