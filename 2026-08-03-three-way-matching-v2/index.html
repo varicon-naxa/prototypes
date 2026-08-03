@@ -4800,12 +4800,17 @@ function renderE2E(){
       <div class="tbl-wrap" style="box-shadow:none">
         <table><thead><tr><th>${label}</th><th class="r">Budget</th><th class="r">Committed (PO)</th>
           <th class="r">Actual (this bill)</th><th class="r">Remaining</th></tr></thead>
-        <tbody>${perLine.map(l=>`<tr${l.qty?' class="vok"':''}>
+        <tbody>${perLine.map((l,i)=>{
+          // The PO commits its whole value against the single default coding line (index 1).
+          // The docket then apportions ACTUAL cost across lines — which is the point being made.
+          const cm = (E2E.stage>=2 && i===1) ? committed : 0;
+          const ac = E2E.stage>=4 ? l.actual : 0;
+          return `<tr${l.qty?' class="vok"':''}>
           <td><strong>${l.code}</strong> — ${l.name}</td>
           <td class="r num">${money(l.budget)}</td>
-          <td class="r num" style="color:var(--muted)">${l.qty?money(0):'—'}</td>
-          <td class="r num">${l.qty ? '<strong>'+money(E2E.stage>=4?l.actual:0)+'</strong>' : '—'}</td>
-          <td class="r num">${money(l.budget - (E2E.stage>=4?l.actual:0))}</td></tr>`).join('')}
+          <td class="r num" style="color:${cm?'var(--blue)':'var(--disabled)'}">${cm?money(cm):'—'}</td>
+          <td class="r num">${ac ? '<strong>'+money(ac)+'</strong>' : '—'}</td>
+          <td class="r num">${money(l.budget - ac)}</td></tr>`;}).join('')}
         </tbody></table>
       </div>
       <p class="foot-note" style="margin-top:10px">${E2E.stage>=4
@@ -5057,6 +5062,7 @@ function tryInSandbox(k){
 buildRail();
 buildFlows();
 buildScenarios();
+renderE2E();
 INPUTS.forEach(id => { const el = $(id); if(el) el.addEventListener('input', compute); });
 compute();
 go('overview');
