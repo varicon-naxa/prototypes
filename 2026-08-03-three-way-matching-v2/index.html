@@ -5804,6 +5804,21 @@ function apDct(){
 }
 const apTracked = cc => apDct().filter(e=>!e.superseded && (!cc || e.cc===cc)).reduce((a,e)=>a+e.cost,0);
 
+/* Target cost model, per Alec: PO = COMMITTED, docket = TRACKED, bill = ACTUAL.
+   (The live app only has one figure, "Tracked to Date" — this is the direction, not
+   today's behaviour.) The three are stages of the same money, never additive:
+     committed  = ordered but not yet received      (orderQty − delivered) × PO rate
+     tracked    = received but not yet billed       docket entries not yet superseded
+     actual     = billed and approved               approved bill lines
+   Total spend against budget = tracked + actual. Committed is exposure, not spend. */
+const apCommitted = cc => AP.po.status==='Approved'
+  ? AP.po.lines.filter(l=>!cc||l.cc===cc)
+      .reduce((a,l)=>a+Math.max(l.orderQty-apDelivered(l.id),0)*l.rate,0) : 0;
+const apTrackedOnly = cc => apDct().filter(e=>!e.superseded && e.source==='Docket' && (!cc||e.cc===cc))
+  .reduce((a,e)=>a+e.cost,0);
+const apActual = cc => apDct().filter(e=>e.source==='Bills' && (!cc||e.cc===cc))
+  .reduce((a,e)=>a+e.cost,0);
+
 function apSet(k,v){ AP[k] = (k==='supersede') ? v : (parseFloat(v)||0); apRender(); }
 function apGo(v){ AP.view = v; AP.msg=''; apRender(); }
 function apReset(){ AP = apBlank(AP.trackBy); apRender(); }
