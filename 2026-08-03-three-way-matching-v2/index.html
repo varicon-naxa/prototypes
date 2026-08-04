@@ -5796,7 +5796,7 @@ function apDct(){
   });
   AP.bills.filter(b=>b.status==='Approved').forEach(b => b.lines.forEach(l => {
     const pl = l.poLineId ? apLine(l.poLineId) : null;
-    out.push({date:b.date, cc:l.cc||'(unassigned_cost_centre) Unassigned Cost Centre', type:'Contract',
+    out.push({date:b.date, cc:l.cc||AP_UNASSIGNED, type:'Contract',
       resource:pl?pl.resource:l.desc, supplier:AP.po.supplier, unit:pl?pl.unit:'ea',
       unitCost:l.rate, qty:l.qty, cost:+(l.qty*l.rate).toFixed(2),
       source:'Bills', ref:b.ref, superseded:false});
@@ -5807,7 +5807,7 @@ const apTracked = cc => apDct().filter(e=>!e.superseded && (!cc || e.cc===cc)).r
 
 function apSet(k,v){ AP[k] = (k==='supersede') ? v : (parseFloat(v)||0); apRender(); }
 function apGo(v){ AP.view = v; AP.msg=''; apRender(); }
-function apReset(){ AP = apBlank(); apRender(); }
+function apReset(){ AP = apBlank(AP.trackBy); apRender(); }
 function apApprovePo(){ AP.po.status='Approved';
   AP.msg='PO approved — the rates are now the authority. Capture a docket next.'; AP.view='dockets'; apRender(); }
 function apAddDocket(){
@@ -5820,13 +5820,47 @@ function apAddDocket(){
     poLineId:lid, cc, qty:q, status:'To be paid'});
   AP.msg='Docket captured — Total Cost to Date has moved. Check Daily Cost Tracking.'; apRender();
 }
-function apCopyPoToBill(){
-  const lines = AP.po.lines.map((pl,i)=>({id:i+1, poLineId:pl.id, desc:pl.resource, cc:pl.cc,
-    ac:pl.ac, qty:Math.max(apAvailable(pl.id),0), rate:pl.rate})).filter(l=>l.qty>0);
-  if(!lines.length){ AP.msg='Nothing available to bill — capture a docket first.'; AP.view='dockets'; return apRender(); }
+/* Which bill (if any) has already consumed a given docket. This is what makes the
+   link modal able to exclude dockets billed on an earlier invoice — VDP-134 AC #2. */
+function apDocketBill(dkId){
+  return AP.bills.find(b => b.status==='Approved' && (b.docketIds||[]).includes(dkId));
+}
+/* Available quantity for a bill line is the sum of the dockets THIS bill has linked,
+   less anything an approved bill already consumed from them. */
+function apLinkedQty(bill, poLineId){
+  return AP.dockets.filter(d => d.poLineId===poLineId && (bill.docketIds||[]).includes(d.id)
+    && !apDocketBill(d.id)).reduce((a,d)=>a+d.qty,0);
+}
+
+function apNewBill(){
+  if(!AP.dockets.length){ AP.msg='Capture a docket first — there is nothing to bill against.'; AP.view='dockets'; return apRender(); }
   const n = AP.nextBl++;
-  AP.bills.push({id:n, ref:'VR1950'+(7300+n), date:'12/08/2026', status:'Draft', lines});
-  AP.view='bill'; AP.msg='Bill created from the PO at PO rates, quantities pre-filled from available evidence.'; apRender();
+  AP.bills.push({id:n, ref:'VR1950'+(7300+n), date:'12/08/2026', status:'Draft', docketIds:[], lines:[]});
+  AP.view='bill'; AP.linkOpen=true;
+  AP.msg='Bill created. Now link the PO and the dockets this invoice covers — that link is what the match is computed from.';
+  apRender();
+}
+function apToggleLink(bid, dkId){
+  const b = AP.bills.find(x=>x.id===bid);
+  b.docketIds = b.docketIds || [];
+  const i = b.docketIds.indexOf(dkId);
+  if(i>=0) b.docketIds.splice(i,1); else b.docketIds.push(dkId);
+  apRender();
+}
+/* Confirming the link builds the bill's lines from the SELECTED dockets only —
+   one line per PO line, quantity = the linked docket quantity, rate = the PO rate. */
+function apConfirmLink(bid){
+  const b = AP.bills.find(x=>x.id===bid);
+  if(!(b.docketIds||[]).length){ AP.msg='Select at least one docket — or the bill has no evidence to match against.'; return apRender(); }
+  const byLine = {};
+  AP.dockets.filter(d=>b.docketIds.includes(d.id)).forEach(d=>{ byLine[d.poLineId]=(byLine[d.poLineId]||0)+d.qty; });
+  b.lines = Object.entries(byLine).map(([plid,q],i)=>{
+    const pl = apLine(+plid);
+    return {id:i+1, poLineId:pl.id, desc:pl.resource, cc:pl.cc, ac:pl.ac, qty:q, rate:pl.rate};
+  });
+  AP.linkOpen=false;
+  AP.msg=`Linked ${b.docketIds.length} docket${b.docketIds.length>1?'s':''}. Line items built from those dockets at PO rates — edit qty or rate to create a variance.`;
+  apRender();
 }
 function apEditBill(bid,lid,f,v){
   const l = AP.bills.find(x=>x.id===bid).lines.find(x=>x.id===lid);
@@ -5849,16 +5883,17 @@ function apApproveBill(bid){
   AP.view='dct'; apRender();
 }
 function apSeed(){
-  AP = apBlank(); AP.po.status='Approved';
+  AP = apBlank(AP.trackBy); AP.po.status='Approved';
+  const O = apOpts().map(x=>x.code);
   AP.dockets=[
-    {id:1, number:'VAR00420260806132531', date:'06/08/2026', poLineId:2, cc:'(005) Footings', qty:5, status:'To be paid'},
-    {id:2, number:'VAR00420260806112359', date:'06/08/2026', poLineId:2, cc:'(002) Bulk Earthworks', qty:3, status:'To be paid'},
-    {id:3, number:'VAR00420260808141002', date:'08/08/2026', poLineId:3, cc:'(005) Footings', qty:4, status:'To be paid'},
+    {id:1, number:'VAR00420260806132531', date:'06/08/2026', poLineId:2, cc:O[2], qty:5, status:'To be paid'},
+    {id:2, number:'VAR00420260806112359', date:'06/08/2026', poLineId:2, cc:O[1], qty:3, status:'To be paid'},
+    {id:3, number:'VAR00420260808141002', date:'08/08/2026', poLineId:3, cc:O[2], qty:4, status:'To be paid'},
   ];
   AP.nextDk=4;
-  AP.bills=[{id:1, ref:'VR19507301', date:'12/08/2026', status:'Draft', lines:[
-    {id:1, poLineId:2, desc:'(N32) 32 MPa Concrete', cc:'(005) Footings', ac:'310 - Cost of Goods Sold', qty:8, rate:235},
-    {id:2, poLineId:3, desc:'(PUMP) Concrete pump hire', cc:'(005) Footings', ac:'320 - Plant Hire', qty:4, rate:145},
+  AP.bills=[{id:1, ref:'VR19507301', date:'12/08/2026', status:'Draft', docketIds:[1,2,3], lines:[
+    {id:1, poLineId:2, desc:'(N32) 32 MPa Concrete', cc:O[2], ac:'310 - Cost of Goods Sold', qty:8, rate:235},
+    {id:2, poLineId:3, desc:'(PUMP) Concrete pump hire', cc:O[2], ac:'320 - Plant Hire', qty:4, rate:145},
     {id:3, poLineId:null, desc:'Freight / delivery surcharge', cc:'', ac:'', qty:1, rate:180},
   ]}];
   AP.nextBl=2; AP.view='bill';
@@ -5906,11 +5941,11 @@ function apViewPo(){
       <h4 class="sub2" style="margin-top:0">Delivery Items <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">— Amount are GST - EXCLUSIVE</span></h4>
       <div class="tbl-wrap" style="box-shadow:none"><table><thead><tr>
         <th style="width:26px" class="c">#</th><th>Resource</th><th>Resource category</th><th>Accounting Code</th>
-        <th>Task</th><th>Cost Centre</th><th>Unit</th><th class="r">Unit Cost</th><th class="r">Order Qty</th>
+        <th>${apDim().label}</th>${apDim().zones?'<th>Zone</th>':''}<th>Unit</th><th class="r">Unit Cost</th><th class="r">Order Qty</th>
         <th class="r">Delivered Qty</th><th class="r">Total exc. GST</th></tr></thead>
         <tbody>${AP.po.lines.map((l,i)=>{const d=apDelivered(l.id);return `<tr${d?' class="vok"':''}>
           <td class="c" style="color:var(--disabled)">${i+1}</td><td><strong>${l.resource}</strong></td>
-          <td>${l.cat}</td><td>${l.ac}</td><td>${l.task}</td><td>${l.cc}</td><td>${l.unit}</td>
+          <td>${l.cat}</td><td>${l.ac}</td><td>${l.cc}</td>${apDim().zones?`<td>${l.zone}</td>`:''}<td>${l.unit}</td>
           <td class="r num">${money(l.rate)}</td><td class="r num">${qty(l.orderQty)}</td>
           <td class="r num"${d?' style="font-weight:700;color:var(--green)"':''}>${qty(d)}</td>
           <td class="r num">${money(l.orderQty*l.rate)}</td></tr>`;}).join('')}</tbody></table></div>
@@ -5941,14 +5976,14 @@ function apViewDockets(){
             ${AP.po.lines.map(l=>`<option value="${l.id}">${l.resource} — ${qty(apDelivered(l.id))} of ${qty(l.orderQty)} received</option>`).join('')}</select></div>
           <div><div class="ph-lbl">Received qty</div><input id="dk-qty" type="number" value="5" step="1" min="0"
             style="width:94px;height:36px;padding:6px 9px;border:1px solid var(--field);border-radius:4px;text-align:right;font-family:'Roboto';font-size:12.5px" /></div>
-          <div><div class="ph-lbl">Cost Centre <span style="color:var(--red)">*</span></div><select id="dk-cc"
+          <div><div class="ph-lbl">${apDim().label} <span style="color:var(--red)">*</span></div><select id="dk-cc"
             style="height:36px;padding:6px 9px;border:1px solid var(--field);border-radius:4px;font-family:'Roboto';font-size:12.5px;min-width:190px">
-            ${AP_CCS.map(c=>`<option>${c.code}</option>`).join('')}</select></div>
+            ${apOpts().map(c=>`<option>${c.code}</option>`).join('')}</select></div>
           <button class="btn btn-p btn-sm" onclick="apAddDocket()">Add docket</button></div>
         <p class="foot-note" style="margin-top:10px">Choose a cost centre the PO didn't authorise and the bill will raise
           <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">coding_variance</code>.</p></div>
       ${AP.dockets.length?`<div class="tbl-wrap" style="box-shadow:none"><table><thead><tr>
-        <th>Date</th><th>Docket Number</th><th>Supplier</th><th>Cost Centre</th><th>Purchase Order</th>
+        <th>Date</th><th>Docket Number</th><th>Supplier</th><th>${apDim().label}</th><th>Purchase Order</th>
         <th class="r">Qty</th><th class="r">At PO rate</th><th>Status</th></tr></thead>
         <tbody>${AP.dockets.map(d=>{const pl=apLine(d.poLineId);const ok=d.cc===pl.cc;return `<tr class="${ok?'':'vr'}">
           <td class="num">${d.date}</td><td class="num">${d.number}</td><td>${AP.po.supplier}</td>
@@ -6004,7 +6039,7 @@ function apViewBill(){
             ${t[0]} ${t[1]?`<span style="color:${(i===2&&cum>st.delivered+1e-9)?'var(--red)':'var(--green)'}">${t[1]}</span>`:''}</div>`).join('')}
       </div>
       <div class="tbl-wrap" style="box-shadow:none"><table class="calc"><thead><tr>
-        <th style="width:22px"></th><th>Description</th><th>Cost Centre</th><th>Accounting code</th>
+        <th style="width:22px"></th><th>Description</th><th>${apDim().label}</th><th>Accounting code</th>
         <th class="r">PO rate</th><th class="r">Available</th><th class="r">Qty</th><th class="r">Rate</th>
         <th class="r">Amount</th><th>Result</th></tr></thead>
         <tbody>${ms.map(({l,m})=>{const bad=m.flags.some(f=>AP_BLOCKING.includes(f));
@@ -6015,7 +6050,7 @@ function apViewBill(){
           <td><select onchange="apEditBill(${b.id},${l.id},'cc',this.value)"
             style="height:30px;padding:4px 7px;border:1px solid ${l.cc?'var(--field)':'var(--red)'};border-radius:4px;font-family:'Roboto';font-size:12px;min-width:172px">
             <option value=""${l.cc?'':' selected'}>— required —</option>
-            ${AP_CCS.map(c=>`<option${c.code===l.cc?' selected':''}>${c.code}</option>`).join('')}</select></td>
+            ${apOpts().map(c=>`<option${c.code===l.cc?' selected':''}>${c.code}</option>`).join('')}</select></td>
           <td>${l.ac||'<span class="pill bad">Required</span>'}</td>
           <td class="r num">${m.pl?money(m.pl.rate):'—'}</td>
           <td class="r num">${m.avail===null?'—':qty(m.avail)}</td>
@@ -6043,14 +6078,14 @@ function apViewBill(){
 }
 
 function apViewBudget(){
-  const rows = AP_CCS.map(c=>({...c, tracked:apTracked(c.code)}));
-  const un = apTracked('(unassigned_cost_centre) Unassigned Cost Centre');
+  const rows = apOpts().map(c=>({...c, tracked:apTracked(c.code)}));
+  const un = apTracked(AP_UNASSIGNED);
   const t = rows.reduce((a,r)=>({b:a.b+r.budget, k:a.k+r.tracked}),{b:0,k:0});
   return `<div class="frame" style="border-radius:0 0 8px 8px;margin:0">
     <div class="frame-bar">Budget Overview<div class="sp"></div><span class="meta">Cost Centre view</span></div>
     <div class="frame-body">
       <div class="tbl-wrap" style="box-shadow:none"><table><thead><tr>
-        <th>Cost Centre</th><th class="r">Budget</th><th class="r">Tracked to Date</th><th class="r">Remaining</th>
+        <th>${apDim().label}</th><th class="r">Budget</th><th class="r">Tracked to Date</th><th class="r">Remaining</th>
         <th style="width:160px">Used</th></tr></thead>
         <tbody>${rows.map(r=>{const p=r.budget?Math.min(100,r.tracked/r.budget*100):0;
           return `<tr${r.tracked?' class="vok"':''}><td><strong>${r.code}</strong></td>
@@ -6060,7 +6095,7 @@ function apViewBudget(){
           <td><div style="height:6px;background:#E0E0E0;border-radius:3px"><div style="height:6px;width:${p}%;
             background:${p>=100?'var(--red)':'var(--green)'};border-radius:3px"></div></div>
             <div class="t-sub">${p.toFixed(1)}%</div></td></tr>`;}).join('')}
-        ${un?`<tr class="vbad"><td><strong>(unassigned_cost_centre) Unassigned Cost Centre</strong>
+        ${un?`<tr class="vbad"><td><strong>${AP_UNASSIGNED}</strong>
           <div class="t-sub">uncoded cost has leaked here — cf. PICBR-874</div></td>
           <td class="r" style="color:var(--disabled)">—</td><td class="r num" style="font-weight:700">${money(un)}</td>
           <td class="r" style="color:var(--disabled)">—</td><td></td></tr>`:''}
@@ -6084,10 +6119,10 @@ function apViewDct(){
       ${!e.length?`<div class="empty-state"><div class="ico-big">📊</div><div class="title">No cost entries yet</div>
         <div class="sub">Capture a docket or approve a bill — entries appear with their <code>Source</code>.</div></div>`
       :`<div class="tbl-wrap" style="box-shadow:none"><table><thead><tr>
-        <th>Date</th><th>Cost Centre</th><th>Type</th><th>Resource</th><th>Supplier</th><th>Unit</th>
+        <th>Date</th><th>${apDim().label}</th><th>Type</th><th>Resource</th><th>Supplier</th><th>Unit</th>
         <th class="r">Unit Cost</th><th class="r">Qty</th><th class="r">Cost</th><th>Source</th></tr></thead>
         <tbody>${Object.entries(byCc).map(([cc,list])=>`
-          <tr style="background:#fbfcfd"><td colspan="10"><strong>Cost Centre: ${cc}</strong>
+          <tr style="background:#fbfcfd"><td colspan="10"><strong>${apDim().label}: ${cc}</strong>
           <span style="color:var(--muted);margin-left:10px">Total Cost: ${money(list.filter(x=>!x.superseded).reduce((a,x)=>a+x.cost,0))}</span></td></tr>
           ${list.map(x=>`<tr${x.superseded?' style="opacity:.45"':''}>
             <td class="num">${x.date}</td><td>${x.cc}</td><td>${x.type}</td>
