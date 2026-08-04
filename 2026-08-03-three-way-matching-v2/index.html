@@ -3784,6 +3784,167 @@ GST_RATE = Decimal(<span class="s">"0.10"</span>)
       differently rather than an arbitrary one.</p>
   </div>
 
+  <h3 class="sub"><span class="bar"></span>Decided · post-approval coding correction</h3>
+  <div class="banner ok">
+    <div class="b-ico">✓</div>
+    <div><div class="b-t">Commercial fields stay locked at final approval. Coding fields become editable by role.</div>
+      <div class="b-d">This adopts <span class="jira">CQ-2714</span> and gives
+        <span class="jira">VDP-1086</span> a coherent scope instead of a title with no description. It also removes the
+        contradiction between them: VDP-1086 locks <em>what should be locked</em>, and this defines <em>what shouldn't be</em>,
+        so they stop pulling in opposite directions.</div></div>
+  </div>
+
+  <h4 class="sub2">The field taxonomy — three tiers, not two</h4>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:190px">Tier</th><th style="width:250px">Fields</th><th>After final approval</th></tr></thead>
+      <tbody>
+        <tr class="vbad"><td><strong>Commercial</strong><div class="t-sub">changes what we owe</div></td>
+          <td>Amount · quantity · unit rate · supplier · tax code · invoice reference · dates</td>
+          <td><span class="pill bad">Locked</span> — editing these would undo an approver's sign-off, and would invalidate the
+            match verdict and the consumption ledger. Correcting them means a credit note or a reject-and-resubmit, as today</td></tr>
+        <tr class="vok"><td><strong>Coding — internal</strong><div class="t-sub">changes which budget line pays</div></td>
+          <td><strong>Cost centre · task / WBS</strong></td>
+          <td><span class="pill ok">Editable by role</span> — Varicon-internal cost tracking only. Nothing leaves the system,
+            so this is genuinely safe. Audited</td></tr>
+        <tr class="vr"><td><strong>Coding — synced</strong><div class="t-sub">changes the GL</div></td>
+          <td><strong>Accounting code</strong></td>
+          <td><span class="pill warn">Editable, triggers re-sync</span> — see below. Not in the same tier as cost centre,
+            even though it feels like one</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="banner warn" style="margin-top:16px">
+    <div class="b-ico">⇄</div>
+    <div><div class="b-t">Why accounting code is not in the same tier as cost centre</div>
+      <div class="b-d">Cost centre and task are <strong>Varicon's own</strong> cost-tracking dimensions — changing them moves
+        numbers inside Varicon and nowhere else. The <strong>accounting code is the GL account</strong>, it syncs to Xero/MYOB,
+        and changing it after the bill has synced changes <em>their</em> ledger. So it can be corrected by the same role, but it
+        must mark the bill for re-sync rather than quietly diverging from the accounting system. Worth noting that
+        <span class="jira">CQ-2714</span>'s own wording asks only for <em>"cost centres and/or tasks"</em> — the customer drew
+        this line correctly without being asked to.</div></div>
+  </div>
+
+  <h4 class="sub2">Who, and what gets recorded</h4>
+  <div class="grid-2">
+    <div class="card card-p">
+      <h4 class="sub2" style="margin-top:0">Permission</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">A <strong>distinct permission</strong>, not bundled
+        into general bill editing — held by the project-level role accountable for cost reporting. Per the customer:
+        <em>"the person ultimately responsible for reporting on costs."</em></p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:9px">Notably the holder <strong>need not be
+        an approver</strong>. That is the whole point — today the PM has to go back to whoever approved the bill, which is the
+        time sink being complained about. Decoupling the two is the fix.</p>
+      <p class="foot-note" style="margin-top:10px">It should not require Superadmin. Varicon support editing customer bills on
+        request is the current escape hatch and it is not a workflow, it's a support burden.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2" style="margin-top:0">Audit — non-negotiable</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">Every correction records <strong>who, when, from what,
+        to what, and why</strong>. A free-text reason should be required, not optional: a coding change is a budget movement
+        between two lines, and the reason is the only thing that makes it reviewable later.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:9px">Surface it on the bill's own timeline
+        alongside approvals, and in a <strong>coding-movement report</strong> — cost moved between cost centres, by whom, over a
+        period. Without that report, a re-coding permission is an unmonitored way to reshape a budget.</p>
+    </div>
+  </div>
+
+  <div class="frame">
+    <div class="frame-bar"><div class="dots"><i></i><i></i><i></i></div>Bill · INV-BORAL-9912 · approved
+      <div class="sp"></div><span class="meta">Correcting coding · Alec Neill, Project Manager</span></div>
+    <div class="frame-body">
+      <div class="banner plain" style="margin-bottom:15px">
+        <div class="b-ico">🔒</div>
+        <div><div class="b-t">Approved 14 May · commercial fields locked</div>
+          <div class="b-d">Amount, quantities, rates and supplier cannot be changed. Cost centre and task can, because they
+            don't alter what is owed.</div></div>
+      </div>
+      <div class="tbl-wrap" style="box-shadow:none;margin-bottom:14px">
+        <table>
+          <thead><tr><th>Field</th><th>Value</th><th style="width:130px">Status</th></tr></thead>
+          <tbody>
+            <tr><td>Billed amount</td><td class="num">$2,420.00 incl. GST</td><td><span class="pill neutral">🔒 Locked</span></td></tr>
+            <tr><td>Quantity · rate</td><td class="num">8.00 m³ × $220.00</td><td><span class="pill neutral">🔒 Locked</span></td></tr>
+            <tr><td>Supplier · invoice ref</td><td>BORAL Concrete · INV-BORAL-9912</td><td><span class="pill neutral">🔒 Locked</span></td></tr>
+            <tr class="vok"><td><strong>Cost centre</strong></td>
+              <td><div style="position:relative;max-width:230px">
+                <select style="width:100%;height:34px;padding:6px 26px 6px 9px;border:1px solid var(--field);border-radius:4px;font-family:'Roboto';font-size:12.5px;background:#fff;appearance:none;-webkit-appearance:none;cursor:pointer">
+                  <option>CC-101 — Earthworks</option><option selected>CC-104 — Concrete Works</option><option>CC-110 — Drainage</option></select>
+                <span style="position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--disabled);font-size:10px;pointer-events:none">▾</span></div></td>
+              <td><span class="pill ok">Editable</span></td></tr>
+            <tr class="vok"><td><strong>Task / WBS</strong></td>
+              <td><div style="position:relative;max-width:230px">
+                <select style="width:100%;height:34px;padding:6px 26px 6px 9px;border:1px solid var(--field);border-radius:4px;font-family:'Roboto';font-size:12.5px;background:#fff;appearance:none;-webkit-appearance:none;cursor:pointer">
+                  <option selected>04.10 — Slab &amp; footings</option><option>02.30 — Bulk earthworks</option></select>
+                <span style="position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--disabled);font-size:10px;pointer-events:none">▾</span></div></td>
+              <td><span class="pill ok">Editable</span></td></tr>
+            <tr class="vr"><td><strong>Accounting code</strong></td>
+              <td class="num">5-1200 — Concrete supply</td>
+              <td><span class="pill warn">Editable · re-syncs</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="max-width:430px;margin-bottom:13px">
+        <div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:6px">Reason for change <span style="color:var(--red)">*</span></div>
+        <input placeholder="e.g. concrete was poured on the access road, not the slab"
+          style="width:100%;height:38px;padding:8px 11px;border:1px solid var(--field);border-radius:4px;font-family:'Roboto';font-size:13px" />
+      </div>
+      <h4 class="sub2">Timeline</h4>
+      <div class="tbl-wrap" style="box-shadow:none">
+        <table>
+          <tbody>
+            <tr><td style="width:130px" class="num">14 May 2:10pm</td><td>Approved by <strong>James Baker</strong> · Commercial Manager</td></tr>
+            <tr class="vok"><td class="num">22 May 9:04am</td>
+              <td><strong>Coding corrected</strong> by <strong>Alec Neill</strong> · Project Manager<br>
+                <span style="font-size:11.5px;color:var(--muted)">Cost centre CC-101 → CC-104 · $660.00 moved ·
+                <em>"3 m³ was recorded against Earthworks in error — all 8 m³ went into the slab"</em></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <h4 class="sub2">What recomputes, and what deliberately doesn't</h4>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:210px">Downstream</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr class="vok"><td><strong>Consumption ledger</strong></td>
+          <td><span class="pill ok">Untouched</span> — and this is the safety argument. Quantity and value don't change, so
+            nothing about what has been consumed against the docket moves. A coding correction <strong>cannot</strong> create
+            a double-payment route, which is precisely why it is safe to allow after approval when a quantity change is not</td></tr>
+        <tr><td><strong>Match verdict</strong></td>
+          <td><span class="pill ok">Unchanged</span> — rate × quantity is unaffected. The stored verdict stays valid, so no
+            re-match is triggered</td></tr>
+        <tr class="vr"><td><strong>Daily Cost Tracking · budget · forecast</strong></td>
+          <td><span class="pill warn">Recomputes</span> — cost moves between two budget lines. Both must update, and the
+            movement should be visible rather than the numbers just quietly differing from last week</td></tr>
+        <tr class="vr"><td><strong>Xero / MYOB</strong></td>
+          <td><span class="pill warn">Only if accounting code changed</span> — cost centre and task don't leave Varicon.
+            An accounting-code change marks the bill for re-sync</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="anno q">
+    <div class="an-h">▲ One caveat worth deciding · closed periods</div>
+    <p>Moving cost between cost centres retrospectively changes a period that may already have been reported on — to a
+      client, a financier, or internally at month end. Recommend a <strong>period lock</strong>: coding corrections are free
+      within the open period, and require a higher permission (or are simply blocked) once a period is closed. Otherwise last
+      month's reported numbers change after the fact and nobody can reconcile a report to the system that produced it.</p>
+    <p style="margin-top:8px">Not a blocker for shipping — most corrections happen within days — but it should be a
+      deliberate choice rather than something discovered at the first month end.</p>
+  </div>
+
+  <div class="anno">
+    <div class="an-h">◆ A useful side-effect</div>
+    <p><span class="jira">PICBR-1519</span> / <span class="jira">PICBR-1517</span> have coded costs silently reverting to
+      unassigned after system updates — bills becoming mis-coded through no user action. Today there is <em>no way to fix
+      that on an approved bill</em>. An audited coding-correction permission is also the remediation tool for that damage,
+      which makes it worth more than the CQ-2714 request alone suggests.</p>
+  </div>
+
   <div class="anno q">
     <div class="an-h">▲ Still to decide</div>
     <p><strong>Does the split have to total the received quantity exactly?</strong> Recommend yes, as an invariant — 8 m³
