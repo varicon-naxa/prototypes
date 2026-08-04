@@ -3659,6 +3659,160 @@ GST_RATE = Decimal(<span class="s">"0.10"</span>)
   </div>
 </section>
 
+<!-- ============ BUDGET ============ -->
+<section class="sec" id="sec-budget">
+  <div class="step-pill"><span class="dot"></span>Budget · committed, tracked, actual</div>
+  <h2 class="page-t">Where matching earns its place — the tracked → actual transition</h2>
+  <p class="lede">Each document in the chain creates a different kind of cost, and they are <strong>not additive</strong>.
+    A docket records cost that has been <em>incurred</em>; the bill records the same cost as <em>real</em>. When the bill
+    is approved, tracked must be <strong>superseded</strong> by actual — not added to it. Getting that wrong either
+    doubles the project's cost or loses it entirely, and <strong>matching is the only thing that makes the swap
+    correct.</strong></p>
+
+  <div class="legs" style="grid-template-columns:repeat(3,1fr)">
+    <div class="leg po">
+      <div class="lg-h"><div class="lg-ico">📋</div><div>
+        <div class="lg-n">Committed</div><div class="lg-q">Authorised, not received</div></div></div>
+      <p>Created when the <strong>PO is approved</strong>. Σ (order qty × PO rate), less what has been billed. It is a
+        promise, not a cost.</p>
+      <div class="lg-src">Reduces as billing consumes the PO</div>
+    </div>
+    <div class="leg dk">
+      <div class="lg-h"><div class="lg-ico">🚚</div><div>
+        <div class="lg-n">Tracked</div><div class="lg-q">Incurred, not invoiced</div></div></div>
+      <p>Created when <strong>evidence is captured</strong> — docket, timesheet, plant hours. Σ (received qty × PO rate).
+        <strong>This is Varicon's differentiator</strong>: the cost is visible before the invoice arrives.</p>
+      <div class="lg-src">Accrual. Superseded by actual, never added to it</div>
+    </div>
+    <div class="leg bl">
+      <div class="lg-h"><div class="lg-ico">🧾</div><div>
+        <div class="lg-n">Actual</div><div class="lg-q">Real and payable</div></div></div>
+      <p>Created when the <strong>bill is approved</strong>. The billed amount, coded to a cost centre, synced to the
+        accounting system.</p>
+      <div class="lg-src">The only figure the GL agrees with</div>
+    </div>
+  </div>
+
+  <div class="banner bad">
+    <div class="b-ico">2×</div>
+    <div><div class="b-t">Without a line-level link, the swap is impossible — so you double-count or lose the cost</div>
+      <div class="b-d">If a docket tracked <strong>$1,760</strong> and the bill posts <strong>$1,760</strong> and both
+        count, the project shows <strong>$3,520</strong>. To avoid that, the system has to know <em>which tracked cost this
+        bill line replaces</em> — which is precisely the docket-to-bill-line link that three-way matching creates. Without
+        the link there is no way to answer it, so you get one of two failures and no way to tell which.</div></div>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>This is already three open tickets</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:150px">Key</th><th>The ask, and which failure it describes</th></tr></thead>
+      <tbody>
+        <tr class="vbad"><td><span class="jira">CQ-2758</span><div class="t-sub">Synq Projects</div></td>
+          <td><em>"Approved bill amount should supersede tracked cost in cost tracking."</em> <strong>This is exactly the
+            question</strong>, asked by a customer, and it has no recorded decision either way. The source-of-truth conflict
+            when tracked and actual disagree</td></tr>
+        <tr class="vbad"><td><span class="jira">CQ-2737</span><div class="t-sub">Dig It Civil</div></td>
+          <td>Allocate one bill to both an equipment asset and a project <strong>without double entry</strong> — the same
+            double-count, on the plant axis</td></tr>
+        <tr class="vr"><td><span class="jira">PICBR-1495</span></td>
+          <td><em>"Bill line items not linked to a Docket are not tracked in Daily Cost Tracking"</em> — the
+            <strong>opposite</strong> failure. Cost silently disappears rather than doubling. Note the cause: <em>not linked
+            to a docket</em>. The link is the whole mechanism</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="foot-note">Read together these three say the same thing from different angles: <strong>cost tracking cannot
+    reconcile evidence with invoices because nothing connects them at line level.</strong> That is a stronger case for
+    matching than "faster reconciliation" — it is not an efficiency feature, it is what makes the cost figures correct.</p>
+
+  <h3 class="sub"><span class="bar"></span>The transition, stage by stage</h3>
+  <div class="tbl-wrap">
+    <table class="calc">
+      <thead><tr><th>Event</th><th class="r">Committed</th><th class="r">Tracked</th><th class="r">Actual</th>
+        <th>Project total</th></tr></thead>
+      <tbody>
+        <tr><td><strong>PO approved</strong><div class="t-sub">40 m³ @ $220</div></td>
+          <td class="r num">$8,800</td><td class="r num">—</td><td class="r num">—</td>
+          <td class="num">$8,800 committed</td></tr>
+        <tr class="vok"><td><strong>Docket captured</strong><div class="t-sub">8 m³ received</div></td>
+          <td class="r num">$7,040<div class="t-sub">less received</div></td>
+          <td class="r num"><strong>$1,760</strong></td><td class="r num">—</td>
+          <td class="num">$8,800<div class="t-sub">no change — reclassified, not added</div></td></tr>
+        <tr class="vok"><td><strong>Bill approved &amp; matched</strong><div class="t-sub">8 m³ @ $220</div></td>
+          <td class="r num">$7,040</td>
+          <td class="r num"><strong>$0</strong><div class="t-sub">released</div></td>
+          <td class="r num"><strong>$1,760</strong></td>
+          <td class="num">$8,800<div class="t-sub">still no change</div></td></tr>
+        <tr class="vr"><td><strong>Bill approved with accepted variance</strong>
+          <div class="t-sub">billed $235/m³, variance accepted</div></td>
+          <td class="r num">$7,040</td><td class="r num">$0</td>
+          <td class="r num">$1,880<div class="t-sub">+$120</div></td>
+          <td class="num">$8,920<div class="t-sub">the variance is the only real movement</div></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="anno">
+    <div class="an-h">◆ The test of a correct implementation</div>
+    <p>Capturing a docket should <strong>not change the project's total cost</strong> — it reclassifies committed into
+      tracked. Approving a matched bill should <strong>not change it either</strong> — it reclassifies tracked into actual.
+      <strong>The only events that move the total are a variance being accepted, an off-PO charge, or a credit note.</strong>
+      If capturing a docket or approving a clean bill moves the total, something is being counted twice.</p>
+    <p style="margin-top:8px">That gives a single, testable invariant worth asserting directly:
+      <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">committed + tracked + actual</code> changes only on
+      a priced event, never on a document transition.</p>
+  </div>
+
+  <h3 class="sub"><span class="bar"></span>What each match outcome does to the budget</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:180px">Outcome</th><th>Budget effect</th></tr></thead>
+      <tbody>
+        <tr class="vok"><td><span class="pill ok">matched</span></td>
+          <td>Tracked released, actual posted at the same value. Total unchanged. <strong>The clean swap</strong></td></tr>
+        <tr><td><span class="pill neutral">awaiting_evidence</span><div class="t-sub">parked</div></td>
+          <td>No actual yet, and <strong>no tracked either</strong> — the evidence hasn't arrived. The bill sits in payables
+            but contributes nothing to project cost, which is correct: parking does not distort the budget</td></tr>
+        <tr class="vr"><td><span class="pill warn">price variance accepted</span></td>
+          <td>Actual exceeds the tracked amount it replaced. <strong>The difference must land visibly</strong> — it is a real
+            cost increase against budget, and burying it inside the swap is how a project drifts without anyone seeing why</td></tr>
+        <tr class="vr"><td><span class="pill warn">off-PO line</span></td>
+          <td>No committed, no tracked — <strong>actual appears from nowhere</strong>. This is why the coding must be
+            resolved before approval: there is no PO line to inherit a cost centre from, so an uncoded off-PO charge lands
+            nowhere useful. See <a onclick="go('coding')" style="color:var(--blue);cursor:pointer;font-weight:500">Coding authority</a></td></tr>
+        <tr><td><span class="pill bad">credit note</span></td>
+          <td>Reduces actual. Whether it also returns <em>tracked</em> depends on the credit type — a cancel-and-rebill
+            restores the tracked accrual pending the corrected invoice; a price correction does not</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="anno q">
+    <div class="an-h">▲ Open · does actual supersede tracked, or reconcile against it?</div>
+    <p><span class="jira">CQ-2758</span> asks for supersede, and that is almost certainly right for the <em>total</em>.
+      But there is a reporting question underneath it: when the bill differs from what was tracked, do you
+      <strong>overwrite</strong> the tracked figure and lose the fact that site evidence said something different, or
+      <strong>keep both</strong> and show the delta?</p>
+    <p style="margin-top:8px">Recommendation: <strong>keep both, report actual.</strong> The project total uses actual; the
+      tracked figure is retained on the line so the variance is inspectable. Overwriting destroys the only independent record
+      of what site said — which is the thing that makes a dispute winnable. It is also nearly free, since the match already
+      stores both numbers.</p>
+  </div>
+
+  <div class="anno">
+    <div class="an-h">◆ Forecast</div>
+    <p>Forecast-to-complete needs <strong>committed + tracked</strong> as the cost already locked in, plus an estimate for
+      the remainder. Which means a mis-handled tracked→actual swap doesn't just misstate history — it misstates the
+      <em>forecast</em>, and forecast is what a project manager acts on. Worth noting FCTC is in beta and already has an
+      unassigned-cost-code bug (<span class="jira">CQ-2689</span>) that blocks saving, so it is a fragile consumer of this
+      data today.</p>
+  </div>
+
+  <div class="nav-foot">
+    <button class="btn btn-s" onclick="go('step6')">← Step 7 · Downstream</button>
+    <button class="btn btn-p" onclick="go('coding')">Coding authority →</button>
+  </div>
+</section>
+
 <!-- ============ CODING AUTHORITY ============ -->
 <section class="sec" id="sec-coding">
   <div class="step-pill"><span class="dot"></span>Control · coding authority</div>
