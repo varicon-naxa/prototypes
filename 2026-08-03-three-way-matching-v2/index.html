@@ -5785,6 +5785,12 @@ const apBillBlocked = b => !b.lines.length || b.lines.some(l => apMatch(l,b).fla
 /* Approved billed quantity consumes docket entries oldest-first; consumed ones supersede. */
 function apDct(){
   const out = [];
+  AP.dockets.filter(d=>!d.poLineId).forEach(d => {
+    out.push({date:d.date, cc:d.cc||AP_UNASSIGNED, type:'Contract', resource:d.desc+' (not on PO)',
+      supplier:AP.po.supplier, unit:d.unit||'ea', unitCost:d.rate||0, qty:d.qty,
+      cost:+((d.rate||0)*d.qty).toFixed(2), source:'Docket', ref:d.number,
+      superseded: AP.supersede && !!apDocketBill(d.id)});
+  });
   AP.po.lines.forEach(pl => {
     AP.dockets.filter(d=>d.poLineId===pl.id).forEach(d => {
       const done = AP.supersede && !!apDocketBill(d.id);
@@ -5887,11 +5893,16 @@ function apToggleLink(bid, dkId){
 function apConfirmLink(bid){
   const b = AP.bills.find(x=>x.id===bid);
   if(!(b.docketIds||[]).length){ AP.msg='Select at least one docket — or the bill has no evidence to match against.'; return apRender(); }
-  const byLine = {};
-  AP.dockets.filter(d=>b.docketIds.includes(d.id)).forEach(d=>{ byLine[d.poLineId]=(byLine[d.poLineId]||0)+d.qty; });
-  b.lines = Object.entries(byLine).map(([plid,q],i)=>{
+  const sel = AP.dockets.filter(d=>b.docketIds.includes(d.id));
+  const byLine = {}; sel.filter(d=>d.poLineId).forEach(d=>{ byLine[d.poLineId]=(byLine[d.poLineId]||0)+d.qty; });
+  let n=0;
+  b.lines = Object.entries(byLine).map(([plid,q])=>{
     const pl = apLine(+plid);
-    return {id:i+1, poLineId:pl.id, desc:pl.resource, cc:pl.cc, ac:pl.ac, qty:q, rate:pl.rate};
+    return {id:++n, poLineId:pl.id, desc:pl.resource, cc:pl.cc, ac:pl.ac, qty:q, rate:pl.rate};
+  });
+  // Custom docket items become off-PO bill lines — evidenced but with no rate authority
+  sel.filter(d=>!d.poLineId).forEach(d=>{
+    b.lines.push({id:++n, poLineId:null, desc:d.desc, cc:d.cc||'', ac:'', qty:d.qty, rate:d.rate||0});
   });
   AP.linkOpen=false;
   AP.msg=`Linked ${b.docketIds.length} docket${b.docketIds.length>1?'s':''}. Line items built from those dockets at PO rates — edit qty or rate to create a variance.`;
@@ -6111,25 +6122,37 @@ function apViewDockets(){
       <div class="card card-p" style="margin-bottom:16px;background:#fbfcfd">
         <h4 class="sub2" style="margin-top:0">Add Site Docket</h4>
         <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-          <div><div class="ph-lbl">PO line received</div><select id="dk-line"
+          <div><div class="ph-lbl">PO line received</div><select id="dk-line" onchange="apDkPrefill()"
             style="height:36px;padding:6px 9px;border:1px solid var(--field);border-radius:4px;font-family:'Roboto';font-size:12.5px;min-width:250px">
-            ${AP.po.lines.map(l=>`<option value="${l.id}">${l.resource} — ${qty(apDelivered(l.id))} of ${qty(l.orderQty)} received</option>`).join('')}</select></div>
+            ${AP.po.lines.map(l=>`<option value="${l.id}">${l.resource} — ${qty(apDelivered(l.id))} of ${qty(l.orderQty)} received</option>`).join('')}
+            <option value="none">— Not on this PO (custom item) —</option></select></div>
+          <div><div class="ph-lbl">If not on PO — description &amp; rate</div>
+            <div style="display:flex;gap:6px">
+              <input id="dk-desc" placeholder="e.g. Wash-out fee"
+                style="width:146px;height:36px;padding:6px 9px;border:1px solid var(--field);border-radius:4px;font-family:'Roboto';font-size:12.5px" />
+              <input id="dk-rate" type="number" value="80" step="10" min="0"
+                style="width:74px;height:36px;padding:6px 9px;border:1px solid var(--field);border-radius:4px;text-align:right;font-family:'Roboto';font-size:12.5px" /></div></div>
           <div><div class="ph-lbl">Received qty</div><input id="dk-qty" type="number" value="5" step="1" min="0"
             style="width:94px;height:36px;padding:6px 9px;border:1px solid var(--field);border-radius:4px;text-align:right;font-family:'Roboto';font-size:12.5px" /></div>
-          <div><div class="ph-lbl">${apDim().label} <span style="color:var(--red)">*</span></div><select id="dk-cc"
+          <div><div class="ph-lbl">${apDim().label} <span style="color:var(--red)">*</span>
+            <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">— prefills from the PO line</span></div><select id="dk-cc"
             style="height:36px;padding:6px 9px;border:1px solid var(--field);border-radius:4px;font-family:'Roboto';font-size:12.5px;min-width:190px">
             ${apOpts().map(c=>`<option>${c.code}</option>`).join('')}</select></div>
           <button class="btn btn-p btn-sm" onclick="apAddDocket()">Add docket</button></div>
-        <p class="foot-note" style="margin-top:10px">Choose a cost centre the PO didn't authorise and the bill will raise
-          <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">coding_variance</code>.</p></div>
+        <p class="foot-note" style="margin-top:10px">The cost centre <strong>prefills from the selected PO line</strong> —
+          the crew confirms an allocation the PO already authorised. Change it and the bill raises
+          <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">coding_variance</code> for a PM to accept.
+          Pick <em>Not on this PO</em> to capture a custom item — received and real, but with no rate authority.</p></div>
       ${AP.dockets.length?`<div class="tbl-wrap" style="box-shadow:none"><table><thead><tr>
         <th>Date</th><th>Docket Number</th><th>Supplier</th><th>${apDim().label}</th><th>Purchase Order</th>
         <th class="r">Qty</th><th class="r">At PO rate</th><th>Status</th></tr></thead>
-        <tbody>${AP.dockets.map(d=>{const pl=apLine(d.poLineId);const ok=d.cc===pl.cc;return `<tr class="${ok?'':'vr'}">
+        <tbody>${AP.dockets.map(d=>{const pl=d.poLineId?apLine(d.poLineId):null;
+          const ok=pl&&d.cc===pl.cc;return `<tr class="${ok?'':'vr'}">
           <td class="num">${d.date}</td><td class="num">${d.number}</td><td>${AP.po.supplier}</td>
-          <td>${d.cc}${ok?'':' <span class="pill warn">Not on PO</span>'}</td>
-          <td>(${AP.po.number}) ${pl.resource}</td><td class="r num">${qty(d.qty)} ${pl.unit}</td>
-          <td class="r num">${money(d.qty*pl.rate)}</td>
+          <td>${d.cc||'<span class="pill bad">Uncoded</span>'}${(pl&&!ok)?' <span class="pill warn">Not on PO</span>':''}</td>
+          <td>${pl?`(${AP.po.number}) ${pl.resource}`:`<span class="pill warn">Custom item</span> ${d.desc}`}</td>
+          <td class="r num">${qty(d.qty)} ${pl?pl.unit:(d.unit||'ea')}</td>
+          <td class="r num">${money(d.qty*(pl?pl.rate:(d.rate||0)))}</td>
           <td><span class="pill ${d.status==='Billed'?'neutral':'warn'}">${d.status}</span></td></tr>`;}).join('')}
         </tbody></table></div>
         <div style="margin-top:14px"><button class="btn btn-p btn-sm" onclick="apNewBill()">Create the bill →</button></div>`
@@ -6261,19 +6284,24 @@ function apViewBill(){
    bill that consumed them — that exclusion is the double-pay guard, and showing rather
    than hiding them is what stops an AP officer wondering where a docket went. */
 function apLinkModal(b){
-  const rows = AP.dockets.map(d=>{
-    const pl = apLine(d.poLineId), consumedBy = apDocketBill(d.id);
+  const rows = AP.dockets.filter(d=>!AP.dkFrom||d.date>=AP.dkFrom).map(d=>{
+    const pl = d.poLineId?apLine(d.poLineId):null, consumedBy = apDocketBill(d.id);
     const sel = (b.docketIds||[]).includes(d.id);
     return {d, pl, consumedBy, sel};
   });
-  const selQty = rows.filter(r=>r.sel&&!r.consumedBy).reduce((a,r)=>a+r.d.qty*r.pl.rate,0);
+  const selQty = rows.filter(r=>r.sel&&!r.consumedBy).reduce((a,r)=>a+r.d.qty*(r.pl?r.pl.rate:(r.d.rate||0)),0);
   return `<div class="card card-p" style="margin-bottom:16px;border-color:var(--primary);box-shadow:0 2px 12px rgba(20,54,102,.1)">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:12px">
       <div><h4 class="sub2" style="margin:0">Link PO and Dockets</h4>
         <div style="font-size:11.5px;color:var(--muted);margin-top:3px">Select the dockets this invoice covers.
           Dockets already billed on an earlier invoice are excluded.</div></div>
-      <div style="text-align:right"><div style="font-size:11.5px;color:var(--muted)">Selected at PO rates</div>
-        <div style="font-size:17px;font-weight:700">${money(selQty)}</div></div></div>
+      <div style="display:flex;gap:16px;align-items:flex-end">
+        <div><div class="ph-lbl">Dockets from</div>
+          <input type="date" value="${AP.dkFrom||''}" onchange="AP.dkFrom=this.value;apRender()"
+            style="height:32px;padding:5px 8px;border:1px solid var(--field);border-radius:4px;font-family:'Roboto';font-size:12px" />
+          <div style="font-size:10.5px;color:var(--muted);margin-top:3px">Narrows a long docket history</div></div>
+        <div style="text-align:right"><div style="font-size:11.5px;color:var(--muted)">Selected at PO rates</div>
+          <div style="font-size:17px;font-weight:700">${money(selQty)}</div></div></div></div>
     <div class="tbl-wrap" style="box-shadow:none"><table><thead><tr>
       <th style="width:34px"></th><th>Docket</th><th>Date</th><th>PO line</th>
       <th class="r">Qty</th><th class="r">At PO rate</th><th>${apDim().label}</th><th>Availability</th></tr></thead>
@@ -6281,8 +6309,10 @@ function apLinkModal(b){
         <td class="c">${r.consumedBy?'<span style="color:var(--disabled)">—</span>'
           :`<input type="checkbox" ${r.sel?'checked':''} onchange="apToggleLink(${b.id},${r.d.id})" />`}</td>
         <td class="num">${r.d.number}</td><td class="num">${r.d.date}</td>
-        <td>${r.pl.resource}</td><td class="r num">${qty(r.d.qty)} ${r.pl.unit}</td>
-        <td class="r num">${money(r.d.qty*r.pl.rate)}</td><td>${r.d.cc}</td>
+        <td>${r.pl?r.pl.resource:`<span class="pill warn">Custom</span> ${r.d.desc}`}</td>
+        <td class="r num">${qty(r.d.qty)} ${r.pl?r.pl.unit:(r.d.unit||'ea')}</td>
+        <td class="r num">${money(r.d.qty*(r.pl?r.pl.rate:(r.d.rate||0)))}</td>
+        <td>${r.d.cc||'<span class="pill bad">Uncoded</span>'}</td>
         <td>${r.consumedBy
           ? `<span class="pill neutral">Billed on ${r.consumedBy.ref}</span>`
           : '<span class="pill ok">Available</span>'}</td></tr>`).join('')}
