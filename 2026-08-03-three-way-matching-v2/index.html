@@ -6083,6 +6083,44 @@ function apViewBill(){
     </div></div>`;
 }
 
+/* The Link PO & Docket step. Already-billed dockets are shown but disabled, naming the
+   bill that consumed them — that exclusion is the double-pay guard, and showing rather
+   than hiding them is what stops an AP officer wondering where a docket went. */
+function apLinkModal(b){
+  const rows = AP.dockets.map(d=>{
+    const pl = apLine(d.poLineId), consumedBy = apDocketBill(d.id);
+    const sel = (b.docketIds||[]).includes(d.id);
+    return {d, pl, consumedBy, sel};
+  });
+  const selQty = rows.filter(r=>r.sel&&!r.consumedBy).reduce((a,r)=>a+r.d.qty*r.pl.rate,0);
+  return `<div class="card card-p" style="margin-bottom:16px;border-color:var(--primary);box-shadow:0 2px 12px rgba(20,54,102,.1)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+      <div><h4 class="sub2" style="margin:0">Link PO and Dockets</h4>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:3px">Select the dockets this invoice covers.
+          Dockets already billed on an earlier invoice are excluded.</div></div>
+      <div style="text-align:right"><div style="font-size:11.5px;color:var(--muted)">Selected at PO rates</div>
+        <div style="font-size:17px;font-weight:700">${money(selQty)}</div></div></div>
+    <div class="tbl-wrap" style="box-shadow:none"><table><thead><tr>
+      <th style="width:34px"></th><th>Docket</th><th>Date</th><th>PO line</th>
+      <th class="r">Qty</th><th class="r">At PO rate</th><th>${apDim().label}</th><th>Availability</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr class="${r.consumedBy?'':(r.sel?'vok':'')}" style="${r.consumedBy?'opacity:.5':''}">
+        <td class="c">${r.consumedBy?'<span style="color:var(--disabled)">—</span>'
+          :`<input type="checkbox" ${r.sel?'checked':''} onchange="apToggleLink(${b.id},${r.d.id})" />`}</td>
+        <td class="num">${r.d.number}</td><td class="num">${r.d.date}</td>
+        <td>${r.pl.resource}</td><td class="r num">${qty(r.d.qty)} ${r.pl.unit}</td>
+        <td class="r num">${money(r.d.qty*r.pl.rate)}</td><td>${r.d.cc}</td>
+        <td>${r.consumedBy
+          ? `<span class="pill neutral">Billed on ${r.consumedBy.ref}</span>`
+          : '<span class="pill ok">Available</span>'}</td></tr>`).join('')}
+      </tbody></table></div>
+    ${rows.some(r=>r.consumedBy)?`<p class="foot-note" style="margin-top:10px">The greyed rows are the duplicate-payment
+      guard working: those dockets were consumed by an earlier approved bill, so they cannot be billed again.</p>`:''}
+    <div style="margin-top:13px;display:flex;gap:9px">
+      <button class="btn btn-p btn-sm" onclick="apConfirmLink(${b.id})">Confirm link &amp; build line items</button>
+      <button class="btn btn-s btn-sm" onclick="AP.linkOpen=false;apRender()">Cancel</button></div>
+  </div>`;
+}
+
 function apViewBudget(){
   const rows = apOpts().map(c=>({...c, tracked:apTracked(c.code)}));
   const un = apTracked(AP_UNASSIGNED);
