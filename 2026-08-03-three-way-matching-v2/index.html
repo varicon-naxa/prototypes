@@ -5679,6 +5679,400 @@ ${j('blocks_approval', blocking.length ? '<span class="b">true</span>' : '<span 
 }`;
 }
 
+/* ================= INTERACTIVE SANDBOX =================
+   One state object, five views, everything re-renders on every action.
+   Vocabulary follows the real app: (001) Preliminaries, Source, Total Cost to Date,
+   Docket Delivered, Remaining to be Billed. */
+
+const AP_CCS = [
+  {code:'(001) Preliminaries',   budget:40958.98},
+  {code:'(002) Bulk Earthworks', budget:38743.79},
+  {code:'(005) Footings',        budget:20180.00},
+];
+
+function apBlank(){
+  return {
+    view:'po', supersede:true, tolPct:2, tolAbs:25, nextDk:1, nextBl:1, msg:'',
+    po:{ number:'PO-VAR004-0011', supplier:'Boral', project:'(VAR004) Bourke Street Roadworks',
+      status:'Draft',
+      lines:[
+        {id:1, resource:'(FCR20) 20mm Crushed Rock', cat:'Material', cc:'(002) Bulk Earthworks',
+         task:'(2.1) Zone 1', ac:'310 - Cost of Goods Sold', unit:'tonne', orderQty:200, rate:48},
+        {id:2, resource:'(N32) 32 MPa Concrete', cat:'Material', cc:'(005) Footings',
+         task:'(4.1) Slab', ac:'310 - Cost of Goods Sold', unit:'m³', orderQty:40, rate:220},
+        {id:3, resource:'(PUMP) Concrete pump hire', cat:'Plant & Equipment', cc:'(005) Footings',
+         task:'(4.1) Slab', ac:'320 - Plant Hire', unit:'hour', orderQty:16, rate:145},
+      ]},
+    dockets:[], bills:[],
+  };
+}
+let AP = apBlank();
+
+const apLine = id => AP.po.lines.find(l => l.id === id);
+const apDelivered = lid => AP.dockets.filter(d => d.poLineId === lid).reduce((a,d)=>a+d.qty,0);
+const apBilledApproved = lid => AP.bills.filter(b => b.status === 'Approved')
+  .flatMap(b => b.lines).filter(l => l.poLineId === lid).reduce((a,l)=>a+l.qty,0);
+const apAvailable = lid => apDelivered(lid) - apBilledApproved(lid);
+
+function apPoStats(){
+  const total = AP.po.lines.reduce((a,l)=>a+l.orderQty*l.rate,0);
+  const delivered = AP.po.lines.reduce((a,l)=>a+apDelivered(l.id)*l.rate,0);
+  const billed = AP.bills.filter(b=>b.status==='Approved').flatMap(b=>b.lines)
+    .reduce((a,l)=>a+l.qty*l.rate,0);
+  return {total, delivered, remainingDeliver: total-delivered, billed, remainingBill: total-billed};
+}
+
+/* Rate is checked on the billed quantity — which handles partial billing correctly.
+   Quantity is checked separately against what remains available. */
+function apMatch(bl){
+  const pl = bl.poLineId ? apLine(bl.poLineId) : null;
+  const flags = [];
+  if(!pl){ flags.push('off_po'); if(!bl.cc) flags.push('needs_coding');
+           return {flags, pl:null, expected:null, priceVar:null, band:null, avail:null}; }
+  const avail = apAvailable(pl.id), delivered = apDelivered(pl.id);
+  const expected = +(pl.rate * bl.qty).toFixed(2);
+  const billed = +(bl.qty * bl.rate).toFixed(2);
+  const priceVar = +(billed - expected).toFixed(2);
+  const band = +Math.max(expected * AP.tolPct/100, AP.tolAbs).toFixed(2);
+  if(delivered === 0) flags.push('missing_docket');
+  else if(bl.qty > avail + 1e-9) flags.push('over_consumed');
+  if(priceVar > band) flags.push('price_variance');
+  if(bl.cc && bl.cc !== pl.cc) flags.push('coding_variance');
+  return {flags, pl, expected, billed, priceVar, band, avail, delivered};
+}
+const AP_BLOCKING = ['off_po','over_consumed','needs_coding'];
+const apBillBlocked = b => b.lines.some(l => apMatch(l).flags.some(f => AP_BLOCKING.includes(f)));
+
+/* Approved billed quantity consumes docket entries oldest-first; consumed ones supersede. */
+function apDct(){
+  const out = [];
+  AP.po.lines.forEach(pl => {
+    let cover = AP.supersede ? apBilledApproved(pl.id) : 0;
+    AP.dockets.filter(d=>d.poLineId===pl.id).forEach(d => {
+      const done = cover >= d.qty - 1e-9;
+      if(done) cover -= d.qty;
+      out.push({date:d.date, cc:d.cc, type:'Contract', resource:pl.resource, supplier:AP.po.supplier,
+        unit:pl.unit, unitCost:pl.rate, qty:d.qty, cost:+(d.qty*pl.rate).toFixed(2),
+        source:'Docket', ref:d.number, superseded:done});
+    });
+  });
+  AP.bills.filter(b=>b.status==='Approved').forEach(b => b.lines.forEach(l => {
+    const pl = l.poLineId ? apLine(l.poLineId) : null;
+    out.push({date:b.date, cc:l.cc||'(unassigned_cost_centre) Unassigned Cost Centre', type:'Contract',
+      resource:pl?pl.resource:l.desc, supplier:AP.po.supplier, unit:pl?pl.unit:'ea',
+      unitCost:l.rate, qty:l.qty, cost:+(l.qty*l.rate).toFixed(2),
+      source:'Bills', ref:b.ref, superseded:false});
+  }));
+  return out;
+}
+const apTracked = cc => apDct().filter(e=>!e.superseded && (!cc || e.cc===cc)).reduce((a,e)=>a+e.cost,0);
+
+function apSet(k,v){ AP[k] = (k==='supersede') ? v : (parseFloat(v)||0); apRender(); }
+function apGo(v){ AP.view = v; AP.msg=''; apRender(); }
+function apReset(){ AP = apBlank(); apRender(); }
+function apApprovePo(){ AP.po.status='Approved';
+  AP.msg='PO approved — the rates are now the authority. Capture a docket next.'; AP.view='dockets'; apRender(); }
+function apAddDocket(){
+  const lid = parseInt(document.getElementById('dk-line').value,10);
+  const q = parseFloat(document.getElementById('dk-qty').value)||0;
+  const cc = document.getElementById('dk-cc').value;
+  if(!q){ AP.msg='Enter a received quantity.'; return apRender(); }
+  const n = AP.nextDk++;
+  AP.dockets.push({id:n, number:'VAR0042026080'+n+'1'+(20000+n*731), date:'0'+((n%9)+1)+'/08/2026',
+    poLineId:lid, cc, qty:q, status:'To be paid'});
+  AP.msg='Docket captured — Total Cost to Date has moved. Check Daily Cost Tracking.'; apRender();
+}
+function apCopyPoToBill(){
+  const lines = AP.po.lines.map((pl,i)=>({id:i+1, poLineId:pl.id, desc:pl.resource, cc:pl.cc,
+    ac:pl.ac, qty:Math.max(apAvailable(pl.id),0), rate:pl.rate})).filter(l=>l.qty>0);
+  if(!lines.length){ AP.msg='Nothing available to bill — capture a docket first.'; AP.view='dockets'; return apRender(); }
+  const n = AP.nextBl++;
+  AP.bills.push({id:n, ref:'VR1950'+(7300+n), date:'12/08/2026', status:'Draft', lines});
+  AP.view='bill'; AP.msg='Bill created from the PO at PO rates, quantities pre-filled from available evidence.'; apRender();
+}
+function apEditBill(bid,lid,f,v){
+  const l = AP.bills.find(x=>x.id===bid).lines.find(x=>x.id===lid);
+  l[f] = (f==='cc') ? v : (parseFloat(v)||0); apRender();
+}
+function apAddOffPo(bid){
+  const b = AP.bills.find(x=>x.id===bid);
+  b.lines.push({id:Math.max(...b.lines.map(l=>l.id),0)+1, poLineId:null,
+    desc:'Freight / delivery surcharge', cc:'', ac:'', qty:1, rate:180});
+  AP.msg='Off-PO line added. No PO line to inherit coding from, so it must be coded before approval.'; apRender();
+}
+function apApproveBill(bid){
+  const b = AP.bills.find(x=>x.id===bid);
+  if(apBillBlocked(b)){ AP.msg='Blocked — resolve the blocking flags first.'; return apRender(); }
+  b.status='Approved';
+  b.lines.forEach(l=>{ if(l.poLineId) AP.dockets.filter(d=>d.poLineId===l.poLineId).forEach(d=>d.status='Billed'); });
+  AP.msg = AP.supersede
+    ? 'Bill approved. The docket entries it consumed are superseded — Total Cost to Date did not move.'
+    : 'Bill approved with supersession OFF. Look at Total Cost to Date — the delivery is now counted twice.';
+  AP.view='dct'; apRender();
+}
+function apSeed(){
+  AP = apBlank(); AP.po.status='Approved';
+  AP.dockets=[
+    {id:1, number:'VAR00420260806132531', date:'06/08/2026', poLineId:2, cc:'(005) Footings', qty:5, status:'To be paid'},
+    {id:2, number:'VAR00420260806112359', date:'06/08/2026', poLineId:2, cc:'(002) Bulk Earthworks', qty:3, status:'To be paid'},
+    {id:3, number:'VAR00420260808141002', date:'08/08/2026', poLineId:3, cc:'(005) Footings', qty:4, status:'To be paid'},
+  ];
+  AP.nextDk=4;
+  AP.bills=[{id:1, ref:'VR19507301', date:'12/08/2026', status:'Draft', lines:[
+    {id:1, poLineId:2, desc:'(N32) 32 MPa Concrete', cc:'(005) Footings', ac:'310 - Cost of Goods Sold', qty:8, rate:235},
+    {id:2, poLineId:3, desc:'(PUMP) Concrete pump hire', cc:'(005) Footings', ac:'320 - Plant Hire', qty:4, rate:145},
+    {id:3, poLineId:null, desc:'Freight / delivery surcharge', cc:'', ac:'', qty:1, rate:180},
+  ]}];
+  AP.nextBl=2; AP.view='bill';
+  AP.msg='Loaded: PO approved, 3 dockets captured, and a draft bill carrying a rate variance, a coding variance and an uncoded off-PO line.';
+  apRender();
+}
+
+const AP_VIEWS = [{k:'po',t:'Purchase Order'},{k:'dockets',t:'Site Dockets'},{k:'bill',t:'Bills'},
+                  {k:'budget',t:'Budget Overview'},{k:'dct',t:'Daily Cost Tracking'}];
+
+function apRender(){
+  const nav = document.getElementById('ap-nav'); if(!nav) return;
+  const count = {dockets:AP.dockets.length, bill:AP.bills.length, dct:apDct().filter(e=>!e.superseded).length};
+  nav.innerHTML = `<div style="display:flex;background:#fff;border:1px solid var(--divider);border-bottom:none;
+    border-radius:8px 8px 0 0;overflow-x:auto">
+    ${AP_VIEWS.map(v=>`<div onclick="apGo('${v.k}')" style="padding:13px 20px;font-size:13px;cursor:pointer;
+      white-space:nowrap;font-weight:${AP.view===v.k?'700':'500'};color:${AP.view===v.k?'#fff':'var(--text-2)'};
+      background:${AP.view===v.k?'var(--primary)':'transparent'};border-radius:${AP.view===v.k?'8px 8px 0 0':'0'}">
+      ${v.t}${count[v.k]?` <span class="pill neutral" style="margin-left:4px">${count[v.k]}</span>`:''}</div>`).join('')}</div>`;
+  const msg = AP.msg ? `<div class="banner ${AP.msg.startsWith('Blocked')?'bad':(AP.msg.indexOf('twice')>-1?'warn':'plain')}"
+    style="margin:0 0 0;border-radius:0"><div class="b-ico">${AP.msg.startsWith('Blocked')?'✖':'✦'}</div>
+    <div><div class="b-d" style="color:var(--text)">${AP.msg}</div></div></div>` : '';
+  document.getElementById('ap-body').innerHTML = msg +
+    ({po:apViewPo, dockets:apViewDockets, bill:apViewBill, budget:apViewBudget, dct:apViewDct}[AP.view])();
+  const s=document.getElementById('ap-sup'); if(s) s.checked = AP.supersede;
+}
+
+function apStat(l,v,hi){ return `<div style="padding:12px 18px;border:1px solid var(--divider);border-radius:8px;
+  min-width:148px;background:${hi?'#F2F7FD':'#fff'}"><div style="font-size:11.5px;color:var(--muted)">${l}</div>
+  <div style="font-size:17px;font-weight:700;margin-top:3px">${money(v)}</div></div>`; }
+
+function apViewPo(){
+  const st = apPoStats();
+  return `<div class="frame" style="border-radius:0 0 8px 8px;margin:0">
+    <div class="frame-bar">Purchase Order Detail<div class="sp"></div><span class="meta">Status: ${AP.po.status}</span></div>
+    <div class="frame-body">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+        ${apStat('PO Total',st.total)}${apStat('Docket Delivered',st.delivered)}${apStat('Remaining to be delivered',st.remainingDeliver)}
+        <div style="width:10px"></div>${apStat('Billed',st.billed,1)}${apStat('Remaining to be Billed',st.remainingBill,1)}
+      </div>
+      <div style="display:flex;gap:26px;flex-wrap:wrap;margin-bottom:14px;font-size:12.5px">
+        <div><div class="ph-lbl">Project</div>${AP.po.project}</div>
+        <div><div class="ph-lbl">Supplier</div>${AP.po.supplier}</div>
+        <div><div class="ph-lbl">PO Number</div>${AP.po.number}</div></div>
+      <h4 class="sub2" style="margin-top:0">Delivery Items <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">— Amount are GST - EXCLUSIVE</span></h4>
+      <div class="tbl-wrap" style="box-shadow:none"><table><thead><tr>
+        <th style="width:26px" class="c">#</th><th>Resource</th><th>Resource category</th><th>Accounting Code</th>
+        <th>Task</th><th>Cost Centre</th><th>Unit</th><th class="r">Unit Cost</th><th class="r">Order Qty</th>
+        <th class="r">Delivered Qty</th><th class="r">Total exc. GST</th></tr></thead>
+        <tbody>${AP.po.lines.map((l,i)=>{const d=apDelivered(l.id);return `<tr${d?' class="vok"':''}>
+          <td class="c" style="color:var(--disabled)">${i+1}</td><td><strong>${l.resource}</strong></td>
+          <td>${l.cat}</td><td>${l.ac}</td><td>${l.task}</td><td>${l.cc}</td><td>${l.unit}</td>
+          <td class="r num">${money(l.rate)}</td><td class="r num">${qty(l.orderQty)}</td>
+          <td class="r num"${d?' style="font-weight:700;color:var(--green)"':''}>${qty(d)}</td>
+          <td class="r num">${money(l.orderQty*l.rate)}</td></tr>`;}).join('')}</tbody></table></div>
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+        ${AP.po.status==='Draft'
+          ? `<button class="btn btn-p btn-sm" onclick="apApprovePo()">Approve</button>`
+          : `<button class="btn btn-p btn-sm" onclick="apGo('dockets')">Capture a docket →</button>
+             <button class="btn btn-s btn-sm" onclick="apCopyPoToBill()">Copy PO content to bill</button>`}</div>
+      ${AP.po.status==='Draft'?`<p class="foot-note" style="margin-top:11px">Rates are not authority until the PO is approved —
+        approving locks ${money(st.total)} of authorised spend.</p>`:''}
+    </div></div>`;
+}
+
+function apViewDockets(){
+  if(AP.po.status!=='Approved') return `<div class="frame" style="border-radius:0 0 8px 8px;margin:0"><div class="frame-body">
+    <div class="banner warn" style="margin:0"><div class="b-ico">🔒</div><div><div class="b-t">Approve the PO first</div>
+    <div class="b-d">A docket needs an approved PO to record against, or a bill could later match unauthorised spend —
+    the PICBR-1565 hole.</div></div></div>
+    <button class="btn btn-p btn-sm" style="margin-top:13px" onclick="apGo('po')">← Back to the PO</button></div></div>`;
+  return `<div class="frame" style="border-radius:0 0 8px 8px;margin:0">
+    <div class="frame-bar">Site Docket<div class="sp"></div><span class="meta">${AP.dockets.length} captured</span></div>
+    <div class="frame-body">
+      <div class="card card-p" style="margin-bottom:16px;background:#fbfcfd">
+        <h4 class="sub2" style="margin-top:0">Add Site Docket</h4>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div><div class="ph-lbl">PO line received</div><select id="dk-line"
+            style="height:36px;padding:6px 9px;border:1px solid var(--field);border-radius:4px;font-family:'Roboto';font-size:12.5px;min-width:250px">
+            ${AP.po.lines.map(l=>`<option value="${l.id}">${l.resource} — ${qty(apDelivered(l.id))} of ${qty(l.orderQty)} received</option>`).join('')}</select></div>
+          <div><div class="ph-lbl">Received qty</div><input id="dk-qty" type="number" value="5" step="1" min="0"
+            style="width:94px;height:36px;padding:6px 9px;border:1px solid var(--field);border-radius:4px;text-align:right;font-family:'Roboto';font-size:12.5px" /></div>
+          <div><div class="ph-lbl">Cost Centre <span style="color:var(--red)">*</span></div><select id="dk-cc"
+            style="height:36px;padding:6px 9px;border:1px solid var(--field);border-radius:4px;font-family:'Roboto';font-size:12.5px;min-width:190px">
+            ${AP_CCS.map(c=>`<option>${c.code}</option>`).join('')}</select></div>
+          <button class="btn btn-p btn-sm" onclick="apAddDocket()">Add docket</button></div>
+        <p class="foot-note" style="margin-top:10px">Choose a cost centre the PO didn't authorise and the bill will raise
+          <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">coding_variance</code>.</p></div>
+      ${AP.dockets.length?`<div class="tbl-wrap" style="box-shadow:none"><table><thead><tr>
+        <th>Date</th><th>Docket Number</th><th>Supplier</th><th>Cost Centre</th><th>Purchase Order</th>
+        <th class="r">Qty</th><th class="r">At PO rate</th><th>Status</th></tr></thead>
+        <tbody>${AP.dockets.map(d=>{const pl=apLine(d.poLineId);const ok=d.cc===pl.cc;return `<tr class="${ok?'':'vr'}">
+          <td class="num">${d.date}</td><td class="num">${d.number}</td><td>${AP.po.supplier}</td>
+          <td>${d.cc}${ok?'':' <span class="pill warn">Not on PO</span>'}</td>
+          <td>(${AP.po.number}) ${pl.resource}</td><td class="r num">${qty(d.qty)} ${pl.unit}</td>
+          <td class="r num">${money(d.qty*pl.rate)}</td>
+          <td><span class="pill ${d.status==='Billed'?'neutral':'warn'}">${d.status}</span></td></tr>`;}).join('')}
+        </tbody></table></div>
+        <div style="margin-top:14px"><button class="btn btn-p btn-sm" onclick="apCopyPoToBill()">Create the bill →</button></div>`
+        :`<div class="empty-state"><div class="ico-big">🚚</div><div class="title">No dockets yet</div>
+          <div class="sub">Capture one above — it posts a <code>Source: Docket</code> cost entry.</div></div>`}
+    </div></div>`;
+}
+
+const AP_FL = {off_po:['bad','No PO line, so no rate authority'],
+  needs_coding:['bad','Cost centre required before approval'],
+  missing_docket:['warn','No docket evidence for this PO line'],
+  over_consumed:['bad','Exceeds what remains available after prior bills'],
+  price_variance:['warn','Billed above the PO rate, beyond tolerance'],
+  coding_variance:['warn','Cost centre differs from the PO — needs a project-level decision']};
+
+function apViewBill(){
+  if(!AP.bills.length) return `<div class="frame" style="border-radius:0 0 8px 8px;margin:0"><div class="frame-body">
+    <div class="banner plain" style="margin:0"><div class="b-ico">🧾</div><div><div class="b-t">No bill yet</div>
+    <div class="b-d">Create one from the PO — it pre-fills at PO rates with the quantities the dockets evidence.</div></div></div>
+    <button class="btn btn-p btn-sm" style="margin-top:13px" onclick="apCopyPoToBill()">Copy PO content to bill</button></div></div>`;
+  const b = AP.bills[AP.bills.length-1], st = apPoStats();
+  const tot = b.lines.reduce((a,l)=>a+l.qty*l.rate,0);
+  const ms = b.lines.map(l=>({l, m:apMatch(l)}));
+  const anyFlag = ms.some(x=>x.m.flags.length), blocked = apBillBlocked(b);
+  const cum = st.billed + (b.status==='Approved'?0:tot);
+  return `<div class="frame" style="border-radius:0 0 8px 8px;margin:0">
+    <div class="frame-bar">Bill: ${b.ref}<div class="sp"></div><span class="meta">${b.status}</span></div>
+    <div class="frame-body">
+      <div style="display:flex;gap:26px;flex-wrap:wrap;margin-bottom:14px;font-size:12.5px">
+        <div><div class="ph-lbl">Supplier</div>${AP.po.supplier}</div>
+        <div><div class="ph-lbl">Project</div>${AP.po.project}</div>
+        <div><div class="ph-lbl">Purchase order</div><span class="pill info">${AP.po.number}</span></div>
+        <div><div class="ph-lbl">Docket</div>${AP.dockets.length?AP.dockets.map(d=>`<span class="pill neutral" style="margin-right:3px">${d.number}</span>`).join(''):'—'}</div></div>
+      ${anyFlag?`<div class="banner ${blocked?'bad':'warn'}" style="margin-bottom:14px"><div class="b-ico">${blocked?'✖':'⚠'}</div>
+        <div><div class="b-t">${blocked?'Blocked — resolve before approval':'Discrepancies detected between the bill, the PO and the linked dockets'}</div>
+        <div class="b-d">Hover a line's ⚠ for detail. Rate comes from the PO; quantity is checked against what remains available
+          after prior bills.</div></div></div>`
+        :`<div class="banner ok" style="margin-bottom:14px"><div class="b-ico">✓</div><div>
+        <div class="b-t">Matched — every line within tolerance and fully evidenced</div>
+        <div class="b-d">Approving this will leave Total Cost to Date unchanged.</div></div></div>`}
+      <div style="display:flex;border-bottom:1px solid var(--divider);margin-bottom:14px;overflow-x:auto">
+        ${[['LINE ITEM',''],['PURCHASE ORDER',`(${money(cum)}/${money(st.total)})`],
+           ['DOCKET',`(${money(cum)}/${money(st.delivered)})`],
+           ['PREVIOUS BILLS', AP.bills.filter(x=>x.status==='Approved').length?`(${AP.bills.filter(x=>x.status==='Approved').length})`:'']]
+          .map((t,i)=>`<div style="padding:11px 15px;font-size:12.5px;white-space:nowrap;font-weight:${i===0?'700':'500'};
+            color:${i===0?'var(--secondary)':'var(--text-2)'};border-bottom:${i===0?'2px solid var(--secondary)':'none'}">
+            ${t[0]} ${t[1]?`<span style="color:${(i===2&&cum>st.delivered+1e-9)?'var(--red)':'var(--green)'}">${t[1]}</span>`:''}</div>`).join('')}
+      </div>
+      <div class="tbl-wrap" style="box-shadow:none"><table class="calc"><thead><tr>
+        <th style="width:22px"></th><th>Description</th><th>Cost Centre</th><th>Accounting code</th>
+        <th class="r">PO rate</th><th class="r">Available</th><th class="r">Qty</th><th class="r">Rate</th>
+        <th class="r">Amount</th><th>Result</th></tr></thead>
+        <tbody>${ms.map(({l,m})=>{const bad=m.flags.some(f=>AP_BLOCKING.includes(f));
+          return `<tr class="${m.flags.length?(bad?'vbad':'vr'):'vok'}">
+          <td class="c">${m.flags.length?`<span title="${m.flags.map(f=>AP_FL[f][1]).join(' · ')}"
+            style="cursor:help;font-weight:700;color:${bad?'var(--red)':'var(--secondary)'}">⚠</span>`:''}</td>
+          <td><strong>${l.desc}</strong></td>
+          <td><select onchange="apEditBill(${b.id},${l.id},'cc',this.value)"
+            style="height:30px;padding:4px 7px;border:1px solid ${l.cc?'var(--field)':'var(--red)'};border-radius:4px;font-family:'Roboto';font-size:12px;min-width:172px">
+            <option value=""${l.cc?'':' selected'}>— required —</option>
+            ${AP_CCS.map(c=>`<option${c.code===l.cc?' selected':''}>${c.code}</option>`).join('')}</select></td>
+          <td>${l.ac||'<span class="pill bad">Required</span>'}</td>
+          <td class="r num">${m.pl?money(m.pl.rate):'—'}</td>
+          <td class="r num">${m.avail===null?'—':qty(m.avail)}</td>
+          <td class="r"><input type="number" value="${l.qty}" step="1" min="0" onchange="apEditBill(${b.id},${l.id},'qty',this.value)"
+            style="width:64px;height:30px;padding:4px 7px;border:1px solid var(--field);border-radius:4px;text-align:right;font-family:'Roboto';font-size:12px" /></td>
+          <td class="r"><input type="number" value="${l.rate}" step="5" min="0" onchange="apEditBill(${b.id},${l.id},'rate',this.value)"
+            style="width:74px;height:30px;padding:4px 7px;border:1px solid var(--field);border-radius:4px;text-align:right;font-family:'Roboto';font-size:12px" /></td>
+          <td class="r num">${money(l.qty*l.rate)}</td>
+          <td>${m.flags.length?m.flags.map(f=>`<span class="pill ${AP_FL[f][0]}" style="margin:1px 2px 1px 0">${f}</span>`).join(''):'<span class="pill ok">✓ Match</span>'}
+            ${m.flags.includes('price_variance')?`<div class="t-sub">${money(m.priceVar)} over · band ${money(m.band)}</div>`:''}</td></tr>`;}).join('')}
+        </tbody></table></div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-top:12px;flex-wrap:wrap">
+        <div style="display:flex;gap:9px;flex-wrap:wrap">
+          <button class="btn btn-s btn-sm" onclick="apAddOffPo(${b.id})">+ Add off-PO line</button>
+          ${b.status==='Draft'?`<button class="btn btn-p btn-sm" onclick="apApproveBill(${b.id})">Approve bill</button>`
+            :`<span class="pill ok" style="align-self:center">Approved</span>`}</div>
+        <div style="min-width:206px">
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0">
+            <span style="color:var(--text-2)">Subtotal</span><span style="font-weight:500">${money(tot)}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--divider)">
+            <span style="color:var(--text-2)">Plus GST - Exclusive 10%</span><span style="font-weight:500">${money(tot*0.1)}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;padding-top:9px">
+            <span>Total</span><span>${money(tot*1.1)}</span></div></div></div>
+    </div></div>`;
+}
+
+function apViewBudget(){
+  const rows = AP_CCS.map(c=>({...c, tracked:apTracked(c.code)}));
+  const un = apTracked('(unassigned_cost_centre) Unassigned Cost Centre');
+  const t = rows.reduce((a,r)=>({b:a.b+r.budget, k:a.k+r.tracked}),{b:0,k:0});
+  return `<div class="frame" style="border-radius:0 0 8px 8px;margin:0">
+    <div class="frame-bar">Budget Overview<div class="sp"></div><span class="meta">Cost Centre view</span></div>
+    <div class="frame-body">
+      <div class="tbl-wrap" style="box-shadow:none"><table><thead><tr>
+        <th>Cost Centre</th><th class="r">Budget</th><th class="r">Tracked to Date</th><th class="r">Remaining</th>
+        <th style="width:160px">Used</th></tr></thead>
+        <tbody>${rows.map(r=>{const p=r.budget?Math.min(100,r.tracked/r.budget*100):0;
+          return `<tr${r.tracked?' class="vok"':''}><td><strong>${r.code}</strong></td>
+          <td class="r num">${money(r.budget)}</td>
+          <td class="r num"${r.tracked?' style="font-weight:700;color:var(--primary)"':''}>${r.tracked?money(r.tracked):'—'}</td>
+          <td class="r num">${money(r.budget-r.tracked)}</td>
+          <td><div style="height:6px;background:#E0E0E0;border-radius:3px"><div style="height:6px;width:${p}%;
+            background:${p>=100?'var(--red)':'var(--green)'};border-radius:3px"></div></div>
+            <div class="t-sub">${p.toFixed(1)}%</div></td></tr>`;}).join('')}
+        ${un?`<tr class="vbad"><td><strong>(unassigned_cost_centre) Unassigned Cost Centre</strong>
+          <div class="t-sub">uncoded cost has leaked here — cf. PICBR-874</div></td>
+          <td class="r" style="color:var(--disabled)">—</td><td class="r num" style="font-weight:700">${money(un)}</td>
+          <td class="r" style="color:var(--disabled)">—</td><td></td></tr>`:''}
+        <tr style="background:#F2F7FD;font-weight:700"><td>Total</td><td class="r num">${money(t.b)}</td>
+          <td class="r num">${money(t.k+un)}</td><td class="r num">${money(t.b-t.k)}</td><td></td></tr>
+        </tbody></table></div>
+      <p class="foot-note" style="margin-top:12px">A single <strong>Budget</strong> column — the Estimated / Construction
+        duality is being removed. <strong>Tracked to Date</strong> counts non-superseded entries only, which is what makes the
+        docket-then-bill sequence land once instead of twice.</p>
+    </div></div>`;
+}
+
+function apViewDct(){
+  const e = apDct(), live = e.filter(x=>!x.superseded);
+  const byCc = {}; e.forEach(x=>{ (byCc[x.cc]=byCc[x.cc]||[]).push(x); });
+  const total = live.reduce((a,x)=>a+x.cost,0);
+  const dbl = !e.some(x=>x.superseded) && live.some(x=>x.source==='Bills') && live.some(x=>x.source==='Docket');
+  return `<div class="frame" style="border-radius:0 0 8px 8px;margin:0">
+    <div class="frame-bar">Daily Cost Tracking<div class="sp"></div><span class="meta">Group By: Cost Centre</span></div>
+    <div class="frame-body">
+      ${!e.length?`<div class="empty-state"><div class="ico-big">📊</div><div class="title">No cost entries yet</div>
+        <div class="sub">Capture a docket or approve a bill — entries appear with their <code>Source</code>.</div></div>`
+      :`<div class="tbl-wrap" style="box-shadow:none"><table><thead><tr>
+        <th>Date</th><th>Cost Centre</th><th>Type</th><th>Resource</th><th>Supplier</th><th>Unit</th>
+        <th class="r">Unit Cost</th><th class="r">Qty</th><th class="r">Cost</th><th>Source</th></tr></thead>
+        <tbody>${Object.entries(byCc).map(([cc,list])=>`
+          <tr style="background:#fbfcfd"><td colspan="10"><strong>Cost Centre: ${cc}</strong>
+          <span style="color:var(--muted);margin-left:10px">Total Cost: ${money(list.filter(x=>!x.superseded).reduce((a,x)=>a+x.cost,0))}</span></td></tr>
+          ${list.map(x=>`<tr${x.superseded?' style="opacity:.45"':''}>
+            <td class="num">${x.date}</td><td>${x.cc}</td><td>${x.type}</td>
+            <td>${x.resource}<div class="t-sub">${x.ref}</div></td><td>${x.supplier}</td><td>${x.unit}</td>
+            <td class="r num">${money(x.unitCost)}</td><td class="r num">${qty(x.qty)}</td>
+            <td class="r num"${x.superseded?' style="text-decoration:line-through"':''}>${money(x.cost)}</td>
+            <td><span class="tag ${x.source==='Docket'?'dk':'bl'}">${x.source}</span>
+              ${x.superseded?'<div class="t-sub">superseded</div>':''}</td></tr>`).join('')}`).join('')}
+        </tbody></table></div>
+      <div style="display:flex;justify-content:flex-end;gap:26px;margin-top:14px;font-size:13px">
+        <div>Entries <strong>${live.length}</strong>${e.length-live.length?` <span style="color:var(--muted)">(+${e.length-live.length} superseded)</span>`:''}</div>
+        <div>Total Cost to Date <strong style="font-size:16px">${money(total)}</strong></div></div>
+      ${e.some(x=>x.superseded)?`<div class="banner ok" style="margin-top:14px"><div class="b-ico">✓</div><div>
+        <div class="b-t">Superseded, not deleted</div><div class="b-d">The Docket entries the bill consumed are excluded from the
+        total but kept on the record — they are the independent evidence of what site said. Filter
+        <code style="background:rgba(0,0,0,.06);padding:1px 6px;border-radius:3px">Source = Docket</code> and you have work done
+        but not yet invoiced.</div></div></div>`
+      :(dbl?`<div class="banner bad" style="margin-top:14px"><div class="b-ico">2×</div><div>
+        <div class="b-t">Double-counted — supersession is off</div><div class="b-d">The same delivery is counted as both a Docket
+        entry and a Bills entry. This is the failure CQ-2758 describes, and the allocation ledger is what prevents it.</div></div></div>`:'')}`}
+    </div></div>`;
+}
+
 /* ---------------- accounting code resolution ----------------
    The map is keyed on (supplier, resource category). Resource category is the real
    determinant — it says WHAT KIND of expense this is, which is what a GL account
