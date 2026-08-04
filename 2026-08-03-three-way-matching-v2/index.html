@@ -3810,6 +3810,76 @@ GST_RATE = Decimal(<span class="s">"0.10"</span>)
       differently rather than an arbitrary one.</p>
   </div>
 
+  <h3 class="sub"><span class="bar"></span>Accounting codes — nobody should think about these at approval</h3>
+  <div class="banner ok">
+    <div class="b-ico">✓</div>
+    <div><div class="b-t">Supplier × resource category is the right key — it just needs a fallback chain</div>
+      <div class="b-d"><strong>Resource category is the real determinant.</strong> A GL account encodes <em>what kind of
+        expense</em> this is, and that is exactly what the category says. Supplier narrows the likely set and makes the default
+        confident. So the proposed key is correct, and the five categories from the budget upload — <strong>Labour · Plant
+        &amp; Equipment · Material · Subcontract · Miscellaneous</strong> — are the right granularity. It is not sufficient on
+        its own, but the gaps are all handled by resolution order rather than by more thinking at approval.</div></div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th style="width:34px" class="c">#</th><th style="width:230px">Resolution — most specific wins</th><th>Handles</th></tr></thead>
+      <tbody>
+        <tr><td class="c"><strong>1</strong></td><td><strong>Resource-level override</strong></td>
+          <td>The exceptions within a category. The big one is <strong>capex vs opex</strong> — same supplier, same category,
+            different GL treatment because one is a purchase and one is hire. Rare, but wrong silently if there's no override</td></tr>
+        <tr style="background:#F2F7FD"><td class="c"><strong>2</strong></td>
+          <td><strong>Supplier × resource category</strong><div class="t-sub">the proposal</div></td>
+          <td><strong>The workhorse.</strong> Should resolve the large majority of lines with no human involvement</td></tr>
+        <tr><td class="c"><strong>3</strong></td><td><strong>Resource category default</strong></td>
+          <td>Suppliers with no specific mapping yet — a new supplier still codes correctly on day one rather than landing
+            unresolved</td></tr>
+        <tr class="vr"><td class="c"><strong>4</strong></td><td><strong>Supplier default</strong></td>
+          <td><strong>The real gap in the proposal.</strong> Off-PO charges — freight, levies, admin fees, surcharges, the
+            wash-out fee — have <em>no resource and therefore no category</em>. That is precisely why they land as
+            <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">off_po</code>. A (supplier × category) map
+            cannot code them at all, so a supplier-level fallback is what stops them arriving uncoded every time</td></tr>
+        <tr><td class="c"><strong>5</strong></td><td><strong>Tenant fallback + flag</strong></td>
+          <td>Last resort. <strong>Never leave it blank</strong> — <span class="jira">VDP-1340</span> shows blank accounting
+            codes are a real sync failure, not a cosmetic gap</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid-2" style="margin-top:16px">
+    <div class="card card-p">
+      <h4 class="sub2">Two mechanisms already exist — this is the intersection</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">Worth knowing the proposal is additive rather than new:
+        <strong>resource → default accounting code</strong> already propagates onto POs (confirmed at Dormway), and
+        <span class="jira">VAR-19955</span> <em>"auto-prefill accounting code on bill line items from supplier default"</em>
+        reached QA in May. So supplier-level and resource-level defaults both exist.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:9px">What's missing is the middle of the
+        chain — the <strong>supplier × category</strong> intersection — which is the level that actually generalises. Filling it
+        in makes the two existing mechanisms the ends of a chain rather than competing defaults.</p>
+    </div>
+    <div class="card card-p">
+      <h4 class="sub2">Make coverage measurable, and let it learn</h4>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65">The goal is <em>nobody thinks about this at
+        approval</em>, so the thing to instrument is <strong>percentage of bill lines auto-coded</strong>. If it sits below
+        ~95% the map has holes, and the holes are nameable — which supplier, which category.</p>
+      <p style="font-size:12.5px;color:var(--text-2);line-height:1.65;margin-top:9px">And <strong>treat a correction as a
+        signal</strong>: when someone re-codes a line, offer to update the map. That is how coverage climbs without anyone
+        running a data-entry project, and it's cheap. It also connects to the coding-correction permission below — a
+        correction is the most reliable evidence you have that a default is wrong.</p>
+    </div>
+  </div>
+  <div class="anno q">
+    <div class="an-h">▲ Three smaller things to decide</div>
+    <p><strong>Resolve at entry, not at approval.</strong> A line that can't be coded should be flagged when the bill is
+      created, so it's fixed once and the map learns — rather than surfacing in front of an approver who has no idea what the
+      right answer is and every incentive to pick anything that clears the screen.</p>
+    <p style="margin-top:8px"><strong>Versioning.</strong> If a customer restructures their chart of accounts, already-posted
+      bills must keep the code they were posted under. Same reasoning as the tolerance snapshot — a past decision has to stay
+      explainable under the rules that produced it.</p>
+    <p style="margin-top:8px"><strong>Don't require every cell.</strong> Suppliers × 5 categories is a matrix, and asking
+      onboarding to populate all of it guarantees it gets skipped. The chain above means a tenant can start with category
+      defaults alone and add supplier specificity only where it actually differs.</p>
+  </div>
+
   <h3 class="sub"><span class="bar"></span>Decided · post-approval coding correction</h3>
   <div class="banner ok">
     <div class="b-ico">✓</div>
