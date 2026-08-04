@@ -5757,12 +5757,13 @@ function apPoStats(){
 
 /* Rate is checked on the billed quantity — which handles partial billing correctly.
    Quantity is checked separately against what remains available. */
-function apMatch(bl){
+function apMatch(bl, bill){
   const pl = bl.poLineId ? apLine(bl.poLineId) : null;
   const flags = [];
   if(!pl){ flags.push('off_po'); if(!bl.cc) flags.push('needs_coding');
            return {flags, pl:null, expected:null, priceVar:null, band:null, avail:null}; }
-  const avail = apAvailable(pl.id), delivered = apDelivered(pl.id);
+  const avail = bill ? apLinkedQty(bill, pl.id) : apAvailable(pl.id);
+  const delivered = avail;
   const expected = +(pl.rate * bl.qty).toFixed(2);
   const billed = +(bl.qty * bl.rate).toFixed(2);
   const priceVar = +(billed - expected).toFixed(2);
@@ -5779,16 +5780,14 @@ function apMatch(bl){
 // off_po is NOT blocking once coded — an off-PO charge is legitimate, it just has
 // nothing to inherit coding from. It is needs_coding that blocks.
 const AP_BLOCKING = ['over_consumed','needs_coding'];
-const apBillBlocked = b => b.lines.some(l => apMatch(l).flags.some(f => AP_BLOCKING.includes(f)));
+const apBillBlocked = b => !b.lines.length || b.lines.some(l => apMatch(l,b).flags.some(f => AP_BLOCKING.includes(f)));
 
 /* Approved billed quantity consumes docket entries oldest-first; consumed ones supersede. */
 function apDct(){
   const out = [];
   AP.po.lines.forEach(pl => {
-    let cover = AP.supersede ? apBilledApproved(pl.id) : 0;
     AP.dockets.filter(d=>d.poLineId===pl.id).forEach(d => {
-      const done = cover >= d.qty - 1e-9;
-      if(done) cover -= d.qty;
+      const done = AP.supersede && !!apDocketBill(d.id);
       out.push({date:d.date, cc:d.cc, type:'Contract', resource:pl.resource, supplier:AP.po.supplier,
         unit:pl.unit, unitCost:pl.rate, qty:d.qty, cost:+(d.qty*pl.rate).toFixed(2),
         source:'Docket', ref:d.number, superseded:done});
@@ -5953,7 +5952,7 @@ function apViewPo(){
         ${AP.po.status==='Draft'
           ? `<button class="btn btn-p btn-sm" onclick="apApprovePo()">Approve</button>`
           : `<button class="btn btn-p btn-sm" onclick="apGo('dockets')">Capture a docket →</button>
-             <button class="btn btn-s btn-sm" onclick="apCopyPoToBill()">Copy PO content to bill</button>`}</div>
+             <button class="btn btn-s btn-sm" onclick="apNewBill()">Create bill from this PO</button>`}</div>
       ${AP.po.status==='Draft'?`<p class="foot-note" style="margin-top:11px">Rates are not authority until the PO is approved —
         approving locks ${money(st.total)} of authorised spend.</p>`:''}
     </div></div>`;
@@ -5992,7 +5991,7 @@ function apViewDockets(){
           <td class="r num">${money(d.qty*pl.rate)}</td>
           <td><span class="pill ${d.status==='Billed'?'neutral':'warn'}">${d.status}</span></td></tr>`;}).join('')}
         </tbody></table></div>
-        <div style="margin-top:14px"><button class="btn btn-p btn-sm" onclick="apCopyPoToBill()">Create the bill →</button></div>`
+        <div style="margin-top:14px"><button class="btn btn-p btn-sm" onclick="apNewBill()">Create the bill →</button></div>`
         :`<div class="empty-state"><div class="ico-big">🚚</div><div class="title">No dockets yet</div>
           <div class="sub">Capture one above — it posts a <code>Source: Docket</code> cost entry.</div></div>`}
     </div></div>`;
@@ -6009,20 +6008,27 @@ function apViewBill(){
   if(!AP.bills.length) return `<div class="frame" style="border-radius:0 0 8px 8px;margin:0"><div class="frame-body">
     <div class="banner plain" style="margin:0"><div class="b-ico">🧾</div><div><div class="b-t">No bill yet</div>
     <div class="b-d">Create one from the PO — it pre-fills at PO rates with the quantities the dockets evidence.</div></div></div>
-    <button class="btn btn-p btn-sm" style="margin-top:13px" onclick="apCopyPoToBill()">Copy PO content to bill</button></div></div>`;
+    <button class="btn btn-p btn-sm" style="margin-top:13px" onclick="apNewBill()">Create bill from this PO</button></div></div>`;
   const b = AP.bills[AP.bills.length-1], st = apPoStats();
   const tot = b.lines.reduce((a,l)=>a+l.qty*l.rate,0);
-  const ms = b.lines.map(l=>({l, m:apMatch(l)}));
+  const ms = b.lines.map(l=>({l, m:apMatch(l,b)}));
   const anyFlag = ms.some(x=>x.m.flags.length), blocked = apBillBlocked(b);
   const cum = st.billed + (b.status==='Approved'?0:tot);
   return `<div class="frame" style="border-radius:0 0 8px 8px;margin:0">
     <div class="frame-bar">Bill: ${b.ref}<div class="sp"></div><span class="meta">${b.status}</span></div>
     <div class="frame-body">
-      <div style="display:flex;gap:26px;flex-wrap:wrap;margin-bottom:14px;font-size:12.5px">
+      <div style="display:flex;gap:26px;flex-wrap:wrap;margin-bottom:8px;font-size:12.5px">
         <div><div class="ph-lbl">Supplier</div>${AP.po.supplier}</div>
         <div><div class="ph-lbl">Project</div>${AP.po.project}</div>
         <div><div class="ph-lbl">Purchase order</div><span class="pill info">${AP.po.number}</span></div>
-        <div><div class="ph-lbl">Docket</div>${AP.dockets.length?AP.dockets.map(d=>`<span class="pill neutral" style="margin-right:3px">${d.number}</span>`).join(''):'—'}</div></div>
+        <div><div class="ph-lbl">Docket</div>${(b.docketIds||[]).length
+          ? AP.dockets.filter(d=>b.docketIds.includes(d.id)).map(d=>`<span class="pill neutral" style="margin-right:3px">${d.number}</span>`).join('')
+          : '<span class="pill bad">None linked</span>'}</div></div>
+      <div style="margin-bottom:14px">
+        <button class="btn btn-s btn-sm" onclick="AP.linkOpen=!AP.linkOpen;apRender()">🔗 Link PO and Dockets</button>
+        <span style="font-size:11.5px;color:var(--muted);margin-left:9px">The link is what the match is computed from —
+          quantity comes from the dockets you select here.</span></div>
+      ${AP.linkOpen?apLinkModal(b):''}
       ${anyFlag?`<div class="banner ${blocked?'bad':'warn'}" style="margin-bottom:14px"><div class="b-ico">${blocked?'✖':'⚠'}</div>
         <div><div class="b-t">${blocked?'Blocked — resolve before approval':'Discrepancies detected between the bill, the PO and the linked dockets'}</div>
         <div class="b-d">Hover a line's ⚠ for detail. Rate comes from the PO; quantity is checked against what remains available
