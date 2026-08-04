@@ -6119,7 +6119,32 @@ function apViewBill(){
   const ms = b.lines.map(l=>({l, m:apMatch(l,b)}));
   const anyFlag = ms.some(x=>x.m.flags.length), blocked = apBillBlocked(b);
   const cum = st.billed + (b.status==='Approved'?0:tot);
-  return `
+  /* The real bill detail is a split view: the scanned invoice on the left, the
+     extracted data on the right. Keeping that shape matters — the whole "is the bill
+     wrong or did we read it wrong?" check depends on seeing both at once. */
+  const pdf = `<div style="width:290px;flex-shrink:0;border:1px solid var(--divider);border-radius:8px;overflow:hidden;background:#fff">
+    <div style="height:30px;background:#F2F7FD;border-bottom:1px solid var(--divider);display:flex;align-items:center;
+      justify-content:space-between;padding:0 10px;font-size:11px;font-weight:600;color:var(--primary)">
+      <span>Boral ${b.ref}.pdf</span><span style="color:var(--muted)">1 / 2</span></div>
+    <div style="padding:12px;font-size:9.5px;line-height:1.5;color:#333">
+      <div style="display:flex;justify-content:space-between;border-bottom:2px solid #333;padding-bottom:5px;margin-bottom:7px">
+        <strong style="font-size:11px">BORAL</strong><strong style="font-size:10px">TAX INVOICE</strong></div>
+      <div style="color:#666;margin-bottom:7px">Construction Materials Group Limited<br>ABN 13 009 660 001</div>
+      <div style="display:flex;justify-content:space-between"><span>Document Number</span><strong>${b.ref}</strong></div>
+      <div style="display:flex;justify-content:space-between"><span>Date</span><span>${b.date}</span></div>
+      <div style="display:flex;justify-content:space-between"><span>Customer Order No.</span><span>${AP.po.number}</span></div>
+      <div style="border:1px solid #ccc;margin-top:9px;padding:6px">
+        ${b.lines.map(l=>`<div style="display:flex;justify-content:space-between;font-size:9px">
+          <span style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.desc}</span>
+          <span>${money(l.qty*l.rate)}</span></div>`).join('')}
+        <div style="display:flex;justify-content:space-between;border-top:1px solid #ccc;margin-top:5px;padding-top:4px">
+          <span>Total excluding GST</span><strong>${money(tot)}</strong></div>
+        <div style="display:flex;justify-content:space-between"><span>GST Payable</span><span>${money(tot*0.1)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-weight:700"><span>Total</span><span>${money(tot*1.1)}</span></div>
+      </div>
+      <div style="margin-top:9px;color:#888;font-size:8.5px">This Invoice is Due for Payment By 30-DAYS</div>
+    </div></div>`;
+  return `<div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">${pdf}<div style="flex:1;min-width:420px">
       <div style="display:flex;gap:26px;flex-wrap:wrap;margin-bottom:8px;font-size:12.5px">
         <div><div class="ph-lbl">Supplier</div>${AP.po.supplier}</div>
         <div><div class="ph-lbl">Project</div>${AP.po.project}</div>
