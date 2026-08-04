@@ -3746,41 +3746,56 @@ GST_RATE = Decimal(<span class="s">"0.10"</span>)
     reconcile evidence with invoices because nothing connects them at line level.</strong> That is a stronger case for
     matching than "faster reconciliation" — it is not an efficiency feature, it is what makes the cost figures correct.</p>
 
-  <h3 class="sub"><span class="bar"></span>The transition, stage by stage</h3>
+  <h3 class="sub"><span class="bar"></span>What each event does to Total Cost to Date</h3>
+  <p style="font-size:13px;color:var(--text-2);max-width:82ch;margin-bottom:13px;line-height:1.6">Note the first row:
+    <strong>there is no <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">PO</code> in the Source enum</strong>,
+    so approving a PO creates no DCT entry and no tracked cost. Commitment is simply not represented in cost tracking today —
+    worth knowing before anyone assumes it is.</p>
   <div class="tbl-wrap">
     <table class="calc">
-      <thead><tr><th>Event</th><th class="r">Committed</th><th class="r">Tracked</th><th class="r">Actual</th>
-        <th>Project total</th></tr></thead>
+      <thead><tr><th>Event</th><th style="width:110px">DCT Source</th><th class="r">Entry</th>
+        <th class="r">Total Cost to Date</th><th>Correct?</th></tr></thead>
       <tbody>
         <tr><td><strong>PO approved</strong><div class="t-sub">40 m³ @ $220</div></td>
-          <td class="r num">$8,800</td><td class="r num">—</td><td class="r num">—</td>
-          <td class="num">$8,800 committed</td></tr>
+          <td style="color:var(--disabled)">none</td><td class="r num">—</td><td class="r num">$0</td>
+          <td><span class="pill neutral">No commitment concept</span></td></tr>
         <tr class="vok"><td><strong>Docket captured</strong><div class="t-sub">8 m³ received</div></td>
-          <td class="r num">$7,040<div class="t-sub">less received</div></td>
-          <td class="r num"><strong>$1,760</strong></td><td class="r num">—</td>
-          <td class="num">$8,800<div class="t-sub">no change — reclassified, not added</div></td></tr>
-        <tr class="vok"><td><strong>Bill approved &amp; matched</strong><div class="t-sub">8 m³ @ $220</div></td>
-          <td class="r num">$7,040</td>
-          <td class="r num"><strong>$0</strong><div class="t-sub">released</div></td>
+          <td><span class="tag dk">Docket</span></td><td class="r num">$1,760</td>
+          <td class="r num">$1,760</td>
+          <td><span class="pill ok">✓ Right</span><div class="t-sub">cost incurred, not yet invoiced</div></td></tr>
+        <tr class="vbad"><td><strong>Bill approved &amp; matched</strong><div class="t-sub">same 8 m³ @ $220</div></td>
+          <td><span class="tag bl">Bills</span></td><td class="r num">$1,760</td>
+          <td class="r num"><strong>$3,520</strong></td>
+          <td><span class="pill bad">✖ Double-counted</span><div class="t-sub">the docket entry was never superseded</div></td></tr>
+        <tr class="vok"><td><strong>…with the fix</strong><div class="t-sub">allocations identify the docket lines consumed</div></td>
+          <td><span class="tag bl">Bills</span></td><td class="r num">$1,760</td>
           <td class="r num"><strong>$1,760</strong></td>
-          <td class="num">$8,800<div class="t-sub">still no change</div></td></tr>
-        <tr class="vr"><td><strong>Bill approved with accepted variance</strong>
-          <div class="t-sub">billed $235/m³, variance accepted</div></td>
-          <td class="r num">$7,040</td><td class="r num">$0</td>
+          <td><span class="pill ok">✓ Right</span><div class="t-sub">Docket entry superseded, not deleted</div></td></tr>
+        <tr class="vr"><td><strong>Variance accepted</strong><div class="t-sub">billed $235/m³</div></td>
+          <td><span class="tag bl">Bills</span></td><td class="r num">$1,880</td>
           <td class="r num">$1,880<div class="t-sub">+$120</div></td>
-          <td class="num">$8,920<div class="t-sub">the variance is the only real movement</div></td></tr>
+          <td><span class="pill warn">Correct — and visible</span><div class="t-sub">a real cost increase</div></td></tr>
       </tbody>
     </table>
   </div>
   <div class="anno">
     <div class="an-h">◆ The test of a correct implementation</div>
-    <p>Capturing a docket should <strong>not change the project's total cost</strong> — it reclassifies committed into
-      tracked. Approving a matched bill should <strong>not change it either</strong> — it reclassifies tracked into actual.
-      <strong>The only events that move the total are a variance being accepted, an off-PO charge, or a credit note.</strong>
-      If capturing a docket or approving a clean bill moves the total, something is being counted twice.</p>
-    <p style="margin-top:8px">That gives a single, testable invariant worth asserting directly:
-      <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">committed + tracked + actual</code> changes only on
-      a priced event, never on a document transition.</p>
+    <p>Capturing a docket <em>should</em> raise Total Cost to Date — that is the whole point of tracking cost before the
+      invoice arrives. But <strong>approving a matched bill should not raise it again.</strong> The only events that should
+      move the number after the docket are a <strong>variance being accepted</strong>, an <strong>off-PO charge</strong>, or a
+      <strong>credit note</strong>.</p>
+    <p style="margin-top:8px">A single testable invariant: <strong>approving a bill that matches cleanly must leave Total Cost
+      to Date unchanged.</strong> If it moves, the supersession is broken. That is one assertion, it is cheap to write, and it
+      would have caught every instance of this class of bug.</p>
+  </div>
+  <div class="anno q">
+    <div class="an-h">▲ Supersede, don't delete</div>
+    <p>The Docket-sourced entry should be marked superseded and <strong>excluded from the total</strong>, not removed. It is
+      the independent record of what site said — the only thing that makes a variance arguable, and the audit trail if the bill
+      is later disputed or credited. Deleting it destroys evidence to fix a sum.</p>
+    <p style="margin-top:8px">It also makes the DCT view better rather than worse: filter to <code style="background:#eef1f5;padding:1px 5px;border-radius:3px">Source
+      = Docket</code> and you have <strong>work done but not yet invoiced</strong> — the accrual, which is genuinely useful and
+      currently impossible to isolate because docket and bill entries are indistinguishable in the total.</p>
   </div>
 
   <h3 class="sub"><span class="bar"></span>What each match outcome does to the budget</h3>
