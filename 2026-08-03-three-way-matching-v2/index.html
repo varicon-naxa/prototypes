@@ -5739,10 +5739,15 @@ function apMatch(bl){
   if(delivered === 0) flags.push('missing_docket');
   else if(bl.qty > avail + 1e-9) flags.push('over_consumed');
   if(priceVar > band) flags.push('price_variance');
-  if(bl.cc && bl.cc !== pl.cc) flags.push('coding_variance');
+  // Coding variance arises from either side: the bill line coded away from the PO,
+  // or a docket that apportioned to a cost centre the PO never authorised.
+  const docketOffPo = AP.dockets.some(d => d.poLineId === pl.id && d.cc !== pl.cc);
+  if((bl.cc && bl.cc !== pl.cc) || docketOffPo) flags.push('coding_variance');
   return {flags, pl, expected, billed, priceVar, band, avail, delivered};
 }
-const AP_BLOCKING = ['off_po','over_consumed','needs_coding'];
+// off_po is NOT blocking once coded — an off-PO charge is legitimate, it just has
+// nothing to inherit coding from. It is needs_coding that blocks.
+const AP_BLOCKING = ['over_consumed','needs_coding'];
 const apBillBlocked = b => b.lines.some(l => apMatch(l).flags.some(f => AP_BLOCKING.includes(f)));
 
 /* Approved billed quantity consumes docket entries oldest-first; consumed ones supersede. */
