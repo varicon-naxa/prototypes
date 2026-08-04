@@ -5686,27 +5686,58 @@ ${j('blocks_approval', blocking.length ? '<span class="b">true</span>' : '<span 
    Vocabulary follows the real app: (001) Preliminaries, Source, Total Cost to Date,
    Docket Delivered, Remaining to be Billed. */
 
-const AP_CCS = [
-  {code:'(001) Preliminaries',   budget:40958.98},
-  {code:'(002) Bulk Earthworks', budget:38743.79},
-  {code:'(005) Footings',        budget:20180.00},
-];
+/* A project is tracked EITHER by cost centre (with zones) OR by WBS task — never both.
+   It is a project-level setting, so every PO, docket and bill on that project codes to
+   the same dimension. `code` below is whichever dimension is active. */
+const AP_DIMS = {
+  cc: { label:'Cost Centre', zones:true, options:[
+    {code:'(001) Preliminaries',   budget:40958.98},
+    {code:'(002) Bulk Earthworks', budget:38743.79},
+    {code:'(005) Footings',        budget:20180.00},
+  ]},
+  wbs: { label:'Task', zones:false, options:[
+    {code:'(1) Civil Prep & Erosion Control', budget:40958.98},
+    {code:'(2) Bulk Earthworks',              budget:38743.79},
+    {code:'(3) Footpath & Crossover Concrete',budget:20180.00},
+  ]},
+};
+const AP_ZONES = ['Zone 1','Zone 2','Zone 3'];
+const apDim = () => AP_DIMS[AP.trackBy];
+const apOpts = () => apDim().options;
+const AP_UNASSIGNED = '(unassigned) Unassigned';
 
-function apBlank(){
+function apBlank(track){
+  const t = track || 'cc';
+  const o = AP_DIMS[t].options.map(x=>x.code);
   return {
-    view:'po', supersede:true, tolPct:2, tolAbs:25, nextDk:1, nextBl:1, msg:'',
+    view:'po', trackBy:t, supersede:true, tolPct:2, tolAbs:25, nextDk:1, nextBl:1, msg:'',
     po:{ number:'PO-VAR004-0011', supplier:'Boral', project:'(VAR004) Bourke Street Roadworks',
       status:'Draft',
       lines:[
-        {id:1, resource:'(FCR20) 20mm Crushed Rock', cat:'Material', cc:'(002) Bulk Earthworks',
-         task:'(2.1) Zone 1', ac:'310 - Cost of Goods Sold', unit:'tonne', orderQty:200, rate:48},
-        {id:2, resource:'(N32) 32 MPa Concrete', cat:'Material', cc:'(005) Footings',
-         task:'(4.1) Slab', ac:'310 - Cost of Goods Sold', unit:'m³', orderQty:40, rate:220},
-        {id:3, resource:'(PUMP) Concrete pump hire', cat:'Plant & Equipment', cc:'(005) Footings',
-         task:'(4.1) Slab', ac:'320 - Plant Hire', unit:'hour', orderQty:16, rate:145},
+        {id:1, resource:'(FCR20) 20mm Crushed Rock', cat:'Material', cc:o[1], zone:'Zone 1',
+         ac:'310 - Cost of Goods Sold', unit:'tonne', orderQty:200, rate:48},
+        {id:2, resource:'(N32) 32 MPa Concrete', cat:'Material', cc:o[2], zone:'Zone 1',
+         ac:'310 - Cost of Goods Sold', unit:'m³', orderQty:40, rate:220},
+        {id:3, resource:'(PUMP) Concrete pump hire', cat:'Plant & Equipment', cc:o[2], zone:'Zone 2',
+         ac:'320 - Plant Hire', unit:'hour', orderQty:16, rate:145},
       ]},
     dockets:[], bills:[],
   };
+}
+/* Switching the project's tracking dimension re-codes everything to the equivalent
+   position in the other dimension — you cannot have a PO coded one way and a docket
+   the other, which is exactly why the engine must refuse to match across modes. */
+function apSetTrack(t){
+  if(t===AP.trackBy) return;
+  const from = AP_DIMS[AP.trackBy].options.map(x=>x.code);
+  const to   = AP_DIMS[t].options.map(x=>x.code);
+  const map = c => { const i = from.indexOf(c); return i>=0 ? to[i] : ''; };
+  AP.trackBy = t;
+  AP.po.lines.forEach(l=>l.cc = map(l.cc));
+  AP.dockets.forEach(d=>d.cc = map(d.cc));
+  AP.bills.forEach(b=>b.lines.forEach(l=>{ if(l.cc) l.cc = map(l.cc); }));
+  AP.msg = `Project now tracked by ${AP_DIMS[t].label}. Every PO, docket and bill line re-codes — a project cannot mix the two.`;
+  apRender();
 }
 let AP = apBlank();
 
