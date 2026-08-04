@@ -5913,10 +5913,28 @@ function apRender(){
       background:${AP.view===v.k?'var(--primary)':'transparent'};border-radius:${AP.view===v.k?'8px 8px 0 0':'0'}">
       ${v.t}${count[v.k]?` <span class="pill neutral" style="margin-left:4px">${count[v.k]}</span>`:''}</div>`).join('')}</div>`;
   const msg = AP.msg ? `<div class="banner ${AP.msg.startsWith('Blocked')?'bad':(AP.msg.indexOf('twice')>-1?'warn':'plain')}"
-    style="margin:0 0 0;border-radius:0"><div class="b-ico">${AP.msg.startsWith('Blocked')?'✖':'✦'}</div>
+    style="margin:0 0 14px"><div class="b-ico">${AP.msg.startsWith('Blocked')?'✖':'✦'}</div>
     <div><div class="b-d" style="color:var(--text)">${AP.msg}</div></div></div>` : '';
-  document.getElementById('ap-body').innerHTML = msg +
-    ({po:apViewPo, dockets:apViewDockets, bill:apViewBill, budget:apViewBudget, dct:apViewDct}[AP.view])();
+  const body = ({po:apViewPo, dockets:apViewDockets, bill:apViewBill,
+                 budget:apViewBudget, dct:apViewDct}[AP.view])();
+  const bl = AP.bills.length ? AP.bills[AP.bills.length-1] : null;
+  const meta = {
+    po:      {title:'Purchase Order Detail', status:AP.po.status, cls:AP.po.status==='Approved'?'ok':'warn',
+              strip:apStrip([['All',1],['Draft',AP.po.status==='Draft'?1:0],['Awaiting Approval',0],
+                             ['Approved',AP.po.status==='Approved'?1:0],['Closed',0],['Rejected',0]],
+                            AP.po.status==='Approved'?'Approved':'Draft')},
+    dockets: {title:'Site Docket',
+              strip:apStrip([['All',AP.dockets.length],['Complete',AP.dockets.filter(d=>d.status==='Billed').length],
+                             ['Incomplete',AP.dockets.filter(d=>d.status!=='Billed').length]],'All')},
+    bill:    {title: bl?`Bill: ${bl.ref}`:'Bills', status: bl?bl.status:'', cls: bl&&bl.status==='Approved'?'ok':'warn',
+              strip:apStrip([['All',AP.bills.length],['Draft',AP.bills.filter(b=>b.status==='Draft').length],
+                             ['Awaiting Approval',0],['Awaiting Payment',AP.bills.filter(b=>b.status==='Approved').length],
+                             ['Paid',0],['Rejected',0]], bl&&bl.status==='Approved'?'Awaiting Payment':'Draft')},
+    budget:  {title:`(JB-0001) ${AP.po.project}`},
+    dct:     {title:`(JB-0001) ${AP.po.project}`},
+  }[AP.view];
+  document.getElementById('ap-body').innerHTML =
+    apChrome(meta.title, msg + body, {status:meta.status, statusCls:meta.cls, strip:meta.strip});
   const s=document.getElementById('ap-sup'); if(s) s.checked = AP.supersede;
 }
 
