@@ -5920,6 +5920,82 @@ function apRender(){
   const s=document.getElementById('ap-sup'); if(s) s.checked = AP.supersede;
 }
 
+/* ---- real Varicon chrome: sidebar nav order, top bar, project tab strip ---- */
+const AP_SIDE = [['Projects','📋'],['Dashboard','▦'],['Gallery','🖼'],['Timesheet','🕐'],['Leave','📅'],
+  ['Scheduler','⇄'],['Daywork Record','📄'],['Purchase Order','🛒'],['Site Docket','🚚'],['Bills','💰'],
+  ['Forms','📝'],['Plant & Equipment','⚒'],['Resource Assigner','▤'],['Suppliers','🚛'],['File Manager','🗂']];
+const AP_PROJ_TABS = ['Dashboard','Budget Overview','Daily Cost Tracking','Claim','Variation Register',
+  'Report','File Manager','Site Diary','Daywork Record'];
+const AP_ACTIVE_SIDE = {po:'Purchase Order', polist:'Purchase Order', dockets:'Site Docket',
+  dklist:'Site Docket', bill:'Bills', blist:'Bills', budget:'Projects', dct:'Projects'};
+const AP_ACTIVE_TAB = {budget:'Budget Overview', dct:'Daily Cost Tracking'};
+
+function apChrome(title, body, opts){
+  opts = opts || {};
+  const side = AP_ACTIVE_SIDE[AP.view], tab = AP_ACTIVE_TAB[AP.view];
+  const badge = {'Purchase Order':AP.po.status==='Draft'?1:0, 'Site Docket':AP.dockets.length,
+    'Bills':AP.bills.filter(b=>b.status==='Draft').length};
+  return `<div style="display:flex;border:1px solid var(--divider);border-radius:0 0 8px 8px;overflow:hidden;background:var(--surface)">
+    <div style="width:172px;flex-shrink:0;background:var(--primary);color:#cdd5e3;padding:10px 0;font-size:12px">
+      <div style="display:flex;align-items:center;gap:8px;padding:0 13px 12px">
+        <div style="width:24px;height:24px;background:var(--secondary);border-radius:5px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px">✓</div>
+        <span style="color:#fff;font-weight:600;font-size:12.5px">Cookie's Civil</span></div>
+      ${AP_SIDE.map(([n,i])=>`<div style="display:flex;align-items:center;gap:9px;padding:7px 13px;
+        ${n===side?'background:var(--secondary);color:#fff;font-weight:600':''}">
+        <span style="width:14px;text-align:center;opacity:.9">${i}</span><span>${n}</span>
+        ${badge[n]?`<span style="margin-left:auto;background:var(--secondary);color:#fff;border-radius:9px;
+          padding:0 6px;font-size:10px;font-weight:700">${badge[n]}</span>`:''}</div>`).join('')}
+    </div>
+    <div style="flex:1;min-width:0;background:#fff">
+      <div style="height:46px;border-bottom:1px solid var(--divider);display:flex;align-items:center;
+        justify-content:space-between;padding:0 16px;background:#fff">
+        <div style="display:flex;align-items:center;gap:9px">
+          <span style="color:var(--primary);font-size:15px">←</span>
+          <strong style="font-size:14px">${title}</strong>
+          ${opts.status?`<span class="pill ${opts.statusCls||'warn'}">${opts.status}</span>`:''}</div>
+        <div style="display:flex;align-items:center;gap:9px">
+          <button class="btn btn-s" style="padding:5px 12px;font-size:12px">Initial Data Upload</button>
+          <span style="color:var(--primary);font-size:17px">＋</span>
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px"><span style="color:var(--secondary)">✓</span>Varicon Info ▾</div></div>
+      </div>
+      ${tab?`<div style="display:flex;border-bottom:1px solid var(--divider);overflow-x:auto;background:#fff">
+        ${AP_PROJ_TABS.map(t=>`<div style="padding:11px 15px;font-size:12.5px;white-space:nowrap;
+          font-weight:${t===tab?'700':'500'};color:${t===tab?'#fff':'var(--text-2)'};
+          background:${t===tab?'var(--primary)':'transparent'};border-radius:${t===tab?'6px 6px 0 0':'0'}">${t}</div>`).join('')}
+        </div>`:''}
+      ${opts.strip||''}
+      <div style="padding:16px">${body}</div>
+    </div></div>`;
+}
+
+/* Status tab strips, as the real list pages carry them */
+function apStrip(tabs, active){
+  return `<div style="display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--divider);overflow-x:auto;background:#fff">
+    ${tabs.map(([t,n])=>`<div style="padding:11px 13px;font-size:12px;white-space:nowrap;text-transform:uppercase;
+      letter-spacing:.4px;font-weight:${t===active?'700':'500'};color:${t===active?'var(--secondary)':'var(--text-2)'};
+      border-bottom:${t===active?'2px solid var(--secondary)':'2px solid transparent'}">${t}
+      <span style="background:${t===active?'var(--secondary)':'#eee'};color:${t===active?'var(--primary)':'#777'};
+        border-radius:9px;padding:1px 7px;font-size:10.5px;font-weight:700;margin-left:4px">${n}</span></div>`).join('')}
+  </div>`;
+}
+
+/* Approval chain, rendered as the real bill/PO detail does */
+function apChain(list){
+  return `<div style="display:flex;gap:9px;flex-wrap:wrap">
+    ${list.map((a,i)=>`<div style="flex:1;min-width:168px;padding:10px 12px;border-radius:8px;display:flex;gap:9px;
+      align-items:center;border:1px solid ${a.state==='done'?'var(--green)':(a.state==='now'?'var(--secondary)':'var(--divider)')};
+      background:${a.state==='done'?'#f1fbf2':(a.state==='now'?'var(--amber-bg)':'#fff')}">
+      <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;
+        justify-content:center;font-size:10.5px;font-weight:700;color:#fff;
+        background:${a.state==='done'?'var(--green)':(a.state==='now'?'var(--secondary)':'#E8EAEF')};
+        ${a.state==='wait'?'color:var(--muted)':''}">${a.state==='done'?'✓':i+1}</div>
+      <div style="min-width:0"><div style="font-weight:600;color:var(--primary);font-size:12px">${a.name}</div>
+        <div style="font-size:10.5px;color:var(--muted)">${a.role}</div>
+        ${a.state==='done'?'<div style="font-size:10px;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.4px;margin-top:2px">Approved</div>':''}
+        ${a.state==='now'?'<div style="font-size:10px;font-weight:800;color:var(--amber);text-transform:uppercase;letter-spacing:.4px;margin-top:2px">Awaiting</div>':''}
+      </div></div>`).join('')}</div>`;
+}
+
 function apStat(l,v,hi){ return `<div style="padding:12px 18px;border:1px solid var(--divider);border-radius:8px;
   min-width:148px;background:${hi?'#F2F7FD':'#fff'}"><div style="font-size:11.5px;color:var(--muted)">${l}</div>
   <div style="font-size:17px;font-weight:700;margin-top:3px">${money(v)}</div></div>`; }
