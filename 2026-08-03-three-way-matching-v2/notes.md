@@ -622,3 +622,82 @@ Key positions argued in the prototype:
   `missing_docket` fires. With no available quantity the expected amount is zero, so any billed
   amount looks like a price breach — that's derivative noise, and reporting both sends the user
   chasing the wrong problem.
+
+---
+
+# SESSION STATE — 4 Aug 2026, end of day
+
+Read this first if picking up in a new conversation.
+
+## The cost model (confirmed by Alec)
+
+PO = **Committed**. Docket = **Tracked**. Bill = **Actual**.
+
+They are stages of the same money, never additive. A bill converts Tracked into Actual
+one-for-one: 50k tracked + 30k actual, bill for 10k → 40k tracked + 40k actual, still 80k
+off budget. **Committed only responds to delivery and can only ever shrink.**
+
+Live Budget Overview in the sandbox confirms it: Committed $10,880 / Tracked $8,080 /
+Actual $1,760 after 3 dockets and 1 approved bill.
+
+The "double count" is a *failure mode if supersession doesn't fire*, not a design risk —
+there is a toggle in the sandbox to demonstrate broken vs working. The model is correct.
+
+## Built and verified
+
+Sandbox (first item in the rail) — five views sharing one state, real Varicon chrome
+(sidebar, top bar, project tab strip, status tab strips with live counts):
+
+- **Purchase Order** — PO Total / Docket Delivered / Remaining to be delivered / Billed /
+  Remaining to be Billed. Order Qty + Delivered Qty per line. Approval chain.
+  "Project tracked by" switch: Cost Centre + Zones **or** Task (WBS) — never both,
+  project-level, re-codes everything on switch.
+- **Site Dockets** — cost centre **prefills from the PO line**; override raises
+  coding_variance. **Non-PO custom items** supported (wash-out fee case) — tracks cost with
+  no rate authority, blocks the bill until coded.
+- **Bills** — split view with mock invoice pane. **Link PO and Dockets** modal with a date
+  filter; already-billed dockets shown greyed and named ("Billed on VR19507301"). Match tabs
+  with live ratios. Per-line flags with hover detail. Approval chain.
+- **Budget Overview** — Budget / Committed / Tracked / Actual / Remaining.
+- **Daily Cost Tracking** — real columns incl. **Source** (Docket / Bills), superseded
+  entries struck through and excluded from the total.
+
+Flags: price_variance, qty_variance, off_po, missing_docket, over_consumed,
+over_po_ceiling, coding_variance, needs_coding. Blocking = over_consumed + needs_coding.
+
+## NOT built — the remaining asks
+
+1. PO landing page (list screen)
+2. Scanning a quote → PO creation (per 2026-05-14-po-creation-page)
+3. Scanning a bill / email intake + Scan log
+4. Mobile docket capture + Process Docket (per 2026-05-07-site-dockets-flow)
+5. List screens for PO / Docket / Bills
+
+## Open questions for Alec
+
+- Should a bill with **no docket at all** be blocked, or warn only? Currently warns.
+- Estimated/Construction Budget removal — assumed single "Budget" column.
+
+## Known flaws to iterate on (plain English)
+
+1. **If nobody closes a PO, Committed never clears** — order 200t, take 8t, $9,216 sits
+   committed forever. Makes PO close a financial task, not admin.
+2. **Non-PO docket items can be priced at anything** — no PO line to check the rate against.
+3. **Editing a docket after the bill is paid silently breaks agreement** — nothing recalculates.
+4. **Two people can start billing the same delivery** — only the second Approve is stopped.
+
+## Jira
+
+VDP-134 has 11 sub-tasks. New this session: **VDP-1631** (evidence projection + consumption
+ledger — prerequisite for everything), **VDP-1632** (eventual matching / parking),
+**VDP-1634** (disputes as overlay), **VDP-1635** (GST per-line tax on sync),
+**VDP-1655** (field-level bill lock, adopts CQ-2714), **VDP-1657** (accounting code
+auto-resolution). Standalone Features: **VDP-1636** plant hire, **VDP-1637** ABN labour,
+**VDP-1638** RCTI. VDP-1086 and CQ-2714 commented and linked.
+
+## Wiki
+
+PR **#153** open on varicon-naxa/varicon-wiki — 2 decision pages, plant hire concept,
+corrected three-way-matching concept, plus a **Windows bug fix in
+scripts/regenerate-backlinks.py** (os.path.relpath emitted backslash paths, rewriting 810
+links across 407 files). Not yet merged.
