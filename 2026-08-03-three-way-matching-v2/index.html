@@ -5222,6 +5222,35 @@ ${j('blocks_approval', blocking.length ? '<span class="b">true</span>' : '<span 
 }`;
 }
 
+/* ---------------- accounting code resolution ----------------
+   The map is keyed on (supplier, resource category). Resource category is the real
+   determinant — it says WHAT KIND of expense this is, which is what a GL account
+   encodes. Supplier narrows the likely set and lets the default be confident.
+   Five categories, straight from the budget upload. */
+const AC_MAP = {
+  'BORAL Concrete': {
+    'Material':          {code:'5-1200', name:'Concrete supply'},
+    'Plant & Equipment': {code:'5-1450', name:'Plant hire'},
+    'Labour':            {code:'5-1100', name:'Labour'},
+    'Subcontract':       {code:'5-1600', name:'Subcontract'},
+    'Miscellaneous':     {code:'5-1900', name:'Sundry site costs'},
+  },
+};
+const AC_SUPPLIER_FALLBACK = {'BORAL Concrete': {code:'5-1900', name:'Sundry site costs'}};
+
+function resolveAC(supplier, category){
+  const bySupplier = AC_MAP[supplier] || {};
+  if(bySupplier[category]) return {...bySupplier[category], src:'supplier × category'};
+  if(AC_SUPPLIER_FALLBACK[supplier]) return {...AC_SUPPLIER_FALLBACK[supplier], src:'supplier default'};
+  return {code:'—', name:'unresolved', src:'needs review'};
+}
+
+function poCat(sel, row){
+  const r = resolveAC('BORAL Concrete', sel.value);
+  const cell = document.getElementById('po-ac-' + row);
+  if(cell) cell.innerHTML = `${r.code}<div class="t-sub"><span class="tag dk">auto</span> ${r.src}</div>`;
+}
+
 /* ---------------- end-to-end workflow ---------------- */
 // Coding structure comes from the budget upload. Cost centres and WBS tasks are
 // alternative shapes over the same money — the PO picks one and everything downstream
