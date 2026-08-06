@@ -24,7 +24,9 @@ Two flows, switched from the top right:
 Project  ›  Variation Register  ›  drag the file onto the row  ›  done
 ```
 
-Dragging a file over the register arms every row (left edge marker + "Drop onto the variation you want to attach to" banner); the row under the cursor highlights and labels itself *⇪ drop to attach here*. Dropping attaches to that variation, shows an uploading state in its Documents cell, and confirms with a toast naming the variation — you never leave the register. The row's **⇪ add** link does the same via a file browser, for anyone not dragging.
+Dragging a file over the register arms every row (left edge marker + "Drop onto the variation you want to attach to" banner); the row under the cursor highlights and labels itself *⇪ drop to attach here*. Dropping attaches to that variation, shows an uploading state in its Documents cell, and confirms with a toast naming the variation — you never leave the register.
+
+Only two controls sit on the row: **drop onto it**, or **click its 📎 cell**. A separate per-row upload button was tried and cut — the 📎 cell already opens a page with a browse option, so a third affordance on the row earned nothing and added clutter to a table that has to stay scannable.
 
 This matters because filing evidence is usually a batch job: you come back from site or clear your inbox with several things to file across several variations. Opening each variation to attach one PDF is the slow path.
 
