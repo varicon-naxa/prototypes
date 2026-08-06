@@ -18,8 +18,21 @@ Two flows, switched from the top right:
 
 **B · Existing** — the actual navigation path, walkable end to end:
 
+**Fastest path — drop straight onto the register row, no navigation at all:**
+
 ```
-Project  ›  Variation Register  ›  click the variation row  ›  press Documents  ›  upload
+Project  ›  Variation Register  ›  drag the file onto the row  ›  done
+```
+
+Dragging a file over the register arms every row (left edge marker + "Drop onto the variation you want to attach to" banner); the row under the cursor highlights and labels itself *⇪ drop to attach here*. Dropping attaches to that variation, shows an uploading state in its Documents cell, and confirms with a toast naming the variation — you never leave the register. The row's **⇪ add** link does the same via a file browser, for anyone not dragging.
+
+This matters because filing evidence is usually a batch job: you come back from site or clear your inbox with several things to file across several variations. Opening each variation to attach one PDF is the slow path.
+
+**Longer path, when you want to review what's there:**
+
+```
+Project  ›  Variation Register  ›  click 📎 on the row  ›  documents page opens in place
+Project  ›  Variation Register  ›  click the row  ›  variation opens  ›  press Documents
 ```
 
 No new navigation is introduced — the register row is already the way into a variation. Click either row in the register to walk it. The register also gains a **Documents** column, so it's visible at a glance which variations are backed by evidence and which are bare. `v1` starts with evidence, `v2` is bare, and attaching to one updates its count on the register.
