@@ -41,7 +41,9 @@ The drop zones are real, not mocked images:
 
 **Forms are linked, not uploaded.** The picker selects an existing form submission and the link stays live (marked with a `LIVE LINK` pill), so opening it from the variation reaches the submission itself rather than a frozen PDF copy taken at attach time. This is the more useful behaviour but a bigger build than plain file upload — it may deserve splitting into its own ticket.
 
-**A new tab rather than a new page.** Supporting Documents sits alongside COST and CONTRACT with a count badge, so it's discoverable without adding navigation. Alternative considered: a section stacked below the cost table. The tab keeps the screen short and matches where users already look.
+**An inline section, NOT a new tab.** First pass put Supporting Documents alongside COST and CONTRACT as a third tab. That was wrong on two counts: those tabs are the cost breakdown and evidence isn't part of it, and a tab hides the evidence behind a click — the whole problem is that evidence isn't visible on the variation. It's now an always-visible section below the cost table, with a paperclip count in the header strip (next to Summary/Comments) that jumps down to it. Less to build, nothing hidden.
+
+**One save button.** The first pass had a duplicate Save Variation in a footer bar. Saving happens top-right only, as it does today.
 
 **Documents column on the register.** Not in the original request, but it's what makes the feature visible before you open a variation — a bare variation is the risk, and the register is where you'd spot it.
 
