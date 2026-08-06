@@ -39,6 +39,14 @@ No new navigation is introduced — the register row is already the way into a v
 
 Both flows keep today's layout above the new section — the fields, amounts and COST/CONTRACT tabs are unchanged.
 
+## Engineering notes on the register drop
+
+- Row drop targets only arm for **file** drags (`dataTransfer.types` contains `Files`), so dragging text or a UI element doesn't light up the table.
+- Drops that miss a row are swallowed at the view level — otherwise the browser navigates away to the dropped file, which looks like a crash.
+- The row drop handler stops propagation so a file can't be attached twice by the same drop.
+- Rejected files (wrong type, over the size cap) are still reported on a register drop — the toast says how many were rejected rather than silently dropping them. A drop of only rejected files must not read as success.
+- The Documents cell derives its own uploading state from whether any attachment is still in flight. Callers must not set that class themselves — the render function rewrites `className` and would wipe it. (This was a real bug in the first cut of this screen.)
+
 ## Interactions that actually work
 
 The drop zones are real, not mocked images:
