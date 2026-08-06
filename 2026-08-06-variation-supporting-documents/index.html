@@ -714,8 +714,9 @@ function removeAtt(i){
 }
 
 // ---------- upload ----------
-function addFiles(files){
-  const arr = attsFor(docsTarget);
+// arr = where the attachments go, onUpdate = how to reflect progress
+function addFilesTo(arr, files, onUpdate){
+  const accepted = [], rejected = [];
   [...files].forEach(f => {
     const e = extOf(f.name);
     let error = null;
@@ -726,17 +727,24 @@ function addFiles(files){
                    by: 'Alec Neill', when: 'just now', done: !!error, error, pct: 0 };
     if (!error && item.kind === 'img') item.url = URL.createObjectURL(f);
     arr.push(item);
-    if (error) { renderDocs(); return; }
+    (error ? rejected : accepted).push(item);
+    if (error) { onUpdate(); return; }
 
-    renderDocs();
+    onUpdate();
     let pct = 0;
     const tick = setInterval(() => {
       pct += 18 + Math.round(Math.random() * 22);
       if (pct >= 100) { clearInterval(tick); item.pct = 100; item.done = true; }
       else item.pct = pct;
-      renderDocs();
+      onUpdate();
     }, 260);
   });
+  return { accepted: accepted.length, rejected: rejected.length };
+}
+
+// upload from inside the documents page
+function addFiles(files){
+  addFilesTo(attsFor(docsTarget), files, renderDocs);
 }
 
 const dz = document.getElementById('dz-docs');
@@ -749,6 +757,89 @@ dz.addEventListener('drop', e => {
   e.preventDefault(); dz.classList.remove('over');
   addFiles(e.dataTransfer.files);
 });
+
+// ---------- upload straight from the register, no navigation ----------
+function attachFromRegister(key, files){
+  const v = VARIATIONS[key];
+  const clip = document.getElementById('clip-' + key);
+  if (clip) clip.classList.add('busy');
+  const res = addFilesTo(v.atts, files, () => {
+    renderRegister();
+    const stillGoing = v.atts.some(x => !x.done && !x.error);
+    if (!stillGoing && clip) document.getElementById('clip-' + key).classList.remove('busy');
+    if (document.getElementById('docsOverlay').classList.contains('open') && docsTarget === 'existing' && currentVar === key) renderDocs();
+  });
+  const bits = [];
+  if (res.accepted) bits.push(res.accepted + ' file' + (res.accepted === 1 ? '' : 's') + ' attached to ' + v.wbs + ' · ' + v.title);
+  if (res.rejected) bits.push(res.rejected + ' rejected');
+  toast(bits.join(' — ') || 'Nothing to attach');
+}
+
+// "⇪ add" browses for files against a specific row
+let browseKey = null;
+const rowInput = document.getElementById('file-row');
+function browseFor(key){ browseKey = key; rowInput.click(); }
+rowInput.onchange = () => {
+  if (browseKey) attachFromRegister(browseKey, rowInput.files);
+  rowInput.value = ''; browseKey = null;
+};
+
+// open a variation's documents page from the register, staying on the register
+function openDocsFor(key){
+  currentVar = key;
+  openDocs('existing');
+}
+
+// each register row is its own drop target
+const regTable = document.getElementById('regTable');
+let dragDepth = 0;
+
+function armTable(on){
+  regTable.classList.toggle('armed', on);
+  document.getElementById('dragBanner').classList.toggle('show', on);
+  if (!on) regTable.querySelectorAll('tr.row').forEach(r => r.classList.remove('drop-over'));
+}
+
+// only arm for actual file drags, not text/element drags
+function isFileDrag(e){
+  const t = e.dataTransfer && e.dataTransfer.types;
+  return !!t && [...t].includes('Files');
+}
+
+document.getElementById('view-register').addEventListener('dragenter', e => {
+  if (!isFileDrag(e)) return;
+  dragDepth++; armTable(true);
+});
+document.getElementById('view-register').addEventListener('dragleave', e => {
+  if (!isFileDrag(e)) return;
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) armTable(false);
+});
+
+regTable.querySelectorAll('tr.row').forEach(row => {
+  const key = row.dataset.var;
+  row.addEventListener('dragover', e => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    regTable.querySelectorAll('tr.row').forEach(r => r.classList.remove('drop-over'));
+    row.classList.add('drop-over');
+  });
+  row.addEventListener('drop', e => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    dragDepth = 0; armTable(false);
+    attachFromRegister(key, e.dataTransfer.files);
+  });
+});
+
+// swallow drops that miss a row, so the browser doesn't navigate to the file
+['dragover','drop'].forEach(evt =>
+  document.getElementById('view-register').addEventListener(evt, e => {
+    if (isFileDrag(e)) e.preventDefault();
+    if (evt === 'drop') { dragDepth = 0; armTable(false); }
+  })
+);
 
 function seedExample(){
   attsFor(docsTarget).push(
