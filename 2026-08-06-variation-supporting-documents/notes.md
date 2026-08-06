@@ -41,7 +41,16 @@ The drop zones are real, not mocked images:
 
 **Forms are linked, not uploaded.** The picker selects an existing form submission and the link stays live (marked with a `LIVE LINK` pill), so opening it from the variation reaches the submission itself rather than a frozen PDF copy taken at attach time. This is the more useful behaviour but a bigger build than plain file upload — it may deserve splitting into its own ticket.
 
-**An inline section, NOT a new tab.** First pass put Supporting Documents alongside COST and CONTRACT as a third tab. That was wrong on two counts: those tabs are the cost breakdown and evidence isn't part of it, and a tab hides the evidence behind a click — the whole problem is that evidence isn't visible on the variation. It's now an always-visible section below the cost table, with a paperclip count in the header strip (next to Summary/Comments) that jumps down to it. Less to build, nothing hidden.
+**One button on the variation screen; everything else on its own page.** The only addition to the variation screen is a **Documents** button in the header strip, carrying a count. Pressing it opens a documents page for that variation holding the upload area and what's already attached. The variation screen stays as dense as it is today — no drop zone competing for space on it.
+
+Two earlier passes were rejected on the way here:
+
+- *A third tab beside COST/CONTRACT* — those tabs are the cost breakdown; evidence isn't part of it.
+- *An always-visible drop zone section below the cost table* — took a lot of vertical room on a screen that's already dense, for something you only interact with occasionally.
+
+The count on the button is what keeps evidence visible at a glance without putting the upload UI on the screen.
+
+**Files and linked forms are separate lists.** On the documents page, uploaded files sit under **FILES** and linked form submissions under **LINKED VARICON FORMS**, each with its own count. Mixing them into one list makes it ambiguous what's a stored copy and what's a live link — and the actions differ (Remove vs Unlink).
 
 **One save button.** The first pass had a duplicate Save Variation in a footer bar. Saving happens top-right only, as it does today.
 
