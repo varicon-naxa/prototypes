@@ -19,7 +19,7 @@ Two flows, switched from the top right:
 **B · Existing** — the actual navigation path, walkable end to end:
 
 ```
-Project  ›  Variation Register  ›  click the variation row  ›  variation opens  ›  drop files in
+Project  ›  Variation Register  ›  click the variation row  ›  press Documents  ›  upload
 ```
 
 No new navigation is introduced — the register row is already the way into a variation. Click either row in the register to walk it. The register also gains a **Documents** column, so it's visible at a glance which variations are backed by evidence and which are bare. `v1` starts with evidence, `v2` is bare, and attaching to one updates its count on the register.
