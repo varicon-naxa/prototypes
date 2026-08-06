@@ -12,12 +12,19 @@ Variations are commercial claims. The justification — site photos, screenshots
 
 ## What the prototype shows
 
-Two screens, switched from the top right:
+Two flows, switched from the top right:
 
-1. **Create** — a Supporting Documents tab on the Add Variation screen. Files dropped are held against the draft and committed on Save Variation.
-2. **Existing** — the same section on an already-created variation (VAR011 v1, Partial Approved), reached from the Variation Register. Also shows a **Documents** column on the register itself, so it's visible at a glance which variations are backed by evidence and which are bare.
+**A · Create** — a Supporting Documents section on the Add Variation screen. Files dropped are held against the draft and committed on Save Variation.
 
-Both screens keep today's layout above the new section — the fields, amounts and COST/CONTRACT tabs are unchanged.
+**B · Existing** — the actual navigation path, walkable end to end:
+
+```
+Project  ›  Variation Register  ›  click the variation row  ›  variation opens  ›  drop files in
+```
+
+No new navigation is introduced — the register row is already the way into a variation. Click either row in the register to walk it. The register also gains a **Documents** column, so it's visible at a glance which variations are backed by evidence and which are bare. `v1` starts with evidence, `v2` is bare, and attaching to one updates its count on the register.
+
+Both flows keep today's layout above the new section — the fields, amounts and COST/CONTRACT tabs are unchanged.
 
 ## Interactions that actually work
 
