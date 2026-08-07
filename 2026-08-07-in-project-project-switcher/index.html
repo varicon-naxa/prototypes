@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<!--
+  In-project project switcher — prototype
+
+  PROBLEM
+  Once you're inside a project there's no way to get to another project except
+  going back out to the projects list, finding the project, opening it, and then
+  re-navigating to the tab you were already on. If you're comparing the same
+  screen across projects (e.g. Claim, Budget Overview, Daily Cost Tracking)
+  that's 4+ clicks every single time.
+
+  IDEA
+  Put a search bar in the project header (the empty space to the right of the
+  project name). Type, pick a project, and you land on the SAME tab in the new
+  project — Dashboard -> Dashboard, Claim -> Claim.
+
+  Details demonstrated here:
+   • Ctrl/Cmd+K or "/" focuses the search
+   • Search matches project code and name
+   • Recent projects shown before you type
+   • The dropdown tells you where you'll land ("Opens Claim")
+   • Modules the target project doesn't have fall back to Dashboard with a toast
+   • Keyboard nav: up/down/enter/esc
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>In-project project switcher · Varicon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#1b2a4a;font-size:14px}
+button,input{font-family:'Inter',sans-serif}
+
+/* ---------- Project top bar ---------- */
+.topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:12px 24px;display:flex;align-items:center;gap:14px}
+.back-btn{width:32px;height:32px;border:none;background:transparent;color:#1b2a4a;font-size:18px;cursor:pointer;border-radius:6px;flex-shrink:0}
+.back-btn:hover{background:#f1f5f9}
+.proj-name{font-size:19px;font-weight:700;color:#1b2a4a;display:flex;align-items:center;gap:8px;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.proj-name .caret{font-size:13px;color:#94a3b8}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:14px;flex-shrink:0}
+.btn{padding:8px 14px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;font-size:13px;font-weight:600;color:#475569;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all .12s}
+.btn:hover{background:#f8fafc}
+.btn.outline{border-color:#1b2a4a;color:#1b2a4a}
+.plus{width:32px;height:32px;border:none;background:transparent;color:#1b2a4a;font-size:20px;cursor:pointer;border-radius:6px}
+.plus:hover{background:#f1f5f9}
+.org{display:flex;align-items:center;gap:8px;font-weight:600;color:#1b2a4a}
+.org .tick{color:#f5a623}
+
+/* ---------- THE NEW BIT: project switcher ---------- */
+.switcher{position:relative;flex:1;max-width:420px;min-width:200px}
+.sw-input-wrap{position:relative;display:flex;align-items:center}
+.sw-input-wrap>i.mag{position:absolute;left:12px;color:#94a3b8;font-size:13px;pointer-events:none}
+.sw-input{width:100%;padding:9px 62px 9px 34px;border:1px solid #e2e8f0;background:#f8fafc;border-radius:8px;font-size:13px;color:#1b2a4a;outline:none;transition:all .12s}
+.sw-input::placeholder{color:#94a3b8}
+.sw-input:hover{background:#f1f5f9}
+.sw-input:focus{background:#fff;border-color:#f5a623;box-shadow:0 0 0 3px rgba(245,166,35,.15)}
+.kbd{position:absolute;right:10px;display:flex;gap:3px;pointer-events:none}
+.kbd span{background:#fff;border:1px solid #e2e8f0;border-bottom-width:2px;border-radius:4px;font-size:10px;font-weight:600;color:#94a3b8;padding:2px 5px;line-height:1}
+.sw-input:focus~.kbd{display:none}
+
+.sw-panel{position:absolute;top:calc(100% + 8px);left:0;right:0;background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 12px 32px rgba(15,23,42,.16);z-index:60;overflow:hidden;display:none}
+.sw-panel.open{display:block}
+.sw-context{padding:9px 14px;background:#fffbeb;border-bottom:1px solid #fef3c7;font-size:12px;color:#a16207;display:flex;align-items:center;gap:8px}
+.sw-context b{color:#92400e}
+.sw-head{padding:9px 14px 6px;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px}
+.sw-list{max-height:340px;overflow-y:auto;padding-bottom:4px}
+.sw-item{padding:10px 14px;display:flex;align-items:center;gap:11px;cursor:pointer;border-left:3px solid transparent}
+.sw-item:hover,.sw-item.cursor{background:#f8fafc;border-left-color:#f5a623}
+.sw-item.current{opacity:.55;cursor:default}
+.sw-item.current:hover{background:transparent;border-left-color:transparent}
+.sw-ico{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;letter-spacing:-.3px}
+.sw-body{flex:1;min-width:0}
+.sw-name{font-size:13px;font-weight:600;color:#1b2a4a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sw-name mark{background:#fef3c7;color:#92400e;padding:0 1px;border-radius:2px}
+.sw-sub{font-size:11.5px;color:#94a3b8;margin-top:2px;display:flex;align-items:center;gap:7px}
+.sw-dot{width:5px;height:5px;border-radius:50%;background:#cbd5e1}
+.sw-go{font-size:11px;font-weight:600;color:#94a3b8;display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0}
+.sw-item:hover .sw-go,.sw-item.cursor .sw-go{color:#f5a623}
+.sw-go.fallback{color:#c2410c}
+.sw-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#f1f5f9;color:#64748b;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0}
+.sw-badge.active{background:#dcfce7;color:#166534}
+.sw-badge.hold{background:#fef3c7;color:#a16207}
+.sw-empty{padding:32px 14px;text-align:center;color:#94a3b8;font-size:13px}
+.sw-foot{padding:8px 14px;border-top:1px solid #f1f5f9;background:#fafbfd;font-size:11.5px;color:#94a3b8;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sw-foot .keys{display:flex;gap:10px}
+.sw-foot .keys span{display:flex;align-items:center;gap:4px}
+.sw-foot em{font-style:normal;background:#fff;border:1px solid #e2e8f0;border-radius:3px;padding:1px 4px;font-size:10px;font-weight:600;color:#64748b}
+.sw-foot a{color:#f5a623;font-weight:600;text-decoration:none;cursor:pointer}
+
+/* ---------- Project tab bar ---------- */
+.proj-tabbar{background:#fff;border-bottom:1px solid #e2e8f0;display:flex;align-items:stretch;padding:0 12px}
+.proj-tab-scroll{width:34px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#94a3b8;cursor:pointer;border-right:1px solid #eef1f5}
+.proj-tabs{display:flex;overflow-x:auto;flex:1}
+.proj-tabs::-webkit-scrollbar{height:0}
+.proj-tab{padding:14px 22px;font-size:14px;font-weight:600;color:#475569;cursor:pointer;white-space:nowrap;border-right:1px solid #f1f5f9;transition:background .1s}
+.proj-tab:hover{background:#f8fafc}
+.proj-tab.active{background:#1b2a4a;color:#fff}
+
+/* ---------- Workspace ---------- */
+.subbar{display:flex;align-items:center;gap:14px;padding:12px 24px;background:#eef1f5}
+.date-sel{background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:8px 14px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:500;color:#1b2a4a}
+.subbar .right{margin-left:auto;display:flex;align-items:center;gap:18px;font-size:13px;font-weight:600;color:#475569}
+.help{color:#f5a623;display:flex;align-items:center;gap:7px}
+
+.workspace{padding:18px 24px 60px}
+.card{background:#fff;border-radius:10px;padding:22px 24px;margin-bottom:18px}
+.card-title{font-size:16px;font-weight:700;color:#1b2a4a;display:flex;align-items:center;gap:8px}
+.card-title i{color:#cbd5e1;font-size:13px}
+.card-note{font-size:12px;color:#94a3b8;margin-top:5px}
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:44px;margin-top:26px}
+.sm-label{font-size:13px;color:#64748b}
+.sm-value{font-size:25px;font-weight:700;color:#1b2a4a;margin-top:5px}
+.sm-rows{margin-top:16px}
+.sm-row{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#475569;padding:4px 0}
+.sm-row .lbl{display:flex;align-items:center;gap:9px}
+.bullet{width:9px;height:9px;border-radius:50%}
+.bar{display:flex;height:22px;border-radius:4px;overflow:hidden;margin-top:12px;background:#f1f5f9}
+.bar div{display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:600;color:#fff}
+
+table{width:100%;border-collapse:collapse;margin-top:24px}
+thead{background:#eef1f5}
+th{text-align:right;padding:11px 16px;font-size:12px;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0;white-space:nowrap}
+th:first-child{text-align:left}
+td{padding:12px 16px;font-size:13px;color:#1b2a4a;border-bottom:1px solid #f1f5f9;text-align:right;font-variant-numeric:tabular-nums}
+td:first-child{text-align:left}
+tbody tr:last-child td{font-weight:700;background:#fafbfd}
+
+.stub{background:#fff;border-radius:10px;padding:64px 24px;text-align:center;color:#94a3b8}
+.stub i{font-size:34px;color:#e2e8f0;display:block;margin-bottom:14px}
+.stub b{color:#475569;font-size:15px;display:block;margin-bottom:6px}
+
+/* ---------- toast ---------- */
+#toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);background:#1b2a4a;color:#fff;padding:13px 20px;border-radius:8px;font-size:13px;font-weight:500;opacity:0;pointer-events:none;transition:all .25s;z-index:100;box-shadow:0 8px 24px rgba(15,23,42,.25);display:flex;align-items:center;gap:10px;max-width:520px}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast i{color:#f5a623}
+
+/* ---------- explainer ---------- */
+.explain{margin:0 24px 20px;background:#fff;border:1px dashed #cbd5e1;border-radius:10px;padding:16px 20px;font-size:13px;color:#475569;line-height:1.65}
+.explain b{color:#1b2a4a}
+.explain ul{margin:8px 0 0 18px}
+.explain li{margin-bottom:3px}
+</style>
+</head>
+<body>
+
+<!-- ===== Project top bar ===== -->
+<div class="topbar">
+  <button class="back-btn" title="Back to projects"><i class="fa-solid fa-arrow-left"></i></button>
+  <div class="proj-name" id="projName">— <i class="fa-solid fa-chevron-down caret"></i></div>
+
+  <!-- NEW: project switcher lives here (the circled space in the screenshot) -->
+  <div class="switcher" id="switcher">
+    <div class="sw-input-wrap">
+      <i class="fa-solid fa-magnifying-glass mag"></i>
+      <input class="sw-input" id="swInput" type="text" placeholder="Switch project…" autocomplete="off">
+      <div class="kbd"><span>Ctrl</span><span>K</span></div>
+    </div>
+    <div class="sw-panel" id="swPanel">
+      <div class="sw-context" id="swContext"></div>
+      <div class="sw-head" id="swHead">Recent projects</div>
+      <div class="sw-list" id="swList"></div>
+      <div class="sw-foot">
+        <div class="keys">
+          <span><em>↑↓</em> navigate</span>
+          <span><em>↵</em> open</span>
+          <span><em>esc</em> close</span>
+        </div>
+        <a id="swAll">View all projects</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <button class="btn outline">Initial Data Upload</button>
+    <button class="plus"><i class="fa-solid fa-plus"></i></button>
+    <div class="org"><i class="fa-solid fa-check tick"></i> Varicon Info <i class="fa-solid fa-chevron-down caret" style="font-size:12px;color:#94a3b8"></i></div>
+  </div>
+</div>
+
+<!-- ===== Project tab bar ===== -->
+<div class="proj-tabbar">
+  <div class="proj-tab-scroll"><i class="fa-solid fa-chevron-left"></i></div>
+  <div class="proj-tabs" id="projTabs"></div>
+  <div class="proj-tab-scroll"><i class="fa-solid fa-chevron-right"></i></div>
+</div>
+
+<!-- ===== Sub bar ===== -->
+<div class="subbar">
+  <div class="date-sel"><i class="fa-regular fa-calendar" style="color:#f5a623"></i> To Date <i class="fa-solid fa-chevron-down" style="font-size:11px;color:#94a3b8"></i></div>
+  <div class="right">
+    <span class="help"><i class="fa-solid fa-circle-question"></i> Need Help?</span>
+    <span>Switch to Old Dashboard</span>
+    <button class="btn outline">Rearrange Widgets</button>
+  </div>
+</div>
+
+<div class="workspace">
+  <div class="explain">
+    <b>Prototype — in-project project switcher.</b> Click the search bar in the header (or press <b>Ctrl/⌘+K</b>, or <b>/</b>) and pick another project.
+    <ul>
+      <li>You land on <b>the same tab</b> you were already on — switch while on Claim and you arrive on Claim.</li>
+      <li>Try switching to <b>(VAR011) Hunter St Fitout</b> from the <b>Daywork Record</b> tab — that project doesn't have the module, so it falls back to Dashboard and tells you why.</li>
+    </ul>
+  </div>
+  <div id="panel"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ==================== data ==================== */
+const ALL_TABS = ['Dashboard','Budget Overview','Daily Cost Tracking','Claim','Variation Register','Report','File Manager','Site Diary','Daywork Record','Subcontract'];
+
+const PROJECTS = [
+  { code:'VAR005', name:'Bar Beach Curb Works',      client:'Newcastle City Council', status:'Active', color:'#f5a623',
+    tabs:ALL_TABS, contract:130000, variation:101000, claim:39000, retention:3900, retTotal:11550 },
+  { code:'VAR008', name:'Merewether Baths Upgrade',  client:'Newcastle City Council', status:'Active', color:'#3b82f6',
+    tabs:ALL_TABS, contract:412000, variation:56800,  claim:187400, retention:9370, retTotal:23440 },
+  { code:'VAR011', name:'Hunter St Fitout',          client:'Argyle Property Group',  status:'Active', color:'#8b5cf6',
+    tabs:['Dashboard','Budget Overview','Daily Cost Tracking','Claim','Variation Register','Report','File Manager','Site Diary'],
+    contract:288000, variation:12500, claim:96000, retention:4800, retTotal:15025 },
+  { code:'VAR014', name:'Charlestown Depot Slab',    client:'Lake Macquarie Council',  status:'Active', color:'#10b981',
+    tabs:ALL_TABS, contract:96500, variation:8200, claim:41300, retention:2065, retTotal:5235 },
+  { code:'VAR017', name:'Wallsend Drainage Stage 2', client:'Newcastle City Council', status:'On Hold', color:'#ef4444',
+    tabs:ALL_TABS, contract:640000, variation:143900, claim:0, retention:0, retTotal:39195 },
+  { code:'VAR019', name:'Kotara Carpark Resurface',  client:'Stockland',              status:'Active', color:'#0ea5e9',
+    tabs:ALL_TABS, contract:184000, variation:0, claim:184000, retention:9200, retTotal:9200 },
+  { code:'VAR022', name:'Adamstown Rail Bridge',     client:'Transport for NSW',      status:'Active', color:'#f97316',
+    tabs:ALL_TABS, contract:1240000, variation:318000, claim:522000, retention:26100, retTotal:77900 },
+  { code:'VAR024', name:'Belmont Foreshore Path',    client:'Lake Macquarie Council',  status:'Active', color:'#14b8a6',
+    tabs:ALL_TABS, contract:76000, variation:4400, claim:22800, retention:1140, retTotal:4020 },
+];
+
+/* what the user has been in lately — powers the pre-typing "Recent" list */
+let recents = ['VAR022','VAR008','VAR011'];
+
+let current = 'VAR005';
+let activeTab = 'Dashboard';
+let cursor = 0;
+let results = [];
+
+const $ = id => document.getElementById(id);
+const proj = code => PROJECTS.find(p => p.code === code);
+const money = n => '$ ' + n.toLocaleString('en-AU', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+/* ==================== chrome ==================== */
+function renderHeader(){
+  const p = proj(current);
+  $('projName').innerHTML = `(${p.code}) ${p.name} <i class="fa-solid fa-chevron-down caret"></i>`;
+  document.title = `(${p.code}) ${p.name} · Varicon`;
+}
+
+function renderTabs(){
+  const p = proj(current);
+  $('projTabs').innerHTML = p.tabs.map(t =>
+    `<div class="proj-tab ${t===activeTab?'active':''}" data-tab="${t}">${t}</div>`).join('');
+  $('projTabs').querySelectorAll('.proj-tab').forEach(el => {
+    el.onclick = () => { activeTab = el.dataset.tab; renderTabs(); renderPanel(); };
+  });
+}
+
+/* ==================== page content ==================== */
+function renderPanel(){
+  const p = proj(current);
+  if(activeTab !== 'Dashboard'){
+    $('panel').innerHTML = `<div class="stub">
+      <i class="fa-regular fa-file-lines"></i>
+      <b>${activeTab}</b>
+      (${p.code}) ${p.name}<br>
+      <span style="font-size:12.5px">Stand-in for the real ${activeTab} page. The point of the prototype is that switching projects keeps you right here.</span>
+    </div>`;
+    return;
+  }
+  const total = p.contract + p.variation;
+  const cPct = total ? (p.contract/total*100) : 0;
+  const remaining = total - p.claim;
+  $('panel').innerHTML = `
+  <div class="card">
+    <div class="card-title">Contracts Summary <i class="fa-solid fa-circle-info"></i></div>
+    <div class="card-note">Values are as of last claim date</div>
+    <div class="summary">
+      <div>
+        <div class="sm-label">Total Contract Sum</div>
+        <div class="sm-value">${money(total)}</div>
+        <div class="sm-rows">
+          <div class="sm-row"><span class="lbl"><span class="bullet" style="background:#f5a623"></span>Original Contract</span><span>${money(p.contract)}</span></div>
+          <div class="sm-row"><span class="lbl"><span class="bullet" style="background:#3b82f6"></span>Variation</span><span>${money(p.variation)}</span></div>
+        </div>
+        <div class="bar">
+          <div style="background:#f5a623;width:${cPct}%">${cPct.toFixed(2)}%</div>
+          <div style="background:#3b82f6;width:${100-cPct}%">${(100-cPct).toFixed(2)}%</div>
+        </div>
+      </div>
+      <div>
+        <div class="sm-label">Total Claim</div>
+        <div class="sm-value">${money(p.claim)}</div>
+        <div class="sm-rows">
+          <div class="sm-row"><span class="lbl"><span class="bullet" style="background:#f5a623"></span>Contract Claim</span><span>${money(p.claim)}</span></div>
+          <div class="sm-row"><span class="lbl"><span class="bullet" style="background:#3b82f6"></span>Variation Claim</span><span>${money(0)}</span></div>
+        </div>
+        <div class="bar"><div style="background:#f5a623;width:100%">100.00%</div></div>
+      </div>
+      <div>
+        <div class="sm-label">Total Retention Withheld</div>
+        <div class="sm-value">${money(p.retention)}</div>
+        <div class="sm-rows">
+          <div class="sm-row"><span class="lbl"><span class="bullet" style="background:#94a3b8"></span>Combined Retention</span><span>${money(p.retention)}</span></div>
+        </div>
+        <div class="bar"><div style="background:#94a3b8;width:100%">100.00%</div></div>
+      </div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Contract Details</th><th>Contract Sum</th><th>Claim to Date</th><th>Remaining Claim</th>
+        <th>Retention When Completed</th><th>Retention Withheld</th><th>Remaining Retention</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>Contract Works</td><td>${money(p.contract)}</td><td>${money(p.claim)}</td><td>${money(p.contract-p.claim)}</td><td>-</td><td>-</td><td>-</td></tr>
+        <tr><td>Variation</td><td>${money(p.variation)}</td><td>${money(0)}</td><td>${money(p.variation)}</td><td>-</td><td>-</td><td>-</td></tr>
+        <tr><td>Combined</td><td>-</td><td>-</td><td>-</td><td>${money(p.retTotal)}</td><td>${money(p.retention)}</td><td>${money(p.retTotal-p.retention)}</td></tr>
+        <tr><td>Total</td><td>${money(total)}</td><td>${money(p.claim)}</td><td>${money(remaining)}</td><td>${money(p.retTotal)}</td><td>${money(p.retention)}</td><td>${money(p.retTotal-p.retention)}</td></tr>
+      </tbody>
+    </table>
+  </div>`;
+}
+
+/* ==================== switcher ==================== */
+function highlight(text, q){
+  if(!q) return text;
+  const i = text.toLowerCase().indexOf(q.toLowerCase());
+  if(i < 0) return text;
+  return text.slice(0,i) + '<mark>' + text.slice(i, i+q.length) + '</mark>' + text.slice(i+q.length);
+}
+
+function search(q){
+  const term = q.trim().toLowerCase();
+  if(!term){
+    // no query: recents first, then everything else
+    const rec = recents.map(proj).filter(Boolean);
+    const rest = PROJECTS.filter(p => !recents.includes(p.code));
+    return { label:'Recent projects', items:[...rec, ...rest] };
+  }
+  const items = PROJECTS.filter(p =>
+    p.code.toLowerCase().includes(term) ||
+    p.name.toLowerCase().includes(term) ||
+    p.client.toLowerCase().includes(term));
+  return { label:`${items.length} result${items.length===1?'':'s'}`, items };
+}
+
+function renderPanelList(){
+  const q = $('swInput').value;
+  const { label, items } = search(q);
+  results = items;
+  if(cursor >= items.length) cursor = Math.max(0, items.length-1);
+
+  $('swContext').innerHTML = `<i class="fa-solid fa-arrow-right-arrow-left"></i> Staying on <b>${activeTab}</b> — you'll open the same page in the project you pick.`;
+  $('swHead').textContent = label;
+
+  if(!items.length){
+    $('swList').innerHTML = `<div class="sw-empty"><i class="fa-solid fa-magnifying-glass" style="font-size:20px;display:block;margin-bottom:10px;color:#e2e8f0"></i>No projects match "<b>${q}</b>"</div>`;
+    return;
+  }
+
+  $('swList').innerHTML = items.map((p,i) => {
+    const isCurrent = p.code === current;
+    const has = p.tabs.includes(activeTab);
+    const go = isCurrent
+      ? `<div class="sw-go">Current</div>`
+      : has
+        ? `<div class="sw-go">Opens ${activeTab} <i class="fa-solid fa-arrow-right"></i></div>`
+        : `<div class="sw-go fallback" title="This project doesn't have ${activeTab}">No ${activeTab} → Dashboard</div>`;
+    return `<div class="sw-item ${isCurrent?'current':''} ${i===cursor?'cursor':''}" data-i="${i}">
+      <div class="sw-ico" style="background:${p.color}1f;color:${p.color}">${p.code.slice(3)}</div>
+      <div class="sw-body">
+        <div class="sw-name">(${highlight(p.code,q)}) ${highlight(p.name,q)}</div>
+        <div class="sw-sub">${highlight(p.client,q)} <span class="sw-dot"></span> <span class="sw-badge ${p.status==='Active'?'active':'hold'}">${p.status}</span></div>
+      </div>
+      ${go}
+    </div>`;
+  }).join('');
+
+  $('swList').querySelectorAll('.sw-item').forEach(el => {
+    el.onclick = () => choose(+el.dataset.i);
+    el.onmouseenter = () => { cursor = +el.dataset.i; markCursor(); };
+  });
+}
+
+function markCursor(){
+  $('swList').querySelectorAll('.sw-item').forEach((el,i) => el.classList.toggle('cursor', i===cursor));
+}
+
+function openPanel(){
+  $('swPanel').classList.add('open');
+  cursor = 0;
+  renderPanelList();
+}
+function closePanel(){
+  $('swPanel').classList.remove('open');
+  $('swInput').value = '';
+  $('swInput').blur();
+}
+
+function choose(i){
+  const p = results[i];
+  if(!p || p.code === current) return;
+
+  const wanted = activeTab;
+  const landed = p.tabs.includes(wanted) ? wanted : 'Dashboard';
+
+  current = p.code;
+  activeTab = landed;
+  recents = [p.code, ...recents.filter(c => c !== p.code)].slice(0,4);
+
+  closePanel();
+  renderHeader(); renderTabs(); renderPanel();
+
+  if(landed === wanted){
+    toast(`<i class="fa-solid fa-arrow-right-arrow-left"></i> Switched to (${p.code}) ${p.name} — still on ${landed}`);
+  } else {
+    toast(`<i class="fa-solid fa-triangle-exclamation"></i> (${p.code}) ${p.name} doesn't have ${wanted}. Opened Dashboard instead.`);
+  }
+}
+
+let toastTimer;
+function toast(html){
+  const t = $('toast');
+  t.innerHTML = html;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+/* ---- events ---- */
+$('swInput').addEventListener('focus', openPanel);
+$('swInput').addEventListener('input', () => { cursor = 0; renderPanelList(); });
+$('swInput').addEventListener('keydown', e => {
+  if(e.key === 'ArrowDown'){ e.preventDefault(); cursor = Math.min(cursor+1, results.length-1); markCursor(); }
+  else if(e.key === 'ArrowUp'){ e.preventDefault(); cursor = Math.max(cursor-1, 0); markCursor(); }
+  else if(e.key === 'Enter'){ e.preventDefault(); choose(cursor); }
+  else if(e.key === 'Escape'){ closePanel(); }
+});
+$('swAll').onclick = () => { closePanel(); toast('<i class="fa-solid fa-list"></i> Would open the full projects list'); };
+
+document.addEventListener('click', e => {
+  if(!$('switcher').contains(e.target)) $('swPanel').classList.remove('open');
+});
+document.addEventListener('keydown', e => {
+  const typing = ['INPUT','TEXTAREA'].includes(document.activeElement.tagName);
+  if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k'){ e.preventDefault(); $('swInput').focus(); }
+  else if(e.key === '/' && !typing){ e.preventDefault(); $('swInput').focus(); }
+});
+
+/* ---- boot ---- */
+renderHeader(); renderTabs(); renderPanel();
+</script>
+</body>
+</html>
