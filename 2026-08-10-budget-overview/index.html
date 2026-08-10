@@ -1085,6 +1085,48 @@ function recordTotal(r){
   return t;
 }
 
+/* ── Dayworks-only project ──
+   No fixed BOQ. Every docket is both the unit of work and the unit of revenue:
+   claimable value comes off the schedule of rates, cost lands the same way it
+   does anywhere else (POs commit, site dockets and unapproved timesheets track,
+   paid bills and approved timesheets are actual).
+   claim: 'unclaimed' | 'in-claim' | 'claimed' */
+const dayworksLines = [
+  {code:'DW-1042', desc:'Additional excavation — unforeseen rock at ch. 1+200', cc:'Earthworks', zone:'Zone B', date:'22 Jul 2026', claim:'claimed',
+   contract:4250, budget:3880, poCommitted:2820, dktTracked:0, tsUnapproved:0, billsPaid:2820, tsApproved:876,
+   suppliers:{po:'Ridgeline Civil', dkt:'Ridgeline Civil', bill:'Ridgeline Civil'}},
+  {code:'DW-1045', desc:'Re-grade access road after heavy rainfall', cc:'Earthworks', zone:'Zone B', date:'23 Jul 2026', claim:'claimed',
+   contract:3650, budget:3330, poCommitted:2550, dktTracked:0, tsUnapproved:0, billsPaid:2550, tsApproved:624,
+   suppliers:{po:'Delta Plant Hire', dkt:'Delta Plant Hire', bill:'Delta Plant Hire'}},
+  {code:'DW-1051', desc:'Temporary stormwater diversion (client request)', cc:'Drainage', zone:'Zone A', date:'25 Jul 2026', claim:'in-claim',
+   contract:7023, budget:6410, poCommitted:4545, dktTracked:4545, tsUnapproved:0, billsPaid:0, tsApproved:1562,
+   suppliers:{po:'Vinidex Pipe Co', dkt:'Vinidex Pipe Co', bill:'Vinidex Pipe Co'}},
+  {code:'DW-1058', desc:'Standby — site closed by client awaiting inspection', cc:'Overheads / Prelims', zone:'Project Wide', date:'26 Jul 2026', claim:'unclaimed',
+   contract:2990, budget:2730, poCommitted:720, dktTracked:720, tsUnapproved:1880, billsPaid:0, tsApproved:0,
+   suppliers:{po:'Delta Plant Hire', dkt:'Delta Plant Hire', bill:''}},
+  {code:'DW-1063', desc:'Concrete cut & make-good — service relocation', cc:'Concrete', zone:'Zone B', date:'27 Jul 2026', claim:'unclaimed',
+   contract:2203, budget:2010, poCommitted:920, dktTracked:920, tsUnapproved:996, billsPaid:0, tsApproved:0,
+   suppliers:{po:'Hanson Concrete', dkt:'Hanson Concrete', bill:''}},
+  {code:'DW-1067', desc:'Extra steel fixing — retaining wall upgrade', cc:'Steel & Rebar', zone:'Zone C', date:'28 Jul 2026', claim:'unclaimed',
+   contract:4137, budget:3780, poCommitted:2125, dktTracked:2125, tsUnapproved:1472, billsPaid:0, tsApproved:0,
+   suppliers:{po:'ARC Reinforcing', dkt:'ARC Reinforcing', bill:''}},
+  {code:'DW-1071', desc:'Damaged kerb replacement (third-party impact)', cc:'Roadway', zone:'Zone D', date:'29 Jul 2026', claim:'claimed',
+   contract:3253, budget:2970, poCommitted:2205, dktTracked:0, tsUnapproved:0, billsPaid:2205, tsApproved:624,
+   suppliers:{po:'Humes Precast', dkt:'Humes Precast', bill:'Humes Precast'}},
+  {code:'DW-1078', desc:'Dewatering — pump hire & monitoring', cc:'Drainage', zone:'Zone A', date:'03 Aug 2026', claim:'in-claim',
+   contract:2496, budget:2280, poCommitted:1450, dktTracked:1450, tsUnapproved:0, billsPaid:0, tsApproved:720,
+   suppliers:{po:'Coates Hire', dkt:'Coates Hire', bill:''}},
+  {code:'DW-1082', desc:'Traffic control — detour setup for night pour', cc:'Overheads / Prelims', zone:'Project Wide', date:'05 Aug 2026', claim:'unclaimed',
+   contract:2300, budget:2100, poCommitted:860, dktTracked:860, tsUnapproved:1140, billsPaid:0, tsApproved:0,
+   suppliers:{po:'Altus Traffic', dkt:'Altus Traffic', bill:''}}
+];
+dayworksLines.forEach(d => { d.kind = 'daywork'; d.l1 = 'D Dayworks'; d.l2 = 'D.1 Dockets'; });
+const CLAIM_STATES = {
+  unclaimed: {label:'Unclaimed', cls:'warn'},
+  'in-claim': {label:'In claim', cls:'vo'},
+  claimed:    {label:'Claimed', cls:'ok'}
+};
+
 /* ═══ Derivation ═══
    Tracked and Actual are reported separately and never added together in a
    single figure — cost to date is shown as its own number so nothing is
