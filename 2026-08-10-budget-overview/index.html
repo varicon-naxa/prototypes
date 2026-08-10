@@ -838,70 +838,80 @@ tr.released-row td{opacity:.55}
 <script>
 /* ═══════════════════════════════════════════════════════════════
    COST MODEL
-     poCommitted   — approved PO value            → Committed
-     poReceipted   — PO value delivered/receipted ┐
-     docketTracked — daywork & delivery dockets   ┴→ Tracked
-     actualPaid    — bills matched & paid         → Actual
+
+     poCommitted — approved PO value                    → Committed
+     docketed    — cost incurred: site & delivery
+                   dockets receipted against the budget
+     billedPaid  — the part of that docketed cost now
+                   sitting on a bill that has been paid  → Actual
+
+   Tracked and Actual are DISJOINT — a site docket is tracked until it
+   lands on a paid bill, at which point it moves out of tracked and into
+   actual. Cost to date = tracked + actual, with nothing counted twice.
+
+   Daywork dockets do NOT feed this. They are a claim instrument: they
+   flow through the variation workflow, and only reach the budget when
+   the variation is approved and carries its own budget.
    ═══════════════════════════════════════════════════════════════ */
 
 const COST_CENTRES = ['Earthworks','Concrete','Steel & Rebar','Formwork','Drainage','Roadway','Overheads / Prelims'];
 const ZONES = ['Project Wide','Zone A','Zone B','Zone C','Zone D'];
 
-/* ── Base BOQ budget lines ── */
+/* ── Base budget lines (carry both a WBS code and a cost centre) ── */
 const baseItems = [
   {code:'0.1', desc:'Site Establishment & Facilities', cc:'Overheads / Prelims', zone:'Project Wide', l1:'0 Preliminaries', l2:'0.1 Establishment',
-   contract:48000, budget:41000, poCommitted:26000, poReceipted:26000, docketTracked:9800, actualPaid:26000,
-   suppliers:{po:'Coates Hire', dkt:'Site crew', bill:'Coates Hire'}},
+   contract:48000, budget:41000, poCommitted:26000, docketed:35800, billedPaid:26000,
+   suppliers:{po:'Coates Hire', dkt:'Coates Hire', bill:'Coates Hire'}},
   {code:'0.2', desc:'Site Supervision & Management', cc:'Overheads / Prelims', zone:'Project Wide', l1:'0 Preliminaries', l2:'0.1 Establishment',
-   contract:62000, budget:58000, poCommitted:0, poReceipted:0, docketTracked:66400, actualPaid:52000,
-   suppliers:{po:'', dkt:'Supervision timesheets', bill:'Payroll journal'}},
+   contract:62000, budget:58000, poCommitted:0, docketed:66400, billedPaid:52000,
+   suppliers:{po:'', dkt:'Supervision allocations', bill:'Payroll journal'}},
 
   {code:'1.1.1', desc:'Site Clearing & Grubbing', cc:'Earthworks', zone:'Zone A', l1:'1 Preliminaries & Earthworks', l2:'1.1 Site Preparation',
-   contract:65000, budget:53000, poCommitted:18000, poReceipted:18000, docketTracked:33200, actualPaid:44000,
+   contract:65000, budget:53000, poCommitted:18000, docketed:51200, billedPaid:44000,
    suppliers:{po:'Delta Plant Hire', dkt:'Delta Plant Hire', bill:'Delta Plant Hire'}},
   {code:'1.1.2', desc:'Topsoil Stripping & Stockpiling', cc:'Earthworks', zone:'Zone A', l1:'1 Preliminaries & Earthworks', l2:'1.1 Site Preparation',
-   contract:32400, budget:26500, poCommitted:9500, poReceipted:9500, docketTracked:15100, actualPaid:21000,
-   suppliers:{po:'Delta Plant Hire', dkt:'Cookie’s crew', bill:'Delta Plant Hire'}},
+   contract:32400, budget:26500, poCommitted:9500, docketed:24600, billedPaid:21000,
+   suppliers:{po:'Delta Plant Hire', dkt:'Delta Plant Hire', bill:'Delta Plant Hire'}},
   {code:'1.2.1', desc:'Bulk Earthworks — Cut to Fill', cc:'Earthworks', zone:'Zone B', l1:'1 Preliminaries & Earthworks', l2:'1.2 Earthworks',
-   contract:147000, budget:118000, poCommitted:72000, poReceipted:68000, docketTracked:42500, actualPaid:88000,
+   contract:147000, budget:118000, poCommitted:72000, docketed:110500, billedPaid:88000,
    suppliers:{po:'Ridgeline Civil', dkt:'Ridgeline Civil', bill:'Ridgeline Civil'}},
   {code:'1.2.2', desc:'Subgrade Preparation', cc:'Earthworks', zone:'Zone B', l1:'1 Preliminaries & Earthworks', l2:'1.2 Earthworks',
-   contract:34000, budget:28000, poCommitted:0, poReceipted:0, docketTracked:12400, actualPaid:6200,
+   contract:34000, budget:28000, poCommitted:0, docketed:12400, billedPaid:6200,
    suppliers:{po:'', dkt:'Cookie’s crew', bill:'Fuel & consumables'}},
 
   {code:'2.1.1', desc:'Concrete Supply & Pour — Footings', cc:'Concrete', zone:'Zone B', l1:'2 Structural Works', l2:'2.1 Concrete',
-   contract:141600, budget:116000, poCommitted:98000, poReceipted:71000, docketTracked:12800, actualPaid:55000,
+   contract:141600, budget:116000, poCommitted:98000, docketed:83800, billedPaid:55000,
    suppliers:{po:'Hanson Concrete', dkt:'Hanson Concrete', bill:'Hanson Concrete'}},
   {code:'2.1.2', desc:'Concrete Supply & Pour — Slabs', cc:'Concrete', zone:'Zone C', l1:'2 Structural Works', l2:'2.1 Concrete',
-   contract:91200, budget:74500, poCommitted:68000, poReceipted:32000, docketTracked:6400, actualPaid:24000,
+   contract:91200, budget:74500, poCommitted:68000, docketed:38400, billedPaid:24000,
    suppliers:{po:'Hanson Concrete', dkt:'Hanson Concrete', bill:'Hanson Concrete'}},
   {code:'2.2.1', desc:'Steel Reinforcement — Supply & Fix', cc:'Steel & Rebar', zone:'Zone B', l1:'2 Structural Works', l2:'2.2 Reinforcement',
-   contract:252000, budget:208000, poCommitted:196000, poReceipted:84000, docketTracked:9200, actualPaid:61000,
+   contract:252000, budget:208000, poCommitted:196000, docketed:93200, billedPaid:61000,
    suppliers:{po:'ARC Reinforcing', dkt:'ARC Reinforcing', bill:'ARC Reinforcing'}},
   {code:'2.2.2', desc:'Mesh Reinforcement — Supply & Fix', cc:'Steel & Rebar', zone:'Zone C', l1:'2 Structural Works', l2:'2.2 Reinforcement',
-   contract:67200, budget:55000, poCommitted:52000, poReceipted:21000, docketTracked:2800, actualPaid:14000,
+   contract:67200, budget:55000, poCommitted:52000, docketed:23800, billedPaid:14000,
    suppliers:{po:'ARC Reinforcing', dkt:'ARC Reinforcing', bill:'ARC Reinforcing'}},
   {code:'2.3.1', desc:'Formwork — Walls & Columns', cc:'Formwork', zone:'Zone C', l1:'2 Structural Works', l2:'2.3 Formwork',
-   contract:104400, budget:86000, poCommitted:0, poReceipted:0, docketTracked:0, actualPaid:0, suppliers:{po:'',dkt:'',bill:''}},
+   contract:104400, budget:86000, poCommitted:0, docketed:0, billedPaid:0, suppliers:{po:'',dkt:'',bill:''}},
   {code:'2.3.2', desc:'Formwork — Beams', cc:'Formwork', zone:'Zone C', l1:'2 Structural Works', l2:'2.3 Formwork',
-   contract:39000, budget:32000, poCommitted:0, poReceipted:0, docketTracked:0, actualPaid:0, suppliers:{po:'',dkt:'',bill:''}},
+   contract:39000, budget:32000, poCommitted:0, docketed:0, billedPaid:0, suppliers:{po:'',dkt:'',bill:''}},
 
   {code:'3.1.1', desc:'Structural Steelwork — Supply & Erect', cc:'Steel & Rebar', zone:'Zone C', l1:'3 Structural Steel', l2:'3.1 Steelwork',
-   contract:247000, budget:203000, poCommitted:214000, poReceipted:46000, docketTracked:0, actualPaid:30000,
+   contract:247000, budget:203000, poCommitted:214000, docketed:46000, billedPaid:30000,
    suppliers:{po:'Northbridge Steel', dkt:'Northbridge Steel', bill:'Northbridge Steel'}},
 
   {code:'4.1.1', desc:'Stormwater Pipes — Supply & Lay', cc:'Drainage', zone:'Zone A', l1:'4 Drainage', l2:'4.1 Stormwater',
-   contract:76500, budget:62000, poCommitted:44000, poReceipted:38000, docketTracked:8600, actualPaid:27000,
-   suppliers:{po:'Vinidex Pipe Co', dkt:'Cookie’s crew', bill:'Vinidex Pipe Co'}},
+   contract:76500, budget:62000, poCommitted:44000, docketed:46600, billedPaid:27000,
+   suppliers:{po:'Vinidex Pipe Co', dkt:'Vinidex Pipe Co', bill:'Vinidex Pipe Co'}},
   {code:'4.1.2', desc:'Pits & Headwalls', cc:'Drainage', zone:'Zone A', l1:'4 Drainage', l2:'4.1 Stormwater',
-   contract:52800, budget:43000, poCommitted:31000, poReceipted:12000, docketTracked:3200, actualPaid:9000,
-   suppliers:{po:'Humes Precast', dkt:'Cookie’s crew', bill:'Humes Precast'}},
+   contract:52800, budget:43000, poCommitted:31000, docketed:15200, billedPaid:9000,
+   suppliers:{po:'Humes Precast', dkt:'Humes Precast', bill:'Humes Precast'}},
 
   {code:'5.1.1', desc:'Asphalt — Base Course', cc:'Roadway', zone:'Zone D', l1:'5 Roadway Construction', l2:'5.1 Asphalt',
-   contract:144000, budget:120000, poCommitted:116000, poReceipted:0, docketTracked:0, actualPaid:0,
+   contract:144000, budget:120000, poCommitted:116000, docketed:0, billedPaid:0,
    suppliers:{po:'Fulton Hogan', dkt:'', bill:''}},
   {code:'5.1.2', desc:'Asphalt — Wearing Course', cc:'Roadway', zone:'Zone D', l1:'5 Roadway Construction', l2:'5.1 Asphalt',
-   contract:176000, budget:146000, poCommitted:0, poReceipted:0, docketTracked:0, actualPaid:0, suppliers:{po:'',dkt:'',bill:''}}
+   contract:176000, budget:146000, poCommitted:0, docketed:0, billedPaid:0, suppliers:{po:'',dkt:'',bill:''}}
 ];
 baseItems.forEach(it => it.kind = 'base');
 
