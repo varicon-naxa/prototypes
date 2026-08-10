@@ -1105,33 +1105,41 @@ function aggregate(list){
 
 /* ═══ Source documents (drill-down) ═══ */
 function docsFor(it){
-  const po = [], dkt = [], bill = [];
+  const po = [], trk = [], act = [];
   const n = Math.round;
   const key = String(it.code).replace(/[^0-9A-Za-z]/g,'');
+  const supplyCost = (it.dktTracked || 0) + (it.billsPaid || 0);
+
   if (it.poCommitted > 0){
     const split = it.poCommitted > 90000 ? [0.6, 0.4] : [1];
     let consumed = 0;
     split.forEach((f, i) => {
       const amt = n(it.poCommitted * f);
-      const rec = Math.max(0, Math.min(amt, it.poReceipted - consumed));
+      const rec = Math.max(0, Math.min(amt, supplyCost - consumed));
       consumed += amt;
       po.push({ref:'PO-' + key + (split.length > 1 ? '-' + (i+1) : ''), party:it.suppliers.po,
                meta: rec >= amt ? 'Fully receipted' : rec > 0 ? 'Part receipted — ' + money(rec) + ' delivered' : 'Approved, awaiting delivery',
                state: rec >= amt ? 'ok' : rec > 0 ? 'warn' : 'idle', amt});
     });
   }
-  if (it.poReceipted > 0) dkt.push({ref:'Delivery dockets ×' + (it.poReceipted > 40000 ? 6 : 3), party:it.suppliers.dkt, meta:'Receipted against PO', state:'live', amt:it.poReceipted});
-  if (it.docketTracked > 0) dkt.push({ref:'Daywork dockets ×' + (it.docketTracked > 20000 ? 9 : 4), party:it.suppliers.dkt, meta:'Labour, plant & materials booked on site', state:'live', amt:it.docketTracked});
-  if (it.actualPaid > 0) bill.push({ref:'BILL-' + key, party:it.suppliers.bill, meta:'Paid ' + payDate(key), state:'ok', amt:it.actualPaid});
-  const unpaid = Math.max(0, it.tracked - it.actual);
-  if (unpaid > 0) bill.push({ref:'Awaiting billing / payment', party:'', meta:'Tracked cost not yet paid', state:'warn', amt:unpaid, ghost:true});
-  return {po, dkt, bill};
+
+  if (it.dktTracked > 0) trk.push({ref:'Site dockets ×' + (it.dktTracked > 20000 ? 8 : 3), party:it.suppliers.dkt,
+    meta:'Received on site, not yet on a paid bill', state:'live', amt:it.dktTracked, icon:'fa-truck'});
+  if (it.tsUnapproved > 0) trk.push({ref:'Timesheets — unapproved', party:'Site crew',
+    meta:'Hours booked to this line, awaiting approval', state:'warn', amt:it.tsUnapproved, icon:'fa-clock'});
+
+  if (it.billsPaid > 0) act.push({ref:'BILL-' + key, party:it.suppliers.bill,
+    meta:'Bill paid ' + payDate(key) + ' — moved out of tracked', state:'ok', amt:it.billsPaid, icon:'fa-file-invoice-dollar'});
+  if (it.tsApproved > 0) act.push({ref:'Timesheets — approved', party:'Site crew',
+    meta:'Approved, so counted as actual cost', state:'ok', amt:it.tsApproved, icon:'fa-clock'});
+
+  return {po, trk, act};
 }
 function payDate(key){
   const days = ['12 Jun 2026','26 Jun 2026','10 Jul 2026','24 Jul 2026','07 Aug 2026'];
   return days[key.length % days.length];
 }
-function chipText(s){ return {ok:'Paid / receipted', warn:'Part', idle:'Open', live:'Booked'}[s] || s; }
+function chipText(s){ return {ok:'Actual', warn:'Awaiting approval', idle:'Open', live:'Tracked'}[s] || s; }
 
 function drill(it){
   const d = docsFor(it);
@@ -1141,7 +1149,7 @@ function drill(it){
       '<div class="drill-total">' + money(total) + '</div></div>' +
       (docs.length ? docs.map(x =>
         '<div class="doc"' + (x.ghost ? ' style="border-style:dashed;background:#fbfdff"' : '') + '>' +
-          '<div class="doc-icon ' + iconCls + '"><i class="fas ' + icon + '"></i></div>' +
+          '<div class="doc-icon ' + iconCls + '"><i class="fas ' + (x.icon || icon) + '"></i></div>' +
           '<div class="doc-body"><div class="doc-ref">' + x.ref + '</div>' +
             '<div class="doc-meta">' + (x.party ? x.party + ' · ' : '') + x.meta + '</div></div>' +
           '<div style="text-align:right"><div class="doc-amt">' + money(x.amt) + '</div>' +
@@ -1152,11 +1160,11 @@ function drill(it){
 
   return '<div class="drill">' +
     col('Committed — purchase orders', 'committed', 'fa-cart-shopping', it.committed, d.po,
-        'Committed is the approved PO value. Open POs stay committed until goods are receipted.', 'po') +
-    col('Tracked — dockets + POs', 'tracked', 'fa-clipboard-list', it.tracked, d.dkt,
-        'Tracked = daywork and delivery dockets booked on site plus the receipted portion of POs.', 'dkt') +
-    col('Actual — bills paid', 'actual', 'fa-file-invoice-dollar', it.actual, d.bill,
-        'Actual only moves when a matched bill is marked paid, so it lags tracked cost.', 'bill') +
+        'Committed is the approved PO value. An open PO stays committed until the goods are received.', 'po') +
+    col('Tracked — site dockets + unapproved timesheets', 'tracked', 'fa-clipboard-list', it.tracked, d.trk,
+        'Cost sitting in the tracked state. A site docket leaves here once it is on a paid bill; a timesheet leaves here once approved.', 'dkt') +
+    col('Actual — paid bills + approved timesheets', 'actual', 'fa-file-invoice-dollar', it.actual, d.act,
+        'Actual is what has been settled. It never overlaps tracked — cost moves across, it is not counted twice.', 'bill') +
   '</div>';
 }
 
