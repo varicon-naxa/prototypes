@@ -1424,81 +1424,259 @@ function fillSelect(id, options, selected){
 }
 
 /* ═══ VARIATION WORKFLOW ═══
-   Add Variation → type → (priced: pricing method | dayworks: docket picker) →
-   build-up → draft / submitted → approved → becomes a live budget line. */
+   Add Variation
+     → type (priced / dayworks / cost plus)
+     → priced: lump sum goes straight to build-up; rates checks resource mapping first
+     → dayworks: checks resource mapping, then pulls in daywork dockets already tracked
+     → build-up (details, pricing, budget mapping, documents)
+     → draft / submitted  (outside the totals)
+     → approved           (becomes a live budget line in the overview)
+*/
 let pendingVarType = null, pendingVarMethod = null, varCounter = 3;
-let varLines = [];
+let varLines = [], rateRows = {labour:[], plant:[], material:[]};
+let attachedRecords = [], varFiles = [];
 
 function showVariationModal(){ pendingVarType = null; pendingVarMethod = null; openModal('variationModal'); }
 
 function selectVariationType(type){
-  pendingVarType = type;
   closeModal('variationModal');
-  if (type === 'costplus'){ toast('Cost plus variations are priced from actual cost + margin — coming soon'); return; }
+  pendingVarType = type;
   if (type === 'priced'){ openModal('pricedMethodModal'); return; }
-  openDocketPicker();
+  if (type === 'dayworks'){ pendingVarMethod = 'rates'; proceedToMappingOrBuild(); return; }
+  toast('Cost plus variations price from actual cost + an agreed margin — coming soon');
 }
 function selectPricedMethod(method){
-  pendingVarMethod = method;
   closeModal('pricedMethodModal');
-  openVarBuild([]);
+  pendingVarMethod = method;
+  if (method === 'lumpsum') openVarBuild();
+  else proceedToMappingOrBuild();
 }
 
-/* Dayworks: pull already-tracked dockets into the variation */
-let selectedDockets = new Set();
-function openDocketPicker(){
-  selectedDockets.clear();
-  renderDocketList();
-  openModal('docketModal');
+/* ── Rate mapping gate ── */
+function proceedToMappingOrBuild(){
+  if (allResourcesMapped && !hasNewUnmappedResources) proceedAfterMapping();
+  else {
+    document.getElementById('newResourceWarning').style.display = hasNewUnmappedResources ? '' : 'none';
+    openModal('plantMappingModal');
+  }
 }
-function renderDocketList(){
-  document.getElementById('docketList').innerHTML = dayworkDockets.map(d =>
-    '<div class="docket-pick' + (selectedDockets.has(d.id) ? ' checked' : '') + '" onclick="toggleDocket(\'' + d.id + '\')">' +
-      '<span class="dp-check"><i class="fas fa-check"></i></span>' +
-      '<div><div class="dp-ref">' + d.id + ' — ' + d.desc + '</div>' +
-      '<div class="dp-meta">' + d.date + ' · ' + d.cc + ' · ' + d.zone + '</div></div>' +
-      '<div class="dp-amt">' + money(d.amount) + '</div></div>').join('');
-  const sel = dayworkDockets.filter(d => selectedDockets.has(d.id));
-  const total = sel.reduce((s,d) => s + d.amount, 0);
-  document.getElementById('docketSummary').innerHTML = sel.length
-    ? '<i class="fas fa-clipboard-list"></i> <strong>' + sel.length + ' docket' + (sel.length !== 1 ? 's' : '') + ' · ' + money(total) + ' of tracked cost</strong> will be attached. The variation is priced at cost + margin; the tracked cost carries across so it stops showing as unclaimed.'
-    : '<i class="fas fa-circle-info"></i> Select the dockets this variation covers. Their tracked cost is already in the overview — attaching them makes it claimable.';
-  document.getElementById('docketAddBtn').disabled = sel.length === 0;
+function proceedAfterMapping(){
+  if (pendingVarType === 'dayworks') showDayworksRecordsModal();
+  else openVarBuild();
 }
-function toggleDocket(id){ selectedDockets.has(id) ? selectedDockets.delete(id) : selectedDockets.add(id); renderDocketList(); }
-function skipDockets(){ closeModal('docketModal'); openVarBuild([]); }
-function addSelectedDockets(){
-  const sel = dayworkDockets.filter(d => selectedDockets.has(d.id));
-  closeModal('docketModal');
-  openVarBuild(sel.map(d => ({desc:d.id + ' — ' + d.desc, qty:1, unit:'item', rate:Math.round(d.amount * 1.15)})),
-               {cc:sel[0] && sel[0].cc, zone:sel[0] && sel[0].zone,
-                title:'Dayworks variation — ' + sel.length + ' docket' + (sel.length !== 1 ? 's' : ''),
-                budget:sel.reduce((s,d) => s + d.amount, 0),
-                docketTracked:sel.reduce((s,d) => s + d.amount, 0)});
+function plantMappingResponse(mapped){
+  closeModal('plantMappingModal');
+  if (mapped){ allResourcesMapped = true; hasNewUnmappedResources = false; proceedAfterMapping(); return; }
+  if (hasRatesUploaded) showRateMappingPage(); else showRateUploadForMapping();
+}
+function showRateUploadForMapping(){
+  document.getElementById('rateMappingOverlay').classList.add('show');
+  document.getElementById('rateUploadSection').style.display = '';
+  document.getElementById('rateMappingSection').style.display = 'none';
+}
+function simulateRateUpload(){
+  document.getElementById('rateUploadPreview').style.display = '';
+  toast('Schedule_of_Rates.xlsx read — 13 rates found');
+}
+function skipToMapping(){
+  hasRatesUploaded = true;
+  document.getElementById('rateUploadSection').style.display = 'none';
+  showRateMappingPage();
+}
+function showRateMappingPage(){
+  document.getElementById('rateMappingOverlay').classList.add('show');
+  document.getElementById('rateUploadSection').style.display = 'none';
+  document.getElementById('rateMappingSection').style.display = '';
+  buildMappingTables();
+}
+function closeRateMappingOverlay(){ document.getElementById('rateMappingOverlay').classList.remove('show'); }
+
+function buildMappingTables(){
+  const row = (list, kind, rates) => list.map((r, i) =>
+    '<tr><td style="font-weight:500;color:#1b2a4a">' + r.name + '</td>' +
+    '<td><div class="mapping-dropzone' + (r.mapped ? ' mapped' : '') + '" id="' + kind + 'Drop' + i + '"' +
+      ' ondrop="dropRate(event,\'' + kind + '\',' + i + ')" ondragover="event.preventDefault();this.classList.add(\'dragover\')"' +
+      ' ondragleave="this.classList.remove(\'dragover\')">' +
+      (r.mapped
+        ? '<span class="mapped-rate"><i class="fas fa-check-circle" style="color:#16a34a"></i> ' + r.mapped +
+          '<span class="clear-map" onclick="clearMapping(\'' + kind + '\',' + i + ')"><i class="fas fa-times"></i></span></span>'
+        : '<span class="dropzone-placeholder">Drag a rate here, or</span>') +
+      '</div>' +
+      (r.mapped ? '' : '<select onchange="selectRate(\'' + kind + '\',' + i + ',this.value)" style="width:100%;margin-top:5px;padding:6px 8px;border:1px solid #e2e8f0;border-radius:5px;font-size:12px;font-family:Inter;outline:none">' +
+        '<option value="">— choose a rate —</option>' + rates.map(x => '<option value="' + x.name + '">' + x.name + '</option>').join('') + '</select>') +
+    '</td>' +
+    '<td class="right" style="font-weight:600;color:' + (r.rate ? '#1b2a4a' : '#cbd5e1') + '">' + (r.rate ? '$' + r.rate.toFixed(2) : '—') + '</td></tr>').join('');
+
+  document.getElementById('plantMappingBody').innerHTML = row(projectPlant, 'plant', uploadedPlantRates);
+  document.getElementById('labourMappingBody').innerHTML = row(projectLabour, 'labour', uploadedLabourRates);
+
+  const drag = (rates, kind) => rates.map((x, i) =>
+    '<div class="draggable-rate" draggable="true" ondragstart="dragRate(event,\'' + kind + '\',' + i + ')">' +
+      '<span>' + x.name + '</span><span class="dr-rate">$' + x.rate.toFixed(2) + '</span></div>').join('');
+  document.getElementById('availPlantRates').innerHTML = drag(uploadedPlantRates, 'plant');
+  document.getElementById('availLabourRates').innerHTML = drag(uploadedLabourRates, 'labour');
+
+  const total = projectPlant.length + projectLabour.length;
+  const done = projectPlant.filter(p => p.mapped).length + projectLabour.filter(l => l.mapped).length;
+  document.getElementById('mapProgress').innerHTML = done === total
+    ? '<i class="fas fa-check-circle" style="color:#16a34a"></i> <b>All ' + total + ' resources mapped.</b> Save the mappings to continue building the variation.'
+    : '<i class="fas fa-circle-info" style="color:#3b82f6"></i> <b>' + done + ' of ' + total + '</b> resources mapped. Unmapped resources cost at $0 in a rates build-up and on daywork dockets.';
+}
+let dragPayload = null;
+function dragRate(e, kind, idx){ dragPayload = {kind, idx}; e.dataTransfer.effectAllowed = 'copy'; }
+function dropRate(e, targetKind, targetIdx){
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  if (!dragPayload || dragPayload.kind !== targetKind) { toast('That rate belongs to the other resource type'); return; }
+  const rate = (targetKind === 'plant' ? uploadedPlantRates : uploadedLabourRates)[dragPayload.idx];
+  applyMapping(targetKind, targetIdx, rate.name, rate.rate);
+}
+function selectRate(kind, idx, name){
+  if (!name) return;
+  const rate = (kind === 'plant' ? uploadedPlantRates : uploadedLabourRates).find(r => r.name === name);
+  applyMapping(kind, idx, rate.name, rate.rate);
+}
+function applyMapping(kind, idx, name, rate){
+  const list = kind === 'plant' ? projectPlant : projectLabour;
+  list[idx].mapped = name;
+  list[idx].rate = rate;
+  buildMappingTables();
+}
+function clearMapping(kind, idx){
+  const list = kind === 'plant' ? projectPlant : projectLabour;
+  list[idx].mapped = null; list[idx].rate = null;
+  buildMappingTables();
+}
+function saveMappings(){
+  const total = projectPlant.length + projectLabour.length;
+  const done = projectPlant.filter(p => p.mapped).length + projectLabour.filter(l => l.mapped).length;
+  allResourcesMapped = done === total;
+  hasNewUnmappedResources = false;
+  closeRateMappingOverlay();
+  toast('<i class="fas fa-check-circle"></i> ' + done + ' of ' + total + ' resources mapped to the schedule of rates.' +
+        (allResourcesMapped ? '' : ' Unmapped resources will price at $0.'));
+  proceedAfterMapping();
 }
 
-let prefillTracked = 0;
-function openVarBuild(lines, opts){
-  opts = opts || {};
-  varLines = lines.length ? lines : [{desc:'', qty:1, unit:'item', rate:0}];
-  prefillTracked = opts.docketTracked || 0;
+/* ── Dayworks records selection ── */
+let selectedRecordIds = new Set();
+function showDayworksRecordsModal(){
+  selectedRecordIds = new Set();
+  document.getElementById('dwSearch').value = '';
+  document.getElementById('dwStatusFilter').value = 'all';
+  document.getElementById('dwClaimedFilter').value = 'unclaimed';
+  document.getElementById('dwSelectAll').checked = false;
+  renderDayworksRecords();
+  openModal('dayworksRecordsModal');
+}
+function filteredRecords(){
+  const q = document.getElementById('dwSearch').value.trim().toLowerCase();
+  const st = document.getElementById('dwStatusFilter').value;
+  const cl = document.getElementById('dwClaimedFilter').value;
+  return dayworksRecords.filter(r => {
+    if (q && !(r.desc.toLowerCase().includes(q) || r.id.toLowerCase().includes(q))) return false;
+    if (st !== 'all' && r.status !== st) return false;
+    if (cl === 'unclaimed' && r.claimed) return false;
+    return true;
+  });
+}
+function renderDayworksRecords(){
+  const rows = filteredRecords();
+  document.getElementById('dwRecordsBody').innerHTML = rows.map(r => {
+    const res = []
+      .concat((r.items.labour || []).map(x => '<span class="res-pill lab">' + x.name + ' ' + (x.hrs * x.days) + 'h</span>'))
+      .concat((r.items.plant || []).map(x => '<span class="res-pill pla">' + x.name.split(' — ')[0] + ' ' + (x.hrs * x.days) + 'h</span>'))
+      .concat((r.items.materials || []).map(x => '<span class="res-pill mat">' + x.desc + '</span>')).join('');
+    const picked = selectedRecordIds.has(r.id);
+    return '<tr class="pick' + (picked ? ' picked' : '') + (r.claimed ? ' claimed' : '') + '" onclick="toggleDayworksRecord(\'' + r.id + '\')">' +
+      '<td><input type="checkbox"' + (picked ? ' checked' : '') + ' onclick="event.stopPropagation();toggleDayworksRecord(\'' + r.id + '\')"' + (r.claimed ? ' disabled' : '') + '></td>' +
+      '<td style="color:#64748b">' + r.date + '</td>' +
+      '<td style="font-weight:600;color:#1b2a4a">' + r.id + '</td>' +
+      '<td>' + r.desc + '<div style="font-size:11px;color:#94a3b8;margin-top:2px">' + r.cc + ' · ' + r.zone + '</div></td>' +
+      '<td>' + res + '</td>' +
+      '<td class="right" style="font-weight:600">' + money(recordTotal(r)) + '</td>' +
+      '<td><span class="chip ' + (r.claimed ? 'idle' : r.status === 'approved' ? 'ok' : 'warn') + '">' +
+        (r.claimed ? 'Claimed' : r.status) + '</span></td></tr>';
+  }).join('') || '<tr><td colspan="7" style="padding:26px;text-align:center;color:#94a3b8">No dayworks records match these filters.</td></tr>';
+
+  const sel = dayworksRecords.filter(r => selectedRecordIds.has(r.id));
+  const total = sel.reduce((s,r) => s + recordTotal(r), 0);
+  document.getElementById('dwSummary').innerHTML = sel.length
+    ? '<i class="fas fa-clipboard-list"></i> <strong>' + sel.length + ' record' + (sel.length !== 1 ? 's' : '') + ' · ' + money(total) +
+      ' of cost already tracked</strong> will pre-fill the build-up. That cost is sitting in the overview right now with no revenue against it.'
+    : '<i class="fas fa-circle-info"></i> Select the dockets this variation covers. Their cost is already <strong>tracked</strong> in the overview — the variation is what makes it claimable.';
+  document.getElementById('dwAddBtn').disabled = sel.length === 0;
+}
+function toggleDayworksRecord(id){
+  const r = dayworksRecords.find(x => x.id === id);
+  if (r.claimed) return;
+  selectedRecordIds.has(id) ? selectedRecordIds.delete(id) : selectedRecordIds.add(id);
+  renderDayworksRecords();
+}
+function toggleAllDayworks(cb){
+  filteredRecords().forEach(r => { if (r.claimed) return; cb.checked ? selectedRecordIds.add(r.id) : selectedRecordIds.delete(r.id); });
+  renderDayworksRecords();
+}
+function proceedDayworksWithoutRecords(){ closeModal('dayworksRecordsModal'); attachedRecords = []; openVarBuild(); }
+function addSelectedDayworksToVariation(){
+  attachedRecords = dayworksRecords.filter(r => selectedRecordIds.has(r.id));
+  closeModal('dayworksRecordsModal');
+  openVarBuild();
+}
+
+/* ── Build-up page ── */
+function openVarBuild(){
+  const isRates = pendingVarMethod === 'rates';
   document.getElementById('varBuildTitle').textContent =
-    pendingVarType === 'dayworks' ? 'Dayworks Variation'
-    : pendingVarMethod === 'rates' ? 'Priced Variation — rates build-up' : 'Priced Variation — lump sum';
-  document.getElementById('varBuildSub').textContent = pendingVarType === 'dayworks'
-    ? 'Dockets already booked on site are priced at cost plus margin. Map the variation so its cost lands in the right cost centre.'
-    : 'Build up the variation value, then map it to a cost centre and zone so it lands in the right place in the budget overview.';
-  document.getElementById('vLinesLabel').textContent = pendingVarType === 'dayworks' ? 'Dockets & priced items'
-    : pendingVarMethod === 'rates' ? 'Rate build-up' : 'Priced line items';
-  document.getElementById('vTitle').value = opts.title || '';
+    pendingVarType === 'dayworks' ? 'Dayworks Variation' : 'Priced Variation';
+  document.getElementById('varBuildSub').textContent =
+    pendingVarType === 'dayworks' ? 'Dayworks build-up from tracked dockets'
+    : isRates ? 'Priced from the schedule of rates' : 'Lump sum build-up';
+
+  document.getElementById('varLumpSection').style.display = isRates ? 'none' : '';
+  document.getElementById('varRatesSection').style.display = isRates ? '' : 'none';
+
+  varLines = [{desc:'', qty:1, unit:'item', rate:0}];
+  rateRows = {labour:[], plant:[], material:[]};
+  varFiles = [];
+
+  let prefillCC = null, prefillZone = null, title = '';
+  if (attachedRecords.length){
+    attachedRecords.forEach(r => {
+      (r.items.labour || []).forEach(x => rateRows.labour.push({name:x.name, hrs:x.hrs, days:x.days, rate:x.rate, src:r.id}));
+      (r.items.plant || []).forEach(x => rateRows.plant.push({name:x.name, hrs:x.hrs, days:x.days, rate:x.rate, src:r.id}));
+      (r.items.materials || []).forEach(x => rateRows.material.push({name:x.desc, qty:x.qty, unit:x.unit, rate:x.rate, src:r.id}));
+    });
+    prefillCC = attachedRecords[0].cc; prefillZone = attachedRecords[0].zone;
+    title = 'Dayworks variation — ' + attachedRecords.length + ' docket' + (attachedRecords.length !== 1 ? 's' : '');
+    document.getElementById('varDocketsCard').style.display = '';
+    document.getElementById('varDocketList').innerHTML = attachedRecords.map(r =>
+      '<div class="docket-pick checked" style="cursor:default"><span class="dp-check"><i class="fas fa-check"></i></span>' +
+      '<div><div class="dp-ref">' + r.id + ' — ' + r.desc + '</div>' +
+      '<div class="dp-meta">' + r.date + ' · ' + r.cc + ' · ' + r.zone + ' · already tracked</div></div>' +
+      '<div class="dp-amt">' + money(recordTotal(r)) + '</div></div>').join('');
+  } else {
+    document.getElementById('varDocketsCard').style.display = 'none';
+    if (!rateRows.labour.length && isRates) addRateRow('labour', true);
+  }
+
+  document.getElementById('vTitle').value = title;
   document.getElementById('vRef').value = '';
   document.getElementById('vDesc').value = '';
-  document.getElementById('vBudget').value = opts.budget || '';
-  fillSelect('vCC', COST_CENTRES, opts.cc);
-  fillSelect('vZone', ZONES, opts.zone);
+  document.getElementById('vBudget').value = attachedRecords.length ? attachedRecords.reduce((s,r) => s + recordTotal(r), 0) : '';
+  document.getElementById('vMarkup').value = 15;
+  fillSelect('vCC', COST_CENTRES, prefillCC);
+  fillSelect('vZone', ZONES, prefillZone);
+  renderVarFiles();
   renderVarLines();
-  openModal('varBuildModal');
+  renderRateRows();
+  document.getElementById('varBuildOverlay').classList.add('show');
 }
+function closeVariationBuild(){
+  document.getElementById('varBuildOverlay').classList.remove('show');
+  attachedRecords = [];
+}
+
 function renderVarLines(){
   document.getElementById('vLines').innerHTML = varLines.map((l, i) =>
     '<tr>' +
@@ -1513,39 +1691,146 @@ function renderVarLines(){
 }
 function addVarLine(){ varLines.push({desc:'', qty:1, unit:'item', rate:0}); renderVarLines(); }
 function removeVarLine(i){ varLines.splice(i,1); if (!varLines.length) varLines.push({desc:'',qty:1,unit:'item',rate:0}); renderVarLines(); }
-function varContractTotal(){ return varLines.reduce((s,l) => s + (l.qty || 0) * (l.rate || 0), 0); }
+
+function addRateRow(kind, silent){
+  if (kind === 'material') rateRows.material.push({name:'', qty:1, unit:'ea', rate:0});
+  else rateRows[kind].push({name:'', hrs:8, days:1, rate:0});
+  if (!silent) renderRateRows();
+}
+function removeRateRow(kind, i){ rateRows[kind].splice(i,1); renderRateRows(); }
+function rateOptions(kind, selected){
+  const list = kind === 'plant' ? projectPlant : projectLabour;
+  return '<option value="">— select —</option>' + list.map(r =>
+    '<option value="' + r.name + '"' + (r.name === selected ? ' selected' : '') + '>' + r.name +
+    (r.rate ? ' ($' + r.rate + '/hr)' : ' (unmapped)') + '</option>').join('') +
+    (selected && !list.some(r => r.name === selected) ? '<option value="' + selected + '" selected>' + selected + '</option>' : '');
+}
+function setRateRowResource(kind, i, name){
+  const list = kind === 'plant' ? projectPlant : projectLabour;
+  const res = list.find(r => r.name === name);
+  rateRows[kind][i].name = name;
+  if (res && res.rate) rateRows[kind][i].rate = res.rate;
+  else if (res) toast(name + ' has no mapped rate — it will price at $0 until you map it');
+  renderRateRows();
+}
+function renderRateRows(){
+  ['labour','plant'].forEach(kind => {
+    const body = document.getElementById(kind === 'labour' ? 'vLabourBody' : 'vPlantBody');
+    if (!body) return;
+    body.innerHTML = rateRows[kind].map((r, i) =>
+      '<tr>' +
+        '<td><select onchange="setRateRowResource(\'' + kind + '\',' + i + ',this.value)" style="width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:5px;font-size:12px;font-family:Inter;outline:none">' +
+          rateOptions(kind, r.name) + '</select>' +
+          (r.src ? '<div style="font-size:10px;color:#0d9488;margin-top:3px"><i class="fas fa-clipboard-list"></i> from ' + r.src + '</div>' : '') + '</td>' +
+        '<td><input class="num" value="' + r.hrs + '" oninput="rateRows.' + kind + '[' + i + '].hrs=parseFloat(this.value)||0;calcVarBuild()"></td>' +
+        '<td><input class="num" value="' + r.days + '" oninput="rateRows.' + kind + '[' + i + '].days=parseFloat(this.value)||0;calcVarBuild()"></td>' +
+        '<td class="right" style="color:' + (r.rate ? '#1b2a4a' : '#cbd5e1') + ';font-weight:600">' + (r.rate ? '$' + r.rate.toFixed(2) : '—') + '</td>' +
+        '<td class="right" style="font-weight:600" id="' + kind + 'Amt' + i + '">' + money(r.hrs * r.days * r.rate) + '</td>' +
+        '<td><span class="row-del" onclick="removeRateRow(\'' + kind + '\',' + i + ')"><i class="fas fa-trash-alt"></i></span></td>' +
+      '</tr>').join('') || '<tr><td colspan="6" style="color:#94a3b8;font-size:12px;padding:12px">Nothing added yet.</td></tr>';
+  });
+  const mb = document.getElementById('vMaterialBody');
+  if (mb) mb.innerHTML = rateRows.material.map((r, i) =>
+    '<tr>' +
+      '<td><input value="' + (r.name || '').replace(/"/g,'&quot;') + '" placeholder="Material" oninput="rateRows.material[' + i + '].name=this.value">' +
+        (r.src ? '<div style="font-size:10px;color:#0d9488;margin-top:3px"><i class="fas fa-clipboard-list"></i> from ' + r.src + '</div>' : '') + '</td>' +
+      '<td><input class="num" value="' + r.qty + '" oninput="rateRows.material[' + i + '].qty=parseFloat(this.value)||0;calcVarBuild()"></td>' +
+      '<td><input value="' + r.unit + '" oninput="rateRows.material[' + i + '].unit=this.value"></td>' +
+      '<td><input class="num" value="' + r.rate + '" oninput="rateRows.material[' + i + '].rate=parseFloat(this.value)||0;calcVarBuild()"></td>' +
+      '<td class="right" style="font-weight:600" id="materialAmt' + i + '">' + money(r.qty * r.rate) + '</td>' +
+      '<td><span class="row-del" onclick="removeRateRow(\'material\',' + i + ')"><i class="fas fa-trash-alt"></i></span></td>' +
+    '</tr>').join('') || '<tr><td colspan="6" style="color:#94a3b8;font-size:12px;padding:12px">Nothing added yet.</td></tr>';
+  calcVarBuild();
+}
+
+function rateCost(kind){
+  return rateRows[kind].reduce((s,r) => s + (kind === 'material' ? (r.qty||0) * (r.rate||0) : (r.hrs||0) * (r.days||0) * (r.rate||0)), 0);
+}
+function varContractTotal(){
+  if (pendingVarMethod === 'rates'){
+    const cost = rateCost('labour') + rateCost('plant') + rateCost('material');
+    return Math.round(cost * (1 + (parseFloat(document.getElementById('vMarkup').value) || 0) / 100));
+  }
+  return varLines.reduce((s,l) => s + (l.qty || 0) * (l.rate || 0), 0);
+}
 function calcVarBuild(){
-  const contract = varContractTotal();
   varLines.forEach((l,i) => { const el = document.getElementById('vAmt'+i); if (el) el.textContent = money((l.qty||0)*(l.rate||0)); });
+  ['labour','plant'].forEach(k => rateRows[k].forEach((r,i) => {
+    const el = document.getElementById(k + 'Amt' + i); if (el) el.textContent = money((r.hrs||0)*(r.days||0)*(r.rate||0));
+  }));
+  rateRows.material.forEach((r,i) => {
+    const el = document.getElementById('materialAmt' + i); if (el) el.textContent = money((r.qty||0)*(r.rate||0));
+  });
+
+  if (pendingVarMethod === 'rates'){
+    const l = rateCost('labour'), p = rateCost('plant'), m = rateCost('material');
+    document.getElementById('vSumLabour').textContent = money(l);
+    document.getElementById('vSumPlant').textContent = money(p);
+    document.getElementById('vSumMaterial').textContent = money(m);
+    document.getElementById('vSumCost').textContent = money(l + p + m);
+    document.getElementById('vSumClaim').textContent = money(varContractTotal());
+  }
+
+  const contract = varContractTotal();
   const budget = num('vBudget');
+  const tracked = attachedRecords.reduce((s,r) => s + recordTotal(r), 0);
   document.getElementById('vSumContract').textContent = money(contract);
   document.getElementById('vSumBudget').textContent = money(budget);
-  const m = contract > 0 ? (contract - budget) / contract * 100 : 0;
+  document.getElementById('vSumTracked').textContent = money(tracked);
+  const mgn = contract > 0 ? (contract - budget) / contract * 100 : 0;
   const el = document.getElementById('vSumMargin');
-  el.textContent = pct(m);
-  el.style.color = m >= 0 ? '#16a34a' : '#ef4444';
-  const ok = contract > 0 && document.getElementById('vTitle').value.trim();
+  el.textContent = pct(mgn);
+  el.style.color = mgn >= 0 ? '#16a34a' : '#ef4444';
+
+  const titled = !!document.getElementById('vTitle').value.trim();
+  document.getElementById('varDetailsBlocker').style.display = titled ? 'none' : '';
+  const ok = contract > 0 && titled;
   document.getElementById('vSubmitBtn').disabled = !ok;
   document.getElementById('vDraftBtn').disabled = !ok;
 }
+
+function addSampleVarFile(){
+  const samples = [
+    {name:'Client instruction SI-018.pdf', size:'240 KB'},
+    {name:'Subcontractor quote — rev B.pdf', size:'512 KB'},
+    {name:'Site photos 22-07.zip', size:'3.1 MB'},
+    {name:'Marked-up drawing C-104.pdf', size:'1.4 MB'}
+  ];
+  varFiles.push(samples[varFiles.length % samples.length]);
+  renderVarFiles();
+}
+function removeVarFile(i){ varFiles.splice(i,1); renderVarFiles(); }
+function renderVarFiles(){
+  document.getElementById('varFileList').innerHTML = varFiles.map((f,i) =>
+    '<div class="file-row"><div class="fr-icon"><i class="fas fa-file"></i></div>' +
+    '<div><div class="fr-name">' + f.name + '</div><div class="fr-size">' + f.size + '</div></div>' +
+    '<span class="fr-del" onclick="removeVarFile(' + i + ')"><i class="fas fa-trash-alt"></i></span></div>').join('');
+}
+
 function saveVariation(status){
   const contract = varContractTotal();
   const title = document.getElementById('vTitle').value.trim() || 'Untitled variation';
+  const tracked = attachedRecords.reduce((s,r) => s + recordTotal(r), 0);
   varCounter++;
   const id = 'VO-' + String(varCounter).padStart(3,'0');
   const v = {
-    id, title, type:pendingVarType, method:pendingVarMethod || 'dockets', status,
+    id, title, type:pendingVarType, method:pendingVarMethod || 'lumpsum', status,
     cc:document.getElementById('vCC').value, zone:document.getElementById('vZone').value,
     ref:document.getElementById('vRef').value.trim(),
+    alloc:document.getElementById('vAlloc').value,
+    files:varFiles.slice(), dockets:attachedRecords.map(r => r.id),
     contract, budget:num('vBudget'),
-    poCommitted:0, poReceipted:0, docketTracked:prefillTracked, actualPaid:0,
-    suppliers:{po:'', dkt:'Attached dockets', bill:''}
+    poCommitted:0, poReceipted:0, docketTracked:tracked, actualPaid:0,
+    suppliers:{po:'', dkt:'Attached dayworks dockets', bill:''}
   };
   variations.push(v);
-  closeModal('varBuildModal');
+  attachedRecords.forEach(r => r.claimed = true);
+  document.getElementById('varBuildOverlay').classList.remove('show');
+  attachedRecords = [];
   render();
   toast('<i class="fas fa-check-circle"></i> ' + id + ' ' + (status === 'draft' ? 'saved as draft' : 'submitted for approval') +
-        ' — ' + money(contract) + ' contract, ' + money(v.budget) + ' budget. Sitting outside totals until approved.');
+        ' — ' + money(contract) + ' contract, ' + money(v.budget) + ' budget' +
+        (tracked ? ', ' + money(tracked) + ' already tracked' : '') + '. Outside the totals until approved.');
 }
 function submitDraft(id){
   const v = variations.find(x => x.id === id);
