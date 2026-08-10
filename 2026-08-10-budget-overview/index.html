@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Budget Overview - Cookie's Civil</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#333;display:flex;min-height:100vh}
+
+/* ── Sidebar ── */
+.sidebar{width:240px;background:#1b2a4a;color:#fff;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;overflow-y:auto}
+.sidebar-header{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sidebar-logo .logo-icon{width:32px;height:32px;background:linear-gradient(135deg,#f5a623,#f7c948);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#1b2a4a}
+.sidebar-collapse{color:rgba(255,255,255,.5);cursor:pointer;font-size:14px}
+.sidebar-org{padding:12px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.08);cursor:pointer}
+.sidebar-org .org-avatar{width:28px;height:28px;background:#3b5998;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.sidebar-org span{font-size:14px;font-weight:500}
+.sidebar-org .chevron{margin-left:auto;font-size:11px;opacity:.5}
+.sidebar-nav{padding:8px 0;flex:1}
+.nav-item{display:flex;align-items:center;gap:12px;padding:10px 16px;font-size:14px;color:rgba(255,255,255,.75);cursor:pointer;transition:all .15s;text-decoration:none;position:relative}
+.nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-item.active{background:#f5a623;color:#fff;font-weight:600;border-radius:0 6px 6px 0;margin-right:8px}
+.nav-item i.nav-icon{width:20px;text-align:center;font-size:15px}
+.nav-item .badge{background:#f5a623;color:#fff;font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;margin-left:auto}
+.nav-item.active .badge{background:#fff;color:#f5a623}
+.nav-item .beta{background:rgba(255,255,255,.15);font-size:10px;padding:1px 6px;border-radius:4px;font-weight:500}
+.nav-item .chev{margin-left:auto;font-size:11px;opacity:.5}
+
+/* ── Main ── */
+.main{margin-left:240px;flex:1;display:flex;flex-direction:column;min-height:100vh;min-width:0}
+.topbar{background:#fff;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:50}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.topbar-left .back-btn{color:#1b2a4a;font-size:18px;cursor:pointer;padding:4px}
+.topbar-left h1{font-size:18px;font-weight:600;color:#1b2a4a;white-space:nowrap}
+.topbar-right{display:flex;align-items:center;gap:16px}
+.search-btn{display:flex;align-items:center;gap:6px;border:2px solid #f5a623;color:#f5a623;background:transparent;padding:6px 16px;border-radius:20px;font-size:14px;font-weight:500;cursor:pointer}
+.plus-btn{width:32px;height:32px;border:1px solid #e2e8f0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;cursor:pointer;color:#64748b;font-size:16px}
+.user-menu{display:flex;align-items:center;gap:8px;cursor:pointer}
+.user-avatar{width:34px;height:34px;background:#1b2a4a;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.user-name{font-size:14px;font-weight:500;color:#1b2a4a}
+.page-content{padding:24px;flex:1;min-width:0}
+
+/* ── Project tabs ── */
+.budget-view-tabs{display:flex;gap:0;background:#fff;border-bottom:2px solid #e2e8f0;margin:-24px -24px 24px;padding:0 24px;overflow-x:auto}
+.bv-tab{padding:14px 20px;font-size:14px;font-weight:500;color:#64748b;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:all .15s}
+.bv-tab:hover{color:#1b2a4a}
+.bv-tab.active{color:#f5a623;border-bottom-color:#f5a623;font-weight:600}
+
+/* ── Stat tiles ── */
+.stat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:#e2e8f0;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:8px}
+.stat{background:#fff;padding:14px 18px}
+.stat .st-label{font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;display:flex;align-items:center;gap:5px}
+.stat .st-value{font-size:19px;font-weight:700;color:#1b2a4a;letter-spacing:-.3px}
+.stat .st-sub{font-size:11px;color:#94a3b8;margin-top:3px;line-height:1.4}
+.st-value.blue{color:#3b82f6}.st-value.green{color:#16a34a}.st-value.amber{color:#d97706}
+.st-value.teal{color:#0d9488}.st-value.red{color:#ef4444}.st-value.purple{color:#7c3aed}
+.stat.accent-committed{box-shadow:inset 3px 0 0 #d97706}
+.stat.accent-tracked{box-shadow:inset 3px 0 0 #0d9488}
+.stat.accent-actual{box-shadow:inset 3px 0 0 #16a34a}
+.stat.accent-var{box-shadow:inset 3px 0 0 #3b82f6}
+.stat.accent-prov{box-shadow:inset 3px 0 0 #a16207;background:#fffdf7}
+
+/* ── Definitions strip ── */
+.defs{display:flex;gap:0;background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:20px;overflow:hidden}
+.def{flex:1;padding:12px 18px;border-right:1px solid #f1f5f9;display:flex;gap:10px;align-items:flex-start}
+.def:last-child{border-right:none}
+.def .dot{width:10px;height:10px;border-radius:3px;margin-top:4px;flex-shrink:0}
+.def .d-name{font-size:12px;font-weight:600;color:#1b2a4a;margin-bottom:2px}
+.def .d-desc{font-size:11px;color:#94a3b8;line-height:1.5}
+
+/* ── Toolbar ── */
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.toolbar-left,.toolbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.type-toggle{display:inline-flex;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;font-size:13px;background:#fff}
+.type-toggle span{padding:8px 14px;cursor:pointer;color:#64748b;transition:all .15s;white-space:nowrap}
+.type-toggle span.active{background:#f5a623;color:#fff;font-weight:600}
+.filter-select{padding:8px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;color:#475569;background:#fff;outline:none}
+.filter-select:focus{border-color:#f5a623}
+.review-search{padding:8px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;outline:none;width:200px}
+.review-search:focus{border-color:#f5a623}
+.btn{padding:9px 18px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s;font-family:'Inter',sans-serif;display:inline-flex;align-items:center;gap:8px}
+.btn-primary{background:#f5a623;color:#fff}.btn-primary:hover{background:#e6951a}
+.btn-primary:disabled{background:#cbd5e1;cursor:not-allowed}
+.btn-outline{background:#fff;border:1px solid #e2e8f0;color:#475569}.btn-outline:hover{background:#f8fafc}
+.btn-dark{background:#1b2a4a;color:#fff}.btn-dark:hover{background:#243456}
+.btn-success{background:#22c55e;color:#fff}.btn-success:hover{background:#16a34a}
+.btn-sm{padding:4px 10px;font-size:11px;border-radius:5px;font-weight:600}
+
+/* ── Table ── */
+.table-shell{border:1px solid #e2e8f0;border-radius:8px 8px 0 0;overflow-x:auto;background:#fff}
+.ov-table{width:100%;min-width:1460px;border-collapse:collapse}
+.ov-table thead th{background:#1b2a4a;color:#fff;font-size:12px;font-weight:600;padding:11px 12px;text-align:left;white-space:nowrap;letter-spacing:.2px}
+.ov-table thead th.right{text-align:right}
+.ov-table thead tr.sub-header th{background:#243456;font-size:10px;font-weight:500;color:rgba(255,255,255,.65);padding:6px 12px;text-transform:uppercase;letter-spacing:.4px}
+.ov-table thead th.sep{border-left:1px solid rgba(255,255,255,.12)}
+.ov-table tbody td{padding:10px 12px;font-size:13px;color:#334155;border-bottom:1px solid #f1f5f9;white-space:nowrap}
+.ov-table tbody td.right{text-align:right}
+.ov-table tfoot td{padding:12px;font-size:13px;font-weight:700;color:#1b2a4a;background:#f1f5f9;border-top:2px solid #cbd5e1;white-space:nowrap}
+.ov-table tfoot td.right{text-align:right}
+.ov-table tfoot tr.excl td{background:#fafbfc;font-weight:500;color:#94a3b8;font-size:12px;border-top:1px solid #e2e8f0}
+
+tr.grp-row{cursor:pointer;background:#f8fafc}
+tr.grp-row:hover{background:#eef2f7}
+tr.grp-row td{font-weight:600;color:#1b2a4a;border-bottom:1px solid #e2e8f0}
+tr.grp-row .expand-icon{display:inline-block;width:16px;color:#94a3b8;font-size:11px;transition:transform .2s}
+tr.grp-row.expanded .expand-icon{transform:rotate(90deg);color:#f5a623}
+tr.item-row{display:none}
+tr.item-row.visible{display:table-row}
+tr.item-row td{cursor:pointer}
+tr.item-row:hover td{background:#fcfdff}
+tr.item-row td:first-child{box-shadow:inset 3px 0 0 #e2e8f0}
+tr.item-row.expanded td:first-child{box-shadow:inset 3px 0 0 #f5a623}
+tr.l2-row td{background:#eef2f7;font-weight:600;color:#1b2a4a}
+tr.detail-row{display:none}
+tr.detail-row.visible{display:table-row}
+tr.detail-row td{background:#f8fafc;padding:0;border-bottom:1px solid #e2e8f0}
+
+/* Section banners for Variations / Provisional */
+tr.section-banner td{background:#1b2a4a;color:#fff;font-weight:700;font-size:13px;letter-spacing:.3px;padding:11px 12px;border-bottom:none}
+tr.section-banner.variations td{background:#1e3a8a;border-top:3px solid #3b82f6}
+tr.section-banner.provisional td{background:#a16207;border-top:3px solid #f5a623}
+tr.section-banner .banner-note{font-weight:400;font-size:11px;color:rgba(255,255,255,.7);margin-left:10px}
+tr.prov-row td{background:#fffbeb}
+tr.prov-row:hover td{background:#fef6db}
+tr.prov-row td:first-child{box-shadow:inset 3px 0 0 #f5a623}
+tr.pend-row td{background:#f5f8ff}
+tr.pend-row:hover td{background:#eef4ff}
+tr.pend-row td:first-child{box-shadow:inset 3px 0 0 #3b82f6}
+tr.released-row td{opacity:.55}
+
+.cell-code{color:#94a3b8;font-size:12px}
+.cell-desc{font-weight:500;color:#1b2a4a;white-space:normal;min-width:240px}
+.money-committed{color:#b45309;font-weight:600}
+.money-tracked{color:#0d9488;font-weight:600}
+.money-actual{color:#16a34a;font-weight:600}
+.money-muted{color:#cbd5e1}
+.var-pos{color:#16a34a;font-weight:600}
+.var-neg{color:#ef4444;font-weight:600}
+.excluded-money{color:#94a3b8;font-weight:600;font-style:italic}
+
+/* Spend bar */
+.spend{width:150px;min-width:150px}
+.spend-bar{position:relative;height:8px;border-radius:4px;background:#e9edf3;overflow:hidden;display:flex}
+.spend-bar span{display:block;height:100%}
+.sb-actual{background:#16a34a}
+.sb-tracked{background:#5eead4}
+.sb-committed{background:#fbbf24}
+.spend-marker{position:absolute;top:-2px;width:2px;height:12px;background:#1b2a4a;border-radius:1px}
+.spend-cap{font-size:10px;color:#94a3b8;margin-top:4px;display:block}
+
+/* Chips */
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;letter-spacing:.2px;text-transform:uppercase;white-space:nowrap}
+.chip.ok{background:#dcfce7;color:#16a34a}
+.chip.warn{background:#fef3c7;color:#b45309}
+.chip.over{background:#fee2e2;color:#dc2626}
+.chip.idle{background:#f1f5f9;color:#94a3b8}
+.chip.live{background:#ccfbf1;color:#0d9488}
+.chip.vo{background:#dbeafe;color:#1d4ed8}
+.chip.prov{background:#fde68a;color:#92400e}
+.chip.draft{background:#e2e8f0;color:#64748b}
+
+/* Drill-down panel */
+.drill{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
+.drill-col{padding:14px 16px;border-right:1px dashed #e2e8f0}
+.drill-col:last-child{border-right:none}
+.drill-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.drill-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:6px}
+.drill-title.committed{color:#b45309}
+.drill-title.tracked{color:#0d9488}
+.drill-title.actual{color:#16a34a}
+.drill-total{font-size:13px;font-weight:700;color:#1b2a4a}
+.doc{display:flex;align-items:center;gap:10px;padding:7px 10px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:6px}
+.doc:last-child{margin-bottom:0}
+.doc .doc-icon{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+.doc .doc-icon.po{background:#fef3c7;color:#b45309}
+.doc .doc-icon.dkt{background:#ccfbf1;color:#0d9488}
+.doc .doc-icon.bill{background:#dcfce7;color:#16a34a}
+.doc .doc-body{flex:1;min-width:0}
+.doc .doc-ref{font-size:12px;font-weight:600;color:#1b2a4a}
+.doc .doc-meta{font-size:11px;color:#94a3b8;white-space:normal;line-height:1.4}
+.doc .doc-amt{font-size:12px;font-weight:600;color:#1b2a4a;white-space:nowrap}
+.drill-empty{font-size:12px;color:#94a3b8;font-style:italic;padding:10px 0}
+.drill-note{font-size:11px;color:#94a3b8;margin-top:8px;line-height:1.5}
+
+/* Footer */
+.review-footer{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;font-size:13px;color:#64748b;flex-wrap:wrap;gap:10px}
+.legend{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:middle}
+
+/* Tooltip */
+.info-tooltip{position:relative;display:inline-block;vertical-align:middle}
+.info-tooltip>i{color:rgba(255,255,255,.45);font-size:11px;cursor:pointer}
+.stat .info-tooltip>i{color:#cbd5e1}
+.info-tooltip .tip{visibility:hidden;opacity:0;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;font-size:11px;font-weight:400;line-height:1.6;padding:10px 12px;border-radius:8px;width:240px;text-align:left;z-index:80;box-shadow:0 8px 24px rgba(0,0,0,.2);transition:opacity .15s;text-transform:none;letter-spacing:0;white-space:normal;pointer-events:none}
+.info-tooltip .tip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:#0f172a}
+.info-tooltip:hover .tip{visibility:visible;opacity:1}
+
+/* ── Modals ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.show{display:flex}
+.modal{background:#fff;border-radius:12px;padding:26px;width:560px;max-width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);animation:modalIn .18s ease}
+@keyframes modalIn{from{transform:scale(.97);opacity:0}to{transform:scale(1);opacity:1}}
+.modal-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:6px}
+.modal-head h3{font-size:18px;font-weight:600;color:#1b2a4a;margin:0}
+.modal-sub{font-size:12px;color:#94a3b8;margin-bottom:18px;line-height:1.5}
+.modal-close{color:#94a3b8;cursor:pointer;font-size:17px;padding:2px 6px}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid #f1f5f9}
+.var-type-card{display:flex;align-items:center;gap:14px;padding:15px;border:2px solid #e2e8f0;border-radius:10px;cursor:pointer;transition:all .15s;margin-bottom:11px}
+.var-type-card:hover{border-color:#f5a623;background:#fffbf0;box-shadow:0 2px 8px rgba(245,166,35,.1)}
+.var-type-icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.var-type-name{font-size:14px;font-weight:600;color:#1b2a4a;margin-bottom:3px}
+.var-type-desc{font-size:12px;color:#64748b;line-height:1.45}
+.var-type-arrow{color:#cbd5e1;font-size:13px;margin-left:auto}
+.var-type-card:hover .var-type-arrow{color:#f5a623}
+
+.field{margin-bottom:14px}
+.field label{font-size:12px;font-weight:500;color:#64748b;display:block;margin-bottom:5px}
+.field input,.field select,.field textarea{width:100%;padding:9px 11px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;outline:none;background:#fff;color:#1b2a4a}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:#f5a623;box-shadow:0 0 0 3px rgba(245,166,35,.1)}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.radio-card{display:flex;gap:10px;align-items:flex-start;border:2px solid #e2e8f0;border-radius:8px;padding:12px 14px;cursor:pointer;margin-bottom:9px;transition:all .15s}
+.radio-card:hover{border-color:#f5a623}
+.radio-card.selected{border-color:#f5a623;background:#fffbf0}
+.radio-dot{width:18px;height:18px;border-radius:50%;border:2px solid #cbd5e1;flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center}
+.radio-card.selected .radio-dot{border-color:#f5a623}
+.radio-card.selected .radio-dot::after{content:'';width:9px;height:9px;border-radius:50%;background:#f5a623}
+.radio-card .rc-name{font-size:13px;font-weight:600;color:#1b2a4a;margin-bottom:2px}
+.radio-card .rc-desc{font-size:11.5px;color:#94a3b8;line-height:1.45}
+.callout{border-radius:8px;padding:11px 14px;font-size:12px;line-height:1.55;margin-bottom:16px}
+.callout.amber{background:#fffbeb;border:1px solid #fcd34d;color:#92400e}
+.callout.blue{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}
+.callout.green{background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d}
+
+.mini-table{width:100%;border-collapse:collapse;margin-bottom:10px}
+.mini-table th{font-size:11px;font-weight:600;color:#64748b;text-align:left;padding:7px 8px;background:#f8fafc;border-bottom:1px solid #e2e8f0;text-transform:uppercase;letter-spacing:.3px}
+.mini-table th.right{text-align:right}
+.mini-table td{padding:6px 8px;border-bottom:1px solid #f1f5f9;font-size:12px}
+.mini-table td.right{text-align:right}
+.mini-table input{width:100%;padding:6px 8px;border:1px solid #e2e8f0;border-radius:5px;font-size:12px;font-family:'Inter',sans-serif;outline:none}
+.mini-table input:focus{border-color:#f5a623}
+.mini-table input.num{text-align:right}
+.row-del{color:#ef4444;cursor:pointer;font-size:12px}
+.add-line-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:9px;border:2px dashed #cbd5e1;border-radius:8px;background:transparent;color:#64748b;font-size:12px;font-weight:500;cursor:pointer;width:100%;transition:all .15s;font-family:'Inter',sans-serif}
+.add-line-btn:hover{border-color:#f5a623;color:#f5a623;background:#fffbf0}
+.sum-strip{display:flex;gap:10px;margin-top:16px}
+.sum-card{flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center}
+.sum-card .sc-label{font-size:11px;color:#94a3b8;margin-bottom:3px}
+.sum-card .sc-value{font-size:17px;font-weight:700;color:#1b2a4a}
+.sum-card.primary{border-color:#f5a623;background:#fffbf0}
+.sum-card.primary .sc-value{color:#d97706}
+
+.docket-pick{display:flex;align-items:center;gap:11px;border:1px solid #e2e8f0;border-radius:7px;padding:9px 12px;margin-bottom:7px;cursor:pointer;transition:all .15s}
+.docket-pick:hover{border-color:#f5a623;background:#fffbf0}
+.docket-pick.checked{border-color:#f5a623;background:#fffbf0}
+.dp-check{width:19px;height:19px;border:2px solid #cbd5e1;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;flex-shrink:0}
+.docket-pick.checked .dp-check{background:#f5a623;border-color:#f5a623;color:#fff}
+.dp-ref{font-size:12.5px;font-weight:600;color:#1b2a4a}
+.dp-meta{font-size:11px;color:#94a3b8}
+.dp-amt{margin-left:auto;font-size:13px;font-weight:600;color:#1b2a4a}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;background:#1b2a4a;color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;display:none;align-items:center;gap:8px;z-index:400;box-shadow:0 8px 24px rgba(0,0,0,.2);max-width:460px}
+.toast.show{display:flex}
+@media(max-width:1400px){.stat-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:1000px){.stat-grid{grid-template-columns:repeat(2,1fr)}.defs{flex-direction:column}.def{border-right:none;border-bottom:1px solid #f1f5f9}.drill{grid-template-columns:1fr}.drill-col{border-right:none;border-bottom:1px dashed #e2e8f0}.field-row,.field-row-3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ═══ Sidebar ═══ -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo"><div class="logo-icon">V</div></div>
+    <span class="sidebar-collapse"><i class="fas fa-angles-left"></i></span>
+  </div>
+  <div class="sidebar-org">
+    <div class="org-avatar">C</div>
+    <span>Cookie's Civil</span>
+    <i class="fas fa-chevron-right chevron"></i>
+  </div>
+  <nav class="sidebar-nav">
+    <a class="nav-item active"><i class="fas fa-folder nav-icon"></i> Projects</a>
+    <a class="nav-item"><i class="fas fa-th-large nav-icon"></i> Dashboard</a>
+    <a class="nav-item"><i class="far fa-image nav-icon"></i> Gallery</a>
+    <a class="nav-item"><i class="far fa-clock nav-icon"></i> Timesheet</a>
+    <a class="nav-item"><i class="far fa-calendar nav-icon"></i> Leave <span class="badge">8</span><i class="fas fa-chevron-down chev"></i></a>
+    <a class="nav-item"><i class="far fa-calendar-check nav-icon"></i> Scheduler <span class="beta">Beta</span><i class="fas fa-chevron-down chev"></i></a>
+    <a class="nav-item"><i class="fas fa-clipboard-list nav-icon"></i> Daywork Docket</a>
+    <a class="nav-item"><i class="fas fa-cart-shopping nav-icon"></i> Purchase Order</a>
+    <a class="nav-item"><i class="fas fa-truck nav-icon"></i> Delivery Docket</a>
+    <a class="nav-item"><i class="fas fa-file-invoice-dollar nav-icon"></i> Bills</a>
+    <a class="nav-item"><i class="far fa-file-alt nav-icon"></i> Forms <i class="fas fa-chevron-down chev"></i></a>
+    <a class="nav-item"><i class="fas fa-tools nav-icon"></i> Equipment</a>
+    <a class="nav-item"><i class="fas fa-user-cog nav-icon"></i> Resource Assigner</a>
+    <a class="nav-item"><i class="far fa-comment-dots nav-icon"></i> Suppliers</a>
+    <a class="nav-item"><i class="far fa-folder-open nav-icon"></i> File Manager</a>
+    <a class="nav-item"><i class="fas fa-users-cog nav-icon"></i> User Management <i class="fas fa-chevron-down chev"></i></a>
+  </nav>
+</aside>
+
+<!-- ═══ Main ═══ -->
+<div class="main">
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="back-btn"><i class="fas fa-arrow-left"></i></span>
+      <h1>Budget Overview — Northline Industrial Estate</h1>
+      <i class="far fa-question-circle" style="color:#94a3b8;font-size:14px;cursor:pointer"></i>
+      <i class="fas fa-circle" style="font-size:8px;color:#22c55e"></i>
+    </div>
+    <div class="topbar-right">
+      <button class="search-btn"><i class="fas fa-wand-magic-sparkles"></i> Search</button>
+      <span class="plus-btn"><i class="fas fa-plus"></i></span>
+      <div class="user-menu">
+        <div class="user-avatar">AN</div>
+        <span class="user-name">Alec Neill</span>
+        <i class="fas fa-chevron-down" style="font-size:11px;color:#94a3b8"></i>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-content">
+    <div class="budget-view-tabs">
+      <span class="bv-tab"><i class="fas fa-chevron-left" style="margin-right:4px"></i> Dashboard</span>
+      <span class="bv-tab active">Budget Overview</span>
+      <span class="bv-tab">Daily Cost Tracking</span>
+      <span class="bv-tab">Claim</span>
+      <span class="bv-tab">Variation Register</span>
+      <span class="bv-tab">Report</span>
+      <span class="bv-tab">File Manager</span>
+      <span class="bv-tab">Site Diary</span>
+      <span class="bv-tab">Daywork Docket</span>
+    </div>
+
+    <div class="stat-grid" id="statGrid"></div>
+    <div style="text-align:right;font-size:11px;color:#94a3b8;margin-bottom:16px">
+      Cost data as at 10 Aug 2026, 6:00am &middot; <span style="color:#16a34a"><i class="fas fa-check-circle"></i> Synced with Bills, Purchase Orders &amp; Dockets</span>
+    </div>
+
+    <div class="defs">
+      <div class="def">
+        <span class="dot" style="background:#fbbf24"></span>
+        <div><div class="d-name">Committed</div><div class="d-desc">Value of approved purchase orders raised against the budget — money you are on the hook for, delivered or not.</div></div>
+      </div>
+      <div class="def">
+        <span class="dot" style="background:#5eead4"></span>
+        <div><div class="d-name">Tracked</div><div class="d-desc">Cost incurred on site to date — daywork &amp; delivery dockets, plus the receipted portion of purchase orders.</div></div>
+      </div>
+      <div class="def">
+        <span class="dot" style="background:#16a34a"></span>
+        <div><div class="d-name">Actual</div><div class="d-desc">Cost that has left the bank — supplier and subcontractor bills matched to this budget and marked paid.</div></div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <div class="type-toggle" id="viewToggle">
+          <span class="active" data-view="cc" onclick="switchView('cc')"><i class="fas fa-layer-group" style="margin-right:5px"></i> Cost Centres</span>
+          <span data-view="boq" onclick="switchView('boq')"><i class="fas fa-list" style="margin-right:5px"></i> BOQ Line Items</span>
+          <span data-view="zone" onclick="switchView('zone')"><i class="fas fa-map-marker-alt" style="margin-right:5px"></i> Zones</span>
+        </div>
+        <select class="filter-select" id="statusFilter" onchange="render()">
+          <option value="all">All statuses</option>
+          <option value="over">Over budget</option>
+          <option value="risk">At risk (&gt;90% committed)</option>
+          <option value="progress">In progress</option>
+          <option value="notstarted">Not started</option>
+        </select>
+        <input class="review-search" id="searchBox" placeholder="Search description or code…" oninput="render()">
+      </div>
+      <div class="toolbar-right">
+        <button class="btn btn-outline" onclick="toggleAll()"><i class="fas fa-angles-down"></i> <span id="expandLabel">Expand all</span></button>
+        <button class="btn btn-outline" onclick="toast('Export queued — CSV will download shortly')"><i class="fas fa-file-export"></i> Export</button>
+        <button class="btn btn-dark" onclick="showVariationModal()"><i class="fas fa-plus"></i> Add Variation</button>
+      </div>
+    </div>
+
+    <div class="table-shell">
+      <table class="ov-table">
+        <colgroup>
+          <col style="width:34px"><col style="width:88px"><col style="width:auto"><col style="width:170px">
+          <col style="width:120px"><col style="width:120px"><col style="width:130px"><col style="width:120px"><col style="width:120px">
+          <col style="width:130px"><col style="width:120px"><col style="width:90px">
+        </colgroup>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Code</th>
+            <th>Description</th>
+            <th>Spend vs Budget</th>
+            <th class="right sep">Contract</th>
+            <th class="right">Budget</th>
+            <th class="right sep">Committed <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Committed</strong><br>Approved purchase orders raised against this budget line, including POs not yet delivered.</span></span></th>
+            <th class="right">Tracked <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Tracked</strong><br>Daywork &amp; delivery dockets plus receipted PO value — cost incurred on site to date.</span></span></th>
+            <th class="right">Actual <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Actual</strong><br>Bills matched to this line that have been paid.</span></span></th>
+            <th class="right sep">Forecast Cost <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Forecast final cost</strong><br>Committed + docketed cost outside POs + the budget still uncommitted.</span></span></th>
+            <th class="right">Variance</th>
+            <th class="right">Margin</th>
+          </tr>
+          <tr class="sub-header">
+            <th></th><th></th><th>Task</th><th>Actual / Tracked / Committed</th>
+            <th class="right sep">Contract sum</th><th class="right">Approved budget</th>
+            <th class="right sep">From POs</th><th class="right">Dockets + POs</th><th class="right">Bills paid</th>
+            <th class="right sep">At completion</th><th class="right">Budget − forecast</th><th class="right">Forecast</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+        <tfoot id="tableFoot"></tfoot>
+      </table>
+    </div>
+
+    <div class="review-footer">
+      <div class="legend">
+        <span><i style="background:#16a34a"></i>Actual (paid)</span>
+        <span><i style="background:#5eead4"></i>Tracked not yet paid</span>
+        <span><i style="background:#fbbf24"></i>Committed, not delivered</span>
+        <span><i style="background:#e9edf3"></i>Uncommitted budget</span>
+        <span><i style="background:#1b2a4a;width:2px;height:12px;border-radius:1px"></i>Budget line</span>
+      </div>
+      <div id="rowCount"></div>
+      <div style="display:flex;align-items:center;gap:4px;color:#16a34a"><span>All Saved</span> <i class="fas fa-check-circle"></i></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Variation type modal ═══ -->
+<div class="modal-overlay" id="variationModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>What type of variation is this?</h3>
+      <span class="modal-close" onclick="closeModal('variationModal')"><i class="fas fa-times"></i></span>
+    </div>
+    <p class="modal-sub">A variation adds to the contract sum and carries its own budget. Once approved it is tracked in the overview exactly like a BOQ line — POs commit it, dockets track it, paid bills make it actual.</p>
+    <div class="var-type-card" onclick="selectVariationType('priced')">
+      <div class="var-type-icon" style="background:#eff6ff;color:#3b82f6"><i class="fas fa-file-invoice-dollar"></i></div>
+      <div><div class="var-type-name">Priced Variation</div><div class="var-type-desc">Agreed pricing based on a lump sum quote or a build-up from your schedule of rates.</div></div>
+      <div class="var-type-arrow"><i class="fas fa-chevron-right"></i></div>
+    </div>
+    <div class="var-type-card" onclick="selectVariationType('dayworks')">
+      <div class="var-type-icon" style="background:#f0fdf4;color:#16a34a"><i class="fas fa-clock-rotate-left"></i></div>
+      <div><div class="var-type-name">Dayworks Variation</div><div class="var-type-desc">Tracked on a time and cost basis. Pull in approved daywork dockets already booked on site.</div></div>
+      <div class="var-type-arrow"><i class="fas fa-chevron-right"></i></div>
+    </div>
+    <div class="var-type-card" onclick="selectVariationType('costplus')">
+      <div class="var-type-icon" style="background:#faf5ff;color:#9333ea"><i class="fas fa-percentage"></i></div>
+      <div><div class="var-type-name">Cost Plus Variation</div><div class="var-type-desc">Actual cost plus an agreed margin percentage.</div></div>
+      <div class="var-type-arrow"><i class="fas fa-chevron-right"></i></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Priced method modal ═══ -->
+<div class="modal-overlay" id="pricedMethodModal">
+  <div class="modal" style="width:500px">
+    <div class="modal-head">
+      <h3>How would you like to price it?</h3>
+      <span class="modal-close" onclick="closeModal('pricedMethodModal')"><i class="fas fa-times"></i></span>
+    </div>
+    <p class="modal-sub">This sets how the contract value is built up. The budget cost is set separately in the next step.</p>
+    <div class="var-type-card" onclick="selectPricedMethod('lumpsum')">
+      <div class="var-type-icon" style="background:#eff6ff;color:#3b82f6"><i class="fas fa-money-bill-wave"></i></div>
+      <div><div class="var-type-name">Lump Sum</div><div class="var-type-desc">Enter agreed line items with quantities and rates.</div></div>
+      <div class="var-type-arrow"><i class="fas fa-chevron-right"></i></div>
+    </div>
+    <div class="var-type-card" onclick="selectPricedMethod('rates')">
+      <div class="var-type-icon" style="background:#fff7ed;color:#f5a623"><i class="fas fa-calculator"></i></div>
+      <div><div class="var-type-name">Build Up Using Rates</div><div class="var-type-desc">Price from the schedule of rates — labour, plant and materials.</div></div>
+      <div class="var-type-arrow"><i class="fas fa-chevron-right"></i></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Daywork docket picker ═══ -->
+<div class="modal-overlay" id="docketModal">
+  <div class="modal" style="width:620px">
+    <div class="modal-head">
+      <h3>Add daywork dockets to this variation</h3>
+      <span class="modal-close" onclick="closeModal('docketModal')"><i class="fas fa-times"></i></span>
+    </div>
+    <p class="modal-sub">These dockets are already <strong>tracked</strong> cost on the project. Attaching them to a variation is what turns that cost into claimable revenue.</p>
+    <div id="docketList"></div>
+    <div class="callout amber" style="margin-top:14px;margin-bottom:0" id="docketSummary"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="skipDockets()">Skip — build manually</button>
+      <button class="btn btn-primary" id="docketAddBtn" disabled onclick="addSelectedDockets()"><i class="fas fa-arrow-right"></i> Add selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Variation build modal ═══ -->
+<div class="modal-overlay" id="varBuildModal">
+  <div class="modal" style="width:720px">
+    <div class="modal-head">
+      <h3 id="varBuildTitle">Priced Variation</h3>
+      <span class="modal-close" onclick="closeModal('varBuildModal')"><i class="fas fa-times"></i></span>
+    </div>
+    <p class="modal-sub" id="varBuildSub">Build up the variation value, then map it to a cost centre and zone so it lands in the right place in the budget overview.</p>
+
+    <div class="field-row">
+      <div class="field"><label>Variation title</label><input id="vTitle" placeholder="e.g. Additional drainage works — Zone B" oninput="calcVarBuild()"></div>
+      <div class="field"><label>Client reference</label><input id="vRef" placeholder="e.g. RFI-042 / VO-004"></div>
+    </div>
+    <div class="field"><label>Scope description</label><textarea id="vDesc" rows="2" placeholder="Describe the scope of the variation…"></textarea></div>
+
+    <div style="font-size:12px;font-weight:600;color:#1b2a4a;margin:18px 0 8px"><i class="fas fa-list-ol" style="color:#f5a623;margin-right:6px"></i><span id="vLinesLabel">Priced line items</span></div>
+    <table class="mini-table">
+      <thead><tr><th>Description</th><th style="width:70px" class="right">Qty</th><th style="width:70px">Unit</th><th style="width:100px" class="right">Rate ($)</th><th style="width:100px" class="right">Amount</th><th style="width:30px"></th></tr></thead>
+      <tbody id="vLines"></tbody>
+    </table>
+    <button class="add-line-btn" onclick="addVarLine()"><i class="fas fa-plus"></i> Add line item</button>
+
+    <div style="font-size:12px;font-weight:600;color:#1b2a4a;margin:18px 0 8px"><i class="fas fa-map-pin" style="color:#f5a623;margin-right:6px"></i>Budget mapping</div>
+    <div class="field-row-3">
+      <div class="field"><label>Cost centre</label><select id="vCC"></select></div>
+      <div class="field"><label>Zone</label><select id="vZone"></select></div>
+      <div class="field"><label>Budget cost ($)</label><input id="vBudget" class="num" placeholder="0" oninput="calcVarBuild()"></div>
+    </div>
+
+    <div class="sum-strip">
+      <div class="sum-card"><div class="sc-label">Contract value</div><div class="sc-value" id="vSumContract">$0</div></div>
+      <div class="sum-card"><div class="sc-label">Budget cost</div><div class="sc-value" id="vSumBudget">$0</div></div>
+      <div class="sum-card primary"><div class="sc-label">Margin</div><div class="sc-value" id="vSumMargin">0.0%</div></div>
+    </div>
+
+    <div class="callout blue" style="margin-top:16px;margin-bottom:0">
+      <i class="fas fa-circle-info"></i> A <strong>submitted</strong> variation sits outside the contract and budget totals until the client approves it. Any dockets or POs already raised against it show as <strong>cost at risk</strong>.
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('varBuildModal')">Cancel</button>
+      <button class="btn btn-outline" id="vDraftBtn" onclick="saveVariation('draft')"><i class="fas fa-save"></i> Save draft</button>
+      <button class="btn btn-primary" id="vSubmitBtn" onclick="saveVariation('submitted')"><i class="fas fa-paper-plane"></i> Submit for approval</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Provisional sum activation modal ═══ -->
+<div class="modal-overlay" id="provModal">
+  <div class="modal" style="width:640px">
+    <div class="modal-head">
+      <h3>Activate provisional sum</h3>
+      <span class="modal-close" onclick="closeModal('provModal')"><i class="fas fa-times"></i></span>
+    </div>
+    <p class="modal-sub" id="provSub"></p>
+
+    <div class="callout amber" id="provAllowance"></div>
+
+    <div class="field"><label>How is this being activated?</label>
+      <div class="radio-card selected" id="provModeBudget" onclick="setProvMode('budget')">
+        <span class="radio-dot"></span>
+        <div><div class="rc-name">Instruct against the allowance</div><div class="rc-desc">The work is covered by the provisional allowance already in the contract. The activated amount moves into the live contract and budget at the agreed value.</div></div>
+      </div>
+      <div class="radio-card" id="provModeVariation" onclick="setProvMode('variation')">
+        <span class="radio-dot"></span>
+        <div><div class="rc-name">Activate as a variation</div><div class="rc-desc">The instructed scope exceeds the allowance or differs from it. Creates a submitted variation for the difference, which needs client approval before it counts.</div></div>
+      </div>
+    </div>
+
+    <div class="field-row-3">
+      <div class="field"><label>Allowance drawn down ($)</label><input id="provDraw" class="num" oninput="calcProv()"></div>
+      <div class="field"><label>Agreed contract value ($)</label><input id="provContract" class="num" oninput="calcProv()"></div>
+      <div class="field"><label>Budget cost ($)</label><input id="provBudget" class="num" oninput="calcProv()"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Cost centre</label><select id="provCC"></select></div>
+      <div class="field"><label>Zone</label><select id="provZone"></select></div>
+    </div>
+    <div class="field"><label>Instruction reference</label><input id="provRef" placeholder="e.g. SI-018 — Superintendent's instruction"></div>
+
+    <div class="callout blue" id="provOutcome" style="margin-bottom:0"></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('provModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmProvActivation()"><i class="fas fa-bolt"></i> Activate</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><i class="fas fa-circle-info"></i> <span id="toastMsg"></span></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   COST MODEL
+     poCommitted   — approved PO value            → Committed
+     poReceipted   — PO value delivered/receipted ┐
+     docketTracked — daywork & delivery dockets   ┴→ Tracked
+     actualPaid    — bills matched & paid         → Actual
+   ═══════════════════════════════════════════════════════════════ */
+
+const COST_CENTRES = ['Earthworks','Concrete','Steel & Rebar','Formwork','Drainage','Roadway','Overheads / Prelims'];
+const ZONES = ['Project Wide','Zone A','Zone B','Zone C','Zone D'];
+
+/* ── Base BOQ budget lines ── */
+const baseItems = [
+  {code:'0.1', desc:'Site Establishment & Facilities', cc:'Overheads / Prelims', zone:'Project Wide', l1:'0 Preliminaries', l2:'0.1 Establishment',
+   contract:48000, budget:41000, poCommitted:26000, poReceipted:26000, docketTracked:9800, actualPaid:26000,
+   suppliers:{po:'Coates Hire', dkt:'Site crew', bill:'Coates Hire'}},
+  {code:'0.2', desc:'Site Supervision & Management', cc:'Overheads / Prelims', zone:'Project Wide', l1:'0 Preliminaries', l2:'0.1 Establishment',
+   contract:62000, budget:58000, poCommitted:0, poReceipted:0, docketTracked:66400, actualPaid:52000,
+   suppliers:{po:'', dkt:'Supervision timesheets', bill:'Payroll journal'}},
+
+  {code:'1.1.1', desc:'Site Clearing & Grubbing', cc:'Earthworks', zone:'Zone A', l1:'1 Preliminaries & Earthworks', l2:'1.1 Site Preparation',
+   contract:65000, budget:53000, poCommitted:18000, poReceipted:18000, docketTracked:33200, actualPaid:44000,
+   suppliers:{po:'Delta Plant Hire', dkt:'Delta Plant Hire', bill:'Delta Plant Hire'}},
+  {code:'1.1.2', desc:'Topsoil Stripping & Stockpiling', cc:'Earthworks', zone:'Zone A', l1:'1 Preliminaries & Earthworks', l2:'1.1 Site Preparation',
+   contract:32400, budget:26500, poCommitted:9500, poReceipted:9500, docketTracked:15100, actualPaid:21000,
+   suppliers:{po:'Delta Plant Hire', dkt:'Cookie’s crew', bill:'Delta Plant Hire'}},
+  {code:'1.2.1', desc:'Bulk Earthworks — Cut to Fill', cc:'Earthworks', zone:'Zone B', l1:'1 Preliminaries & Earthworks', l2:'1.2 Earthworks',
+   contract:147000, budget:118000, poCommitted:72000, poReceipted:68000, docketTracked:42500, actualPaid:88000,
+   suppliers:{po:'Ridgeline Civil', dkt:'Ridgeline Civil', bill:'Ridgeline Civil'}},
+  {code:'1.2.2', desc:'Subgrade Preparation', cc:'Earthworks', zone:'Zone B', l1:'1 Preliminaries & Earthworks', l2:'1.2 Earthworks',
+   contract:34000, budget:28000, poCommitted:0, poReceipted:0, docketTracked:12400, actualPaid:6200,
+   suppliers:{po:'', dkt:'Cookie’s crew', bill:'Fuel & consumables'}},
+
+  {code:'2.1.1', desc:'Concrete Supply & Pour — Footings', cc:'Concrete', zone:'Zone B', l1:'2 Structural Works', l2:'2.1 Concrete',
+   contract:141600, budget:116000, poCommitted:98000, poReceipted:71000, docketTracked:12800, actualPaid:55000,
+   suppliers:{po:'Hanson Concrete', dkt:'Hanson Concrete', bill:'Hanson Concrete'}},
+  {code:'2.1.2', desc:'Concrete Supply & Pour — Slabs', cc:'Concrete', zone:'Zone C', l1:'2 Structural Works', l2:'2.1 Concrete',
+   contract:91200, budget:74500, poCommitted:68000, poReceipted:32000, docketTracked:6400, actualPaid:24000,
+   suppliers:{po:'Hanson Concrete', dkt:'Hanson Concrete', bill:'Hanson Concrete'}},
+  {code:'2.2.1', desc:'Steel Reinforcement — Supply & Fix', cc:'Steel & Rebar', zone:'Zone B', l1:'2 Structural Works', l2:'2.2 Reinforcement',
+   contract:252000, budget:208000, poCommitted:196000, poReceipted:84000, docketTracked:9200, actualPaid:61000,
+   suppliers:{po:'ARC Reinforcing', dkt:'ARC Reinforcing', bill:'ARC Reinforcing'}},
+  {code:'2.2.2', desc:'Mesh Reinforcement — Supply & Fix', cc:'Steel & Rebar', zone:'Zone C', l1:'2 Structural Works', l2:'2.2 Reinforcement',
+   contract:67200, budget:55000, poCommitted:52000, poReceipted:21000, docketTracked:2800, actualPaid:14000,
+   suppliers:{po:'ARC Reinforcing', dkt:'ARC Reinforcing', bill:'ARC Reinforcing'}},
+  {code:'2.3.1', desc:'Formwork — Walls & Columns', cc:'Formwork', zone:'Zone C', l1:'2 Structural Works', l2:'2.3 Formwork',
+   contract:104400, budget:86000, poCommitted:0, poReceipted:0, docketTracked:0, actualPaid:0, suppliers:{po:'',dkt:'',bill:''}},
+  {code:'2.3.2', desc:'Formwork — Beams', cc:'Formwork', zone:'Zone C', l1:'2 Structural Works', l2:'2.3 Formwork',
+   contract:39000, budget:32000, poCommitted:0, poReceipted:0, docketTracked:0, actualPaid:0, suppliers:{po:'',dkt:'',bill:''}},
+
+  {code:'3.1.1', desc:'Structural Steelwork — Supply & Erect', cc:'Steel & Rebar', zone:'Zone C', l1:'3 Structural Steel', l2:'3.1 Steelwork',
+   contract:247000, budget:203000, poCommitted:214000, poReceipted:46000, docketTracked:0, actualPaid:30000,
+   suppliers:{po:'Northbridge Steel', dkt:'Northbridge Steel', bill:'Northbridge Steel'}},
+
+  {code:'4.1.1', desc:'Stormwater Pipes — Supply & Lay', cc:'Drainage', zone:'Zone A', l1:'4 Drainage', l2:'4.1 Stormwater',
+   contract:76500, budget:62000, poCommitted:44000, poReceipted:38000, docketTracked:8600, actualPaid:27000,
+   suppliers:{po:'Vinidex Pipe Co', dkt:'Cookie’s crew', bill:'Vinidex Pipe Co'}},
+  {code:'4.1.2', desc:'Pits & Headwalls', cc:'Drainage', zone:'Zone A', l1:'4 Drainage', l2:'4.1 Stormwater',
+   contract:52800, budget:43000, poCommitted:31000, poReceipted:12000, docketTracked:3200, actualPaid:9000,
+   suppliers:{po:'Humes Precast', dkt:'Cookie’s crew', bill:'Humes Precast'}},
+
+  {code:'5.1.1', desc:'Asphalt — Base Course', cc:'Roadway', zone:'Zone D', l1:'5 Roadway Construction', l2:'5.1 Asphalt',
+   contract:144000, budget:120000, poCommitted:116000, poReceipted:0, docketTracked:0, actualPaid:0,
+   suppliers:{po:'Fulton Hogan', dkt:'', bill:''}},
+  {code:'5.1.2', desc:'Asphalt — Wearing Course', cc:'Roadway', zone:'Zone D', l1:'5 Roadway Construction', l2:'5.1 Asphalt',
+   contract:176000, budget:146000, poCommitted:0, poReceipted:0, docketTracked:0, actualPaid:0, suppliers:{po:'',dkt:'',bill:''}}
+];
+baseItems.forEach(it => it.kind = 'base');
+
+/* ── Variations ──
+   status: draft | submitted | approved
+   Only APPROVED variations sit inside the contract and budget totals. Cost already
+   incurred against a draft/submitted variation is reported as cost at risk. */
+let variations = [
+  {id:'VO-001', title:'Additional drainage — Zone B outfall', type:'priced', method:'lumpsum', status:'approved',
+   cc:'Drainage', zone:'Zone B', ref:'RFI-021', approvedOn:'18 Jun 2026',
+   contract:38500, budget:31000, poCommitted:24000, poReceipted:18000, docketTracked:4200, actualPaid:12000,
+   suppliers:{po:'Vinidex Pipe Co', dkt:'Cookie’s crew', bill:'Vinidex Pipe Co'}},
+  {id:'VO-002', title:'Rock excavation — unforeseen ground conditions', type:'dayworks', method:'dockets', status:'submitted',
+   cc:'Earthworks', zone:'Zone B', ref:'SI-014', submittedOn:'29 Jul 2026',
+   contract:26800, budget:22500, poCommitted:0, poReceipted:0, docketTracked:18900, actualPaid:5400,
+   suppliers:{po:'', dkt:'Ridgeline Civil', bill:'Ridgeline Civil'}},
+  {id:'VO-003', title:'Night works traffic management', type:'priced', method:'rates', status:'approved',
+   cc:'Overheads / Prelims', zone:'Project Wide', ref:'VO-003', approvedOn:'31 Jul 2026',
+   contract:14200, budget:12400, poCommitted:12400, poReceipted:6000, docketTracked:0, actualPaid:6000,
+   suppliers:{po:'Altus Traffic', dkt:'Altus Traffic', bill:'Altus Traffic'}}
+];
+
+/* ── Provisional sums ──
+   Excluded from contract and budget totals until instructed. Activating draws
+   down the allowance and creates a live budget line (or a variation for the excess). */
+let provisionals = [
+  {code:'P.1.1', desc:'Survey & Set-Out', allowance:8500,  status:'provisional', drawn:0, activations:[]},
+  {code:'P.1.2', desc:'Site Investigation Allowance', allowance:12000, status:'provisional', drawn:0, activations:[]},
+  {code:'P.1.3', desc:'Traffic Management Contingency', allowance:15000, status:'provisional', drawn:0, activations:[]}
+];
+
+/* ── Daywork dockets available to attach to a variation ── */
+const dayworkDockets = [
+  {id:'DKT-1187', desc:'Rock breaking — 20t excavator + operator', date:'22 Jul 2026', amount:7400, cc:'Earthworks', zone:'Zone B'},
+  {id:'DKT-1192', desc:'Additional cartage — spoil to stockpile', date:'23 Jul 2026', amount:4300, cc:'Earthworks', zone:'Zone B'},
+  {id:'DKT-1204', desc:'Hand excavation around services', date:'25 Jul 2026', amount:3600, cc:'Earthworks', zone:'Zone B'},
+  {id:'DKT-1219', desc:'Standby — plant idle awaiting instruction', date:'28 Jul 2026', amount:2900, cc:'Earthworks', zone:'Zone B'}
+];
+
+/* ═══ Derivation ═══ */
+function derive(it){
+  const committed = it.poCommitted || 0;
+  const tracked   = (it.poReceipted || 0) + (it.docketTracked || 0);
+  const actual    = it.actualPaid || 0;
+  const engaged   = committed + (it.docketTracked || 0);      // budget consumed or locked in
+  const uncommitted = Math.max(0, (it.budget || 0) - engaged);
+  const forecast  = engaged + uncommitted;
+  const variance  = (it.budget || 0) - forecast;
+  const margin    = it.contract > 0 ? (it.contract - forecast) / it.contract * 100 : 0;
+  return {committed, tracked, actual, engaged, uncommitted, forecast, variance, margin};
+}
+
+/* Active budget lines = base BOQ + approved variations + activated provisional sums.
+   Rebuilt on every render so approvals and activations flow straight through. */
+function activeLines(){
+  const lines = baseItems.map(it => Object.assign({}, it, derive(it)));
+
+  variations.filter(v => v.status === 'approved').forEach(v => {
+    lines.push(Object.assign({}, v, derive(v), {
+      kind:'variation', code:v.id, desc:v.title,
+      l1:'V Variations', l2:'V.1 Approved Variations'
+    }));
+  });
+
+  provisionals.forEach(p => p.activations.forEach(a => {
+    lines.push(Object.assign({}, a, derive(a), {
+      kind:'provisional-active', code:a.code, desc:a.desc,
+      l1:'P Provisional Sums', l2:'P.1 Activated'
+    }));
+  }));
+
+  return lines;
+}
+
+/* ═══ Helpers ═══ */
+function money(v){ return '$' + Math.round(v || 0).toLocaleString('en-AU'); }
+function pct(v){ return (v || 0).toFixed(1) + '%'; }
+function num(id){ return parseFloat(String(document.getElementById(id).value).replace(/[^0-9.-]/g,'')) || 0; }
+function esc(s){ return String(s).replace(/'/g, "\\'"); }
+
+function statusOf(it){
+  if (it.forecast > it.budget + 0.5) return {key:'over', label:'Over budget', cls:'over'};
+  if (it.engaged === 0) return {key:'notstarted', label:'Not started', cls:'idle'};
+  if (it.budget > 0 && it.engaged / it.budget > 0.9) return {key:'risk', label:'At risk', cls:'warn'};
+  return {key:'progress', label:'In progress', cls:'ok'};
+}
+
+function spendBar(it){
+  const scale = Math.max(it.budget || 0, it.forecast || 0, it.engaged || 0, 1);
+  const trackedOnly = Math.max(0, it.tracked - it.actual);
+  const committedOpen = Math.max(0, it.committed - (it.poReceipted || 0));
+  const p = v => (v / scale * 100).toFixed(2) + '%';
+  const marker = (it.budget || 0) / scale * 100;
+  const usedPct = it.budget > 0 ? (it.engaged / it.budget * 100) : 0;
+  return '<div class="spend-bar">' +
+      '<span class="sb-actual" style="width:' + p(it.actual) + '"></span>' +
+      '<span class="sb-tracked" style="width:' + p(trackedOnly) + '"></span>' +
+      '<span class="sb-committed" style="width:' + p(committedOpen) + '"></span>' +
+      (marker < 99.9 ? '<span class="spend-marker" style="left:' + marker.toFixed(2) + '%"></span>' : '') +
+    '</div>' +
+    '<span class="spend-cap">' + pct(usedPct) + ' of budget engaged</span>';
+}
+
+/* Totals roll up line-level derived values — an overrun on one line must not be
+   absorbed by unspent budget on another, which re-deriving from summed inputs would do. */
+const SUM_KEYS = ['contract','budget','poCommitted','poReceipted','docketTracked','actualPaid',
+                  'committed','tracked','actual','engaged','uncommitted','forecast'];
+function aggregate(list){
+  const t = {}; SUM_KEYS.forEach(k => t[k] = 0);
+  list.forEach(it => SUM_KEYS.forEach(k => t[k] += (it[k] || 0)));
+  t.variance = t.budget - t.forecast;
+  t.margin = t.contract > 0 ? (t.contract - t.forecast) / t.contract * 100 : 0;
+  return t;
+}
+
+/* ═══ Source documents (drill-down) ═══ */
+function docsFor(it){
+  const po = [], dkt = [], bill = [];
+  const n = Math.round;
+  const key = String(it.code).replace(/[^0-9A-Za-z]/g,'');
+  if (it.poCommitted > 0){
+    const split = it.poCommitted > 90000 ? [0.6, 0.4] : [1];
+    let consumed = 0;
+    split.forEach((f, i) => {
+      const amt = n(it.poCommitted * f);
+      const rec = Math.max(0, Math.min(amt, it.poReceipted - consumed));
+      consumed += amt;
+      po.push({ref:'PO-' + key + (split.length > 1 ? '-' + (i+1) : ''), party:it.suppliers.po,
+               meta: rec >= amt ? 'Fully receipted' : rec > 0 ? 'Part receipted — ' + money(rec) + ' delivered' : 'Approved, awaiting delivery',
+               state: rec >= amt ? 'ok' : rec > 0 ? 'warn' : 'idle', amt});
+    });
+  }
+  if (it.poReceipted > 0) dkt.push({ref:'Delivery dockets ×' + (it.poReceipted > 40000 ? 6 : 3), party:it.suppliers.dkt, meta:'Receipted against PO', state:'live', amt:it.poReceipted});
+  if (it.docketTracked > 0) dkt.push({ref:'Daywork dockets ×' + (it.docketTracked > 20000 ? 9 : 4), party:it.suppliers.dkt, meta:'Labour, plant & materials booked on site', state:'live', amt:it.docketTracked});
+  if (it.actualPaid > 0) bill.push({ref:'BILL-' + key, party:it.suppliers.bill, meta:'Paid ' + payDate(key), state:'ok', amt:it.actualPaid});
+  const unpaid = Math.max(0, it.tracked - it.actual);
+  if (unpaid > 0) bill.push({ref:'Awaiting billing / payment', party:'', meta:'Tracked cost not yet paid', state:'warn', amt:unpaid, ghost:true});
+  return {po, dkt, bill};
+}
+function payDate(key){
+  const days = ['12 Jun 2026','26 Jun 2026','10 Jul 2026','24 Jul 2026','07 Aug 2026'];
+  return days[key.length % days.length];
+}
+function chipText(s){ return {ok:'Paid / receipted', warn:'Part', idle:'Open', live:'Booked'}[s] || s; }
+
+function drill(it){
+  const d = docsFor(it);
+  const col = (title, cls, icon, total, docs, note, iconCls) =>
+    '<div class="drill-col">' +
+      '<div class="drill-head"><div class="drill-title ' + cls + '"><i class="fas ' + icon + '"></i> ' + title + '</div>' +
+      '<div class="drill-total">' + money(total) + '</div></div>' +
+      (docs.length ? docs.map(x =>
+        '<div class="doc"' + (x.ghost ? ' style="border-style:dashed;background:#fbfdff"' : '') + '>' +
+          '<div class="doc-icon ' + iconCls + '"><i class="fas ' + icon + '"></i></div>' +
+          '<div class="doc-body"><div class="doc-ref">' + x.ref + '</div>' +
+            '<div class="doc-meta">' + (x.party ? x.party + ' · ' : '') + x.meta + '</div></div>' +
+          '<div style="text-align:right"><div class="doc-amt">' + money(x.amt) + '</div>' +
+            '<span class="chip ' + x.state + '" style="margin-top:3px">' + chipText(x.state) + '</span></div>' +
+        '</div>').join('') : '<div class="drill-empty">Nothing raised against this line yet.</div>') +
+      '<div class="drill-note">' + note + '</div>' +
+    '</div>';
+
+  return '<div class="drill">' +
+    col('Committed — purchase orders', 'committed', 'fa-cart-shopping', it.committed, d.po,
+        'Committed is the approved PO value. Open POs stay committed until goods are receipted.', 'po') +
+    col('Tracked — dockets + POs', 'tracked', 'fa-clipboard-list', it.tracked, d.dkt,
+        'Tracked = daywork and delivery dockets booked on site plus the receipted portion of POs.', 'dkt') +
+    col('Actual — bills paid', 'actual', 'fa-file-invoice-dollar', it.actual, d.bill,
+        'Actual only moves when a matched bill is marked paid, so it lags tracked cost.', 'bill') +
+  '</div>';
+}
+
+/* ═══ Rendering ═══ */
+let currentView = 'cc';
+let allExpanded = false;
+const openGroups = new Set();
+const openItems = new Set();
+
+function visibleItems(){
+  const q = document.getElementById('searchBox').value.trim().toLowerCase();
+  const f = document.getElementById('statusFilter').value;
+  return activeLines().filter(it => {
+    if (q && !(it.desc.toLowerCase().includes(q) || String(it.code).toLowerCase().includes(q) || it.cc.toLowerCase().includes(q))) return false;
+    if (f !== 'all' && statusOf(it).key !== f) return false;
+    return true;
+  });
+}
+function groupKey(it){
+  if (currentView === 'cc') return it.cc;
+  if (currentView === 'zone') return it.zone;
+  return it.l1;
+}
+
+function moneyCells(t){
+  return '<td class="right sep">' + money(t.contract) + '</td>' +
+    '<td class="right">' + money(t.budget) + '</td>' +
+    '<td class="right ' + (t.committed ? 'money-committed' : 'money-muted') + '">' + (t.committed ? money(t.committed) : '—') + '</td>' +
+    '<td class="right ' + (t.tracked ? 'money-tracked' : 'money-muted') + '">' + (t.tracked ? money(t.tracked) : '—') + '</td>' +
+    '<td class="right ' + (t.actual ? 'money-actual' : 'money-muted') + '">' + (t.actual ? money(t.actual) : '—') + '</td>' +
+    '<td class="right">' + money(t.forecast) + '</td>' +
+    '<td class="right ' + (t.variance >= 0 ? 'var-pos' : 'var-neg') + '">' + (t.variance >= 0 ? '' : '−') + money(Math.abs(t.variance)) + '</td>' +
+    '<td class="right ' + (t.margin >= 0 ? 'var-pos' : 'var-neg') + '">' + pct(t.margin) + '</td>';
+}
+
+function render(){
+  const list = visibleItems();
+  let html = '';
+  let gi = 0;
+
+  const groups = [];
+  list.forEach(it => {
+    const k = groupKey(it);
+    let g = groups.find(x => x.key === k);
+    if (!g){ g = {key:k, items:[]}; groups.push(g); }
+    g.items.push(it);
+  });
+
+  groups.forEach(g => {
+    const t = aggregate(g.items);
+    const open = openGroups.has(g.key);
+    const st = statusOf(t);
+    html += '<tr class="grp-row' + (open ? ' expanded' : '') + '" onclick="toggleGroup(\'' + esc(g.key) + '\')">' +
+      '<td><i class="fas fa-chevron-right expand-icon"></i></td>' +
+      '<td class="cell-code">' + (currentView === 'boq' ? g.key.split(' ')[0] : '') + '</td>' +
+      '<td class="cell-desc">' + (currentView === 'boq' ? g.key.replace(/^\S+\s/,'') : g.key) +
+        ' <span class="chip ' + st.cls + '" style="margin-left:6px">' + st.label + '</span>' +
+        ' <span style="font-weight:400;color:#94a3b8;font-size:11px">· ' + g.items.length + ' items</span></td>' +
+      '<td class="spend">' + spendBar(t) + '</td>' + moneyCells(t) + '</tr>';
+
+    if (currentView === 'boq'){
+      const subs = [];
+      g.items.forEach(it => {
+        let s = subs.find(x => x.key === it.l2);
+        if (!s){ s = {key:it.l2, items:[]}; subs.push(s); }
+        s.items.push(it);
+      });
+      subs.forEach(s => {
+        const t2 = aggregate(s.items);
+        html += '<tr class="item-row l2-row' + (open ? ' visible' : '') + '">' +
+          '<td></td><td class="cell-code">' + s.key.split(' ')[0] + '</td>' +
+          '<td class="cell-desc">' + s.key.replace(/^\S+\s/,'') + '</td>' +
+          '<td class="spend">' + spendBar(t2) + '</td>' + moneyCells(t2) + '</tr>';
+        s.items.forEach(it => html += itemRow(it, open));
+      });
+    } else {
+      g.items.forEach(it => html += itemRow(it, open));
+    }
+    gi++;
+  });
+
+  if (!groups.length) html = '<tr><td colspan="12" style="padding:40px;text-align:center;color:#94a3b8">No budget lines match this filter.</td></tr>';
+
+  html += pendingVariationRows();
+  html += provisionalRows();
+
+  document.getElementById('tableBody').innerHTML = html;
+
+  /* Footer — active lines only, with the excluded amounts shown beneath */
+  const tot = aggregate(list);
+  const pend = aggregate(variations.filter(v => v.status !== 'approved').map(v => Object.assign({}, v, derive(v))));
+  const provRemaining = provisionals.filter(p => p.status !== 'released').reduce((s,p) => s + (p.allowance - p.drawn), 0);
+  let foot = '<tr><td></td><td></td><td>Total' + (list.length !== activeLines().length ? ' (filtered)' : '') + '</td>' +
+    '<td class="spend" style="padding:10px 12px">' + spendBar(tot) + '</td>' + moneyCells(tot) + '</tr>';
+  foot += '<tr class="excl"><td></td><td></td><td>Excluded from totals</td><td></td>' +
+    '<td class="right">' + money(pend.contract + provRemaining) + '</td>' +
+    '<td class="right">' + money(pend.budget) + '</td>' +
+    '<td class="right">' + (pend.committed ? money(pend.committed) : '—') + '</td>' +
+    '<td class="right">' + (pend.tracked ? money(pend.tracked) : '—') + '</td>' +
+    '<td class="right">' + (pend.actual ? money(pend.actual) : '—') + '</td>' +
+    '<td colspan="3" class="right" style="font-style:italic">Pending variations ' + money(pend.contract) + ' · provisional allowance remaining ' + money(provRemaining) + '</td></tr>';
+  document.getElementById('tableFoot').innerHTML = foot;
+
+  document.getElementById('rowCount').textContent = list.length + ' of ' + activeLines().length + ' active budget lines';
+  renderStats();
+}
+
+function itemRow(it, open){
+  const st = statusOf(it);
+  const itemOpen = openItems.has(it.code);
+  const badge = it.kind === 'variation'
+      ? ' <span class="chip vo">Variation</span>'
+      : it.kind === 'provisional-active'
+      ? ' <span class="chip prov">From provisional</span>' : '';
+  let html = '<tr class="item-row' + (open ? ' visible' : '') + (itemOpen ? ' expanded' : '') + '" onclick="toggleItem(\'' + esc(it.code) + '\')">' +
+    '<td></td>' +
+    '<td class="cell-code">' + it.code + '</td>' +
+    '<td class="cell-desc" style="font-weight:400">' + it.desc + badge +
+      ' <span class="chip ' + st.cls + '">' + st.label + '</span>' +
+      '<div style="font-size:11px;color:#94a3b8;margin-top:2px">' + it.cc + ' · ' + it.zone +
+      ' <i class="fas fa-chevron-' + (itemOpen ? 'up' : 'down') + '" style="font-size:9px;margin-left:4px;color:#f5a623"></i>' +
+      ' <span style="color:#f5a623">' + (itemOpen ? 'hide' : 'view') + ' source documents</span></div></td>' +
+    '<td class="spend">' + spendBar(it) + '</td>' + moneyCells(it) + '</tr>';
+  html += '<tr class="detail-row' + (open && itemOpen ? ' visible' : '') + '"><td colspan="12">' + drill(it) + '</td></tr>';
+  return html;
+}
+
+/* ── Pending variations section ── */
+function pendingVariationRows(){
+  const pending = variations.filter(v => v.status !== 'approved');
+  if (!pending.length) return '';
+  const t = aggregate(pending.map(v => Object.assign({}, v, derive(v))));
+  let html = '<tr class="section-banner variations"><td colspan="12">' +
+    '<i class="fas fa-file-signature" style="margin-right:8px"></i>Pending Variations' +
+    '<span class="banner-note">Excluded from contract and budget totals until approved · ' +
+    money(t.contract) + ' claimable, ' + money(t.tracked) + ' cost already tracked</span></td></tr>';
+
+  pending.forEach(v => {
+    const d = derive(v);
+    const atRisk = d.tracked > 0;
+    const itemOpen = openItems.has(v.id);
+    html += '<tr class="pend-row" onclick="toggleItem(\'' + esc(v.id) + '\')">' +
+      '<td></td><td class="cell-code">' + v.id + '</td>' +
+      '<td class="cell-desc" style="font-weight:400">' + v.title +
+        ' <span class="chip ' + (v.status === 'draft' ? 'draft' : 'vo') + '">' + (v.status === 'draft' ? 'Draft' : 'Awaiting approval') + '</span>' +
+        (atRisk ? ' <span class="chip over">Cost at risk</span>' : '') +
+        '<div style="font-size:11px;color:#94a3b8;margin-top:3px">' + v.cc + ' · ' + v.zone + ' · ' + varTypeLabel(v) + (v.ref ? ' · ref ' + v.ref : '') +
+        (atRisk ? ' — <span style="color:#dc2626;font-weight:600">' + money(d.tracked) + ' tracked against unapproved revenue</span>' : '') + '</div>' +
+        '<div style="margin-top:6px" onclick="event.stopPropagation()">' +
+          '<button class="btn btn-success btn-sm" onclick="approveVariation(\'' + v.id + '\')"><i class="fas fa-check"></i> Approve</button> ' +
+          (v.status === 'draft' ? '<button class="btn btn-outline btn-sm" onclick="submitDraft(\'' + v.id + '\')"><i class="fas fa-paper-plane"></i> Submit</button> ' : '') +
+          '<button class="btn btn-outline btn-sm" onclick="toggleItem(\'' + esc(v.id) + '\')">' + (itemOpen ? 'Hide' : 'View') + ' costs</button>' +
+        '</div></td>' +
+      '<td class="spend">' + spendBar(Object.assign({}, v, d)) + '</td>' +
+      '<td class="right excluded-money">' + money(v.contract) + '</td>' +
+      '<td class="right excluded-money">' + money(v.budget) + '</td>' +
+      '<td class="right ' + (d.committed ? 'money-committed' : 'money-muted') + '">' + (d.committed ? money(d.committed) : '—') + '</td>' +
+      '<td class="right ' + (d.tracked ? 'money-tracked' : 'money-muted') + '">' + (d.tracked ? money(d.tracked) : '—') + '</td>' +
+      '<td class="right ' + (d.actual ? 'money-actual' : 'money-muted') + '">' + (d.actual ? money(d.actual) : '—') + '</td>' +
+      '<td class="right excluded-money">' + money(d.forecast) + '</td>' +
+      '<td class="right" style="color:#94a3b8">—</td>' +
+      '<td class="right" style="color:#94a3b8">' + pct(d.margin) + '</td></tr>';
+    html += '<tr class="detail-row' + (itemOpen ? ' visible' : '') + '"><td colspan="12">' + drill(Object.assign({}, v, d)) + '</td></tr>';
+  });
+  return html;
+}
+function varTypeLabel(v){
+  return {priced:'Priced variation', dayworks:'Dayworks variation', costplus:'Cost plus variation'}[v.type] || 'Variation';
+}
+
+/* ── Provisional sums section ── */
+function provisionalRows(){
+  const live = provisionals.filter(p => p.status !== 'released');
+  const remaining = live.reduce((s,p) => s + (p.allowance - p.drawn), 0);
+  const totalAllowance = provisionals.reduce((s,p) => s + p.allowance, 0);
+  const drawn = provisionals.reduce((s,p) => s + p.drawn, 0);
+
+  let html = '<tr class="section-banner provisional"><td colspan="12">' +
+    '<i class="fas fa-hourglass-half" style="margin-right:8px"></i>Provisional Sums' +
+    '<span class="banner-note">Allowances sit outside the budget until instructed · ' +
+    money(totalAllowance) + ' allowed, ' + money(drawn) + ' drawn down, ' + money(remaining) + ' remaining</span></td></tr>';
+
+  provisionals.forEach(p => {
+    const rem = p.allowance - p.drawn;
+    const chip = p.status === 'activated' ? '<span class="chip ok">Fully activated</span>'
+      : p.status === 'partial' ? '<span class="chip warn">Partly activated</span>'
+      : p.status === 'released' ? '<span class="chip idle">Not required</span>'
+      : '<span class="chip prov">Provisional</span>';
+    const drawPct = p.allowance > 0 ? (p.drawn / p.allowance * 100) : 0;
+
+    html += '<tr class="prov-row' + (p.status === 'released' ? ' released-row' : '') + '">' +
+      '<td></td><td class="cell-code">' + p.code + '</td>' +
+      '<td class="cell-desc" style="font-weight:400">' + p.desc + ' ' + chip +
+        '<div style="font-size:11px;color:#94a3b8;margin-top:3px">' +
+          (p.activations.length
+            ? p.activations.map(a => '<span style="color:#92400e">' + a.ref + ' → ' + a.code + ' · ' + money(a.drawn) + ' drawn' + (a.variationId ? ' + variation ' + a.variationId : '') + '</span>').join('<br>')
+            : p.status === 'released' ? 'Released back to the client — no longer forecast' : 'Not yet instructed') +
+        '</div>' +
+        (p.status !== 'released' && rem > 0 ? '<div style="margin-top:6px">' +
+          '<button class="btn btn-primary btn-sm" onclick="openProvModal(\'' + p.code + '\')"><i class="fas fa-bolt"></i> Activate</button> ' +
+          '<button class="btn btn-outline btn-sm" onclick="releaseProvisional(\'' + p.code + '\')"><i class="fas fa-xmark"></i> Not required</button>' +
+        '</div>' : '') +
+      '</td>' +
+      '<td class="spend"><div class="spend-bar"><span class="sb-committed" style="width:' + drawPct.toFixed(1) + '%"></span></div>' +
+        '<span class="spend-cap">' + pct(drawPct) + ' of allowance drawn</span></td>' +
+      '<td class="right excluded-money">' + money(rem) + '</td>' +
+      '<td class="right money-muted">—</td>' +
+      '<td class="right money-muted">—</td><td class="right money-muted">—</td><td class="right money-muted">—</td>' +
+      '<td class="right money-muted">—</td><td class="right money-muted">—</td><td class="right money-muted">—</td></tr>';
+  });
+  return html;
+}
+
+/* ═══ Stats ═══ */
+function renderStats(){
+  const lines = activeLines();
+  const t = aggregate(lines);
+  const pending = variations.filter(v => v.status !== 'approved').map(v => Object.assign({}, v, derive(v)));
+  const pendT = aggregate(pending);
+  const approvedVO = aggregate(lines.filter(l => l.kind === 'variation'));
+  const provRemaining = provisionals.filter(p => p.status !== 'released').reduce((s,p) => s + (p.allowance - p.drawn), 0);
+  const provDrawn = provisionals.reduce((s,p) => s + p.drawn, 0);
+  const unpaid = t.tracked - t.actual;
+  const openPO = t.committed - t.poReceipted;
+
+  const tile = (label, value, cls, sub, tip, accent) =>
+    '<div class="stat' + (accent ? ' accent-' + accent : '') + '">' +
+      '<div class="st-label">' + label + (tip ? ' <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip">' + tip + '</span></span>' : '') + '</div>' +
+      '<div class="st-value ' + cls + '">' + value + '</div>' +
+      (sub ? '<div class="st-sub">' + sub + '</div>' : '') + '</div>';
+
+  document.getElementById('statGrid').innerHTML =
+    tile('Contract Sum', money(t.contract), 'blue', 'Incl. ' + money(approvedVO.contract) + ' approved variations') +
+    tile('Approved Budget', money(t.budget), '', pct(t.budget / t.contract * 100) + ' of contract') +
+    tile('Committed', money(t.committed), 'amber', money(openPO) + ' on open POs not yet delivered',
+         '<strong>Committed</strong><br>Approved purchase orders raised against the budget.', 'committed') +
+    tile('Tracked to Date', money(t.tracked), 'teal', pct(t.tracked / t.budget * 100) + ' of budget incurred',
+         '<strong>Tracked</strong><br>Daywork &amp; delivery dockets plus receipted PO value.', 'tracked') +
+    tile('Actual (Paid)', money(t.actual), 'green', money(unpaid) + ' tracked but not yet paid',
+         '<strong>Actual</strong><br>Bills matched to the budget and marked paid.', 'actual') +
+    tile('Forecast Final Cost', money(t.forecast), 'purple', 'Committed + dockets + uncommitted budget') +
+    tile('Variance to Budget', (t.variance >= 0 ? '' : '−') + money(Math.abs(t.variance)), t.variance >= 0 ? 'green' : 'red',
+         t.variance >= 0 ? 'Forecast under budget' : 'Forecast over budget') +
+    tile('Forecast Margin', pct(t.margin), t.margin >= 0 ? 'green' : 'red',
+         'Budget margin ' + pct((t.contract - t.budget) / t.contract * 100)) +
+    tile('Pending Variations', money(pendT.contract), 'blue',
+         pending.length + ' awaiting approval · ' + money(pendT.tracked) + ' cost at risk',
+         '<strong>Pending variations</strong><br>Submitted but not approved, so excluded from the contract and budget. Cost already tracked against them is at risk.', 'var') +
+    tile('Provisional Sums', money(provRemaining), 'amber',
+         money(provDrawn) + ' drawn down · remaining excluded',
+         '<strong>Provisional sums</strong><br>Allowances that sit outside the contract and budget until instructed. Activating one draws down the allowance into a live budget line.', 'prov');
+}
+
+/* ═══ Interaction ═══ */
+function toggleGroup(key){ openGroups.has(key) ? openGroups.delete(key) : openGroups.add(key); render(); }
+function toggleItem(code){ openItems.has(code) ? openItems.delete(code) : openItems.add(code); render(); }
+function toggleAll(){
+  allExpanded = !allExpanded;
+  openGroups.clear();
+  if (allExpanded) visibleItems().forEach(it => openGroups.add(groupKey(it)));
+  else openItems.clear();
+  document.getElementById('expandLabel').textContent = allExpanded ? 'Collapse all' : 'Expand all';
+  render();
+}
+function switchView(v){
+  currentView = v;
+  openGroups.clear(); openItems.clear(); allExpanded = false;
+  document.getElementById('expandLabel').textContent = 'Expand all';
+  document.querySelectorAll('#viewToggle span').forEach(s => s.classList.toggle('active', s.dataset.view === v));
+  render();
+}
+let toastTimer;
+function toast(msg){
+  const el = document.getElementById('toast');
+  document.getElementById('toastMsg').innerHTML = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3600);
+}
+function openModal(id){ document.getElementById(id).classList.add('show'); }
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+function fillSelect(id, options, selected){
+  document.getElementById(id).innerHTML = options.map(o =>
+    '<option' + (o === selected ? ' selected' : '') + '>' + o + '</option>').join('');
+}
+
+/* ═══ VARIATION WORKFLOW ═══
+   Add Variation → type → (priced: pricing method | dayworks: docket picker) →
+   build-up → draft / submitted → approved → becomes a live budget line. */
+let pendingVarType = null, pendingVarMethod = null, varCounter = 3;
+let varLines = [];
+
+function showVariationModal(){ pendingVarType = null; pendingVarMethod = null; openModal('variationModal'); }
+
+function selectVariationType(type){
+  pendingVarType = type;
+  closeModal('variationModal');
+  if (type === 'costplus'){ toast('Cost plus variations are priced from actual cost + margin — coming soon'); return; }
+  if (type === 'priced'){ openModal('pricedMethodModal'); return; }
+  openDocketPicker();
+}
+function selectPricedMethod(method){
+  pendingVarMethod = method;
+  closeModal('pricedMethodModal');
+  openVarBuild([]);
+}
+
+/* Dayworks: pull already-tracked dockets into the variation */
+let selectedDockets = new Set();
+function openDocketPicker(){
+  selectedDockets.clear();
+  renderDocketList();
+  openModal('docketModal');
+}
+function renderDocketList(){
+  document.getElementById('docketList').innerHTML = dayworkDockets.map(d =>
+    '<div class="docket-pick' + (selectedDockets.has(d.id) ? ' checked' : '') + '" onclick="toggleDocket(\'' + d.id + '\')">' +
+      '<span class="dp-check"><i class="fas fa-check"></i></span>' +
+      '<div><div class="dp-ref">' + d.id + ' — ' + d.desc + '</div>' +
+      '<div class="dp-meta">' + d.date + ' · ' + d.cc + ' · ' + d.zone + '</div></div>' +
+      '<div class="dp-amt">' + money(d.amount) + '</div></div>').join('');
+  const sel = dayworkDockets.filter(d => selectedDockets.has(d.id));
+  const total = sel.reduce((s,d) => s + d.amount, 0);
+  document.getElementById('docketSummary').innerHTML = sel.length
+    ? '<i class="fas fa-clipboard-list"></i> <strong>' + sel.length + ' docket' + (sel.length !== 1 ? 's' : '') + ' · ' + money(total) + ' of tracked cost</strong> will be attached. The variation is priced at cost + margin; the tracked cost carries across so it stops showing as unclaimed.'
+    : '<i class="fas fa-circle-info"></i> Select the dockets this variation covers. Their tracked cost is already in the overview — attaching them makes it claimable.';
+  document.getElementById('docketAddBtn').disabled = sel.length === 0;
+}
+function toggleDocket(id){ selectedDockets.has(id) ? selectedDockets.delete(id) : selectedDockets.add(id); renderDocketList(); }
+function skipDockets(){ closeModal('docketModal'); openVarBuild([]); }
+function addSelectedDockets(){
+  const sel = dayworkDockets.filter(d => selectedDockets.has(d.id));
+  closeModal('docketModal');
+  openVarBuild(sel.map(d => ({desc:d.id + ' — ' + d.desc, qty:1, unit:'item', rate:Math.round(d.amount * 1.15)})),
+               {cc:sel[0] && sel[0].cc, zone:sel[0] && sel[0].zone,
+                title:'Dayworks variation — ' + sel.length + ' docket' + (sel.length !== 1 ? 's' : ''),
+                budget:sel.reduce((s,d) => s + d.amount, 0),
+                docketTracked:sel.reduce((s,d) => s + d.amount, 0)});
+}
+
+let prefillTracked = 0;
+function openVarBuild(lines, opts){
+  opts = opts || {};
+  varLines = lines.length ? lines : [{desc:'', qty:1, unit:'item', rate:0}];
+  prefillTracked = opts.docketTracked || 0;
+  document.getElementById('varBuildTitle').textContent =
+    pendingVarType === 'dayworks' ? 'Dayworks Variation'
+    : pendingVarMethod === 'rates' ? 'Priced Variation — rates build-up' : 'Priced Variation — lump sum';
+  document.getElementById('varBuildSub').textContent = pendingVarType === 'dayworks'
+    ? 'Dockets already booked on site are priced at cost plus margin. Map the variation so its cost lands in the right cost centre.'
+    : 'Build up the variation value, then map it to a cost centre and zone so it lands in the right place in the budget overview.';
+  document.getElementById('vLinesLabel').textContent = pendingVarType === 'dayworks' ? 'Dockets & priced items'
+    : pendingVarMethod === 'rates' ? 'Rate build-up' : 'Priced line items';
+  document.getElementById('vTitle').value = opts.title || '';
+  document.getElementById('vRef').value = '';
+  document.getElementById('vDesc').value = '';
+  document.getElementById('vBudget').value = opts.budget || '';
+  fillSelect('vCC', COST_CENTRES, opts.cc);
+  fillSelect('vZone', ZONES, opts.zone);
+  renderVarLines();
+  openModal('varBuildModal');
+}
+function renderVarLines(){
+  document.getElementById('vLines').innerHTML = varLines.map((l, i) =>
+    '<tr>' +
+      '<td><input value="' + (l.desc || '').replace(/"/g,'&quot;') + '" placeholder="Description" oninput="varLines[' + i + '].desc=this.value"></td>' +
+      '<td><input class="num" value="' + l.qty + '" oninput="varLines[' + i + '].qty=parseFloat(this.value)||0;calcVarBuild()"></td>' +
+      '<td><input value="' + l.unit + '" oninput="varLines[' + i + '].unit=this.value"></td>' +
+      '<td><input class="num" value="' + l.rate + '" oninput="varLines[' + i + '].rate=parseFloat(this.value)||0;calcVarBuild()"></td>' +
+      '<td class="right" id="vAmt' + i + '">' + money(l.qty * l.rate) + '</td>' +
+      '<td><span class="row-del" onclick="removeVarLine(' + i + ')"><i class="fas fa-trash-alt"></i></span></td>' +
+    '</tr>').join('');
+  calcVarBuild();
+}
+function addVarLine(){ varLines.push({desc:'', qty:1, unit:'item', rate:0}); renderVarLines(); }
+function removeVarLine(i){ varLines.splice(i,1); if (!varLines.length) varLines.push({desc:'',qty:1,unit:'item',rate:0}); renderVarLines(); }
+function varContractTotal(){ return varLines.reduce((s,l) => s + (l.qty || 0) * (l.rate || 0), 0); }
+function calcVarBuild(){
+  const contract = varContractTotal();
+  varLines.forEach((l,i) => { const el = document.getElementById('vAmt'+i); if (el) el.textContent = money((l.qty||0)*(l.rate||0)); });
+  const budget = num('vBudget');
+  document.getElementById('vSumContract').textContent = money(contract);
+  document.getElementById('vSumBudget').textContent = money(budget);
+  const m = contract > 0 ? (contract - budget) / contract * 100 : 0;
+  const el = document.getElementById('vSumMargin');
+  el.textContent = pct(m);
+  el.style.color = m >= 0 ? '#16a34a' : '#ef4444';
+  const ok = contract > 0 && document.getElementById('vTitle').value.trim();
+  document.getElementById('vSubmitBtn').disabled = !ok;
+  document.getElementById('vDraftBtn').disabled = !ok;
+}
+function saveVariation(status){
+  const contract = varContractTotal();
+  const title = document.getElementById('vTitle').value.trim() || 'Untitled variation';
+  varCounter++;
+  const id = 'VO-' + String(varCounter).padStart(3,'0');
+  const v = {
+    id, title, type:pendingVarType, method:pendingVarMethod || 'dockets', status,
+    cc:document.getElementById('vCC').value, zone:document.getElementById('vZone').value,
+    ref:document.getElementById('vRef').value.trim(),
+    contract, budget:num('vBudget'),
+    poCommitted:0, poReceipted:0, docketTracked:prefillTracked, actualPaid:0,
+    suppliers:{po:'', dkt:'Attached dockets', bill:''}
+  };
+  variations.push(v);
+  closeModal('varBuildModal');
+  render();
+  toast('<i class="fas fa-check-circle"></i> ' + id + ' ' + (status === 'draft' ? 'saved as draft' : 'submitted for approval') +
+        ' — ' + money(contract) + ' contract, ' + money(v.budget) + ' budget. Sitting outside totals until approved.');
+}
+function submitDraft(id){
+  const v = variations.find(x => x.id === id);
+  v.status = 'submitted';
+  render();
+  toast('<i class="fas fa-paper-plane"></i> ' + id + ' submitted to the client for approval.');
+}
+function approveVariation(id){
+  const v = variations.find(x => x.id === id);
+  v.status = 'approved';
+  v.approvedOn = '10 Aug 2026';
+  render();
+  toast('<i class="fas fa-check-circle"></i> ' + id + ' approved — ' + money(v.contract) + ' added to the contract sum and ' +
+        money(v.budget) + ' to the budget. Its committed, tracked and actual cost now count in the totals.');
+}
+
+/* ═══ PROVISIONAL SUM ACTIVATION ═══ */
+let provTarget = null, provMode = 'budget';
+
+function openProvModal(code){
+  provTarget = provisionals.find(p => p.code === code);
+  provMode = 'budget';
+  setProvMode('budget');
+  const rem = provTarget.allowance - provTarget.drawn;
+  document.getElementById('provSub').textContent =
+    provTarget.code + ' — ' + provTarget.desc + '. Activating turns the allowance into a live budget line that POs, dockets and bills can be tracked against.';
+  document.getElementById('provAllowance').innerHTML =
+    '<i class="fas fa-hourglass-half"></i> Allowance <strong>' + money(provTarget.allowance) + '</strong>' +
+    (provTarget.drawn > 0 ? ' · already drawn ' + money(provTarget.drawn) : '') +
+    ' · <strong>' + money(rem) + ' remaining</strong>. Nothing in this allowance counts toward the contract sum, budget or margin until it is instructed.';
+  document.getElementById('provDraw').value = rem;
+  document.getElementById('provContract').value = rem;
+  document.getElementById('provBudget').value = Math.round(rem * 0.84);
+  document.getElementById('provRef').value = '';
+  fillSelect('provCC', COST_CENTRES, guessCC(provTarget));
+  fillSelect('provZone', ZONES, 'Project Wide');
+  calcProv();
+  openModal('provModal');
+}
+function guessCC(p){
+  if (/traffic|survey|set-out|investigation/i.test(p.desc)) return 'Overheads / Prelims';
+  return 'Overheads / Prelims';
+}
+function setProvMode(mode){
+  provMode = mode;
+  document.getElementById('provModeBudget').classList.toggle('selected', mode === 'budget');
+  document.getElementById('provModeVariation').classList.toggle('selected', mode === 'variation');
+  calcProv();
+}
+function calcProv(){
+  if (!provTarget) return;
+  const rem = provTarget.allowance - provTarget.drawn;
+  const draw = Math.min(num('provDraw'), rem);
+  const contract = num('provContract');
+  const budget = num('provBudget');
+  const excess = contract - draw;
+  const margin = contract > 0 ? (contract - budget) / contract * 100 : 0;
+  let html = '<i class="fas fa-circle-info"></i> ';
+  if (provMode === 'budget'){
+    html += 'Contract sum <strong>+' + money(contract) + '</strong>, budget <strong>+' + money(budget) +
+      '</strong>, forecast margin on this line <strong>' + pct(margin) + '</strong>. Allowance remaining after activation: <strong>' +
+      money(rem - draw) + '</strong>.';
+    if (excess > 0.5) html += '<br><span style="color:#b45309"><i class="fas fa-triangle-exclamation"></i> The agreed value exceeds the allowance drawn by ' +
+      money(excess) + '. Use “activate as a variation” so the excess goes through client approval.</span>';
+  } else {
+    html += money(draw) + ' is drawn from the allowance straight into the budget. The excess of <strong>' + money(Math.max(0, excess)) +
+      '</strong> is raised as a <strong>submitted variation</strong> — excluded from totals until the client approves it.';
+  }
+  document.getElementById('provOutcome').innerHTML = html;
+}
+function confirmProvActivation(){
+  const p = provTarget;
+  const rem = p.allowance - p.drawn;
+  const draw = Math.min(num('provDraw'), rem);
+  const contract = num('provContract');
+  const budget = num('provBudget');
+  const cc = document.getElementById('provCC').value;
+  const zone = document.getElementById('provZone').value;
+  const ref = document.getElementById('provRef').value.trim() || 'SI-' + (100 + p.activations.length + 1);
+  if (draw <= 0){ toast('Enter an amount to draw down from the allowance'); return; }
+
+  const excess = Math.max(0, contract - draw);
+  const activatedContract = provMode === 'variation' ? draw : contract;
+  // Budget cost follows the activated portion when the excess is split into a variation.
+  const activatedBudget = provMode === 'variation' && contract > 0
+    ? Math.round(budget * (draw / contract)) : budget;
+
+  const seq = p.activations.length + 1;
+  const line = {
+    code: p.code + '-A' + seq,
+    desc: p.desc + ' (instructed' + (provMode === 'variation' ? ' — allowance portion' : '') + ')',
+    cc, zone, ref, drawn:draw,
+    contract:activatedContract, budget:activatedBudget,
+    poCommitted:0, poReceipted:0, docketTracked:0, actualPaid:0,
+    suppliers:{po:'', dkt:'', bill:''}
+  };
+
+  let voId = null;
+  if (provMode === 'variation' && excess > 0){
+    varCounter++;
+    voId = 'VO-' + String(varCounter).padStart(3,'0');
+    variations.push({
+      id:voId, title:p.desc + ' — value above provisional allowance', type:'priced', method:'lumpsum',
+      status:'submitted', cc, zone, ref, submittedOn:'10 Aug 2026',
+      contract:excess, budget:Math.max(0, budget - activatedBudget),
+      poCommitted:0, poReceipted:0, docketTracked:0, actualPaid:0,
+      suppliers:{po:'', dkt:'', bill:''}
+    });
+    line.variationId = voId;
+  }
+
+  p.activations.push(line);
+  p.drawn += draw;
+  p.status = p.drawn >= p.allowance - 0.5 ? 'activated' : 'partial';
+
+  closeModal('provModal');
+  render();
+  toast('<i class="fas fa-bolt"></i> ' + p.code + ' activated — ' + money(draw) + ' drawn from the allowance into ' + cc +
+        ' as budget line ' + line.code + '.' + (voId ? ' Excess of ' + money(excess) + ' raised as ' + voId + ', awaiting approval.' : '') +
+        ' ' + money(p.allowance - p.drawn) + ' allowance remaining.');
+}
+function releaseProvisional(code){
+  const p = provisionals.find(x => x.code === code);
+  p.status = 'released';
+  render();
+  toast('<i class="fas fa-xmark"></i> ' + p.code + ' marked not required — ' + money(p.allowance - p.drawn) +
+        ' released. It stays out of the contract sum and out of the forecast.');
+}
+
+/* ═══ Seed state ═══ */
+// P.1.1 was instructed in full early in the job; P.1.3 partly instructed.
+(function seedActivations(){
+  const p1 = provisionals[0];
+  p1.activations.push({code:'P.1.1-A1', desc:'Survey & Set-Out (instructed)', cc:'Overheads / Prelims', zone:'Project Wide',
+    ref:'SI-006', drawn:8500, contract:8500, budget:7200,
+    poCommitted:7200, poReceipted:7200, docketTracked:0, actualPaid:4000,
+    suppliers:{po:'Precision Survey Co', dkt:'Precision Survey Co', bill:'Precision Survey Co'}});
+  p1.drawn = 8500; p1.status = 'activated';
+
+  const p3 = provisionals[2];
+  p3.activations.push({code:'P.1.3-A1', desc:'Traffic Management Contingency (instructed)', cc:'Overheads / Prelims', zone:'Project Wide',
+    ref:'SI-011', drawn:9000, contract:9000, budget:7800,
+    poCommitted:7800, poReceipted:3000, docketTracked:1100, actualPaid:0,
+    suppliers:{po:'Altus Traffic', dkt:'Altus Traffic', bill:'Altus Traffic'}});
+  p3.drawn = 9000; p3.status = 'partial';
+})();
+
+openGroups.add('Overheads / Prelims');
+openGroups.add('Steel & Rebar');
+render();
+</script>
+</body>
+</html>
