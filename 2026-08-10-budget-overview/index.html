@@ -1387,9 +1387,6 @@ function renderStats(){
   const approvedVO = aggregate(lines.filter(l => l.kind === 'variation'));
   const provRemaining = provisionals.filter(p => p.status !== 'released').reduce((s,p) => s + (p.allowance - p.drawn), 0);
   const provDrawn = provisionals.reduce((s,p) => s + p.drawn, 0);
-  const unpaid = t.tracked - t.actual;
-  const openPO = t.committed - t.poReceipted;
-
   const tile = (label, value, cls, sub, tip, accent) =>
     '<div class="stat' + (accent ? ' accent-' + accent : '') + '">' +
       '<div class="st-label">' + label + (tip ? ' <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip">' + tip + '</span></span>' : '') + '</div>' +
@@ -1399,23 +1396,67 @@ function renderStats(){
   document.getElementById('statGrid').innerHTML =
     tile('Contract Sum', money(t.contract), 'blue', 'Incl. ' + money(approvedVO.contract) + ' approved variations') +
     tile('Approved Budget', money(t.budget), '', pct(t.budget / t.contract * 100) + ' of contract') +
-    tile('Committed', money(t.committed), 'amber', money(openPO) + ' on open POs not yet delivered',
+    tile('Committed', money(t.committed), 'amber', money(t.openPO) + ' on open POs not yet received',
          '<strong>Committed</strong><br>Approved purchase orders raised against the budget.', 'committed') +
-    tile('Tracked to Date', money(t.tracked), 'teal', pct(t.tracked / t.budget * 100) + ' of budget incurred',
-         '<strong>Tracked</strong><br>Daywork &amp; delivery dockets plus receipted PO value.', 'tracked') +
-    tile('Actual (Paid)', money(t.actual), 'green', money(unpaid) + ' tracked but not yet paid',
-         '<strong>Actual</strong><br>Bills matched to the budget and marked paid.', 'actual') +
-    tile('Forecast Final Cost', money(t.forecast), 'purple', 'Committed + dockets + uncommitted budget') +
+    tile('Tracked', money(t.tracked), 'teal',
+         money(t.dktTracked) + ' site dockets · ' + money(t.tsUnapproved) + ' unapproved timesheets',
+         '<strong>Tracked</strong><br>Site dockets not yet on a paid bill, plus timesheets not yet approved. Reported separately from actual — never added to it.', 'tracked') +
+    tile('Actual', money(t.actual), 'green',
+         money(t.billsPaid) + ' paid bills · ' + money(t.tsApproved) + ' approved timesheets',
+         '<strong>Actual</strong><br>Paid bills and approved timesheets. Cost moves here out of tracked, so the two never overlap.', 'actual') +
+    tile('Cost to Date', money(t.costToDate), 'purple', 'Tracked + actual, counted once',
+         '<strong>Cost to date</strong><br>The only figure that combines the two. Tracked and actual are disjoint states, so adding them here double counts nothing.') +
+    tile('Forecast Final Cost', money(t.forecast), '', 'Committed + labour + uncommitted budget') +
     tile('Variance to Budget', (t.variance >= 0 ? '' : '−') + money(Math.abs(t.variance)), t.variance >= 0 ? 'green' : 'red',
          t.variance >= 0 ? 'Forecast under budget' : 'Forecast over budget') +
-    tile('Forecast Margin', pct(t.margin), t.margin >= 0 ? 'green' : 'red',
-         'Budget margin ' + pct((t.contract - t.budget) / t.contract * 100)) +
     tile('Pending Variations', money(pendT.contract), 'blue',
-         pending.length + ' awaiting approval · ' + money(pendT.tracked) + ' cost at risk',
-         '<strong>Pending variations</strong><br>Submitted but not approved, so excluded from the contract and budget. Cost already tracked against them is at risk.', 'var') +
+         pending.length + ' awaiting approval · ' + money(pendT.costToDate) + ' cost at risk',
+         '<strong>Pending variations</strong><br>Submitted but not approved, so excluded from the contract and budget. Cost already incurred against them is at risk.', 'var') +
     tile('Provisional Sums', money(provRemaining), 'amber',
          money(provDrawn) + ' drawn down · remaining excluded',
          '<strong>Provisional sums</strong><br>Allowances that sit outside the contract and budget until instructed. Activating one draws down the allowance into a live budget line.', 'prov');
+
+  renderSpendPanel(t);
+}
+
+/* ═══ Project-level Spend vs Budget ═══
+   Same four states as the per-line bar, at project scale, with the figures
+   spelled out so tracked and actual are never read as one number. */
+function renderSpendPanel(t){
+  const scale = Math.max(t.budget, t.engaged, t.forecast, 1);
+  const p = v => (v / scale * 100).toFixed(2) + '%';
+  const markerPct = t.budget / scale * 100;
+  const over = t.engaged > t.budget;
+
+  const seg = (label, value, colour, share) =>
+    '<div class="sp-fig">' +
+      '<div class="sp-fig-label"><span class="sp-dot" style="background:' + colour + '"></span>' + label + '</div>' +
+      '<div class="sp-fig-value">' + money(value) + '</div>' +
+      '<div class="sp-fig-sub">' + share + '</div>' +
+    '</div>';
+
+  document.getElementById('spendPanel').innerHTML =
+    '<div class="sp-head">' +
+      '<div><div class="sp-title">Project Spend vs Budget</div>' +
+      '<div class="sp-sub">' + PROJECT_TYPES[projectType].label + ' project · ' + activeLines().length + ' live budget lines · daywork dockets excluded</div></div>' +
+      '<div class="sp-headline">' +
+        '<div class="sp-headline-value ' + (over ? 'red' : '') + '">' + pct(t.budget > 0 ? t.engaged / t.budget * 100 : 0) + '</div>' +
+        '<div class="sp-headline-label">of budget engaged</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="sp-bar">' +
+      '<span class="sb-actual" style="width:' + p(t.actual) + '" title="Actual"></span>' +
+      '<span class="sb-tracked" style="width:' + p(t.tracked) + '" title="Tracked"></span>' +
+      '<span class="sb-committed" style="width:' + p(t.openPO) + '" title="Committed, not received"></span>' +
+      (markerPct < 99.9 ? '<span class="sp-marker" style="left:' + markerPct.toFixed(2) + '%"><span class="sp-marker-tag">Budget ' + money(t.budget) + '</span></span>' : '') +
+    '</div>' +
+    '<div class="sp-figs">' +
+      seg('Actual — paid bills &amp; approved timesheets', t.actual, '#16a34a', pct(t.actual / t.budget * 100) + ' of budget') +
+      seg('Tracked — site dockets &amp; unapproved timesheets', t.tracked, '#5eead4', pct(t.tracked / t.budget * 100) + ' of budget') +
+      seg('Committed — POs not yet received', t.openPO, '#fbbf24', pct(t.openPO / t.budget * 100) + ' of budget') +
+      seg('Uncommitted budget remaining', Math.max(0, t.budget - t.engaged), '#e9edf3',
+          t.engaged > t.budget ? money(t.engaged - t.budget) + ' over' : pct(Math.max(0, t.budget - t.engaged) / t.budget * 100) + ' of budget') +
+    '</div>';
 }
 
 /* ═══ Interaction ═══ */
@@ -1953,7 +1994,7 @@ function confirmProvActivation(){
     desc: p.desc + ' (instructed' + (provMode === 'variation' ? ' — allowance portion' : '') + ')',
     cc, zone, ref, drawn:draw,
     contract:activatedContract, budget:activatedBudget,
-    poCommitted:0, poReceipted:0, docketTracked:0, actualPaid:0,
+    poCommitted:0, dktTracked:0, tsUnapproved:0, billsPaid:0, tsApproved:0,
     suppliers:{po:'', dkt:'', bill:''}
   };
 
@@ -1965,7 +2006,7 @@ function confirmProvActivation(){
       id:voId, title:p.desc + ' — value above provisional allowance', type:'priced', method:'lumpsum',
       status:'submitted', cc, zone, ref, submittedOn:'10 Aug 2026',
       contract:excess, budget:Math.max(0, budget - activatedBudget),
-      poCommitted:0, poReceipted:0, docketTracked:0, actualPaid:0,
+      poCommitted:0, dktTracked:0, tsUnapproved:0, billsPaid:0, tsApproved:0,
       suppliers:{po:'', dkt:'', bill:''}
     });
     line.variationId = voId;
