@@ -1020,17 +1020,26 @@ function recordTotal(r){
   return t;
 }
 
-/* ═══ Derivation ═══ */
+/* ═══ Derivation ═══
+   Tracked and Actual are reported separately and never added together in a
+   single figure — cost to date is shown as its own number so nothing is
+   double counted when a docket or timesheet moves from tracked to actual. */
 function derive(it){
   const committed = it.poCommitted || 0;
-  const tracked   = (it.poReceipted || 0) + (it.docketTracked || 0);
-  const actual    = it.actualPaid || 0;
-  const engaged   = committed + (it.docketTracked || 0);      // budget consumed or locked in
+  const tracked   = (it.dktTracked || 0) + (it.tsUnapproved || 0);
+  const actual    = (it.billsPaid || 0) + (it.tsApproved || 0);
+  const costToDate = tracked + actual;
+
+  // Supply cost runs through POs; labour runs through timesheets, outside any PO.
+  const supplyCost = (it.dktTracked || 0) + (it.billsPaid || 0);
+  const labourCost = (it.tsUnapproved || 0) + (it.tsApproved || 0);
+  const engaged   = Math.max(committed, supplyCost) + labourCost;   // spent or locked in
   const uncommitted = Math.max(0, (it.budget || 0) - engaged);
   const forecast  = engaged + uncommitted;
   const variance  = (it.budget || 0) - forecast;
   const margin    = it.contract > 0 ? (it.contract - forecast) / it.contract * 100 : 0;
-  return {committed, tracked, actual, engaged, uncommitted, forecast, variance, margin};
+  const openPO    = Math.max(0, committed - supplyCost);            // ordered, not yet received
+  return {committed, tracked, actual, costToDate, engaged, uncommitted, forecast, variance, margin, openPO};
 }
 
 /* Active budget lines = base BOQ + approved variations + activated provisional sums.
