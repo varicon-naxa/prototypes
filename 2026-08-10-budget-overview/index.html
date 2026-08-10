@@ -933,13 +933,79 @@ let provisionals = [
   {code:'P.1.3', desc:'Traffic Management Contingency', allowance:15000, status:'provisional', drawn:0, activations:[]}
 ];
 
-/* ── Daywork dockets available to attach to a variation ── */
-const dayworkDockets = [
-  {id:'DKT-1187', desc:'Rock breaking — 20t excavator + operator', date:'22 Jul 2026', amount:7400, cc:'Earthworks', zone:'Zone B'},
-  {id:'DKT-1192', desc:'Additional cartage — spoil to stockpile', date:'23 Jul 2026', amount:4300, cc:'Earthworks', zone:'Zone B'},
-  {id:'DKT-1204', desc:'Hand excavation around services', date:'25 Jul 2026', amount:3600, cc:'Earthworks', zone:'Zone B'},
-  {id:'DKT-1219', desc:'Standby — plant idle awaiting instruction', date:'28 Jul 2026', amount:2900, cc:'Earthworks', zone:'Zone B'}
+/* ── Project resources and the schedule of rates they map to ── */
+let projectPlant = [
+  {id:'P1', name:'20T Excavator', rate:null, mapped:null},
+  {id:'P2', name:'5T Excavator', rate:null, mapped:null},
+  {id:'P3', name:'Bobcat / Skid Steer', rate:null, mapped:null},
+  {id:'P4', name:'10T Tipper Truck', rate:null, mapped:null},
+  {id:'P5', name:'Concrete Pump', rate:null, mapped:null},
+  {id:'P6', name:'Roller / Compactor', rate:null, mapped:null}
 ];
+let projectLabour = [
+  {id:'L1', name:'Site Foreman', rate:null, mapped:null},
+  {id:'L2', name:'General Labourer', rate:null, mapped:null},
+  {id:'L3', name:'Skilled Labourer', rate:null, mapped:null},
+  {id:'L4', name:'Concrete Finisher', rate:null, mapped:null},
+  {id:'L5', name:'Steel Fixer', rate:null, mapped:null}
+];
+const uploadedPlantRates = [
+  {name:'20T Excavator — Wet Hire', rate:260}, {name:'5T Excavator — Wet Hire', rate:195},
+  {name:'Bobcat — Wet Hire', rate:165}, {name:'Tipper 10T — Wet Hire', rate:210},
+  {name:'Concrete Pump (per hour)', rate:250}, {name:'Roller — Smooth Drum', rate:185},
+  {name:'Compactor — Plate', rate:45}
+];
+const uploadedLabourRates = [
+  {name:'Foreman', rate:95}, {name:'General Labourer', rate:62}, {name:'Skilled Labourer', rate:78},
+  {name:'Concrete Finisher', rate:88}, {name:'Steel Fixer', rate:92}, {name:'Carpenter / Formworker', rate:80}
+];
+let hasRatesUploaded = true;      // rates were loaded during budget setup
+let allResourcesMapped = false;   // but the resources have not been mapped to them yet
+let hasNewUnmappedResources = false;
+
+/* ── Daywork records already booked on site (tracked cost, not yet claimed) ── */
+const dayworksRecords = [
+  {id:'DW-1042', date:'22 Jul 2026', desc:'Additional excavation — unforeseen rock at chainage 1+200',
+   status:'approved', claimed:false, cc:'Earthworks', zone:'Zone B', items:{
+    labour:[{name:'Site Foreman', hrs:4, days:1, rate:95, amount:380},{name:'General Labourer', hrs:8, days:1, rate:62, amount:496}],
+    plant:[{name:'20T Excavator — Wet Hire', hrs:6, days:1, rate:260, amount:1560},{name:'Tipper 10T — Wet Hire', hrs:6, days:1, rate:210, amount:1260}],
+    materials:[]}},
+  {id:'DW-1045', date:'23 Jul 2026', desc:'Re-grade access road after heavy rainfall',
+   status:'approved', claimed:false, cc:'Earthworks', zone:'Zone B', items:{
+    labour:[{name:'Skilled Labourer', hrs:8, days:1, rate:78, amount:624}],
+    plant:[{name:'Roller — Smooth Drum', hrs:6, days:1, rate:185, amount:1110},{name:'Bobcat — Wet Hire', hrs:4, days:1, rate:165, amount:660}],
+    materials:[{desc:'Road base imported', qty:12, unit:'m³', rate:65, amount:780}]}},
+  {id:'DW-1051', date:'25 Jul 2026', desc:'Install temporary stormwater diversion (client request)',
+   status:'pending', claimed:false, cc:'Drainage', zone:'Zone A', items:{
+    labour:[{name:'Site Foreman', hrs:6, days:1, rate:95, amount:570},{name:'General Labourer', hrs:8, days:2, rate:62, amount:992}],
+    plant:[{name:'5T Excavator — Wet Hire', hrs:5, days:1, rate:195, amount:975}],
+    materials:[{desc:'600mm RCP pipe', qty:18, unit:'lm', rate:145, amount:2610},{desc:'Geofabric', qty:80, unit:'m²', rate:12, amount:960}]}},
+  {id:'DW-1058', date:'26 Jul 2026', desc:'Standby — site closed by client awaiting inspection',
+   status:'approved', claimed:false, cc:'Overheads / Prelims', zone:'Project Wide', items:{
+    labour:[{name:'Site Foreman', hrs:8, days:1, rate:95, amount:760},{name:'General Labourer', hrs:8, days:1, rate:62, amount:496},{name:'Skilled Labourer', hrs:8, days:1, rate:78, amount:624}],
+    plant:[{name:'20T Excavator — Dry Hire (standby)', hrs:8, days:1, rate:90, amount:720}],
+    materials:[]}},
+  {id:'DW-1063', date:'27 Jul 2026', desc:'Concrete cut & make-good — additional service relocation',
+   status:'approved', claimed:false, cc:'Concrete', zone:'Zone B', items:{
+    labour:[{name:'Concrete Finisher', hrs:6, days:1, rate:88, amount:528},{name:'Skilled Labourer', hrs:6, days:1, rate:78, amount:468}],
+    plant:[{name:'Concrete Saw — Wet Hire', hrs:4, days:1, rate:110, amount:440}],
+    materials:[{desc:'Patch concrete N32', qty:1.5, unit:'m³', rate:320, amount:480}]}},
+  {id:'DW-1067', date:'28 Jul 2026', desc:'Extra steel fixing for retaining wall reinforcement upgrade',
+   status:'pending', claimed:false, cc:'Steel & Rebar', zone:'Zone C', items:{
+    labour:[{name:'Steel Fixer', hrs:8, days:2, rate:92, amount:1472}],
+    plant:[],
+    materials:[{desc:'N16 reinforcement bar', qty:850, unit:'kg', rate:2.4, amount:2040},{desc:'Tie wire', qty:1, unit:'roll', rate:85, amount:85}]}},
+  {id:'DW-1071', date:'29 Jul 2026', desc:'Damaged kerb replacement (third-party impact)',
+   status:'approved', claimed:true, cc:'Roadway', zone:'Zone D', items:{
+    labour:[{name:'Skilled Labourer', hrs:8, days:1, rate:78, amount:624}],
+    plant:[{name:'Bobcat — Wet Hire', hrs:3, days:1, rate:165, amount:495}],
+    materials:[{desc:'Concrete kerb units', qty:18, unit:'lm', rate:95, amount:1710}]}}
+];
+function recordTotal(r){
+  let t = 0;
+  ['labour','plant','materials'].forEach(k => (r.items[k] || []).forEach(i => t += (i.amount || 0)));
+  return t;
+}
 
 /* ═══ Derivation ═══ */
 function derive(it){
