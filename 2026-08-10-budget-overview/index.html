@@ -1383,29 +1383,39 @@ function render(){
     g.items.push(it);
   });
 
-  /* In a cost centre project the cost documents hang off the cost centre, so the
-     source drill-down lives on the group row rather than on each line item. */
-  const groupDrill = !lineCostsShown() && currentView === 'cc';
-  /* Zones cut across cost centres, so a cost centre project cannot split its
-     cost by zone either — only the cost centre view carries figures. */
-  const groupCosts = lineCostsShown() || currentView === 'cc';
+  /* What carries cost depends on the view, not just the project type:
+       cc    — the cost centre carries it (line items below it do not, unless WBS/dayworks)
+       zone  — each cost centre section within the zone carries it
+       boq   — only a WBS project codes cost to the BOQ line; for a cost centre
+               project this is the claim view: contract, variations and provisional
+               sums, with cost read from the Cost Centres view instead. */
+  const boqIsClaimView = currentView === 'boq' && !lineCostsShown();
+  const groupDrill = currentView === 'cc' && !lineCostsShown();
 
-  if (!groupCosts) html += '<tr class="scope-note"><td colspan="11">' +
-    '<i class="fas fa-circle-info"></i> This is a <strong>cost centre project</strong> — committed, tracked and actual are held against the cost centre, ' +
-    'which cuts across zones. Switch to the <strong>Cost Centres</strong> view for cost figures; this view shows contract value and budget only.</td></tr>';
+  if (boqIsClaimView) html += '<tr class="scope-note"><td colspan="11">' +
+    '<i class="fas fa-file-invoice"></i> <strong>BOQ — claim view.</strong> This is the contract breakdown claims are made against, including approved ' +
+    'variations and any activated provisional sums. Cost on a cost centre project is coded to the cost centre, so committed, tracked and actual live in the ' +
+    '<strong>Cost Centres</strong> view.</td></tr>';
 
   groups.forEach(g => {
     const t = aggregate(g.items);
     const open = openGroups.has(g.key);
     const st = statusOf(t);
+    const isBoq = currentView === 'boq';
+    const groupCosts = !boqIsClaimView;
     const drillKey = 'grp:' + g.key;
     const drillOpen = openItems.has(drillKey);
+    const childLabel = currentView === 'zone' ? 'cost centres'
+      : isDayworksProject() ? 'dockets' : 'items';
+    const childCount = currentView === 'zone'
+      ? new Set(g.items.map(i => i.cc)).size : g.items.length;
+
     html += '<tr class="grp-row' + (open ? ' expanded' : '') + '" onclick="toggleGroup(\'' + esc(g.key) + '\')">' +
       '<td><i class="fas fa-chevron-right expand-icon"></i></td>' +
-      '<td class="cell-code">' + (currentView === 'boq' ? g.key.split(' ')[0] : '') + '</td>' +
-      '<td class="cell-desc">' + (currentView === 'boq' ? g.key.replace(/^\S+\s/,'') : g.key) +
+      '<td class="cell-code">' + (isBoq ? g.key.split(' ')[0] : '') + '</td>' +
+      '<td class="cell-desc">' + (isBoq ? g.key.replace(/^\S+\s/,'') : g.key) +
         (groupCosts ? ' <span class="chip ' + st.cls + '" style="margin-left:6px">' + st.label + '</span>' : '') +
-        ' <span style="font-weight:400;color:#94a3b8;font-size:11px">· ' + g.items.length + ' items</span>' +
+        ' <span style="font-weight:400;color:#94a3b8;font-size:11px">· ' + childCount + ' ' + childLabel + '</span>' +
         (groupDrill ? '<div style="font-size:11px;font-weight:400;margin-top:3px" onclick="event.stopPropagation();toggleItem(\'' + esc(drillKey) + '\')">' +
           '<i class="fas fa-chevron-' + (drillOpen ? 'up' : 'down') + '" style="font-size:9px;margin-right:4px;color:#f5a623"></i>' +
           '<span style="color:#f5a623">' + (drillOpen ? 'hide' : 'view') + ' source documents</span>' +
@@ -1417,7 +1427,16 @@ function render(){
     if (groupDrill) html += '<tr class="detail-row' + (drillOpen ? ' visible' : '') + '"><td colspan="11">' +
       drill(Object.assign({}, t, {suppliers:groupSuppliers(g.items), code:g.key})) + '</td></tr>';
 
-    if (currentView === 'boq'){
+    if (currentView === 'zone'){
+      // A zone breaks down into the cost centre sections working in it — not line items.
+      const ccs = [];
+      g.items.forEach(it => {
+        let s = ccs.find(x => x.key === it.cc);
+        if (!s){ s = {key:it.cc, items:[]}; ccs.push(s); }
+        s.items.push(it);
+      });
+      ccs.forEach(s => html += zoneCostCentreRow(s, g.key, open));
+    } else if (isBoq){
       const subs = [];
       g.items.forEach(it => {
         let s = subs.find(x => x.key === it.l2);
@@ -1429,8 +1448,9 @@ function render(){
         html += '<tr class="item-row l2-row' + (open ? ' visible' : '') + '">' +
           '<td></td><td class="cell-code">' + s.key.split(' ')[0] + '</td>' +
           '<td class="cell-desc">' + s.key.replace(/^\S+\s/,'') + '</td>' +
-          '<td class="spend">' + spendBar(t2) + '</td>' + moneyCells(t2) + '</tr>';
-        s.items.forEach(it => html += itemRow(it, open));
+          '<td class="spend">' + (boqIsClaimView ? '<span class="spend-cap" style="margin-top:0">—</span>' : spendBar(t2)) + '</td>' +
+          moneyCells(t2, !boqIsClaimView) + '</tr>';
+        s.items.forEach(it => html += itemRow(it, open, !boqIsClaimView));
       });
     } else {
       g.items.forEach(it => html += itemRow(it, open));
