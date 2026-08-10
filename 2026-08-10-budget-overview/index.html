@@ -1488,7 +1488,7 @@ function renderStats(){
    Same four states as the per-line bar, at project scale, with the figures
    spelled out so tracked and actual are never read as one number. */
 function renderSpendPanel(t){
-  const scale = Math.max(t.budget, t.engaged, t.forecast, 1);
+  const scale = Math.max(t.budget, t.engaged, 1);
   const p = v => (v / scale * 100).toFixed(2) + '%';
   const markerPct = t.budget / scale * 100;
   const over = t.engaged > t.budget;
@@ -1503,12 +1503,33 @@ function renderSpendPanel(t){
   document.getElementById('spendPanel').innerHTML =
     '<div class="sp-head">' +
       '<div><div class="sp-title">Project Spend vs Budget</div>' +
-      '<div class="sp-sub">' + PROJECT_TYPES[projectType].label + ' project · ' + activeLines().length + ' live budget lines · daywork dockets excluded</div></div>' +
+      '<div class="sp-sub">' + PROJECT_TYPES[projectType].label + ' project · ' + activeLines().length +
+        ' live budget lines · daywork dockets excluded</div></div>' +
       '<div class="sp-headline">' +
         '<div class="sp-headline-value ' + (over ? 'red' : '') + '">' + pct(t.budget > 0 ? t.engaged / t.budget * 100 : 0) + '</div>' +
         '<div class="sp-headline-label">of budget engaged</div>' +
       '</div>' +
     '</div>' +
+
+    /* Live spend to date — the one combined figure, with its two halves split out */
+    '<div class="sp-live">' +
+      '<div class="sp-live-main">' +
+        '<div class="sp-live-label">Live spend to date <span class="info-tooltip"><i class="fas fa-circle-info"></i>' +
+          '<span class="tip"><strong>Live spend to date</strong><br>Tracked + actual. They are disjoint states — cost moves from tracked to actual when a docket is billed or a timesheet is approved — so combining them here counts nothing twice.</span></span></div>' +
+        '<div class="sp-live-value">' + money(t.costToDate) + '</div>' +
+        '<div class="sp-live-sub">' + pct(t.budget > 0 ? t.costToDate / t.budget * 100 : 0) + ' of the ' + money(t.budget) + ' budget</div>' +
+      '</div>' +
+      '<div class="sp-live-split">' +
+        '<div class="sp-live-part"><span class="sp-dot" style="background:#16a34a"></span>' +
+          '<div><div class="sp-part-label">Actual</div><div class="sp-part-value">' + money(t.actual) + '</div>' +
+          '<div class="sp-part-sub">paid bills + approved timesheets</div></div></div>' +
+        '<div class="sp-plus">+</div>' +
+        '<div class="sp-live-part"><span class="sp-dot" style="background:#5eead4"></span>' +
+          '<div><div class="sp-part-label">Tracked</div><div class="sp-part-value">' + money(t.tracked) + '</div>' +
+          '<div class="sp-part-sub">site dockets + unapproved timesheets</div></div></div>' +
+      '</div>' +
+    '</div>' +
+
     '<div class="sp-bar">' +
       '<span class="sb-actual" style="width:' + p(t.actual) + '" title="Actual"></span>' +
       '<span class="sb-tracked" style="width:' + p(t.tracked) + '" title="Tracked"></span>' +
@@ -1519,8 +1540,8 @@ function renderSpendPanel(t){
       seg('Actual — paid bills &amp; approved timesheets', t.actual, '#16a34a', pct(t.actual / t.budget * 100) + ' of budget') +
       seg('Tracked — site dockets &amp; unapproved timesheets', t.tracked, '#5eead4', pct(t.tracked / t.budget * 100) + ' of budget') +
       seg('Committed — POs not yet received', t.openPO, '#fbbf24', pct(t.openPO / t.budget * 100) + ' of budget') +
-      seg('Uncommitted budget remaining', Math.max(0, t.budget - t.engaged), '#e9edf3',
-          t.engaged > t.budget ? money(t.engaged - t.budget) + ' over' : pct(Math.max(0, t.budget - t.engaged) / t.budget * 100) + ' of budget') +
+      seg('Budget remaining', Math.abs(t.remaining), '#e9edf3',
+          t.remaining < 0 ? money(-t.remaining) + ' over budget' : pct(t.remaining / t.budget * 100) + ' of budget') +
     '</div>';
 }
 
