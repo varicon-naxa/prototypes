@@ -496,11 +496,17 @@ function spendBar(it){
 }
 
 /* ═══ Aggregation ═══ */
-const SUM_KEYS = ['contract','budget','poCommitted','poReceipted','docketTracked','actualPaid'];
+/* Totals roll up the line-level derived values — an overrun on one line must not be
+   absorbed by unspent budget on another, which is what re-deriving from summed
+   raw inputs would do. */
+const SUM_KEYS = ['contract','budget','poCommitted','poReceipted','docketTracked','actualPaid',
+                  'committed','tracked','actual','engaged','uncommitted','forecast'];
 function aggregate(list){
   const t = {}; SUM_KEYS.forEach(k => t[k] = 0);
   list.forEach(it => SUM_KEYS.forEach(k => t[k] += it[k]));
-  return Object.assign(t, derive(t));
+  t.variance = t.budget - t.forecast;
+  t.margin = t.contract > 0 ? (t.contract - t.forecast) / t.contract * 100 : 0;
+  return t;
 }
 
 /* ═══ Rendering ═══ */
