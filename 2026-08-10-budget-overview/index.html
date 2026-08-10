@@ -1385,23 +1385,43 @@ function render(){
 }
 
 function itemRow(it, open){
+  const showCost = lineCostsShown();
   const st = statusOf(it);
   const itemOpen = openItems.has(it.code);
   const badge = it.kind === 'variation'
       ? ' <span class="chip vo">Variation</span>'
       : it.kind === 'provisional-active'
       ? ' <span class="chip prov">From provisional</span>' : '';
-  let html = '<tr class="item-row' + (open ? ' visible' : '') + (itemOpen ? ' expanded' : '') + '" onclick="toggleItem(\'' + esc(it.code) + '\')">' +
+
+  let html = '<tr class="item-row' + (open ? ' visible' : '') + (itemOpen ? ' expanded' : '') +
+      (showCost ? '' : ' no-cost-row') + '"' +
+      (showCost ? ' onclick="toggleItem(\'' + esc(it.code) + '\')"' : '') + '>' +
     '<td></td>' +
     '<td class="cell-code">' + it.code + '</td>' +
     '<td class="cell-desc" style="font-weight:400">' + it.desc + badge +
-      ' <span class="chip ' + st.cls + '">' + st.label + '</span>' +
+      (showCost ? ' <span class="chip ' + st.cls + '">' + st.label + '</span>' : '') +
       '<div style="font-size:11px;color:#94a3b8;margin-top:2px">' + it.cc + ' · ' + it.zone +
-      ' <i class="fas fa-chevron-' + (itemOpen ? 'up' : 'down') + '" style="font-size:9px;margin-left:4px;color:#f5a623"></i>' +
-      ' <span style="color:#f5a623">' + (itemOpen ? 'hide' : 'view') + ' source documents</span></div></td>' +
-    '<td class="spend">' + spendBar(it) + '</td>' + moneyCells(it) + '</tr>';
-  html += '<tr class="detail-row' + (open && itemOpen ? ' visible' : '') + '"><td colspan="11">' + drill(it) + '</td></tr>';
+      (showCost
+        ? ' <i class="fas fa-chevron-' + (itemOpen ? 'up' : 'down') + '" style="font-size:9px;margin-left:4px;color:#f5a623"></i>' +
+          ' <span style="color:#f5a623">' + (itemOpen ? 'hide' : 'view') + ' source documents</span>'
+        : '') +
+      '</div></td>' +
+    '<td class="spend">' + (showCost ? spendBar(it) : '<span class="spend-cap" style="margin-top:0">—</span>') + '</td>' +
+    moneyCells(it, showCost) + '</tr>';
+
+  if (showCost)
+    html += '<tr class="detail-row' + (open && itemOpen ? ' visible' : '') + '"><td colspan="11">' + drill(it) + '</td></tr>';
   return html;
+}
+
+/* Representative suppliers across a cost centre, for the group-level drill-down. */
+function groupSuppliers(items){
+  const pick = key => {
+    const names = [...new Set(items.map(i => i.suppliers && i.suppliers[key]).filter(Boolean))];
+    if (!names.length) return '';
+    return names.length === 1 ? names[0] : names[0] + ' +' + (names.length - 1) + ' more';
+  };
+  return {po:pick('po'), dkt:pick('dkt'), bill:pick('bill')};
 }
 
 /* ── Pending variations section ── */
