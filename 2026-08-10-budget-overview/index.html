@@ -1311,17 +1311,31 @@ function render(){
     g.items.push(it);
   });
 
+  /* In a cost centre project the cost documents hang off the cost centre, so the
+     source drill-down lives on the group row rather than on each line item. */
+  const groupDrill = !lineCostsShown() && currentView === 'cc';
+
   groups.forEach(g => {
     const t = aggregate(g.items);
     const open = openGroups.has(g.key);
     const st = statusOf(t);
+    const drillKey = 'grp:' + g.key;
+    const drillOpen = openItems.has(drillKey);
     html += '<tr class="grp-row' + (open ? ' expanded' : '') + '" onclick="toggleGroup(\'' + esc(g.key) + '\')">' +
       '<td><i class="fas fa-chevron-right expand-icon"></i></td>' +
       '<td class="cell-code">' + (currentView === 'boq' ? g.key.split(' ')[0] : '') + '</td>' +
       '<td class="cell-desc">' + (currentView === 'boq' ? g.key.replace(/^\S+\s/,'') : g.key) +
         ' <span class="chip ' + st.cls + '" style="margin-left:6px">' + st.label + '</span>' +
-        ' <span style="font-weight:400;color:#94a3b8;font-size:11px">· ' + g.items.length + ' items</span></td>' +
+        ' <span style="font-weight:400;color:#94a3b8;font-size:11px">· ' + g.items.length + ' items</span>' +
+        (groupDrill ? '<div style="font-size:11px;font-weight:400;margin-top:3px" onclick="event.stopPropagation();toggleItem(\'' + esc(drillKey) + '\')">' +
+          '<i class="fas fa-chevron-' + (drillOpen ? 'up' : 'down') + '" style="font-size:9px;margin-right:4px;color:#f5a623"></i>' +
+          '<span style="color:#f5a623">' + (drillOpen ? 'hide' : 'view') + ' source documents</span>' +
+          '<span style="color:#cbd5e1"> · POs, dockets, timesheets &amp; bills coded to this cost centre</span></div>' : '') +
+      '</td>' +
       '<td class="spend">' + spendBar(t) + '</td>' + moneyCells(t) + '</tr>';
+
+    if (groupDrill) html += '<tr class="detail-row' + (drillOpen ? ' visible' : '') + '"><td colspan="11">' +
+      drill(Object.assign({}, t, {suppliers:groupSuppliers(g.items), code:g.key})) + '</td></tr>';
 
     if (currentView === 'boq'){
       const subs = [];
