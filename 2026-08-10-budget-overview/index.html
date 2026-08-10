@@ -1555,6 +1555,35 @@ function groupSuppliers(items){
   return {po:pick('po'), dkt:pick('dkt'), bill:pick('bill')};
 }
 
+/* ── Dayworks claim status strip (dayworks-only projects) ── */
+function dayworksClaimRow(){
+  if (!isDayworksProject()) return '';
+  const by = s => dayworksLines.filter(d => d.claim === s);
+  const val = s => by(s).reduce((a,d) => a + d.contract, 0);
+  const unclaimed = by('unclaimed'), inClaim = by('in-claim'), claimed = by('claimed');
+  return '<tr class="section-banner dayworks"><td colspan="11">' +
+    '<i class="fas fa-file-invoice" style="margin-right:8px"></i>Claim Status' +
+    '<span class="banner-note">' +
+      unclaimed.length + ' unclaimed ' + money(val('unclaimed')) + ' · ' +
+      inClaim.length + ' in claim ' + money(val('in-claim')) + ' · ' +
+      claimed.length + ' claimed ' + money(val('claimed')) +
+      ' — dayworks-to-claim conversion lands in the next phase</span>' +
+    (unclaimed.length ? '<button class="btn btn-primary btn-sm" style="float:right;margin-top:-2px" onclick="createClaimFromDayworks()">' +
+      '<i class="fas fa-file-invoice"></i> Claim ' + unclaimed.length + ' dockets</button>' : '') +
+    '</td></tr>';
+}
+function convertDocketToClaim(code){
+  const d = dayworksLines.find(x => x.code === code);
+  toast('<i class="fas fa-hourglass-half"></i> Next phase: ' + d.code + ' (' + money(d.contract) +
+        ') would move to <strong>In claim</strong> and carry into the progress claim. The conversion workflow is not built yet.');
+}
+function createClaimFromDayworks(){
+  const unclaimed = dayworksLines.filter(d => d.claim === 'unclaimed');
+  const total = unclaimed.reduce((s,d) => s + d.contract, 0);
+  toast('<i class="fas fa-hourglass-half"></i> Next phase: a claim would be raised from ' + unclaimed.length +
+        ' unclaimed dockets worth ' + money(total) + '. The dayworks-to-claim workflow is not built yet.');
+}
+
 /* ── Pending variations section ── */
 function pendingVariationRows(){
   if (isDayworksProject()) return '';
