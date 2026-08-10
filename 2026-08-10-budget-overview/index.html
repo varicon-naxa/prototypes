@@ -524,66 +524,269 @@ tr.released-row td{opacity:.55}
   </div>
 </div>
 
-<!-- ═══ Daywork docket picker ═══ -->
-<div class="modal-overlay" id="docketModal">
-  <div class="modal" style="width:620px">
-    <div class="modal-head">
-      <h3>Add daywork dockets to this variation</h3>
-      <span class="modal-close" onclick="closeModal('docketModal')"><i class="fas fa-times"></i></span>
+<!-- ═══ Plant & labour rate mapping gate ═══ -->
+<div class="modal-overlay" id="plantMappingModal">
+  <div class="modal" style="width:480px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div style="width:44px;height:44px;border-radius:10px;background:#fff7ed;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-truck-monster" style="font-size:19px;color:#f5a623"></i></div>
+      <div>
+        <h3 style="font-size:16px;font-weight:600;color:#1b2a4a;margin:0">Plant &amp; labour rate mapping</h3>
+        <p style="font-size:13px;color:#64748b;margin:0">Have you mapped the plant and labour on this project to their rates?</p>
+      </div>
     </div>
-    <p class="modal-sub">These dockets are already <strong>tracked</strong> cost on the project. Attaching them to a variation is what turns that cost into claimable revenue.</p>
-    <div id="docketList"></div>
-    <div class="callout amber" style="margin-top:14px;margin-bottom:0" id="docketSummary"></div>
+    <div class="callout amber" id="newResourceWarning" style="display:none">
+      <i class="fas fa-triangle-exclamation"></i> New resources have been added to this project since rates were last mapped.
+    </div>
+    <div class="callout blue">
+      <i class="fas fa-circle-info"></i> Mapping plant and labour to the schedule of rates is what makes a rates build-up cost correctly — and it is the same mapping the daywork dockets use when they land in the overview as <strong>tracked</strong> cost.
+    </div>
     <div class="modal-actions">
-      <button class="btn btn-outline" onclick="skipDockets()">Skip — build manually</button>
-      <button class="btn btn-primary" id="docketAddBtn" disabled onclick="addSelectedDockets()"><i class="fas fa-arrow-right"></i> Add selected</button>
+      <button class="btn btn-outline" onclick="plantMappingResponse(false)"><i class="fas fa-times"></i> Not yet</button>
+      <button class="btn btn-primary" onclick="plantMappingResponse(true)"><i class="fas fa-check"></i> Yes, already mapped</button>
     </div>
   </div>
 </div>
 
-<!-- ═══ Variation build modal ═══ -->
-<div class="modal-overlay" id="varBuildModal">
-  <div class="modal" style="width:720px">
-    <div class="modal-head">
-      <h3 id="varBuildTitle">Priced Variation</h3>
-      <span class="modal-close" onclick="closeModal('varBuildModal')"><i class="fas fa-times"></i></span>
+<!-- ═══ Rate mapping full-page overlay ═══ -->
+<div class="fp-overlay" id="rateMappingOverlay">
+  <div class="fp-header">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="fp-back" onclick="closeRateMappingOverlay()"><i class="fas fa-arrow-left"></i></span>
+      <div><h2><i class="fas fa-link" style="margin-right:8px;color:#f5a623"></i>Plant &amp; Labour Rate Mapping</h2>
+      <div class="fp-sub">Map each project resource to a rate from the schedule of rates</div></div>
     </div>
-    <p class="modal-sub" id="varBuildSub">Build up the variation value, then map it to a cost centre and zone so it lands in the right place in the budget overview.</p>
-
-    <div class="field-row">
-      <div class="field"><label>Variation title</label><input id="vTitle" placeholder="e.g. Additional drainage works — Zone B" oninput="calcVarBuild()"></div>
-      <div class="field"><label>Client reference</label><input id="vRef" placeholder="e.g. RFI-042 / VO-004"></div>
-    </div>
-    <div class="field"><label>Scope description</label><textarea id="vDesc" rows="2" placeholder="Describe the scope of the variation…"></textarea></div>
-
-    <div style="font-size:12px;font-weight:600;color:#1b2a4a;margin:18px 0 8px"><i class="fas fa-list-ol" style="color:#f5a623;margin-right:6px"></i><span id="vLinesLabel">Priced line items</span></div>
-    <table class="mini-table">
-      <thead><tr><th>Description</th><th style="width:70px" class="right">Qty</th><th style="width:70px">Unit</th><th style="width:100px" class="right">Rate ($)</th><th style="width:100px" class="right">Amount</th><th style="width:30px"></th></tr></thead>
-      <tbody id="vLines"></tbody>
-    </table>
-    <button class="add-line-btn" onclick="addVarLine()"><i class="fas fa-plus"></i> Add line item</button>
-
-    <div style="font-size:12px;font-weight:600;color:#1b2a4a;margin:18px 0 8px"><i class="fas fa-map-pin" style="color:#f5a623;margin-right:6px"></i>Budget mapping</div>
-    <div class="field-row-3">
-      <div class="field"><label>Cost centre</label><select id="vCC"></select></div>
-      <div class="field"><label>Zone</label><select id="vZone"></select></div>
-      <div class="field"><label>Budget cost ($)</label><input id="vBudget" class="num" placeholder="0" oninput="calcVarBuild()"></div>
-    </div>
-
-    <div class="sum-strip">
-      <div class="sum-card"><div class="sc-label">Contract value</div><div class="sc-value" id="vSumContract">$0</div></div>
-      <div class="sum-card"><div class="sc-label">Budget cost</div><div class="sc-value" id="vSumBudget">$0</div></div>
-      <div class="sum-card primary"><div class="sc-label">Margin</div><div class="sc-value" id="vSumMargin">0.0%</div></div>
-    </div>
-
-    <div class="callout blue" style="margin-top:16px;margin-bottom:0">
-      <i class="fas fa-circle-info"></i> A <strong>submitted</strong> variation sits outside the contract and budget totals until the client approves it. Any dockets or POs already raised against it show as <strong>cost at risk</strong>.
+    <button class="btn btn-primary" onclick="saveMappings()"><i class="fas fa-check"></i> Save mappings</button>
+  </div>
+  <div class="fp-content">
+    <div id="rateUploadSection" style="display:none">
+      <div class="card" style="max-width:700px;margin:0 auto">
+        <h3><i class="fas fa-cloud-arrow-up" style="color:#f5a623;margin-right:8px"></i>Upload schedule of rates</h3>
+        <p class="card-sub">You need a schedule of rates before mapping. Upload the rates file agreed in the contract.</p>
+        <div class="dropzone" onclick="simulateRateUpload()">
+          <i class="fas fa-cloud-arrow-up" style="font-size:26px;color:#f5a623;margin-bottom:8px"></i>
+          <div style="font-size:14px;font-weight:600;color:#1b2a4a">Drag &amp; drop your rates file here</div>
+          <div style="font-size:12px;color:#94a3b8;margin-top:4px">or <span style="color:#f5a623;font-weight:500">browse</span> to choose a file</div>
+          <div style="font-size:11px;color:#cbd5e1;margin-top:6px">.CSV, .XLSX, .XLS — max 10MB</div>
+        </div>
+        <div id="rateUploadPreview" style="display:none">
+          <div class="file-row">
+            <div class="fr-icon" style="background:#dcfce7;color:#16a34a"><i class="fas fa-file-excel"></i></div>
+            <div><div class="fr-name">Schedule_of_Rates.xlsx</div><div class="fr-size">42 KB · 13 rates found</div></div>
+            <span style="margin-left:auto;color:#16a34a;font-size:12px;font-weight:600"><i class="fas fa-check-circle"></i> Ready</span>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:14px">
+            <button class="btn btn-primary" onclick="skipToMapping()"><i class="fas fa-arrow-right"></i> Continue to mapping</button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="modal-actions">
-      <button class="btn btn-outline" onclick="closeModal('varBuildModal')">Cancel</button>
-      <button class="btn btn-outline" id="vDraftBtn" onclick="saveVariation('draft')"><i class="fas fa-save"></i> Save draft</button>
+    <div id="rateMappingSection" style="display:none">
+      <div class="map-progress" id="mapProgress"></div>
+      <div class="mapping-layout">
+        <div>
+          <div class="card">
+            <h3><i class="fas fa-truck-monster" style="color:#f5a623;margin-right:8px"></i>Plant &amp; Equipment</h3>
+            <p class="card-sub">Drag a rate from the sidebar onto a plant item, or pick one from the dropdown.</p>
+            <table class="mini-table">
+              <thead><tr><th>Project plant</th><th style="width:46%">Mapped rate</th><th class="right" style="width:110px">Rate ($/hr)</th></tr></thead>
+              <tbody id="plantMappingBody"></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3><i class="fas fa-hard-hat" style="color:#3b82f6;margin-right:8px"></i>Labour</h3>
+            <p class="card-sub">Map each labour role on the project to its ordinary-time rate.</p>
+            <table class="mini-table">
+              <thead><tr><th>Project role</th><th style="width:46%">Mapped rate</th><th class="right" style="width:110px">Rate ($/hr)</th></tr></thead>
+              <tbody id="labourMappingBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="mapping-sidebar">
+          <div class="card" style="padding:16px">
+            <h4><i class="fas fa-truck-monster" style="color:#f5a623"></i> Available plant rates</h4>
+            <p style="font-size:11px;color:#94a3b8;margin-bottom:10px">Drag onto a plant item to map</p>
+            <div id="availPlantRates"></div>
+          </div>
+          <div class="card" style="padding:16px">
+            <h4><i class="fas fa-hard-hat" style="color:#3b82f6"></i> Available labour rates</h4>
+            <p style="font-size:11px;color:#94a3b8;margin-bottom:10px">Drag onto a role to map</p>
+            <div id="availLabourRates"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Dayworks records selection ═══ -->
+<div class="modal-overlay" id="dayworksRecordsModal">
+  <div class="modal" style="width:960px;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <div style="width:44px;height:44px;border-radius:10px;background:#f0fdf4;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-clipboard-list" style="font-size:19px;color:#16a34a"></i></div>
+      <div style="flex:1">
+        <h3 style="font-size:16px;font-weight:600;color:#1b2a4a;margin:0">Select dayworks records</h3>
+        <p style="font-size:13px;color:#64748b;margin:0">These dockets are already <strong>tracked</strong> cost in the overview. Attaching them to a variation is what turns that cost into claimable revenue.</p>
+      </div>
+      <span class="modal-close" onclick="closeModal('dayworksRecordsModal')"><i class="fas fa-times"></i></span>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-bottom:12px">
+      <input id="dwSearch" class="review-search" style="flex:1;width:auto" placeholder="Search by description or docket number…" oninput="renderDayworksRecords()">
+      <select id="dwStatusFilter" class="filter-select" onchange="renderDayworksRecords()">
+        <option value="all">All statuses</option><option value="approved">Approved only</option><option value="pending">Pending only</option>
+      </select>
+      <select id="dwClaimedFilter" class="filter-select" onchange="renderDayworksRecords()">
+        <option value="unclaimed">Unclaimed only</option><option value="all">Show all</option>
+      </select>
+    </div>
+
+    <div style="overflow-y:auto;max-height:44vh;border:1px solid #e2e8f0;border-radius:8px">
+      <table class="dw-table">
+        <thead><tr>
+          <th style="width:36px"><input type="checkbox" id="dwSelectAll" onchange="toggleAllDayworks(this)"></th>
+          <th style="width:92px">Date</th><th style="width:92px">Docket</th><th>Description</th>
+          <th style="width:34%">Resources</th><th class="right" style="width:100px">Total</th><th style="width:90px">Status</th>
+        </tr></thead>
+        <tbody id="dwRecordsBody"></tbody>
+      </table>
+    </div>
+
+    <div class="callout amber" id="dwSummary" style="margin-top:14px;margin-bottom:0"></div>
+    <div class="modal-actions" style="justify-content:space-between">
+      <button class="btn btn-outline" onclick="proceedDayworksWithoutRecords()"><i class="fas fa-pen"></i> Skip — build manually</button>
+      <button class="btn btn-primary" id="dwAddBtn" disabled onclick="addSelectedDayworksToVariation()"><i class="fas fa-arrow-right"></i> Add selected to variation</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Variation build full-page overlay ═══ -->
+<div class="fp-overlay" id="varBuildOverlay">
+  <div class="fp-header">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="fp-back" onclick="closeVariationBuild()"><i class="fas fa-arrow-left"></i></span>
+      <div><h2 id="varBuildTitle">Variation</h2><div class="fp-sub" id="varBuildSub">Build-up</div></div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-outline" id="vDraftBtn" style="color:#fff;border-color:rgba(255,255,255,.3);background:transparent" onclick="saveVariation('draft')"><i class="fas fa-save"></i> Save draft</button>
       <button class="btn btn-primary" id="vSubmitBtn" onclick="saveVariation('submitted')"><i class="fas fa-paper-plane"></i> Submit for approval</button>
+    </div>
+  </div>
+
+  <div class="fp-content">
+    <!-- Details -->
+    <div class="card">
+      <h3><i class="fas fa-file-alt" style="color:#f5a623;margin-right:8px"></i>Variation details</h3>
+      <p class="card-sub">The title and reference carry through to the variation register and the client claim.</p>
+      <div class="field-row">
+        <div class="field"><label>Variation title</label><input id="vTitle" placeholder="e.g. Additional drainage works — Zone B" oninput="calcVarBuild()"></div>
+        <div class="field"><label>Client reference / instruction</label><input id="vRef" placeholder="e.g. SI-018, RFI-042"></div>
+      </div>
+      <div class="field" style="margin-bottom:0"><label>Scope description</label><textarea id="vDesc" rows="2" placeholder="Describe the scope of the variation…"></textarea></div>
+    </div>
+
+    <!-- Lump sum build-up -->
+    <div class="card" id="varLumpSection" style="display:none">
+      <div class="callout amber" id="varDetailsBlocker" style="display:none">
+        <i class="fas fa-triangle-exclamation"></i> Enter a variation title above before building up the price.
+      </div>
+      <h3><i class="fas fa-money-bill-wave" style="color:#3b82f6;margin-right:8px"></i>Lump sum line items</h3>
+      <p class="card-sub">The agreed price you are claiming from the client. The budget cost is set separately below.</p>
+      <table class="mini-table">
+        <thead><tr><th>Description</th><th class="right" style="width:70px">Qty</th><th style="width:70px">Unit</th><th class="right" style="width:110px">Rate ($)</th><th class="right" style="width:110px">Amount</th><th style="width:30px"></th></tr></thead>
+        <tbody id="vLines"></tbody>
+      </table>
+      <button class="add-line-btn" onclick="addVarLine()"><i class="fas fa-plus"></i> Add line item</button>
+    </div>
+
+    <!-- Rates build-up -->
+    <div id="varRatesSection" style="display:none">
+      <div class="card">
+        <h3><i class="fas fa-hard-hat" style="color:#3b82f6;margin-right:8px"></i>Labour</h3>
+        <p class="card-sub">Priced from your mapped schedule of rates.</p>
+        <table class="mini-table">
+          <thead><tr><th>Role</th><th class="right" style="width:70px">Hrs</th><th class="right" style="width:70px">Days</th><th class="right" style="width:110px">Rate ($/hr)</th><th class="right" style="width:110px">Amount</th><th style="width:30px"></th></tr></thead>
+          <tbody id="vLabourBody"></tbody>
+        </table>
+        <button class="add-line-btn" onclick="addRateRow('labour')"><i class="fas fa-plus"></i> Add labour</button>
+      </div>
+      <div class="card">
+        <h3><i class="fas fa-truck-monster" style="color:#f5a623;margin-right:8px"></i>Plant &amp; equipment</h3>
+        <p class="card-sub">Wet or dry hire rates as mapped.</p>
+        <table class="mini-table">
+          <thead><tr><th>Plant</th><th class="right" style="width:70px">Hrs</th><th class="right" style="width:70px">Days</th><th class="right" style="width:110px">Rate ($/hr)</th><th class="right" style="width:110px">Amount</th><th style="width:30px"></th></tr></thead>
+          <tbody id="vPlantBody"></tbody>
+        </table>
+        <button class="add-line-btn" onclick="addRateRow('plant')"><i class="fas fa-plus"></i> Add plant</button>
+      </div>
+      <div class="card">
+        <h3><i class="fas fa-cubes" style="color:#16a34a;margin-right:8px"></i>Materials</h3>
+        <table class="mini-table">
+          <thead><tr><th>Description</th><th class="right" style="width:70px">Qty</th><th style="width:70px">Unit</th><th class="right" style="width:110px">Rate ($)</th><th class="right" style="width:110px">Amount</th><th style="width:30px"></th></tr></thead>
+          <tbody id="vMaterialBody"></tbody>
+        </table>
+        <button class="add-line-btn" onclick="addRateRow('material')"><i class="fas fa-plus"></i> Add material</button>
+      </div>
+      <div class="card" style="padding:16px">
+        <div class="sum-strip" style="margin-top:0">
+          <div class="sum-card"><div class="sc-label">Labour</div><div class="sc-value" id="vSumLabour">$0</div></div>
+          <div class="sum-card"><div class="sc-label">Plant</div><div class="sc-value" id="vSumPlant">$0</div></div>
+          <div class="sum-card"><div class="sc-label">Materials</div><div class="sc-value" id="vSumMaterial">$0</div></div>
+          <div class="sum-card"><div class="sc-label">Cost</div><div class="sc-value" id="vSumCost">$0</div></div>
+          <div class="sum-card primary"><div class="sc-label">Claim @ <input id="vMarkup" value="15" style="width:42px;border:none;background:transparent;font-weight:700;color:#d97706;text-align:right;font-size:12px;font-family:Inter" oninput="calcVarBuild()">% markup</div><div class="sc-value" id="vSumClaim">$0</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Attached dockets -->
+    <div class="card" id="varDocketsCard" style="display:none">
+      <h3><i class="fas fa-clipboard-list" style="color:#0d9488;margin-right:8px"></i>Attached daywork dockets</h3>
+      <p class="card-sub">This cost is <strong>already tracked</strong> in the budget overview. Approving the variation converts it from unclaimed cost into contract revenue.</p>
+      <div id="varDocketList"></div>
+    </div>
+
+    <!-- Budget mapping -->
+    <div class="card">
+      <h3><i class="fas fa-map-pin" style="color:#f5a623;margin-right:8px"></i>Budget mapping</h3>
+      <p class="card-sub">Where this variation lands in the budget overview — and therefore which cost centre its POs, dockets and bills are tracked against.</p>
+      <div class="field-row-3">
+        <div class="field"><label>Cost centre</label><select id="vCC"></select></div>
+        <div class="field"><label>Zone</label><select id="vZone"></select></div>
+        <div class="field"><label>Budget cost ($)</label><input id="vBudget" class="num" placeholder="0" oninput="calcVarBuild()"></div>
+      </div>
+      <div class="field" style="margin-bottom:0"><label>Allocation method</label>
+        <select id="vAlloc">
+          <option value="mapped">Mapped to variation line items</option>
+          <option value="even">Even split across cost centres</option>
+          <option value="proportional">Proportional to line item value</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Supporting documents -->
+    <div class="card">
+      <h3><i class="fas fa-paperclip" style="color:#f5a623;margin-right:8px"></i>Supporting documents</h3>
+      <p class="card-sub">Quotes, drawings, emails, photos — stored against the variation for the claim.</p>
+      <div class="dropzone" onclick="addSampleVarFile()" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="event.preventDefault();this.classList.remove('dragover');addSampleVarFile()">
+        <i class="fas fa-cloud-arrow-up" style="font-size:24px;color:#f5a623;margin-bottom:8px"></i>
+        <div style="font-size:13px;font-weight:600;color:#1b2a4a">Drag &amp; drop files here</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:3px">or <span style="color:#f5a623;font-weight:500">browse</span> to choose files</div>
+      </div>
+      <div id="varFileList"></div>
+    </div>
+
+    <!-- Summary -->
+    <div class="card">
+      <h3><i class="fas fa-calculator" style="color:#f5a623;margin-right:8px"></i>Variation summary</h3>
+      <div class="sum-strip" style="margin-top:6px">
+        <div class="sum-card"><div class="sc-label">Contract value</div><div class="sc-value" id="vSumContract">$0</div></div>
+        <div class="sum-card"><div class="sc-label">Budget cost</div><div class="sc-value" id="vSumBudget">$0</div></div>
+        <div class="sum-card"><div class="sc-label">Already tracked</div><div class="sc-value" id="vSumTracked">$0</div></div>
+        <div class="sum-card primary"><div class="sc-label">Margin</div><div class="sc-value" id="vSumMargin">0.0%</div></div>
+      </div>
+      <div class="callout blue" style="margin:16px 0 0">
+        <i class="fas fa-circle-info"></i> A <strong>submitted</strong> variation stays outside the contract and budget totals until the client approves it. Cost already tracked against it is reported as <strong>cost at risk</strong> on the overview. On approval its contract value, budget, committed, tracked and actual all flow into the totals.
+      </div>
     </div>
   </div>
 </div>
