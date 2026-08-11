@@ -260,6 +260,9 @@ tr.no-cost-row:hover td{background:#fcfdff}
 tr.no-cost-row:hover td.no-cost{background:repeating-linear-gradient(-45deg,#fbfcfd,#fbfcfd 6px,#f6f8fa 6px,#f6f8fa 12px)}
 tr.scope-note td{background:#f0f7ff;border-bottom:1px solid #bfdbfe;color:#1e40af;font-size:12px;padding:9px 14px;line-height:1.5}
 tr.scope-note td i{margin-right:6px;color:#3b82f6}
+tr.scope-note.period td{background:#fffbeb;border-bottom-color:#fcd34d;color:#92400e}
+tr.scope-note.period td i{color:#d97706}
+.date-input{padding:7px 10px;font-family:'Inter',sans-serif;color:#475569}
 .money-muted{color:#cbd5e1}
 .var-pos{color:#16a34a;font-weight:600}
 .var-neg{color:#ef4444;font-weight:600}
@@ -1360,7 +1363,13 @@ function derive(it){
 function activeLines(){
   // A dayworks-only project has no BOQ, no variations and no provisional sums —
   // the dockets are the budget.
-  if (isDayworksProject()) return dayworksLines.map(d => Object.assign({}, d, derive(d)));
+  if (isDayworksProject()){
+    const selDw = selectedPeriods();
+    return dayworksLines.map(d => {
+      const line = Object.assign({}, d, derive(d));
+      return selDw ? applyPeriod(line, selDw) : line;
+    });
+  }
 
   const lines = baseItems.map(it => Object.assign({}, it, derive(it)));
 
@@ -1379,7 +1388,8 @@ function activeLines(){
   }));
 
   if (unassignedDocs.length) lines.push(unassignedLine());
-  return lines;
+  const sel = selectedPeriods();
+  return sel ? lines.map(l => applyPeriod(l, sel)) : lines;
 }
 
 /* ═══ Helpers ═══ */
@@ -2068,6 +2078,12 @@ function render(){
   claimMode = boqIsClaimView;
   renderTableHead();
   const groupDrill = currentView === 'cc' && !lineCostsShown();
+
+  const plabel = periodLabel();
+  if (plabel) html += '<tr class="scope-note period"><td colspan="' + colCount() + '">' +
+    '<i class="fas fa-calendar-day"></i> Showing <strong>cost incurred in ' + plabel + '</strong> only. ' +
+    'Contract, budget and claimed to date are as-at figures and still show the full project, so margin and budget ' +
+    'remaining read against the whole job rather than the period.</td></tr>';
 
   if (boqIsClaimView) html += '<tr class="scope-note"><td colspan="' + colCount() + '">' +
     '<i class="fas fa-file-invoice"></i> <strong>BOQ — claim view.</strong> This is the contract breakdown claims are made against, including approved ' +
@@ -3120,6 +3136,12 @@ function releaseProvisional(code){
     suppliers:{po:'Altus Traffic', dkt:'Altus Traffic', bill:'Altus Traffic'}});
   p3.drawn = 9000; p3.status = 'partial';
 })();
+
+/* Month options for the period filter. */
+document.getElementById('periodFilter').innerHTML =
+  '<option value="all">All time</option>' +
+  PERIODS.slice().reverse().map(p => '<option value="' + p.key + '">' + p.label + '</option>').join('') +
+  '<option value="custom">Custom range…</option>';
 
 /* Start as a cost centre project; the toggle re-renders as WBS or dayworks on demand. */
 applyStructureChrome();
