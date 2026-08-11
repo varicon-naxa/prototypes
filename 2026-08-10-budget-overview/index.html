@@ -185,6 +185,12 @@ tr.res-row .res-icon{width:20px;height:20px;border-radius:5px;background:#fff;bo
 tr.res-row .res-hint{font-size:10px;color:#a78bfa;font-weight:400;font-style:italic}
 tr.res-row .spend-bar{height:6px}
 tr.res-row .spend-cap{font-size:9px}
+tr.bd-row{display:none}
+tr.bd-row.visible{display:table-row}
+tr.bd-row td{background:#f5f9ff;font-size:12px;padding:7px 12px;border-bottom:1px solid #eaf1fb;color:#334155}
+tr.bd-row td:first-child{box-shadow:inset 3px 0 0 #93c5fd}
+tr.bd-row .cell-desc{font-weight:500;color:#1e3a8a;font-size:12px}
+tr.bd-row .bd-detail{font-size:10.5px;color:#94a3b8;margin-top:2px;font-weight:400}
 /* Clickable figures */
 .fig-link{cursor:pointer;position:relative}
 .fig-link:hover{background:#eef4ff;box-shadow:inset 0 -2px 0 #3b82f6}
@@ -2256,7 +2262,7 @@ function itemRow(it, open, forceCost){
     '<td class="cell-code">' + it.code + '</td>' +
     '<td class="cell-desc" style="font-weight:400">' + it.desc + badge +
       '<div style="font-size:11px;color:#94a3b8;margin-top:2px">' + (it.date ? it.date + ' · ' : '') + it.cc + ' · ' + it.zone +
-      (showCost ? resourceToggle('res:' + it.code) : '') +
+      (showCost ? resourceToggle('res:' + it.code) : '') + breakdownToggle(it) +
       '</div>' +
       (it.claim === 'unclaimed' ? '<div style="margin-top:6px" onclick="event.stopPropagation()">' +
         '<button class="btn btn-primary btn-sm" onclick="convertDocketToClaim(\'' + it.code + '\')">' +
@@ -3029,6 +3035,14 @@ function saveVariation(status){
     ref:document.getElementById('vRef').value.trim(),
     alloc:document.getElementById('vAlloc').value,
     files:varFiles.slice(), dockets:attachedRecords.map(r => r.id),
+    // the priced build-up carries through to the claim once approved
+    lines:(pendingVarMethod === 'rates'
+      ? [].concat(rateRows.labour, rateRows.plant).filter(x => x.name).map(x =>
+          ({desc:x.name, unit:'hr', qty:(x.hrs || 0) * (x.days || 0), rate:x.rate || 0}))
+         .concat(rateRows.material.filter(x => x.name).map(x =>
+          ({desc:x.name, unit:x.unit, qty:x.qty, rate:x.rate})))
+      : varLines.filter(l => l.desc).map(l => ({desc:l.desc, unit:l.unit, qty:l.qty, rate:l.rate}))),
+    claimed:0,
     contract, budget:num('vBudget'),
     poCommitted:0, dktTracked:0, tsUnapproved:0, billsPaid:0, tsApproved:0,
     dayworksValue:tracked,
@@ -3133,7 +3147,8 @@ function confirmProvActivation(){
     code: p.code + '-A' + seq,
     desc: p.desc + ' (instructed' + (provMode === 'variation' ? ' — allowance portion' : '') + ')',
     cc, zone, ref, drawn:draw,
-    contract:activatedContract, budget:activatedBudget,
+    contract:activatedContract, budget:activatedBudget, claimed:0,
+    lines:[{desc:p.desc + ' — instructed', unit:'item', qty:1, rate:activatedContract}],
     poCommitted:0, dktTracked:0, tsUnapproved:0, billsPaid:0, tsApproved:0,
     suppliers:{po:'', dkt:'', bill:''}
   };
