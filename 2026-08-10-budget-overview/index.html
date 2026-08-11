@@ -1506,6 +1506,25 @@ function docketRegister(node, key, total, forBills){
   }));
 }
 
+/* ABN contractors sit on a PO, but their timesheet is the source of truth for
+   what they did. The timesheet moves value out of committed into tracked;
+   approving it does NOT make it actual — only paying their invoice does. */
+function abnTimesheetRegister(node, key, total){
+  if (total <= 0) return [];
+  const seed = seedOf(key + 'abn');
+  const pos = poRegister(node, key);
+  const n = total > 20000 ? 4 : total > 6000 ? 3 : 2;
+  const amounts = splitAmount(total, Array.from({length:n}, (_, i) => 1 + (i % 2) * 0.35));
+  const names = ['J. Whitton (ABN)','M. Rakes (ABN)','T. Bui (ABN)','Kelso Plant Ops (ABN)'];
+  return amounts.map((amt, i) => ({
+    ref:'TS-' + String(2400 + (seed % 400) + i * 6),
+    contractor:names[(seed + i) % names.length],
+    weekEnding:dateFrom(seed, i), amount:amt,
+    hours:Math.round(amt / 92),
+    po: pos.length ? pos[i % pos.length].ref : null
+  }));
+}
+
 function timesheetRegister(node, key, total, approved){
   if (total <= 0) return [];
   const seed = seedOf(key + (approved ? 'a' : 'u'));
