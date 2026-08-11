@@ -1476,10 +1476,19 @@ function moneyCells(t, showCost){
     '<td class="right ' + (t.remaining >= 0 ? 'var-pos' : 'var-neg') + '">' + (t.remaining >= 0 ? '' : '−') + money(Math.abs(t.remaining)) + '</td>';
 }
 
-/* Current margin against the budget: (budget − spent to date) ÷ budget. */
+/* Current margin against budget: (budget − spent to date − open POs) ÷ budget.
+   Healthy at 10% or better, amber inside 10%, red once it goes negative. */
+const MARGIN_WARN = 10;
+function marginClass(m){ return m < 0 ? 'neg' : m < MARGIN_WARN ? 'warn' : 'pos'; }
 function marginCell(m, budget){
   if (!budget) return '<td class="right money-muted">—</td>';
-  return '<td class="right margin-cell ' + (m >= 0 ? 'pos' : 'neg') + '">' + pct(m) + '</td>';
+  const cls = marginClass(m);
+  return '<td class="right margin-cell ' + cls + '" title="' +
+    (cls === 'neg' ? 'Over budget once open POs land'
+     : cls === 'warn' ? 'Within ' + MARGIN_WARN + '% of budget' : 'Comfortably inside budget') + '">' +
+    (cls === 'neg' ? '<i class="fas fa-triangle-exclamation" style="margin-right:4px;font-size:10px"></i>' :
+     cls === 'warn' ? '<i class="fas fa-circle-exclamation" style="margin-right:4px;font-size:10px"></i>' : '') +
+    pct(m) + '</td>';
 }
 
 function render(){
