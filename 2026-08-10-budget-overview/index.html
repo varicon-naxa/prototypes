@@ -520,14 +520,14 @@ tr.scope-note td i{margin-right:6px;color:#3b82f6}
             <th class="right">Tracked <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Tracked</strong><br>Site dockets not yet on a paid bill, plus timesheets not yet approved. Separate from actual — the two are never added together.</span></span></th>
             <th class="right">Actual <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Actual</strong><br>Paid bills and approved timesheets. Cost moves here out of tracked.</span></span></th>
             <th class="right sep">Spent to Date <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Spent to date</strong><br>Tracked + actual. The one place the two are combined — they are disjoint states, so nothing is counted twice.</span></span></th>
-            <th class="right">Current Margin <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Current margin against budget</strong><br>(Budget − spent to date − open POs) ÷ budget.<br><br>Committed cost is included: an open PO is money already locked in, so leaving it out would flatter a line that has ordered its way past budget.<br><br>Amber inside 10%, red once negative.</span></span></th>
+            <th class="right">Current Margin <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Current margin against budget</strong><br>(Budget − spent to date − committed) ÷ budget.<br><br>Committed cost is included: value still on order is already locked in, so leaving it out would flatter a line that has ordered its way past budget.<br><br>Amber inside 10%, red once negative.</span></span></th>
             <th class="right">Budget Remaining</th>
           </tr>
           <tr class="sub-header">
             <th></th><th></th><th>Task</th><th>Actual / Tracked / Committed</th>
             <th class="right sep" id="thContractSub">Contract sum</th><th class="right">Approved budget</th>
-            <th class="right sep">From POs</th><th class="right">Dockets + unapproved TS</th><th class="right">Bills + approved TS</th>
-            <th class="right sep">Tracked + actual</th><th class="right">vs budget, incl. committed</th><th class="right">Less spend &amp; open POs</th>
+            <th class="right sep">On order</th><th class="right">Dockets + unapproved TS</th><th class="right">Bills + approved TS</th>
+            <th class="right sep">Tracked + actual</th><th class="right">vs budget, incl. committed</th><th class="right">Less spend &amp; committed</th>
           </tr>
         </thead>
         <tbody id="tableBody"></tbody>
@@ -1510,7 +1510,7 @@ function marginCell(m, budget){
   if (!budget) return '<td class="right money-muted">—</td>';
   const cls = marginClass(m);
   return '<td class="right margin-cell ' + cls + '" title="' +
-    (cls === 'neg' ? 'Over budget once open POs land'
+    (cls === 'neg' ? 'Over budget once committed value lands'
      : cls === 'warn' ? 'Within ' + MARGIN_WARN + '% of budget' : 'Comfortably inside budget') + '">' +
     (cls === 'neg' ? '<i class="fas fa-triangle-exclamation" style="margin-right:4px;font-size:10px"></i>' :
      cls === 'warn' ? '<i class="fas fa-circle-exclamation" style="margin-right:4px;font-size:10px"></i>' : '') +
@@ -1846,9 +1846,9 @@ function renderStats(){
       : tile('Contract Sum', money(t.contract), 'blue', 'Incl. ' + money(approvedVO.contract) + ' approved variations')) +
     tile('Current Contract Margin', pct(t.marginContract),
          marginClass(t.marginContract) === 'neg' ? 'red' : marginClass(t.marginContract) === 'warn' ? 'amber' : 'green',
-         (dw ? 'Claimable' : 'Contract') + ' less ' + money(t.costToDate) + ' spent and ' + money(t.openPO) + ' committed',
-         '<strong>Current contract margin</strong><br>(' + (dw ? 'Claimable value' : 'Contract sum') + ' − spent to date − open POs) ÷ ' +
-         (dw ? 'claimable value' : 'contract sum') + '. Includes committed cost, so it does not overstate the position while POs are still open.', 'margin') +
+         (dw ? 'Claimable' : 'Contract') + ' less ' + money(t.costToDate) + ' spent and ' + money(t.committed) + ' on order',
+         '<strong>Current contract margin</strong><br>(' + (dw ? 'Claimable value' : 'Contract sum') + ' − spent to date − committed) ÷ ' +
+         (dw ? 'claimable value' : 'contract sum') + '. Includes value still on order, so it does not overstate the position while POs are outstanding.', 'margin') +
     tile(dw ? 'Cost Budget' : 'Approved Budget', money(t.budget), '', pct(t.budget / t.contract * 100) + ' of ' + (dw ? 'claimable value' : 'contract')) +
     tile('Committed', money(t.committed), 'amber', 'On order — moves to tracked on delivery',
          '<strong>Committed</strong><br>Purchase order value still on order. Received POs have already moved into tracked, so this never overlaps tracked or actual.', 'committed') +
@@ -1861,7 +1861,7 @@ function renderStats(){
     tile('Spent to Date', money(t.costToDate), 'purple', 'Tracked + actual · ' + pct(t.costToDate / t.budget * 100) + ' of budget',
          '<strong>Spent to date</strong><br>The one place tracked and actual are combined. They are disjoint states, so nothing is double counted.') +
     tile('Budget Remaining', (t.remaining >= 0 ? '' : '−') + money(Math.abs(t.remaining)), t.remaining >= 0 ? 'green' : 'red',
-         t.remaining >= 0 ? 'After spend and open POs' : 'Over budget once open POs land') +
+         t.remaining >= 0 ? 'After spend and committed' : 'Over budget once committed value lands') +
     (dw
       ? tile('Unclaimed Dayworks', money(dwVal('unclaimed')), 'amber',
              dayworksLines.filter(d => d.claim === 'unclaimed').length + ' dockets not yet in a claim',
