@@ -64,6 +64,8 @@ body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#333;display:flex;m
 .stat.accent-prov{box-shadow:inset 3px 0 0 #a16207;background:#fffdf7}
 .stat.accent-margin{box-shadow:inset 3px 0 0 #7c3aed}
 .stat.accent-unassigned{box-shadow:inset 3px 0 0 #dc2626;background:#fffafa}
+.stat.accent-claimed{box-shadow:inset 3px 0 0 #3b82f6}
+.claimed-cell{color:#1d4ed8;font-weight:700}
 
 /* ── Project structure bar ── */
 .ptype-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 18px;margin-bottom:16px;flex-wrap:wrap}
@@ -1018,64 +1020,67 @@ tr.scope-note td i{margin-right:6px;color:#3b82f6}
    the variation is approved and carries its own budget.
    ═══════════════════════════════════════════════════════════════ */
 
+/* The last progress claim certified. Claimed-to-date is measured as at this claim. */
+const LAST_CLAIM = {number:'Claim #7', period:'to 31 Jul 2026', certified:'07 Aug 2026'};
+
 const COST_CENTRES = ['Earthworks','Concrete','Steel & Rebar','Formwork','Drainage','Roadway','Overheads / Prelims'];
 const ZONES = ['Project Wide','Zone A','Zone B','Zone C','Zone D'];
 
 /* ── Base budget lines (carry both a WBS code and a cost centre) ── */
 const baseItems = [
   {code:'0.1', desc:'Site Establishment & Facilities', cc:'Overheads / Prelims', zone:'Project Wide', l1:'0 Preliminaries', l2:'0.1 Establishment',
-   unit:'item', qty:1, rate:48000, contract:48000, budget:41000, poCommitted:26000, dktTracked:6800, tsUnapproved:3000, billsPaid:26000, tsApproved:0,
+   unit:'item', qty:1, rate:48000, claimed:48000, contract:48000, budget:41000, poCommitted:26000, dktTracked:6800, tsUnapproved:3000, billsPaid:26000, tsApproved:0,
    suppliers:{po:'Coates Hire', dkt:'Coates Hire', bill:'Coates Hire'}},
   {code:'0.2', desc:'Site Supervision & Management', cc:'Overheads / Prelims', zone:'Project Wide', l1:'0 Preliminaries', l2:'0.1 Establishment',
-   unit:'item', qty:1, rate:62000, contract:62000, budget:58000, poCommitted:0, dktTracked:0, tsUnapproved:14400, billsPaid:0, tsApproved:52000,
+   unit:'item', qty:1, rate:62000, claimed:46500, contract:62000, budget:58000, poCommitted:0, dktTracked:0, tsUnapproved:14400, billsPaid:0, tsApproved:52000,
    suppliers:{po:'', dkt:'', bill:'Payroll journal'}},
 
   {code:'1.1.1', desc:'Site Clearing & Grubbing', cc:'Earthworks', zone:'Zone A', l1:'1 Preliminaries & Earthworks', l2:'1.1 Site Preparation',
-   unit:'m²', qty:5200, rate:12.5, contract:65000, budget:53000, poCommitted:18000, dktTracked:4800, tsUnapproved:2400, billsPaid:38000, tsApproved:6000,
+   unit:'m²', qty:5200, rate:12.5, claimed:65000, contract:65000, budget:53000, poCommitted:18000, dktTracked:4800, tsUnapproved:2400, billsPaid:38000, tsApproved:6000,
    suppliers:{po:'Delta Plant Hire', dkt:'Delta Plant Hire', bill:'Delta Plant Hire'}},
   {code:'1.1.2', desc:'Topsoil Stripping & Stockpiling', cc:'Earthworks', zone:'Zone A', l1:'1 Preliminaries & Earthworks', l2:'1.1 Site Preparation',
-   unit:'m³', qty:1800, rate:18.0, contract:32400, budget:26500, poCommitted:9500, dktTracked:2100, tsUnapproved:1500, billsPaid:18000, tsApproved:3000,
+   unit:'m³', qty:1800, rate:18.0, claimed:32400, contract:32400, budget:26500, poCommitted:9500, dktTracked:2100, tsUnapproved:1500, billsPaid:18000, tsApproved:3000,
    suppliers:{po:'Delta Plant Hire', dkt:'Delta Plant Hire', bill:'Delta Plant Hire'}},
   {code:'1.2.1', desc:'Bulk Earthworks — Cut to Fill', cc:'Earthworks', zone:'Zone B', l1:'1 Preliminaries & Earthworks', l2:'1.2 Earthworks',
-   unit:'m³', qty:3500, rate:42.0, contract:147000, budget:118000, poCommitted:72000, dktTracked:18500, tsUnapproved:4000, billsPaid:82000, tsApproved:6000,
+   unit:'m³', qty:3500, rate:42.0, claimed:132300, contract:147000, budget:118000, poCommitted:72000, dktTracked:18500, tsUnapproved:4000, billsPaid:82000, tsApproved:6000,
    suppliers:{po:'Ridgeline Civil', dkt:'Ridgeline Civil', bill:'Ridgeline Civil'}},
   {code:'1.2.2', desc:'Subgrade Preparation', cc:'Earthworks', zone:'Zone B', l1:'1 Preliminaries & Earthworks', l2:'1.2 Earthworks',
-   unit:'m²', qty:4000, rate:8.5, contract:34000, budget:28000, poCommitted:0, dktTracked:2200, tsUnapproved:4000, billsPaid:2200, tsApproved:4000,
+   unit:'m²', qty:4000, rate:8.5, claimed:17000, contract:34000, budget:28000, poCommitted:0, dktTracked:2200, tsUnapproved:4000, billsPaid:2200, tsApproved:4000,
    suppliers:{po:'', dkt:'Fuel & consumables', bill:'Fuel & consumables'}},
 
   {code:'2.1.1', desc:'Concrete Supply & Pour — Footings', cc:'Concrete', zone:'Zone B', l1:'2 Structural Works', l2:'2.1 Concrete',
-   unit:'m³', qty:480, rate:295.0, contract:141600, budget:116000, poCommitted:98000, dktTracked:24800, tsUnapproved:4000, billsPaid:49000, tsApproved:6000,
+   unit:'m³', qty:480, rate:295.0, claimed:99120, contract:141600, budget:116000, poCommitted:98000, dktTracked:24800, tsUnapproved:4000, billsPaid:49000, tsApproved:6000,
    suppliers:{po:'Hanson Concrete', dkt:'Hanson Concrete', bill:'Hanson Concrete'}},
   {code:'2.1.2', desc:'Concrete Supply & Pour — Slabs', cc:'Concrete', zone:'Zone C', l1:'2 Structural Works', l2:'2.1 Concrete',
-   unit:'m³', qty:320, rate:285.0, contract:91200, budget:74500, poCommitted:68000, dktTracked:12400, tsUnapproved:2000, billsPaid:21000, tsApproved:3000,
+   unit:'m³', qty:320, rate:285.0, claimed:36480, contract:91200, budget:74500, poCommitted:68000, dktTracked:12400, tsUnapproved:2000, billsPaid:21000, tsApproved:3000,
    suppliers:{po:'Hanson Concrete', dkt:'Hanson Concrete', bill:'Hanson Concrete'}},
   {code:'2.2.1', desc:'Steel Reinforcement — Supply & Fix', cc:'Steel & Rebar', zone:'Zone B', l1:'2 Structural Works', l2:'2.2 Reinforcement',
-   unit:'tonne', qty:120, rate:2100.0, contract:252000, budget:208000, poCommitted:196000, dktTracked:27200, tsUnapproved:5000, billsPaid:54000, tsApproved:7000,
+   unit:'tonne', qty:120, rate:2100.0, claimed:88200, contract:252000, budget:208000, poCommitted:196000, dktTracked:27200, tsUnapproved:5000, billsPaid:54000, tsApproved:7000,
    suppliers:{po:'ARC Reinforcing', dkt:'ARC Reinforcing', bill:'ARC Reinforcing'}},
   {code:'2.2.2', desc:'Mesh Reinforcement — Supply & Fix', cc:'Steel & Rebar', zone:'Zone C', l1:'2 Structural Works', l2:'2.2 Reinforcement',
-   unit:'m²', qty:2400, rate:28.0, contract:67200, budget:55000, poCommitted:52000, dktTracked:8300, tsUnapproved:1500, billsPaid:12000, tsApproved:2000,
+   unit:'m²', qty:2400, rate:28.0, claimed:20160, contract:67200, budget:55000, poCommitted:52000, dktTracked:8300, tsUnapproved:1500, billsPaid:12000, tsApproved:2000,
    suppliers:{po:'ARC Reinforcing', dkt:'ARC Reinforcing', bill:'ARC Reinforcing'}},
   {code:'2.3.1', desc:'Formwork — Walls & Columns', cc:'Formwork', zone:'Zone C', l1:'2 Structural Works', l2:'2.3 Formwork',
-   unit:'m²', qty:1800, rate:58.0, contract:104400, budget:86000, poCommitted:0, dktTracked:0, tsUnapproved:0, billsPaid:0, tsApproved:0, suppliers:{po:'',dkt:'',bill:''}},
+   unit:'m²', qty:1800, rate:58.0, claimed:0, contract:104400, budget:86000, poCommitted:0, dktTracked:0, tsUnapproved:0, billsPaid:0, tsApproved:0, suppliers:{po:'',dkt:'',bill:''}},
   {code:'2.3.2', desc:'Formwork — Beams', cc:'Formwork', zone:'Zone C', l1:'2 Structural Works', l2:'2.3 Formwork',
-   unit:'m²', qty:600, rate:65.0, contract:39000, budget:32000, poCommitted:0, dktTracked:0, tsUnapproved:0, billsPaid:0, tsApproved:0, suppliers:{po:'',dkt:'',bill:''}},
+   unit:'m²', qty:600, rate:65.0, claimed:0, contract:39000, budget:32000, poCommitted:0, dktTracked:0, tsUnapproved:0, billsPaid:0, tsApproved:0, suppliers:{po:'',dkt:'',bill:''}},
 
   {code:'3.1.1', desc:'Structural Steelwork — Supply & Erect', cc:'Steel & Rebar', zone:'Zone C', l1:'3 Structural Steel', l2:'3.1 Steelwork',
-   unit:'tonne', qty:65, rate:3800.0, contract:247000, budget:203000, poCommitted:214000, dktTracked:16000, tsUnapproved:0, billsPaid:30000, tsApproved:0,
+   unit:'tonne', qty:65, rate:3800.0, claimed:37050, contract:247000, budget:203000, poCommitted:214000, dktTracked:16000, tsUnapproved:0, billsPaid:30000, tsApproved:0,
    suppliers:{po:'Northbridge Steel', dkt:'Northbridge Steel', bill:'Northbridge Steel'}},
 
   {code:'4.1.1', desc:'Stormwater Pipes — Supply & Lay', cc:'Drainage', zone:'Zone A', l1:'4 Drainage', l2:'4.1 Stormwater',
-   unit:'lm', qty:900, rate:85.0, contract:76500, budget:62000, poCommitted:44000, dktTracked:16600, tsUnapproved:3000, billsPaid:23000, tsApproved:4000,
+   unit:'lm', qty:900, rate:85.0, claimed:53550, contract:76500, budget:62000, poCommitted:44000, dktTracked:16600, tsUnapproved:3000, billsPaid:23000, tsApproved:4000,
    suppliers:{po:'Vinidex Pipe Co', dkt:'Vinidex Pipe Co', bill:'Vinidex Pipe Co'}},
   {code:'4.1.2', desc:'Pits & Headwalls', cc:'Drainage', zone:'Zone A', l1:'4 Drainage', l2:'4.1 Stormwater',
-   unit:'each', qty:24, rate:2200.0, contract:52800, budget:43000, poCommitted:31000, dktTracked:4700, tsUnapproved:1500, billsPaid:7000, tsApproved:2000,
+   unit:'each', qty:24, rate:2200.0, claimed:15840, contract:52800, budget:43000, poCommitted:31000, dktTracked:4700, tsUnapproved:1500, billsPaid:7000, tsApproved:2000,
    suppliers:{po:'Humes Precast', dkt:'Humes Precast', bill:'Humes Precast'}},
 
   {code:'5.1.1', desc:'Asphalt — Base Course', cc:'Roadway', zone:'Zone D', l1:'5 Roadway Construction', l2:'5.1 Asphalt',
-   unit:'m²', qty:8000, rate:18.0, contract:144000, budget:120000, poCommitted:116000, dktTracked:0, tsUnapproved:0, billsPaid:0, tsApproved:0,
+   unit:'m²', qty:8000, rate:18.0, claimed:0, contract:144000, budget:120000, poCommitted:116000, dktTracked:0, tsUnapproved:0, billsPaid:0, tsApproved:0,
    suppliers:{po:'Fulton Hogan', dkt:'', bill:''}},
   {code:'5.1.2', desc:'Asphalt — Wearing Course', cc:'Roadway', zone:'Zone D', l1:'5 Roadway Construction', l2:'5.1 Asphalt',
-   unit:'m²', qty:8000, rate:22.0, contract:176000, budget:146000, poCommitted:0, dktTracked:0, tsUnapproved:0, billsPaid:0, tsApproved:0, suppliers:{po:'',dkt:'',bill:''}}
+   unit:'m²', qty:8000, rate:22.0, claimed:0, contract:176000, budget:146000, poCommitted:0, dktTracked:0, tsUnapproved:0, billsPaid:0, tsApproved:0, suppliers:{po:'',dkt:'',bill:''}}
 ];
 baseItems.forEach(it => it.kind = 'base');
 
@@ -1085,15 +1090,15 @@ baseItems.forEach(it => it.kind = 'base');
    incurred against a draft/submitted variation is reported as cost at risk. */
 let variations = [
   {id:'VO-001', title:'Additional drainage — Zone B outfall', type:'priced', method:'lumpsum', status:'approved',
-   cc:'Drainage', zone:'Zone B', ref:'RFI-021', approvedOn:'18 Jun 2026',
+   cc:'Drainage', zone:'Zone B', ref:'RFI-021', approvedOn:'18 Jun 2026', claimed:19250,
    contract:38500, budget:31000, poCommitted:24000, dktTracked:8200, tsUnapproved:2000, billsPaid:12000, tsApproved:0,
    suppliers:{po:'Vinidex Pipe Co', dkt:'Vinidex Pipe Co', bill:'Vinidex Pipe Co'}},
   {id:'VO-002', title:'Rock excavation — unforeseen ground conditions', type:'priced', method:'lumpsum', status:'submitted',
-   cc:'Earthworks', zone:'Zone B', ref:'SI-014', submittedOn:'29 Jul 2026',
+   cc:'Earthworks', zone:'Zone B', ref:'SI-014', submittedOn:'29 Jul 2026', claimed:0,
    contract:26800, budget:22500, poCommitted:14000, dktTracked:9600, tsUnapproved:3900, billsPaid:5400, tsApproved:0,
    suppliers:{po:'Ridgeline Civil', dkt:'Ridgeline Civil', bill:'Ridgeline Civil'}},
   {id:'VO-003', title:'Night works traffic management', type:'priced', method:'rates', status:'approved',
-   cc:'Overheads / Prelims', zone:'Project Wide', ref:'VO-003', approvedOn:'31 Jul 2026',
+   cc:'Overheads / Prelims', zone:'Project Wide', ref:'VO-003', approvedOn:'31 Jul 2026', claimed:14200,
    contract:14200, budget:12400, poCommitted:12400, dktTracked:6000, tsUnapproved:0, billsPaid:6000, tsApproved:0,
    suppliers:{po:'Altus Traffic', dkt:'Altus Traffic', bill:'Altus Traffic'}}
 ];
@@ -1216,7 +1221,8 @@ const dayworksLines = [
    contract:2300, budget:2100, poCommitted:860, dktTracked:860, tsUnapproved:1140, billsPaid:0, tsApproved:0,
    suppliers:{po:'Altus Traffic', dkt:'Altus Traffic', bill:''}}
 ];
-dayworksLines.forEach(d => { d.kind = 'daywork'; d.l1 = 'D Dayworks'; d.l2 = 'D.1 Dockets'; });
+dayworksLines.forEach(d => { d.kind = 'daywork'; d.l1 = 'D Dayworks'; d.l2 = 'D.1 Dockets';
+  d.claimed = d.claim === 'claimed' ? d.contract : 0; });
 const CLAIM_STATES = {
   unclaimed: {label:'Unclaimed', cls:'warn'},
   'in-claim': {label:'In claim', cls:'vo'},
@@ -1462,7 +1468,7 @@ function spendBar(it){
 
 /* Totals roll up line-level derived values — an overrun on one line must not be
    absorbed by unspent budget on another, which re-deriving from summed inputs would do. */
-const SUM_KEYS = ['contract','budget','poCommitted','dktTracked','tsUnapproved','billsPaid','tsApproved',
+const SUM_KEYS = ['contract','budget','claimed','poCommitted','dktTracked','tsUnapproved','billsPaid','tsApproved',
                   'committed','tracked','actual','costToDate','openPO','engaged'];
 function aggregate(list){
   const t = {}; SUM_KEYS.forEach(k => t[k] = 0);
@@ -1846,7 +1852,7 @@ function groupKey(it){
    the line items inside a cost centre project. */
 function moneyCells(t, showCost, nodeId){
   if (claimMode) return boqCells(t);
-  const head = '<td class="right sep">' + money(t.contract) + '</td>' +
+  const head = '<td class="right sep">' + money(t.contract) + '</td>' + claimedCell(t) +
     '<td class="right">' + money(t.budget) + '</td>';
   if (showCost === false){
     return head + '<td class="right no-cost" colspan="6" title="Cost is coded to the cost centre, not to individual line items">' +
@@ -1868,7 +1874,18 @@ function moneyCells(t, showCost, nodeId){
    one: it shows the rates the claim is built from, and drops committed / tracked
    / actual entirely because that cost is never held against a BOQ line here. */
 let claimMode = false;
-function colCount(){ return claimMode ? 8 : 12; }
+function showClaimed(){ return currentView === 'boq'; }
+function colCount(){ return (claimMode ? 8 : 12) + (showClaimed() ? 1 : 0); }
+
+/* Claimed to date, as at the last certified progress claim. */
+function claimedCell(t){
+  if (!showClaimed()) return '';
+  const c = t.claimed || 0;
+  const pctOf = t.contract > 0 ? (c / t.contract * 100) : 0;
+  if (!t.contract) return '<td class="right money-muted">—</td>';
+  return '<td class="right claimed-cell">' + (c ? money(c) : '—') +
+    '<div class="cell-note">' + pct(pctOf) + ' of contract</div></td>';
+}
 
 function renderTableHead(){
   const cfg = PROJECT_TYPES[projectType];
@@ -1876,24 +1893,25 @@ function renderTableHead(){
     document.getElementById('tableCols').innerHTML =
       '<col style="width:34px"><col style="width:110px"><col style="width:auto">' +
       '<col style="width:80px"><col style="width:110px"><col style="width:120px">' +
-      '<col style="width:150px"><col style="width:150px">';
+      '<col style="width:150px"><col style="width:150px"><col style="width:150px">';
     document.getElementById('tableHead').innerHTML =
       '<tr><th></th><th>BOQ Code</th><th>Description</th>' +
         '<th>Unit</th><th class="right">Qty</th><th class="right">Rate</th>' +
-        '<th class="right sep">Contract</th><th class="right">Budget</th></tr>' +
+        '<th class="right sep">Contract</th>' + claimedHead() + '<th class="right">Budget</th></tr>' +
       '<tr class="sub-header"><th></th><th></th><th>Item as claimed</th>' +
         '<th>Measure</th><th class="right">Quantity</th><th class="right">Unit rate</th>' +
-        '<th class="right sep">Qty × rate</th><th class="right">Approved budget</th></tr>';
+        '<th class="right sep">Qty × rate</th>' + claimedSub() + '<th class="right">Approved budget</th></tr>';
     return;
   }
   document.getElementById('tableCols').innerHTML =
     '<col style="width:34px"><col style="width:88px"><col style="width:auto"><col style="width:170px">' +
-    '<col style="width:120px"><col style="width:120px"><col style="width:130px"><col style="width:130px"><col style="width:130px">' +
+    '<col style="width:120px">' + (showClaimed() ? '<col style="width:140px">' : '') +
+    '<col style="width:120px"><col style="width:130px"><col style="width:130px"><col style="width:130px">' +
     '<col style="width:140px"><col style="width:120px"><col style="width:130px">';
   document.getElementById('tableHead').innerHTML =
     '<tr><th></th><th id="thCode">' + cfg.codeHeader + '</th><th id="thDesc">' + cfg.descHeader + '</th>' +
       '<th>Spend vs Budget</th>' +
-      '<th class="right sep" id="thContract">' + cfg.contractHeader + ' </th><th class="right">Budget</th>' +
+      '<th class="right sep" id="thContract">' + cfg.contractHeader + ' </th>' + claimedHead() + '<th class="right">Budget</th>' +
       '<th class="right sep">Committed <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Committed</strong><br>PO value still on order. When a PO is received the value moves out of here and into tracked, so committed, tracked and actual never overlap.</span></span></th>' +
       '<th class="right">Tracked <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Tracked</strong><br>Site dockets not yet on a paid bill, employee timesheets not yet approved, and ABN contractor timesheets not yet paid. Separate from actual — the two are never added together.</span></span></th>' +
       '<th class="right">Actual <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Actual</strong><br>Paid bills, approved employee timesheets and paid ABN contractor invoices. Cost moves here out of tracked.</span></span></th>' +
@@ -1901,10 +1919,19 @@ function renderTableHead(){
       '<th class="right">Current Margin <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Current margin against budget</strong><br>(Budget − spent to date − committed) ÷ budget.<br><br>Committed cost is included: value still on order is already locked in, so leaving it out would flatter a line that has ordered its way past budget.<br><br>Amber inside 10%, red once negative.</span></span></th>' +
       '<th class="right">Budget Remaining</th></tr>' +
     '<tr class="sub-header"><th></th><th></th><th>Task</th><th>Actual / Tracked / Committed</th>' +
-      '<th class="right sep" id="thContractSub">' + cfg.contractSub + '</th><th class="right">Approved budget</th>' +
+      '<th class="right sep" id="thContractSub">' + cfg.contractSub + '</th>' + claimedSub() + '<th class="right">Approved budget</th>' +
       '<th class="right sep">On order</th><th class="right">Dockets + unapproved TS</th><th class="right">Bills + approved TS</th>' +
       '<th class="right sep">Tracked + actual</th><th class="right">vs budget, incl. committed</th><th class="right">Less spend &amp; committed</th></tr>';
 }
+
+function claimedHead(){
+  return showClaimed()
+    ? '<th class="right">Claimed to Date <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip">' +
+      '<strong>Claimed to date</strong><br>Value certified up to ' + LAST_CLAIM.number + ' (' + LAST_CLAIM.period +
+      '). Revenue claimed against the contract — it is not cost and never nets against budget.</span></span></th>'
+    : '';
+}
+function claimedSub(){ return showClaimed() ? '<th class="right">As at ' + LAST_CLAIM.number + '</th>' : ''; }
 
 /* The spend bar column does not exist in claim mode. */
 function spendCell(inner, style){
@@ -1918,6 +1945,7 @@ function boqCells(it){
     '<td class="right">' + (qty ? it.qty.toLocaleString('en-AU') : '—') + '</td>' +
     '<td class="right">' + (qty ? '$' + it.rate.toLocaleString('en-AU', {minimumFractionDigits:2}) : '—') + '</td>' +
     '<td class="right sep">' + money(it.contract) + '</td>' +
+    claimedCell(it) +
     '<td class="right">' + money(it.budget) + '</td>';
 }
 
@@ -2088,9 +2116,11 @@ function render(){
     (claimMode
       ? '<td colspan="3" class="right" style="font-style:italic">Pending variations &amp; provisional allowance</td>' +
         '<td class="right sep">' + money(pend.contract + provRemaining) + '</td>' +
+        (showClaimed() ? '<td class="right money-muted">—</td>' : '') +
         '<td class="right">' + money(pend.budget) + '</td>'
       :
     '<td class="right">' + money(pend.contract + provRemaining) + '</td>' +
+    (showClaimed() ? '<td class="right money-muted">—</td>' : '') +
     '<td class="right">' + money(pend.budget) + '</td>' +
     '<td class="right">' + (pend.committed ? money(pend.committed) : '—') + '</td>' +
     '<td class="right">' + (pend.tracked ? money(pend.tracked) : '—') + '</td>' +
@@ -2229,10 +2259,10 @@ function pendingVariationRows(){
       spendCell(spendBar(Object.assign({}, v, d))) +
       (claimMode
         ? '<td>—</td><td class="right">—</td><td class="right">—</td>' +
-          '<td class="right sep excluded-money">' + money(v.contract) + '</td>' +
+          '<td class="right sep excluded-money">' + money(v.contract) + '</td>' + claimedCell(v) +
           '<td class="right excluded-money">' + money(v.budget) + '</td>'
         :
-      '<td class="right excluded-money">' + money(v.contract) + '</td>' +
+      '<td class="right excluded-money">' + money(v.contract) + '</td>' + claimedCell(v) +
       '<td class="right excluded-money">' + money(v.budget) + '</td>' +
       committedCell(Object.assign({}, v, d), vid) +
       clickable(d.tracked ? money(d.tracked) : '—', 'tracked', d.tracked ? vid : null, d.tracked ? 'money-tracked' : 'money-muted') +
@@ -2285,9 +2315,10 @@ function provisionalRows(){
         '<span class="spend-cap">' + pct(drawPct) + ' of allowance drawn</span>') +
       (claimMode
         ? '<td>item</td><td class="right">1</td><td class="right">' + money(rem) + '.00</td>' +
-          '<td class="right sep excluded-money">' + money(rem) + '</td><td class="right money-muted">—</td>'
+          '<td class="right sep excluded-money">' + money(rem) + '</td>' + claimedCell({contract:rem, claimed:0}) +
+          '<td class="right money-muted">—</td>'
         :
-      '<td class="right excluded-money">' + money(rem) + '</td>' +
+      '<td class="right excluded-money">' + money(rem) + '</td>' + claimedCell({contract:rem, claimed:0}) +
       '<td class="right money-muted">—</td>' +
       '<td class="right money-muted">—</td><td class="right money-muted">—</td><td class="right money-muted">—</td>' +
       '<td class="right money-muted sep">—</td><td class="right money-muted">—</td><td class="right money-muted">—</td>') + '</tr>';
@@ -2331,6 +2362,10 @@ function renderStats(){
     tile('Actual', money(t.actual), 'green',
          money(t.billsPaid) + ' paid bills · ' + money(t.tsApproved) + ' approved timesheets',
          '<strong>Actual</strong><br>Paid bills, approved employee timesheets and paid ABN contractor invoices. Cost moves here out of tracked, so the two never overlap.', 'actual') +
+    tile('Claimed to Date', money(t.claimed), 'blue',
+         pct(t.contract > 0 ? t.claimed / t.contract * 100 : 0) + ' of contract · as at ' + LAST_CLAIM.number,
+         '<strong>Claimed to date</strong><br>Contract value certified up to ' + LAST_CLAIM.number + ' (' + LAST_CLAIM.period +
+         ', certified ' + LAST_CLAIM.certified + '). This is revenue claimed, not cost — it never nets against the budget.', 'claimed') +
     tile('Unassigned Cost', money(unassignedLine().costToDate + unassignedLine().committed),
          'red', unassignedDocs.length + ' documents with no cost centre',
          '<strong>Unassigned cost</strong><br>Committed, tracked and actual value that reached the project without a cost centre or task. It counts in the project totals but sits against no budget. Click the figures on the Unassigned line to code it.', 'unassigned') +
@@ -3014,14 +3049,14 @@ function releaseProvisional(code){
 (function seedActivations(){
   const p1 = provisionals[0];
   p1.activations.push({code:'P.1.1-A1', desc:'Survey & Set-Out (instructed)', cc:'Overheads / Prelims', zone:'Project Wide',
-    ref:'SI-006', drawn:8500, contract:8500, budget:7200,
+    ref:'SI-006', drawn:8500, claimed:8500, contract:8500, budget:7200,
     poCommitted:7200, dktTracked:3200, tsUnapproved:0, billsPaid:4000, tsApproved:0,
     suppliers:{po:'Precision Survey Co', dkt:'Precision Survey Co', bill:'Precision Survey Co'}});
   p1.drawn = 8500; p1.status = 'activated';
 
   const p3 = provisionals[2];
   p3.activations.push({code:'P.1.3-A1', desc:'Traffic Management Contingency (instructed)', cc:'Overheads / Prelims', zone:'Project Wide',
-    ref:'SI-011', drawn:9000, contract:9000, budget:7800,
+    ref:'SI-011', drawn:9000, claimed:4500, contract:9000, budget:7800,
     poCommitted:7800, dktTracked:3000, tsUnapproved:1100, billsPaid:0, tsApproved:0,
     suppliers:{po:'Altus Traffic', dkt:'Altus Traffic', bill:'Altus Traffic'}});
   p3.drawn = 9000; p3.status = 'partial';
