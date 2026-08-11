@@ -2267,7 +2267,47 @@ function itemRow(it, open, forceCost){
 
   if (showCost)
     html += resourceRows(it, 'res:' + it.code, open && openItems.has('res:' + it.code), it.cc);
+  html += breakdownRows(it, open);
   return html;
+}
+
+/* A variation or an activated provisional sum carries its own priced build-up.
+   In the BOQ view that build-up is what pulls through to the claim once the
+   variation is approved, so it is shown line by line at its agreed rates. */
+function breakdownRows(it, open){
+  if (currentView !== 'boq' || !it.lines || !it.lines.length) return '';
+  const key = 'bd:' + it.code;
+  const isOpen = openItems.has(key);
+  return it.lines.map(l => {
+    const amount = l.qty * l.rate;
+    const detail = l.qty.toLocaleString('en-AU') + ' ' + l.unit +
+      ' @ $' + l.rate.toLocaleString('en-AU', {minimumFractionDigits:2});
+    return '<tr class="bd-row' + (open && isOpen ? ' visible' : '') + '">' +
+      '<td></td><td></td>' +
+      '<td class="cell-desc">' + l.desc +
+        (claimMode ? '' : '<div class="bd-detail">' + detail + '</div>') + '</td>' +
+      (claimMode
+        ? '<td>' + l.unit + '</td>' +
+          '<td class="right">' + l.qty.toLocaleString('en-AU') + '</td>' +
+          '<td class="right">$' + l.rate.toLocaleString('en-AU', {minimumFractionDigits:2}) + '</td>' +
+          '<td class="right sep">' + money(amount) + '</td>' +
+          '<td class="right money-muted">—</td><td class="right money-muted">—</td>'
+        : spendCell('<span class="spend-cap" style="margin-top:0">—</span>') +
+          '<td class="right sep">' + money(amount) + '</td>' +
+          (showClaimed() ? '<td class="right money-muted">—</td>' : '') +
+          '<td class="right money-muted">—</td>' +
+          '<td class="right money-muted">—</td><td class="right money-muted">—</td><td class="right money-muted">—</td>' +
+          '<td class="right money-muted sep">—</td><td class="right money-muted">—</td><td class="right money-muted">—</td>') +
+    '</tr>';
+  }).join('');
+}
+function breakdownToggle(it){
+  if (currentView !== 'boq' || !it.lines || !it.lines.length) return '';
+  const key = 'bd:' + it.code;
+  const isOpen = openItems.has(key);
+  return '<span style="margin-left:10px" onclick="event.stopPropagation();toggleItem(\'' + esc(key) + '\')">' +
+    '<i class="fas fa-chevron-' + (isOpen ? 'up' : 'down') + '" style="font-size:9px;margin-right:4px;color:#1d4ed8"></i>' +
+    '<span style="color:#1d4ed8">' + (isOpen ? 'hide' : 'view') + ' priced build-up (' + it.lines.length + ')</span></span>';
 }
 
 /* Attach representative suppliers to a rolled-up node so its document register
