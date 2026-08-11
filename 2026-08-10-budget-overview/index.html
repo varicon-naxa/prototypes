@@ -1336,16 +1336,21 @@ function docsFor(it){
   const key = String(it.code).replace(/[^0-9A-Za-z]/g,'');
   const supplyCost = (it.dktTracked || 0) + (it.billsPaid || 0);
 
+  // Only the part still on order belongs here — a received PO has moved to tracked.
   if (it.poCommitted > 0){
     const split = it.poCommitted > 90000 ? [0.6, 0.4] : [1];
     let consumed = 0;
     split.forEach((f, i) => {
-      const amt = n(it.poCommitted * f);
-      const rec = Math.max(0, Math.min(amt, supplyCost - consumed));
-      consumed += amt;
+      const raised = n(it.poCommitted * f);
+      const rec = Math.max(0, Math.min(raised, supplyCost - consumed));
+      consumed += raised;
+      const open = raised - rec;
+      if (open <= 0) return;   // fully received — it is in the tracked column now
       po.push({ref:'PO-' + key + (split.length > 1 ? '-' + (i+1) : ''), party:it.suppliers.po,
-               meta: rec >= amt ? 'Fully receipted' : rec > 0 ? 'Part receipted — ' + money(rec) + ' delivered' : 'Approved, awaiting delivery',
-               state: rec >= amt ? 'ok' : rec > 0 ? 'warn' : 'idle', amt});
+               meta: rec > 0
+                 ? 'Part received — ' + money(rec) + ' of ' + money(raised) + ' has moved to tracked'
+                 : 'Approved, awaiting delivery',
+               state: rec > 0 ? 'warn' : 'idle', amt:open});
     });
   }
 
