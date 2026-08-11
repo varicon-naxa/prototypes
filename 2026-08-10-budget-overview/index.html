@@ -1232,20 +1232,26 @@ function resourceBreakdown(node, ccName){
   // Supply categories only — labour is never on a PO or a supplier bill.
   const supply = [0, mix.plant, mix.material, mix.sub, mix.misc];
 
+  const contract  = splitAmount(node.contract || 0, all);
   const budget    = splitAmount(node.budget || 0, all);
   const committed = splitAmount(node.poCommitted || 0, supply);
   const dkt       = splitAmount(node.dktTracked || 0, supply);
   const bills     = splitAmount(node.billsPaid || 0, supply);
+  // Apportion the parent's open PO rather than recomputing it here. On a rolled-up
+  // node openPO is the SUM of each line's open PO — one line's open order must not
+  // be netted off by another line's overspend — so recomputing from the totals
+  // would lose it and the rows would not add back to the row above.
+  const openPO    = splitAmount(node.openPO || 0, supply);
 
   return RESOURCE_CATEGORIES.map((c, i) => {
     const tracked = (c.key === 'labour' ? (node.tsUnapproved || 0) : dkt[i]);
     const actual  = (c.key === 'labour' ? (node.tsApproved   || 0) : bills[i]);
     const costToDate = tracked + actual;
-    const supplyCost = (c.key === 'labour' ? 0 : dkt[i] + bills[i]);
-    const openPO = Math.max(0, committed[i] - supplyCost);
-    const engaged = costToDate + openPO;
+    const open = (c.key === 'labour' ? 0 : openPO[i]);
+    const engaged = costToDate + open;
     return {
-      cat:c, budget:budget[i], committed:committed[i], tracked, actual, costToDate, openPO, engaged,
+      cat:c, contract:contract[i], budget:budget[i], committed:committed[i],
+      tracked, actual, costToDate, openPO:open, engaged,
       remaining: budget[i] - engaged,
       marginBudget: budget[i] > 0 ? (budget[i] - engaged) / budget[i] * 100 : 0
     };
