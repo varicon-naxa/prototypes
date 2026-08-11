@@ -1415,7 +1415,7 @@ function resourceRows(node, key, visible, ccName){
       '<td class="cell-desc"><span class="res-icon" style="color:' + r.cat.colour + '">' +
         '<i class="fas ' + r.cat.icon + '"></i></span>' + r.cat.name +
         (r.cat.key === 'labour' ? '<span class="res-hint">employees on timesheets · ABN contractors on a PO, paid on invoice</span>' : '') + '</td>' +
-      '<td class="spend">' + spendBar(r) + '</td>' +
+      spendCell(spendBar(r)) +
       '<td class="right sep">' + (r.contract ? money(r.contract) : '—') + '</td>' +
       '<td class="right">' + money(r.budget) + '</td>' +
       committedCell(r, rid(r)) +
@@ -1827,7 +1827,10 @@ const openItems = new Set();
 function visibleItems(){
   const q = document.getElementById('searchBox').value.trim().toLowerCase();
   const f = document.getElementById('statusFilter').value;
+  // Uncoded cost has no BOQ line, so it has no place in the claim view.
+  const inClaimView = currentView === 'boq' && !lineCostsShown();
   return activeLines().filter(it => {
+    if (inClaimView && it.kind === 'unassigned') return false;
     if (q && !(it.desc.toLowerCase().includes(q) || String(it.code).toLowerCase().includes(q) || it.cc.toLowerCase().includes(q))) return false;
     if (f !== 'all' && marginBand(it) !== f) return false;
     return true;
@@ -1842,6 +1845,7 @@ function groupKey(it){
 /* showCost=false renders the cost columns as "not held at this level" — used for
    the line items inside a cost centre project. */
 function moneyCells(t, showCost, nodeId){
+  if (claimMode) return boqCells(t);
   const head = '<td class="right sep">' + money(t.contract) + '</td>' +
     '<td class="right">' + money(t.budget) + '</td>';
   if (showCost === false){
@@ -1900,6 +1904,11 @@ function renderTableHead(){
       '<th class="right sep" id="thContractSub">' + cfg.contractSub + '</th><th class="right">Approved budget</th>' +
       '<th class="right sep">On order</th><th class="right">Dockets + unapproved TS</th><th class="right">Bills + approved TS</th>' +
       '<th class="right sep">Tracked + actual</th><th class="right">vs budget, incl. committed</th><th class="right">Less spend &amp; committed</th></tr>';
+}
+
+/* The spend bar column does not exist in claim mode. */
+function spendCell(inner, style){
+  return claimMode ? '' : '<td class="spend"' + (style || '') + '>' + inner + '</td>';
 }
 
 /* The BOQ detail cells used in claim mode. */
@@ -1969,9 +1978,11 @@ function render(){
                project this is the claim view: contract, variations and provisional
                sums, with cost read from the Cost Centres view instead. */
   const boqIsClaimView = currentView === 'boq' && !lineCostsShown();
+  claimMode = boqIsClaimView;
+  renderTableHead();
   const groupDrill = currentView === 'cc' && !lineCostsShown();
 
-  if (boqIsClaimView) html += '<tr class="scope-note"><td colspan="12">' +
+  if (boqIsClaimView) html += '<tr class="scope-note"><td colspan="' + colCount() + '">' +
     '<i class="fas fa-file-invoice"></i> <strong>BOQ — claim view.</strong> This is the contract breakdown claims are made against, including approved ' +
     'variations and any activated provisional sums. Cost on a cost centre project is coded to the cost centre, so committed, tracked and actual live in the ' +
     '<strong>Cost Centres</strong> view.</td></tr>';
@@ -2016,7 +2027,7 @@ function render(){
             : '') +
           (currentView === 'zone' ? resourceToggle(resKey) : '') + '</div>' : '') +
       '</td>' +
-      '<td class="spend">' + (groupCosts ? spendBar(t) : '<span class="spend-cap" style="margin-top:0">—</span>') + '</td>' +
+      spendCell(groupCosts ? spendBar(t) : '<span class="spend-cap" style="margin-top:0">—</span>') +
       moneyCells(t, groupCosts, gid) + '</tr>';
 
     // Cost centre view: expanding the group reveals the resource categories.
@@ -2047,7 +2058,7 @@ function render(){
         html += '<tr class="item-row l2-row' + (open ? ' visible' : '') + '">' +
           '<td></td><td class="cell-code">' + s.key.split(' ')[0] + '</td>' +
           '<td class="cell-desc">' + s.key.replace(/^\S+\s/,'') + '</td>' +
-          '<td class="spend">' + (boqIsClaimView ? '<span class="spend-cap" style="margin-top:0">—</span>' : spendBar(t2)) + '</td>' +
+          spendCell(spendBar(t2)) +
           moneyCells(t2, !boqIsClaimView, registerNode(s.key.replace(/^\S+\s/,''), withSuppliers(t2, s.items), s.key.split(' ')[0])) + '</tr>';
         s.items.forEach(it => html += itemRow(it, open, !boqIsClaimView));
       });
@@ -2058,7 +2069,7 @@ function render(){
     gi++;
   });
 
-  if (!groups.length) html = '<tr><td colspan="12" style="padding:40px;text-align:center;color:#94a3b8">No budget lines match this filter.</td></tr>';
+  if (!groups.length) html = '<tr><td colspan="' + colCount() + '" style="padding:40px;text-align:center;color:#94a3b8">No budget lines match this filter.</td></tr>';
 
   html += dayworksClaimRow();
   html += pendingVariationRows();
@@ -2071,15 +2082,20 @@ function render(){
   const pend = aggregate(variations.filter(v => v.status !== 'approved').map(v => Object.assign({}, v, derive(v))));
   const provRemaining = provisionals.filter(p => p.status !== 'released').reduce((s,p) => s + (p.allowance - p.drawn), 0);
   let foot = '<tr><td></td><td></td><td>Total' + (list.length !== activeLines().length ? ' (filtered)' : '') + '</td>' +
-    '<td class="spend" style="padding:10px 12px">' + spendBar(tot) + '</td>' +
+    spendCell(spendBar(tot), ' style="padding:10px 12px"') +
     moneyCells(tot, true, registerNode('Whole project', withSuppliers(tot, list), 'All cost centres')) + '</tr>';
-  foot += '<tr class="excl"><td></td><td></td><td>Excluded from totals</td><td></td>' +
+  foot += '<tr class="excl"><td></td><td></td><td>Excluded from totals</td>' + spendCell('') +
+    (claimMode
+      ? '<td colspan="3" class="right" style="font-style:italic">Pending variations &amp; provisional allowance</td>' +
+        '<td class="right sep">' + money(pend.contract + provRemaining) + '</td>' +
+        '<td class="right">' + money(pend.budget) + '</td>'
+      :
     '<td class="right">' + money(pend.contract + provRemaining) + '</td>' +
     '<td class="right">' + money(pend.budget) + '</td>' +
     '<td class="right">' + (pend.committed ? money(pend.committed) : '—') + '</td>' +
     '<td class="right">' + (pend.tracked ? money(pend.tracked) : '—') + '</td>' +
     '<td class="right">' + (pend.actual ? money(pend.actual) : '—') + '</td>' +
-    '<td colspan="3" class="right" style="font-style:italic">Pending variations ' + money(pend.contract) + ' · provisional allowance remaining ' + money(provRemaining) + '</td></tr>';
+    '<td colspan="3" class="right" style="font-style:italic">Pending variations ' + money(pend.contract) + ' · provisional allowance remaining ' + money(provRemaining) + '</td>') + '</tr>';
   document.getElementById('tableFoot').innerHTML = foot;
 
   document.getElementById('rowCount').textContent = list.length + ' of ' + activeLines().length + ' active budget lines';
@@ -2103,7 +2119,7 @@ function zoneCostCentreRow(section, zoneKey, open){
         ' <i class="fas fa-chevron-' + (resOpen ? 'up' : 'down') + '" style="font-size:9px;margin-left:4px;color:#7c3aed"></i>' +
         ' <span style="color:#7c3aed">' + (resOpen ? 'hide' : 'view') + ' resource breakdown</span>' +
         '</div></td>' +
-    '<td class="spend">' + spendBar(t) + '</td>' +
+    spendCell(spendBar(t)) +
     moneyCells(t, true, registerNode(section.key + ' — ' + zoneKey, withSuppliers(t, section.items), 'Cost centre section')) + '</tr>';
   html += resourceRows(t, resKey, open && resOpen, section.key);
   return html;
@@ -2130,7 +2146,7 @@ function itemRow(it, open, forceCost){
         '<button class="btn btn-primary btn-sm" onclick="convertDocketToClaim(\'' + it.code + '\')">' +
         '<i class="fas fa-file-invoice"></i> Convert to claim</button></div>' : '') +
       '</td>' +
-    '<td class="spend">' + (showCost ? spendBar(it) : '<span class="spend-cap" style="margin-top:0">—</span>') + '</td>' +
+    spendCell(showCost ? spendBar(it) : '<span class="spend-cap" style="margin-top:0">—</span>') +
     moneyCells(it, showCost, showCost ? registerNode(it.code + ' — ' + it.desc, it, it.cc + ' · ' + it.zone) : null) + '</tr>';
 
   if (showCost)
@@ -2161,7 +2177,7 @@ function dayworksClaimRow(){
   const by = s => dayworksLines.filter(d => d.claim === s);
   const val = s => by(s).reduce((a,d) => a + d.contract, 0);
   const unclaimed = by('unclaimed'), inClaim = by('in-claim'), claimed = by('claimed');
-  return '<tr class="section-banner dayworks"><td colspan="12">' +
+  return '<tr class="section-banner dayworks"><td colspan="' + colCount() + '">' +
     '<i class="fas fa-file-invoice" style="margin-right:8px"></i>Claim Status' +
     '<span class="banner-note">' +
       unclaimed.length + ' unclaimed ' + money(val('unclaimed')) + ' · ' +
@@ -2190,7 +2206,7 @@ function pendingVariationRows(){
   const pending = variations.filter(v => v.status !== 'approved');
   if (!pending.length) return '';
   const t = aggregate(pending.map(v => Object.assign({}, v, derive(v))));
-  let html = '<tr class="section-banner variations"><td colspan="12">' +
+  let html = '<tr class="section-banner variations"><td colspan="' + colCount() + '">' +
     '<i class="fas fa-file-signature" style="margin-right:8px"></i>Pending Variations' +
     '<span class="banner-note">Excluded from contract and budget totals until approved · ' +
     money(t.contract) + ' claimable, ' + money(t.costToDate) + ' already spent against them</span></td></tr>';
@@ -2210,7 +2226,12 @@ function pendingVariationRows(){
           '<button class="btn btn-success btn-sm" onclick="approveVariation(\'' + v.id + '\')"><i class="fas fa-check"></i> Approve</button> ' +
           (v.status === 'draft' ? '<button class="btn btn-outline btn-sm" onclick="submitDraft(\'' + v.id + '\')"><i class="fas fa-paper-plane"></i> Submit</button> ' : '') +
         '</div></td>' +
-      '<td class="spend">' + spendBar(Object.assign({}, v, d)) + '</td>' +
+      spendCell(spendBar(Object.assign({}, v, d))) +
+      (claimMode
+        ? '<td>—</td><td class="right">—</td><td class="right">—</td>' +
+          '<td class="right sep excluded-money">' + money(v.contract) + '</td>' +
+          '<td class="right excluded-money">' + money(v.budget) + '</td>'
+        :
       '<td class="right excluded-money">' + money(v.contract) + '</td>' +
       '<td class="right excluded-money">' + money(v.budget) + '</td>' +
       committedCell(Object.assign({}, v, d), vid) +
@@ -2218,7 +2239,7 @@ function pendingVariationRows(){
       clickable(d.actual ? money(d.actual) : '—', 'actual', d.actual ? vid : null, d.actual ? 'money-actual' : 'money-muted') +
       '<td class="right sep money-spent">' + (d.costToDate ? money(d.costToDate) : '—') + '</td>' +
       marginCell(d.marginBudget, v.budget) +
-      '<td class="right" style="color:#94a3b8">—</td></tr>';
+      '<td class="right" style="color:#94a3b8">—</td>') + '</tr>';
   });
   return html;
 }
@@ -2234,7 +2255,7 @@ function provisionalRows(){
   const totalAllowance = provisionals.reduce((s,p) => s + p.allowance, 0);
   const drawn = provisionals.reduce((s,p) => s + p.drawn, 0);
 
-  let html = '<tr class="section-banner provisional"><td colspan="12">' +
+  let html = '<tr class="section-banner provisional"><td colspan="' + colCount() + '">' +
     '<i class="fas fa-hourglass-half" style="margin-right:8px"></i>Provisional Sums' +
     '<span class="banner-note">Allowances sit outside the budget until instructed · ' +
     money(totalAllowance) + ' allowed, ' + money(drawn) + ' drawn down, ' + money(remaining) + ' remaining</span></td></tr>';
@@ -2260,12 +2281,16 @@ function provisionalRows(){
           '<button class="btn btn-outline btn-sm" onclick="releaseProvisional(\'' + p.code + '\')"><i class="fas fa-xmark"></i> Not required</button>' +
         '</div>' : '') +
       '</td>' +
-      '<td class="spend"><div class="spend-bar"><span class="sb-committed" style="width:' + drawPct.toFixed(1) + '%"></span></div>' +
-        '<span class="spend-cap">' + pct(drawPct) + ' of allowance drawn</span></td>' +
+      spendCell('<div class="spend-bar"><span class="sb-committed" style="width:' + drawPct.toFixed(1) + '%"></span></div>' +
+        '<span class="spend-cap">' + pct(drawPct) + ' of allowance drawn</span>') +
+      (claimMode
+        ? '<td>item</td><td class="right">1</td><td class="right">' + money(rem) + '.00</td>' +
+          '<td class="right sep excluded-money">' + money(rem) + '</td><td class="right money-muted">—</td>'
+        :
       '<td class="right excluded-money">' + money(rem) + '</td>' +
       '<td class="right money-muted">—</td>' +
       '<td class="right money-muted">—</td><td class="right money-muted">—</td><td class="right money-muted">—</td>' +
-      '<td class="right money-muted sep">—</td><td class="right money-muted">—</td><td class="right money-muted">—</td></tr>';
+      '<td class="right money-muted sep">—</td><td class="right money-muted">—</td><td class="right money-muted">—</td>') + '</tr>';
   });
   return html;
 }
