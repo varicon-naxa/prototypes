@@ -1348,10 +1348,14 @@ function resourceBreakdown(node, ccName){
   const committed = splitAmount(node.committed || 0, supply);
 
   return RESOURCE_CATEGORIES.map((c, i) => {
-    const tracked = (c.key === 'labour' ? (node.tsUnapproved || 0) : dkt[i]);
-    const actual  = (c.key === 'labour' ? (node.tsApproved   || 0) : bills[i]);
+    const isLabour = c.key === 'labour';
+    // Labour = employees on timesheets + ABN contractors on POs.
+    const tsUn = isLabour ? (node.tsUnapproved || 0) : 0;
+    const tsAp = isLabour ? (node.tsApproved   || 0) : 0;
+    const tracked = tsUn + dkt[i];
+    const actual  = tsAp + bills[i];
     const costToDate = tracked + actual;
-    const open = (c.key === 'labour' ? 0 : committed[i]);
+    const open = committed[i];
     const engaged = costToDate + open;
     return {
       cat:c, contract:contract[i], budget:budget[i], committed:open,
@@ -1359,11 +1363,10 @@ function resourceBreakdown(node, ccName){
       remaining: budget[i] - engaged,
       marginBudget: budget[i] > 0 ? (budget[i] - engaged) / budget[i] * 100 : 0,
       // raw streams so the document modal can build the register for this category
-      poCommitted: (c.key === 'labour' ? 0 : open + dkt[i] + bills[i]),
-      dktTracked: (c.key === 'labour' ? 0 : dkt[i]),
-      billsPaid:  (c.key === 'labour' ? 0 : bills[i]),
-      tsUnapproved: (c.key === 'labour' ? (node.tsUnapproved || 0) : 0),
-      tsApproved:   (c.key === 'labour' ? (node.tsApproved   || 0) : 0)
+      poCommitted: open + dkt[i] + bills[i],
+      dktTracked: dkt[i], billsPaid: bills[i],
+      tsUnapproved: tsUn, tsApproved: tsAp,
+      abnLabour: isLabour
     };
   });
 }
