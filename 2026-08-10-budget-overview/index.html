@@ -1134,6 +1134,37 @@ const CLAIM_STATES = {
   claimed:    {label:'Claimed', cls:'ok'}
 };
 
+/* ── Unassigned costs ──
+   Documents that landed on the project without a cost centre or task coded to
+   them. Real project cost with no budget to sit against, so it is shown as its
+   own line: it belongs in the project totals but in no cost centre. */
+let unassignedDocs = [
+  {type:'po',   ref:'PO-1488', party:'Boral Quarries',      amount:18400, date:'23 Jul 2026', note:'Raised from site, no cost centre selected'},
+  {type:'po',   ref:'PO-1495', party:'Kennards Hire',       amount:6200,  date:'29 Jul 2026', note:'Awaiting delivery'},
+  {type:'dkt',  ref:'DKT-4620', party:'Boral Quarries',     amount:9100,  date:'31 Jul 2026', note:'Delivered to site, docket not coded'},
+  {type:'dkt',  ref:'DKT-4631', party:'Unknown supplier',   amount:3250,  date:'04 Aug 2026', note:'Docket photographed on site, supplier unmatched'},
+  {type:'ts',   ref:'TS-0912',  party:'Casual labour ×3',   amount:5400,  date:'w/e 02 Aug 2026', note:'Hours booked to the project, no task selected', approved:false},
+  {type:'bill', ref:'BILL-7742', party:'Boral Quarries',    amount:12800, date:'07 Aug 2026', note:'Paid — coded to project only'},
+  {type:'ts',   ref:'TS-0904',  party:'Day crew — Zone A',  amount:4300,  date:'w/e 26 Jul 2026', note:'Approved without a task', approved:true}
+];
+function unassignedLine(){
+  const sum = f => unassignedDocs.filter(f).reduce((a,d) => a + d.amount, 0);
+  const poRaised = sum(d => d.type === 'po');
+  const received = sum(d => d.type === 'dkt') + sum(d => d.type === 'bill');
+  const line = {
+    kind:'unassigned', code:'—', desc:'Unassigned costs',
+    cc:'Unassigned', zone:'Unassigned', l1:'U Unassigned', l2:'U.1 Uncoded documents',
+    contract:0, budget:0,
+    poCommitted:poRaised,
+    dktTracked:sum(d => d.type === 'dkt'),
+    tsUnapproved:sum(d => d.type === 'ts' && !d.approved),
+    billsPaid:sum(d => d.type === 'bill'),
+    tsApproved:sum(d => d.type === 'ts' && d.approved),
+    suppliers:{po:'various', dkt:'various', bill:'various'}
+  };
+  return Object.assign(line, derive(line));
+}
+
 /* ═══ Derivation ═══
    Tracked and Actual are reported separately and never added together in a
    single figure — cost to date is shown as its own number so nothing is
