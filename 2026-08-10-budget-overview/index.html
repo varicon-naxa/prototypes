@@ -1329,6 +1329,104 @@ function aggregate(list){
   return t;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   DOCUMENT REGISTER
+   Every cost figure on the page is clickable and opens the documents behind
+   it. This is where the full procurement history lives: the Committed column
+   shows only what is still on order, but its document list shows every PO
+   raised — open, part received and fully serviced.
+   ═══════════════════════════════════════════════════════════════ */
+let docNodes = {}, docNodeSeq = 0;
+function registerNode(label, node, sub){
+  const id = 'n' + (docNodeSeq++);
+  docNodes[id] = {label, sub:sub || '', node};
+  return id;
+}
+/* Stable pseudo-random from a key, so refs and dates do not move between renders. */
+function seedOf(key){
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++){ h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return Math.abs(h);
+}
+const CREWS = ['Day crew — Zone A','Night crew','Civil crew 2','Plant operators','Supervision'];
+function dateFrom(seed, i){
+  const days = ['04 Jun','18 Jun','02 Jul','16 Jul','23 Jul','30 Jul','06 Aug'];
+  return days[(seed + i * 3) % days.length] + ' 2026';
+}
+
+/* Every PO raised against the node, with how much of each has been received. */
+function poRegister(node, key){
+  const raised = node.poCommitted || 0;
+  if (raised <= 0) return [];
+  const open = node.committed || 0;
+  let received = Math.max(0, raised - open);
+  const seed = seedOf(key);
+  const n = raised > 300000 ? 4 : raised > 80000 ? 3 : 2;
+  const weights = [0.4, 0.28, 0.2, 0.12].slice(0, n);
+  const amounts = splitAmount(raised, weights);
+  const supplier = (node.suppliers && node.suppliers.po) || 'Supplier';
+  return amounts.map((amt, i) => {
+    const rec = Math.min(amt, received);
+    received -= rec;
+    return {
+      ref:'PO-' + String(1200 + (seed % 400) + i * 7),
+      supplier, raised:amt, received:rec, open:amt - rec,
+      raisedOn:dateFrom(seed, i),
+      status: rec >= amt ? 'Fully received' : rec > 0 ? 'Part received' : 'Open',
+      state:  rec >= amt ? 'ok' : rec > 0 ? 'warn' : 'idle'
+    };
+  });
+}
+
+/* Site dockets, each matched back to the PO it was received against. */
+function docketRegister(node, key, total, forBills){
+  if (total <= 0) return [];
+  const seed = seedOf(key + (forBills ? 'b' : 'd'));
+  const pos = poRegister(node, key).filter(p => p.received > 0);
+  const n = total > 20000 ? 5 : total > 6000 ? 3 : 2;
+  const amounts = splitAmount(total, Array.from({length:n}, (_, i) => 1 + (i % 2) * 0.4));
+  const supplier = (node.suppliers && node.suppliers.dkt) || 'Supplier';
+  return amounts.map((amt, i) => ({
+    ref:'DKT-' + String(4100 + (seed % 500) + i * 5),
+    supplier, amount:amt, date:dateFrom(seed, i),
+    po: pos.length ? pos[i % pos.length].ref : null
+  }));
+}
+
+function timesheetRegister(node, key, total, approved){
+  if (total <= 0) return [];
+  const seed = seedOf(key + (approved ? 'a' : 'u'));
+  const n = total > 30000 ? 4 : total > 8000 ? 3 : 2;
+  const amounts = splitAmount(total, Array.from({length:n}, () => 1));
+  return amounts.map((amt, i) => ({
+    ref:'TS-' + String(880 + (seed % 90) + i),
+    crew:CREWS[(seed + i) % CREWS.length],
+    weekEnding:dateFrom(seed, i + 1), amount:amt,
+    hours:Math.round(amt / 78)
+  }));
+}
+
+/* Bills, each with the site dockets attached to it. */
+function billRegister(node, key){
+  const total = node.billsPaid || 0;
+  if (total <= 0) return [];
+  const seed = seedOf(key + 'bill');
+  const n = total > 60000 ? 3 : 2;
+  const amounts = splitAmount(total, Array.from({length:n}, (_, i) => 1 + (i % 2) * 0.3));
+  const supplier = (node.suppliers && node.suppliers.bill) || 'Supplier';
+  return amounts.map((amt, i) => {
+    const dktCount = amt > 30000 ? 3 : 2;
+    const parts = splitAmount(amt, Array.from({length:dktCount}, () => 1));
+    return {
+      ref:'BILL-' + String(7300 + (seed % 300) + i * 11),
+      supplier, amount:amt, paidOn:dateFrom(seed, i + 2),
+      dockets:parts.map((p, j) => ({
+        ref:'DKT-' + String(3900 + (seed % 400) + i * 9 + j), amount:p
+      }))
+    };
+  });
+}
+
 /* ═══ Source documents (drill-down) ═══ */
 function docsFor(it){
   const po = [], trk = [], act = [];
