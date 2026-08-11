@@ -1178,6 +1178,96 @@ function pct(v){ return (v || 0).toFixed(1) + '%'; }
 function num(id){ return parseFloat(String(document.getElementById(id).value).replace(/[^0-9.-]/g,'')) || 0; }
 function esc(s){ return String(s).replace(/'/g, "\\'"); }
 
+/* ═══ Resource category breakdown ═══
+   The five categories a budget is built up from in the budget setup flow.
+   Labour comes off timesheets and never sits under a PO, so it carries no
+   committed value; the supply categories split the PO, docket and bill value.
+   In the product these come from the category coded on each document — here
+   they are apportioned from the cost centre's build-up mix. */
+const RESOURCE_CATEGORIES = [
+  {key:'labour',   name:'Labour',              icon:'fa-hard-hat',      colour:'#3b82f6'},
+  {key:'plant',    name:'Plant and Equipment', icon:'fa-truck-monster', colour:'#f5a623'},
+  {key:'material', name:'Material',            icon:'fa-cubes',         colour:'#16a34a'},
+  {key:'sub',      name:'Subcontract',         icon:'fa-file-contract', colour:'#9333ea'},
+  {key:'misc',     name:'Miscellaneous',       icon:'fa-ellipsis',      colour:'#94a3b8'}
+];
+const RESOURCE_MIX = {
+  'Earthworks':          {labour:.25, plant:.45, material:.15, sub:.10, misc:.05},
+  'Concrete':            {labour:.15, plant:.10, material:.55, sub:.15, misc:.05},
+  'Steel & Rebar':       {labour:.20, plant:.05, material:.55, sub:.17, misc:.03},
+  'Formwork':            {labour:.35, plant:.10, material:.35, sub:.15, misc:.05},
+  'Drainage':            {labour:.25, plant:.20, material:.45, sub:.05, misc:.05},
+  'Roadway':             {labour:.10, plant:.15, material:.30, sub:.43, misc:.02},
+  'Overheads / Prelims': {labour:.55, plant:.20, material:.10, sub:.05, misc:.10}
+};
+const DEFAULT_MIX = {labour:.30, plant:.20, material:.30, sub:.15, misc:.05};
+
+/* Largest-remainder split so the parts always add back to the whole. */
+function splitAmount(total, weights){
+  const sum = weights.reduce((a,b) => a + b, 0);
+  if (!total || sum <= 0) return weights.map(() => 0);
+  const raw = weights.map(w => total * w / sum);
+  const out = raw.map(Math.floor);
+  let rem = Math.round(total) - out.reduce((a,b) => a + b, 0);
+  const order = raw.map((r,i) => ({i, frac:r - Math.floor(r)})).sort((a,b) => b.frac - a.frac);
+  for (let k = 0; k < rem; k++) out[order[k % order.length].i]++;
+  return out;
+}
+
+function resourceBreakdown(node, ccName){
+  const mix = RESOURCE_MIX[ccName] || RESOURCE_MIX[node.cc] || DEFAULT_MIX;
+  const all = RESOURCE_CATEGORIES.map(c => mix[c.key]);
+  // Supply categories only — labour is never on a PO or a supplier bill.
+  const supply = [0, mix.plant, mix.material, mix.sub, mix.misc];
+
+  const budget    = splitAmount(node.budget || 0, all);
+  const committed = splitAmount(node.poCommitted || 0, supply);
+  const dkt       = splitAmount(node.dktTracked || 0, supply);
+  const bills     = splitAmount(node.billsPaid || 0, supply);
+
+  return RESOURCE_CATEGORIES.map((c, i) => {
+    const tracked = (c.key === 'labour' ? (node.tsUnapproved || 0) : dkt[i]);
+    const actual  = (c.key === 'labour' ? (node.tsApproved   || 0) : bills[i]);
+    const costToDate = tracked + actual;
+    const supplyCost = (c.key === 'labour' ? 0 : dkt[i] + bills[i]);
+    const openPO = Math.max(0, committed[i] - supplyCost);
+    return {
+      cat:c, budget:budget[i], committed:committed[i], tracked, actual, costToDate,
+      remaining: budget[i] - costToDate - openPO,
+      marginBudget: budget[i] > 0 ? (budget[i] - costToDate) / budget[i] * 100 : 0
+    };
+  });
+}
+
+/* Rows shown under a cost centre, WBS line or docket when its breakdown is open. */
+function resourceRows(node, key, visible, ccName){
+  return resourceBreakdown(node, ccName).map(r =>
+    '<tr class="res-row' + (visible ? ' visible' : '') + '">' +
+      '<td></td><td></td>' +
+      '<td class="cell-desc"><span class="res-icon" style="color:' + r.cat.colour + '">' +
+        '<i class="fas ' + r.cat.icon + '"></i></span>' + r.cat.name +
+        (r.cat.key === 'labour' ? '<span class="res-hint">timesheets — never committed on a PO</span>' : '') + '</td>' +
+      '<td class="spend">' + spendBar({budget:r.budget, actual:r.actual, tracked:r.tracked,
+        openPO:Math.max(0, r.budget - r.costToDate - r.remaining), engaged:r.costToDate + Math.max(0, r.budget - r.costToDate - r.remaining)}) + '</td>' +
+      '<td class="right money-muted sep">—</td>' +
+      '<td class="right">' + money(r.budget) + '</td>' +
+      '<td class="right ' + (r.committed ? 'money-committed' : 'money-muted') + '">' + (r.committed ? money(r.committed) : '—') + '</td>' +
+      '<td class="right ' + (r.tracked ? 'money-tracked' : 'money-muted') + '">' + (r.tracked ? money(r.tracked) : '—') + '</td>' +
+      '<td class="right ' + (r.actual ? 'money-actual' : 'money-muted') + '">' + (r.actual ? money(r.actual) : '—') + '</td>' +
+      '<td class="right sep money-spent">' + (r.costToDate ? money(r.costToDate) : '—') + '</td>' +
+      marginCell(r.marginBudget, r.budget) +
+      '<td class="right ' + (r.remaining >= 0 ? 'var-pos' : 'var-neg') + '">' +
+        (r.remaining >= 0 ? '' : '−') + money(Math.abs(r.remaining)) + '</td>' +
+    '</tr>').join('');
+}
+
+function resourceToggle(key){
+  const open = openItems.has(key);
+  return '<span style="margin-left:10px" onclick="event.stopPropagation();toggleItem(\'' + esc(key) + '\')">' +
+    '<i class="fas fa-chevron-' + (open ? 'up' : 'down') + '" style="font-size:9px;margin-right:4px;color:#7c3aed"></i>' +
+    '<span style="color:#7c3aed">' + (open ? 'hide' : 'view') + ' resource breakdown</span></span>';
+}
+
 /* Margin bands — drives the filter now that the status tags are gone. */
 function marginBand(it){
   if (it.costToDate === 0) return 'nospend';
