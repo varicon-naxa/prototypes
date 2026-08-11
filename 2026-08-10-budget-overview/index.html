@@ -1684,13 +1684,21 @@ function openDocs(state, nodeId){
     const dkts = docketRegister(node, key, node.dktTracked || 0);
     const ts = timesheetRegister(node, key, node.tsUnapproved || 0, false);
     total = (node.dktTracked || 0) + (node.tsUnapproved || 0);
-    body += group(node.abnLabour ? 'ABN contractor dockets matched to a PO' : 'Site dockets matched to a PO',
-      dkts.length, dkts.map(d =>
-      row(node.abnLabour ? 'fa-user-helmet-safety' : 'fa-truck', '#0d9488', d.ref, d.supplier,
-        (node.abnLabour ? 'Worked ' : 'Received ') + d.date +
-        (d.po ? ' · matched to ' + d.po : ' · no PO match'), d.amount,
-        d.po ? '' : ' <span class="chip warn">Unmatched</span>')).join(''));
-    body += group('Timesheets awaiting approval', ts.length, ts.map(t =>
+    if (node.abnLabour){
+      const abn = abnTimesheetRegister(node, key, node.dktTracked || 0);
+      body += group('ABN contractor timesheets — awaiting invoice payment', abn.length, abn.map(a =>
+        row('fa-clock', '#0d9488', a.ref, a.contractor,
+          'Week ending ' + a.weekEnding + ' · ' + a.hours + ' hrs' +
+          (a.po ? ' · engaged on ' + a.po : '') + ' — the timesheet is the source of truth; this becomes actual when their invoice is paid',
+          a.amount, ' <span class="chip live">Awaiting payment</span>')).join(''));
+    } else {
+      body += group('Site dockets matched to a PO', dkts.length, dkts.map(d =>
+        row('fa-truck', '#0d9488', d.ref, d.supplier, 'Received ' + d.date +
+          (d.po ? ' · matched to ' + d.po : ' · no PO match'), d.amount,
+          d.po ? '' : ' <span class="chip warn">Unmatched</span>')).join(''));
+    }
+    body += group(node.abnLabour ? 'Employee timesheets awaiting approval' : 'Timesheets awaiting approval',
+      ts.length, ts.map(t =>
       row('fa-clock', '#b45309', t.ref, t.crew, 'Week ending ' + t.weekEnding + ' · ' + t.hours + ' hrs', t.amount,
         ' <span class="chip warn">Unapproved</span>')).join(''));
   }
