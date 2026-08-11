@@ -1268,6 +1268,60 @@ function unassignedLine(){
   return Object.assign(line, derive(line));
 }
 
+/* ═══ Cost periods ═══
+   Cost is spread across the months of the job so the overview can be read for a
+   single month or a custom range. Contract, budget and claimed are as-at figures
+   and are never period-filtered — only cost is. */
+const PERIODS = [
+  {key:'2026-05', label:'May 2026', start:'2026-05-01', end:'2026-05-31'},
+  {key:'2026-06', label:'Jun 2026', start:'2026-06-01', end:'2026-06-30'},
+  {key:'2026-07', label:'Jul 2026', start:'2026-07-01', end:'2026-07-31'},
+  {key:'2026-08', label:'Aug 2026', start:'2026-08-01', end:'2026-08-31'}
+];
+const COST_STREAMS = ['poCommitted','dktTracked','tsUnapproved','billsPaid','tsApproved'];
+
+/* Deterministic month profile per line — later months carry more of the spend. */
+function periodWeights(code){
+  const s = seedOf(String(code));
+  return PERIODS.map((p, i) => 1 + ((s >> (i * 3)) % 4) + i);
+}
+/* Which periods the current filter selects; null means every period. */
+function selectedPeriods(){
+  const el = document.getElementById('periodFilter');
+  if (!el || el.value === 'all') return null;
+  if (el.value !== 'custom') return [el.value];
+  const from = document.getElementById('periodFrom').value;
+  const to   = document.getElementById('periodTo').value;
+  return PERIODS.filter(p => (!from || p.end >= from) && (!to || p.start <= to)).map(p => p.key);
+}
+function periodLabel(){
+  const sel = selectedPeriods();
+  if (!sel) return null;
+  const el = document.getElementById('periodFilter');
+  if (el.value === 'custom'){
+    const from = document.getElementById('periodFrom').value, to = document.getElementById('periodTo').value;
+    return (from || 'start') + ' to ' + (to || 'today');
+  }
+  const p = PERIODS.find(x => x.key === el.value);
+  return p ? p.label : null;
+}
+/* Restrict a line's cost streams to the selected periods. */
+function applyPeriod(line, sel){
+  if (!sel) return line;
+  const w = periodWeights(line.code);
+  const out = Object.assign({}, line);
+  COST_STREAMS.forEach(k => {
+    const parts = splitAmount(line[k] || 0, w);
+    out[k] = PERIODS.reduce((a, p, i) => a + (sel.includes(p.key) ? parts[i] : 0), 0);
+  });
+  return Object.assign(out, derive(out));
+}
+function onPeriodChange(){
+  const v = document.getElementById('periodFilter').value;
+  document.getElementById('customRange').style.display = v === 'custom' ? 'inline-flex' : 'none';
+  render();
+}
+
 /* ═══ Derivation ═══
    Tracked and Actual are reported separately and never added together in a
    single figure — cost to date is shown as its own number so nothing is
