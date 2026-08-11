@@ -558,8 +558,8 @@ tr.scope-note td i{margin-right:6px;color:#3b82f6}
             <th class="right sep" id="thContract">Contract </th>
             <th class="right">Budget</th>
             <th class="right sep">Committed <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Committed</strong><br>PO value still on order. When a PO is received the value moves out of here and into tracked, so committed, tracked and actual never overlap.</span></span></th>
-            <th class="right">Tracked <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Tracked</strong><br>Site dockets not yet on a paid bill, plus timesheets not yet approved. Separate from actual — the two are never added together.</span></span></th>
-            <th class="right">Actual <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Actual</strong><br>Paid bills and approved timesheets. Cost moves here out of tracked.</span></span></th>
+            <th class="right">Tracked <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Tracked</strong><br>Site dockets not yet on a paid bill, employee timesheets not yet approved, and ABN contractor timesheets not yet paid. Separate from actual — the two are never added together.</span></span></th>
+            <th class="right">Actual <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Actual</strong><br>Paid bills, approved employee timesheets and paid ABN contractor invoices. Cost moves here out of tracked.</span></span></th>
             <th class="right sep">Spent to Date <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Spent to date</strong><br>Tracked + actual. The one place the two are combined — they are disjoint states, so nothing is counted twice.</span></span></th>
             <th class="right">Current Margin <span class="info-tooltip"><i class="fas fa-circle-info"></i><span class="tip"><strong>Current margin against budget</strong><br>(Budget − spent to date − committed) ÷ budget.<br><br>Committed cost is included: value still on order is already locked in, so leaving it out would flatter a line that has ordered its way past budget.<br><br>Amber inside 10%, red once negative.</span></span></th>
             <th class="right">Budget Remaining</th>
@@ -970,11 +970,14 @@ tr.scope-note td i{margin-right:6px;color:#3b82f6}
 
      poCommitted  — approved PO value                    → Committed
 
-     dktTracked   — site dockets not yet on a paid bill ┐
-     tsUnapproved — timesheets not yet approved         ┴→ Tracked
+     dktTracked   — site dockets not yet on a paid bill,
+                    and ABN contractor timesheets not
+                    yet paid                            ┐
+     tsUnapproved — employee timesheets not yet approved ┴→ Tracked
 
-     billsPaid    — supplier / subcontractor bills paid ┐
-     tsApproved   — timesheets approved                 ┴→ Actual
+     billsPaid    — supplier bills and ABN contractor
+                    invoices, once paid                 ┐
+     tsApproved   — employee timesheets approved         ┴→ Actual
 
    Tracked and Actual are DISJOINT and never summed together in the
    project overview. Cost moves BETWEEN them: a site docket is tracked
@@ -1382,7 +1385,7 @@ function resourceRows(node, key, visible, ccName){
       '<td></td><td></td>' +
       '<td class="cell-desc"><span class="res-icon" style="color:' + r.cat.colour + '">' +
         '<i class="fas ' + r.cat.icon + '"></i></span>' + r.cat.name +
-        (r.cat.key === 'labour' ? '<span class="res-hint">employees on timesheets + ABN contractors on POs</span>' : '') + '</td>' +
+        (r.cat.key === 'labour' ? '<span class="res-hint">employees on timesheets · ABN contractors on a PO, paid on invoice</span>' : '') + '</td>' +
       '<td class="spend">' + spendBar(r) + '</td>' +
       '<td class="right sep">' + (r.contract ? money(r.contract) : '—') + '</td>' +
       '<td class="right">' + money(r.budget) + '</td>' +
@@ -1623,9 +1626,9 @@ const STATE_META = {
   committed:{title:'Committed', colour:'#b45309', icon:'fa-cart-shopping',
     blurb:'Every purchase order raised against this budget, including ones already received and ABN contractor labour engaged on a PO. Only the <strong>still on order</strong> value counts in the Committed column — a received PO has moved into tracked.'},
   tracked:{title:'Tracked', colour:'#0d9488', icon:'fa-clipboard-list',
-    blurb:'Site dockets matched to their purchase order, plus timesheets not yet approved. This value leaves tracked when a docket lands on a paid bill or a timesheet is approved.'},
+    blurb:'Site dockets matched to their purchase order, plus timesheets not yet approved and ABN contractor timesheets not yet paid. A docket leaves tracked when it lands on a paid bill, an employee timesheet when it is approved, and an ABN timesheet when that contractor invoice is paid.'},
   actual:{title:'Actual', colour:'#16a34a', icon:'fa-file-invoice-dollar',
-    blurb:'Paid bills with the site dockets attached to each, plus approved timesheets.'}
+    blurb:'Paid bills with the site dockets attached to each, approved employee timesheets, and ABN contractor invoices once paid.'}
 };
 
 function openDocs(state, nodeId){
@@ -2166,10 +2169,10 @@ function renderStats(){
          '<strong>Committed</strong><br>Purchase order value still on order. Received POs have already moved into tracked, so this never overlaps tracked or actual.', 'committed') +
     tile('Tracked', money(t.tracked), 'teal',
          money(t.dktTracked) + ' site dockets · ' + money(t.tsUnapproved) + ' unapproved timesheets',
-         '<strong>Tracked</strong><br>Site dockets not yet on a paid bill, plus timesheets not yet approved. Reported separately from actual — never added to it.', 'tracked') +
+         '<strong>Tracked</strong><br>Site dockets not yet on a paid bill, employee timesheets not yet approved, and ABN contractor timesheets not yet paid. Reported separately from actual — never added to it.', 'tracked') +
     tile('Actual', money(t.actual), 'green',
          money(t.billsPaid) + ' paid bills · ' + money(t.tsApproved) + ' approved timesheets',
-         '<strong>Actual</strong><br>Paid bills and approved timesheets. Cost moves here out of tracked, so the two never overlap.', 'actual') +
+         '<strong>Actual</strong><br>Paid bills, approved employee timesheets and paid ABN contractor invoices. Cost moves here out of tracked, so the two never overlap.', 'actual') +
     tile('Unassigned Cost', money(unassignedLine().costToDate + unassignedLine().committed),
          'red', unassignedDocs.length + ' documents with no cost centre',
          '<strong>Unassigned cost</strong><br>Committed, tracked and actual value that reached the project without a cost centre or task. It counts in the project totals but sits against no budget. Click the figures on the Unassigned line to code it.', 'unassigned') +
@@ -2202,8 +2205,8 @@ function renderDefs(){
     '<div><div class="d-name">' + name + '</div><div class="d-desc">' + desc + '</div></div></div>';
   document.getElementById('defs').innerHTML =
     def('#fbbf24', 'Committed', 'Purchase orders raised and still on order. On delivery the value moves <em>out</em> of committed and into tracked.') +
-    def('#5eead4', 'Tracked', 'Received on site but not yet settled — site dockets not on a paid bill, plus timesheets not yet approved.') +
-    def('#16a34a', 'Actual', 'Paid bills and approved timesheets. Cost moves here <em>out of</em> tracked. Committed → tracked → actual, never counted twice.') +
+    def('#5eead4', 'Tracked', 'Received or worked but not yet settled — site dockets not on a paid bill, employee timesheets not yet approved, and ABN contractor timesheets not yet paid.') +
+    def('#16a34a', 'Actual', 'Paid bills, approved employee timesheets, and paid ABN contractor invoices. Cost moves here <em>out of</em> tracked — committed → tracked → actual, never counted twice.') +
     (isDayworksProject()
       ? def('#a16207', 'Daywork dockets', 'The project itself. Each docket is a budget line and a claim line — priced off the schedule of rates.')
       : def('#cbd5e1', 'Daywork dockets', 'Not tracked here. They are a claim instrument — they reach the budget only once a variation is raised and approved.'));
@@ -2271,8 +2274,8 @@ function renderSpendPanel(t){
       (markerPct < 99.9 ? '<span class="sp-marker" style="left:' + markerPct.toFixed(2) + '%"><span class="sp-marker-tag">Budget ' + money(t.budget) + '</span></span>' : '') +
     '</div>' +
     '<div class="sp-figs">' +
-      seg('Actual — paid bills &amp; approved timesheets', t.actual, '#16a34a', pct(t.actual / t.budget * 100) + ' of budget', 'actual') +
-      seg('Tracked — site dockets &amp; unapproved timesheets', t.tracked, '#5eead4', pct(t.tracked / t.budget * 100) + ' of budget', 'tracked') +
+      seg('Actual — paid bills, approved &amp; ABN invoices', t.actual, '#16a34a', pct(t.actual / t.budget * 100) + ' of budget', 'actual') +
+      seg('Tracked — dockets &amp; unpaid/unapproved timesheets', t.tracked, '#5eead4', pct(t.tracked / t.budget * 100) + ' of budget', 'tracked') +
       seg('Committed — on order, not yet received', t.committed, '#fbbf24', pct(t.committed / t.budget * 100) + ' of budget', 'committed') +
       seg('Budget remaining', Math.abs(t.remaining), '#e9edf3',
           t.remaining < 0 ? money(-t.remaining) + ' over budget' : pct(t.remaining / t.budget * 100) + ' of budget') +
