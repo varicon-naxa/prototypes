@@ -1102,14 +1102,22 @@ baseItems.forEach(it => it.kind = 'base');
 let variations = [
   {id:'VO-001', title:'Additional drainage — Zone B outfall', type:'priced', method:'lumpsum', status:'approved',
    cc:'Drainage', zone:'Zone B', ref:'RFI-021', approvedOn:'18 Jun 2026', claimed:19250,
+   lines:[{desc:'Additional 300mm RCP outfall', unit:'lm', qty:110, rate:245},
+          {desc:'Headwall & scour protection', unit:'each', qty:2, rate:3275},
+          {desc:'Rock pitching to outlet', unit:'m²', qty:60, rate:83.33}],
    contract:38500, budget:31000, poCommitted:24000, dktTracked:8200, tsUnapproved:2000, billsPaid:12000, tsApproved:0,
    suppliers:{po:'Vinidex Pipe Co', dkt:'Vinidex Pipe Co', bill:'Vinidex Pipe Co'}},
   {id:'VO-002', title:'Rock excavation — unforeseen ground conditions', type:'priced', method:'lumpsum', status:'submitted',
    cc:'Earthworks', zone:'Zone B', ref:'SI-014', submittedOn:'29 Jul 2026', claimed:0,
+   lines:[{desc:'Rock excavation — hydraulic hammer', unit:'m³', qty:320, rate:72},
+          {desc:'Cart & dispose rock spoil', unit:'m³', qty:320, rate:11.75}],
    contract:26800, budget:22500, poCommitted:14000, dktTracked:9600, tsUnapproved:3900, billsPaid:5400, tsApproved:0,
    suppliers:{po:'Ridgeline Civil', dkt:'Ridgeline Civil', bill:'Ridgeline Civil'}},
   {id:'VO-003', title:'Night works traffic management', type:'priced', method:'rates', status:'approved',
    cc:'Overheads / Prelims', zone:'Project Wide', ref:'VO-003', approvedOn:'31 Jul 2026', claimed:14200,
+   lines:[{desc:'Traffic controllers — night shift', unit:'hr', qty:96, rate:98},
+          {desc:'VMS board hire', unit:'week', qty:4, rate:950},
+          {desc:'After-hours supervision', unit:'hr', qty:8, rate:124}],
    contract:14200, budget:12400, poCommitted:12400, dktTracked:6000, tsUnapproved:0, billsPaid:6000, tsApproved:0,
    suppliers:{po:'Altus Traffic', dkt:'Altus Traffic', bill:'Altus Traffic'}}
 ];
@@ -1245,13 +1253,13 @@ const CLAIM_STATES = {
    them. Real project cost with no budget to sit against, so it is shown as its
    own line: it belongs in the project totals but in no cost centre. */
 let unassignedDocs = [
-  {type:'po',   ref:'PO-1488', party:'Boral Quarries',      amount:18400, date:'23 Jul 2026', note:'Raised from site, no cost centre selected'},
+  {type:'po',   ref:'PO-1488', party:'Boral Quarries',      amount:18400, date:'23 Jul 2026', note:'Raised from site, not coded'},
   {type:'po',   ref:'PO-1495', party:'Kennards Hire',       amount:6200,  date:'29 Jul 2026', note:'Awaiting delivery'},
   {type:'dkt',  ref:'DKT-4620', party:'Boral Quarries',     amount:9100,  date:'31 Jul 2026', note:'Delivered to site, docket not coded'},
   {type:'dkt',  ref:'DKT-4631', party:'Unknown supplier',   amount:3250,  date:'04 Aug 2026', note:'Docket photographed on site, supplier unmatched'},
-  {type:'ts',   ref:'TS-0912',  party:'Casual labour ×3',   amount:5400,  date:'w/e 02 Aug 2026', note:'Hours booked to the project, no task selected', approved:false},
+  {type:'ts',   ref:'TS-0912',  party:'Casual labour ×3',   amount:5400,  date:'w/e 02 Aug 2026', note:'Hours booked to the project, not coded', approved:false},
   {type:'bill', ref:'BILL-7742', party:'Boral Quarries',    amount:12800, date:'07 Aug 2026', note:'Paid — coded to project only'},
-  {type:'ts',   ref:'TS-0904',  party:'Day crew — Zone A',  amount:4300,  date:'w/e 26 Jul 2026', note:'Approved without a task', approved:true}
+  {type:'ts',   ref:'TS-0904',  party:'Day crew — Zone A',  amount:4300,  date:'w/e 26 Jul 2026', note:'Approved but not coded', approved:true}
 ];
 function unassignedLine(){
   const sum = f => unassignedDocs.filter(f).reduce((a,d) => a + d.amount, 0);
@@ -1700,6 +1708,9 @@ function isDayworksProject(){ return PROJECT_TYPES[projectType].dayworks; }
    contract value and a budget, and nothing else. WBS projects code cost to the
    line, so every level has figures. */
 function lineCostsShown(){ return PROJECT_TYPES[projectType].lineCosts; }
+/* A cost centre project codes cost to a cost centre; a WBS project codes it to
+   a task. An uncoded document only ever needs the one that applies. */
+function assignTarget(){ return projectType === 'wbs' ? 'task' : 'cost centre'; }
 function costLevelLabel(){ return projectType === 'cc' ? 'cost centre' : 'line item'; }
 
 function setProjectType(type){
@@ -1762,15 +1773,15 @@ function openDocs(state, nodeId){
     const labels = {po:'Purchase orders', dkt:'Site dockets', 'ts-un':'Unapproved timesheets',
                     bill:'Paid bills', 'ts-ap':'Approved timesheets'};
     body = '<div class="callout amber" style="margin-bottom:16px"><i class="fas fa-triangle-exclamation"></i> ' +
-      'These documents reached the project without a cost centre or task. They count in the project totals but sit against no budget until they are coded.</div>';
+      'These documents reached the project without a ' + assignTarget() + '. They count in the project totals but sit against no budget until one is chosen.</div>';
     wanted.forEach(t => {
       const docs = pick(t);
       total += docs.reduce((a,d) => a + d.amount, 0);
       body += group(labels[t], docs.length, docs.map(d =>
         row(icons[t][0], icons[t][1], d.ref, d.party, d.date + ' — ' + d.note, d.amount,
-            ' <span class="chip over">No cost centre</span>',
+            ' <span class="chip over">No ' + assignTarget() + '</span>',
             '<div class="doc-actions"><button class="btn btn-primary btn-sm" onclick="assignDoc(\'' + d.ref + '\')">' +
-            '<i class="fas fa-arrow-right-to-bracket"></i> Assign to cost centre</button></div>')).join(''));
+            '<i class="fas fa-arrow-right-to-bracket"></i> Assign to ' + assignTarget() + '</button></div>')).join(''));
     });
   }
   else if (state === 'committed'){
@@ -1889,8 +1900,8 @@ function openBoqSource(nodeId){
 }
 
 function assignDoc(ref){
-  toast('<i class="fas fa-arrow-right-to-bracket"></i> ' + ref + ' would open the coding screen to pick a cost centre and task. ' +
-        'Once coded it leaves unassigned and lands on that budget line.');
+  toast('<i class="fas fa-arrow-right-to-bracket"></i> ' + ref + ' would open the coding screen to pick a ' + assignTarget() +
+        '. Once coded it leaves unassigned and lands on that budget line.');
 }
 
 /* ═══ Rendering ═══ */
@@ -2120,7 +2131,7 @@ function render(){
         (isUnassigned
           ? ' <span class="chip over">Needs coding</span>' +
             '<div style="font-size:11px;font-weight:400;margin-top:3px;color:#b91c1c">' +
-              unassignedDocs.length + ' documents reached the project with no cost centre or task — click a figure to code them</div>'
+              unassignedDocs.length + ' documents reached the project with no ' + assignTarget() + ' — click a figure to code them</div>'
           : ' <span style="font-weight:400;color:#94a3b8;font-size:11px">· ' +
             (opensToResources ? RESOURCE_CATEGORIES.length + ' resource categories' : childCount + ' ' + childLabel) + '</span>') +
         (groupCosts && !isUnassigned ? '<div style="font-size:11px;font-weight:400;margin-top:5px">' +
@@ -2442,8 +2453,8 @@ function renderStats(){
          '<strong>Claimed to date</strong><br>Contract value certified up to ' + LAST_CLAIM.number + ' (' + LAST_CLAIM.period +
          ', certified ' + LAST_CLAIM.certified + '). This is revenue claimed, not cost — it never nets against the budget.', 'claimed') +
     tile('Unassigned Cost', money(unassignedLine().costToDate + unassignedLine().committed),
-         'red', unassignedDocs.length + ' documents with no cost centre',
-         '<strong>Unassigned cost</strong><br>Committed, tracked and actual value that reached the project without a cost centre or task. It counts in the project totals but sits against no budget. Click the figures on the Unassigned line to code it.', 'unassigned') +
+         'red', unassignedDocs.length + ' documents with no ' + assignTarget(),
+         '<strong>Unassigned cost</strong><br>Committed, tracked and actual value that reached the project without a ' + assignTarget() + '. It counts in the project totals but sits against no budget. Click the figures on the Unassigned line to code it.', 'unassigned') +
     tile('Spent to Date', money(t.costToDate), 'purple', 'Tracked + actual · ' + pct(t.costToDate / t.budget * 100) + ' of budget',
          '<strong>Spent to date</strong><br>The one place tracked and actual are combined. They are disjoint states, so nothing is double counted.') +
     tile('Budget Remaining', (t.remaining >= 0 ? '' : '−') + money(Math.abs(t.remaining)), t.remaining >= 0 ? 'green' : 'red',
@@ -3124,14 +3135,20 @@ function releaseProvisional(code){
 (function seedActivations(){
   const p1 = provisionals[0];
   p1.activations.push({code:'P.1.1-A1', desc:'Survey & Set-Out (instructed)', cc:'Overheads / Prelims', zone:'Project Wide',
-    ref:'SI-006', drawn:8500, claimed:8500, contract:8500, budget:7200,
+    ref:'SI-006', drawn:8500, claimed:8500,
+    lines:[{desc:'Set-out survey — initial', unit:'day', qty:5, rate:1200},
+           {desc:'As-built pickup', unit:'day', qty:2, rate:1250}],
+    contract:8500, budget:7200,
     poCommitted:7200, dktTracked:3200, tsUnapproved:0, billsPaid:4000, tsApproved:0,
     suppliers:{po:'Precision Survey Co', dkt:'Precision Survey Co', bill:'Precision Survey Co'}});
   p1.drawn = 8500; p1.status = 'activated';
 
   const p3 = provisionals[2];
   p3.activations.push({code:'P.1.3-A1', desc:'Traffic Management Contingency (instructed)', cc:'Overheads / Prelims', zone:'Project Wide',
-    ref:'SI-011', drawn:9000, claimed:4500, contract:9000, budget:7800,
+    ref:'SI-011', drawn:9000, claimed:4500,
+    lines:[{desc:'TMP preparation & approval', unit:'item', qty:1, rate:2400},
+           {desc:'Traffic control crew', unit:'day', qty:6, rate:1100}],
+    contract:9000, budget:7800,
     poCommitted:7800, dktTracked:3000, tsUnapproved:1100, billsPaid:0, tsApproved:0,
     suppliers:{po:'Altus Traffic', dkt:'Altus Traffic', bill:'Altus Traffic'}});
   p3.drawn = 9000; p3.status = 'partial';
