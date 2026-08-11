@@ -1586,6 +1586,109 @@ function applyStructureChrome(){
   document.getElementById('btnCreateClaim').style.display = cfg.dayworks ? '' : 'none';
 }
 
+/* ═══ Document modal ═══ */
+const STATE_META = {
+  committed:{title:'Committed', colour:'#b45309', icon:'fa-cart-shopping',
+    blurb:'Every purchase order raised against this budget, including ones already received. Only the <strong>still on order</strong> value counts in the Committed column — a received PO has moved into tracked.'},
+  tracked:{title:'Tracked', colour:'#0d9488', icon:'fa-clipboard-list',
+    blurb:'Site dockets matched to their purchase order, plus timesheets not yet approved. This value leaves tracked when a docket lands on a paid bill or a timesheet is approved.'},
+  actual:{title:'Actual', colour:'#16a34a', icon:'fa-file-invoice-dollar',
+    blurb:'Paid bills with the site dockets attached to each, plus approved timesheets.'}
+};
+
+function openDocs(state, nodeId){
+  const entry = docNodes[nodeId];
+  if (!entry) return;
+  const node = entry.node, meta = STATE_META[state];
+  const key = entry.label + '|' + state;
+  let body = '', total = 0;
+
+  const row = (icon, colour, ref, party, meta2, amt, chip, sub) =>
+    '<div class="doc-line">' +
+      '<div class="doc-icon" style="background:' + colour + '18;color:' + colour + '"><i class="fas ' + icon + '"></i></div>' +
+      '<div class="doc-body"><div class="doc-ref">' + ref + (chip || '') + '</div>' +
+        '<div class="doc-meta">' + (party ? party + ' · ' : '') + meta2 + '</div>' + (sub || '') + '</div>' +
+      '<div class="doc-amt">' + money(amt) + '</div>' +
+    '</div>';
+  const group = (label, count, html) => count
+    ? '<div class="doc-group"><div class="doc-group-head">' + label + ' <span>' + count + '</span></div>' + html + '</div>' : '';
+
+  if (node.kind === 'unassigned'){
+    const wanted = state === 'committed' ? ['po'] : state === 'tracked' ? ['dkt','ts-un'] : ['bill','ts-ap'];
+    const pick = t => unassignedDocs.filter(d =>
+      t === 'ts-un' ? (d.type === 'ts' && !d.approved) :
+      t === 'ts-ap' ? (d.type === 'ts' && d.approved) : d.type === t);
+    const icons = {po:['fa-cart-shopping','#b45309'], dkt:['fa-truck','#0d9488'],
+                   'ts-un':['fa-clock','#b45309'], bill:['fa-file-invoice-dollar','#16a34a'], 'ts-ap':['fa-clock','#16a34a']};
+    const labels = {po:'Purchase orders', dkt:'Site dockets', 'ts-un':'Unapproved timesheets',
+                    bill:'Paid bills', 'ts-ap':'Approved timesheets'};
+    body = '<div class="callout amber" style="margin-bottom:16px"><i class="fas fa-triangle-exclamation"></i> ' +
+      'These documents reached the project without a cost centre or task. They count in the project totals but sit against no budget until they are coded.</div>';
+    wanted.forEach(t => {
+      const docs = pick(t);
+      total += docs.reduce((a,d) => a + d.amount, 0);
+      body += group(labels[t], docs.length, docs.map(d =>
+        row(icons[t][0], icons[t][1], d.ref, d.party, d.date + ' — ' + d.note, d.amount,
+            ' <span class="chip over">No cost centre</span>',
+            '<div class="doc-actions"><button class="btn btn-primary btn-sm" onclick="assignDoc(\'' + d.ref + '\')">' +
+            '<i class="fas fa-arrow-right-to-bracket"></i> Assign to cost centre</button></div>')).join(''));
+    });
+  }
+  else if (state === 'committed'){
+    const pos = poRegister(node, key);
+    total = pos.reduce((a,p) => a + p.open, 0);
+    const raised = pos.reduce((a,p) => a + p.raised, 0);
+    body += '<div class="doc-summary">' +
+      '<div><span>POs raised</span><strong>' + money(raised) + '</strong></div>' +
+      '<div><span>Received — now in tracked</span><strong>' + money(raised - total) + '</strong></div>' +
+      '<div class="hi"><span>Still on order</span><strong>' + money(total) + '</strong></div></div>';
+    body += group('Purchase orders', pos.length, pos.map(p =>
+      row('fa-cart-shopping', '#b45309', p.ref, p.supplier,
+          'Raised ' + p.raisedOn + (p.received > 0 ? ' · ' + money(p.received) + ' received' : '') +
+          (p.open > 0 ? ' · ' + money(p.open) + ' still on order' : ''),
+          p.raised, ' <span class="chip ' + p.state + '">' + p.status + '</span>')).join(''));
+  }
+  else if (state === 'tracked'){
+    const dkts = docketRegister(node, key, node.dktTracked || 0);
+    const ts = timesheetRegister(node, key, node.tsUnapproved || 0, false);
+    total = (node.dktTracked || 0) + (node.tsUnapproved || 0);
+    body += group('Site dockets matched to a PO', dkts.length, dkts.map(d =>
+      row('fa-truck', '#0d9488', d.ref, d.supplier, 'Received ' + d.date +
+        (d.po ? ' · matched to ' + d.po : ' · no PO match'), d.amount,
+        d.po ? '' : ' <span class="chip warn">Unmatched</span>')).join(''));
+    body += group('Timesheets awaiting approval', ts.length, ts.map(t =>
+      row('fa-clock', '#b45309', t.ref, t.crew, 'Week ending ' + t.weekEnding + ' · ' + t.hours + ' hrs', t.amount,
+        ' <span class="chip warn">Unapproved</span>')).join(''));
+  }
+  else {
+    const bills = billRegister(node, key);
+    const ts = timesheetRegister(node, key, node.tsApproved || 0, true);
+    total = (node.billsPaid || 0) + (node.tsApproved || 0);
+    body += group('Paid bills', bills.length, bills.map(b =>
+      row('fa-file-invoice-dollar', '#16a34a', b.ref, b.supplier, 'Paid ' + b.paidOn, b.amount,
+        ' <span class="chip ok">Paid</span>',
+        '<div class="doc-attached"><span class="doc-attached-label">Site dockets attached</span>' +
+        b.dockets.map(d => '<span class="doc-pill"><i class="fas fa-truck"></i> ' + d.ref + ' · ' + money(d.amount) + '</span>').join('') +
+        '</div>')).join(''));
+    body += group('Approved timesheets', ts.length, ts.map(t =>
+      row('fa-clock', '#16a34a', t.ref, t.crew, 'Week ending ' + t.weekEnding + ' · ' + t.hours + ' hrs', t.amount,
+        ' <span class="chip ok">Approved</span>')).join(''));
+  }
+
+  document.getElementById('docModalTitle').innerHTML =
+    '<i class="fas ' + meta.icon + '" style="color:' + meta.colour + ';margin-right:8px"></i>' + meta.title + ' — ' + entry.label;
+  document.getElementById('docModalSub').innerHTML = (entry.sub ? entry.sub + ' · ' : '') + meta.blurb;
+  document.getElementById('docModalTotal').innerHTML =
+    '<span>' + meta.title + ' total</span><strong style="color:' + meta.colour + '">' + money(total) + '</strong>';
+  document.getElementById('docModalBody').innerHTML = body ||
+    '<div class="drill-empty">Nothing raised here yet.</div>';
+  openModal('docModal');
+}
+function assignDoc(ref){
+  toast('<i class="fas fa-arrow-right-to-bracket"></i> ' + ref + ' would open the coding screen to pick a cost centre and task. ' +
+        'Once coded it leaves unassigned and lands on that budget line.');
+}
+
 /* ═══ Rendering ═══ */
 let currentView = 'cc';
 let allExpanded = false;
