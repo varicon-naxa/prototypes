@@ -1296,6 +1296,10 @@ function resourceBreakdown(node, ccName){
 
 /* Rows shown under a cost centre, WBS line or docket when its breakdown is open. */
 function resourceRows(node, key, visible, ccName){
+  const parentLabel = (ccName || node.desc || key.replace(/^res:/, ''));
+  const rid = r => registerNode(parentLabel + ' — ' + r.cat.name,
+                                Object.assign({}, r, {suppliers:node.suppliers, kind:node.kind}),
+                                'Resource category');
   return resourceBreakdown(node, ccName).map(r =>
     '<tr class="res-row' + (visible ? ' visible' : '') + '">' +
       '<td></td><td></td>' +
@@ -1305,9 +1309,9 @@ function resourceRows(node, key, visible, ccName){
       '<td class="spend">' + spendBar(r) + '</td>' +
       '<td class="right sep">' + (r.contract ? money(r.contract) : '—') + '</td>' +
       '<td class="right">' + money(r.budget) + '</td>' +
-      committedCell(r) +
-      '<td class="right ' + (r.tracked ? 'money-tracked' : 'money-muted') + '">' + (r.tracked ? money(r.tracked) : '—') + '</td>' +
-      '<td class="right ' + (r.actual ? 'money-actual' : 'money-muted') + '">' + (r.actual ? money(r.actual) : '—') + '</td>' +
+      committedCell(r, rid(r)) +
+      clickable(r.tracked ? money(r.tracked) : '—', 'tracked', r.tracked ? rid(r) : null, r.tracked ? 'money-tracked' : 'money-muted') +
+      clickable(r.actual ? money(r.actual) : '—', 'actual', r.actual ? rid(r) : null, r.actual ? 'money-actual' : 'money-muted') +
       '<td class="right sep money-spent">' + (r.costToDate ? money(r.costToDate) : '—') + '</td>' +
       marginCell(r.marginBudget, r.budget) +
       '<td class="right ' + (r.remaining >= 0 ? 'var-pos' : 'var-neg') + '">' +
@@ -1765,6 +1769,7 @@ function marginCell(m, budget){
 
 function render(){
   const list = visibleItems();
+  docNodes = {}; docNodeSeq = 0;   // rebuilt each render so ids stay valid
   let html = '';
   let gi = 0;
 
@@ -1815,7 +1820,7 @@ function render(){
           (currentView !== 'boq' ? resourceToggle(resKey) : '') + '</div>' : '') +
       '</td>' +
       '<td class="spend">' + (groupCosts ? spendBar(t) : '<span class="spend-cap" style="margin-top:0">—</span>') + '</td>' +
-      moneyCells(t, groupCosts) + '</tr>';
+      moneyCells(t, groupCosts, registerNode(g.key, t, childCount + ' ' + childLabel)) + '</tr>';
 
     if (groupDrill) html += '<tr class="detail-row' + (drillOpen ? ' visible' : '') + '"><td colspan="12">' +
       drill(Object.assign({}, t, {suppliers:groupSuppliers(g.items), code:g.key})) + '</td></tr>';
@@ -1845,7 +1850,7 @@ function render(){
           '<td></td><td class="cell-code">' + s.key.split(' ')[0] + '</td>' +
           '<td class="cell-desc">' + s.key.replace(/^\S+\s/,'') + '</td>' +
           '<td class="spend">' + (boqIsClaimView ? '<span class="spend-cap" style="margin-top:0">—</span>' : spendBar(t2)) + '</td>' +
-          moneyCells(t2, !boqIsClaimView) + '</tr>';
+          moneyCells(t2, !boqIsClaimView, registerNode(s.key.replace(/^\S+\s/,''), t2, s.key.split(' ')[0])) + '</tr>';
         s.items.forEach(it => html += itemRow(it, open, !boqIsClaimView));
       });
     } else {
@@ -1867,7 +1872,8 @@ function render(){
   const pend = aggregate(variations.filter(v => v.status !== 'approved').map(v => Object.assign({}, v, derive(v))));
   const provRemaining = provisionals.filter(p => p.status !== 'released').reduce((s,p) => s + (p.allowance - p.drawn), 0);
   let foot = '<tr><td></td><td></td><td>Total' + (list.length !== activeLines().length ? ' (filtered)' : '') + '</td>' +
-    '<td class="spend" style="padding:10px 12px">' + spendBar(tot) + '</td>' + moneyCells(tot) + '</tr>';
+    '<td class="spend" style="padding:10px 12px">' + spendBar(tot) + '</td>' +
+    moneyCells(tot, true, registerNode('Whole project', tot, 'All cost centres')) + '</tr>';
   foot += '<tr class="excl"><td></td><td></td><td>Excluded from totals</td><td></td>' +
     '<td class="right">' + money(pend.contract + provRemaining) + '</td>' +
     '<td class="right">' + money(pend.budget) + '</td>' +
@@ -1897,7 +1903,8 @@ function zoneCostCentreRow(section, zoneKey, open){
         ' <i class="fas fa-chevron-' + (drillOpen ? 'up' : 'down') + '" style="font-size:9px;margin-left:4px;color:#f5a623"></i>' +
         ' <span style="color:#f5a623">' + (drillOpen ? 'hide' : 'view') + ' source documents</span>' +
         resourceToggle(resKey) + '</div></td>' +
-    '<td class="spend">' + spendBar(t) + '</td>' + moneyCells(t, true) + '</tr>';
+    '<td class="spend">' + spendBar(t) + '</td>' +
+    moneyCells(t, true, registerNode(section.key + ' — ' + zoneKey, t, 'Cost centre section')) + '</tr>';
   html += '<tr class="detail-row' + (open && drillOpen ? ' visible' : '') + '"><td colspan="12">' +
     drill(Object.assign({}, t, {suppliers:groupSuppliers(section.items), code:section.key})) + '</td></tr>';
   html += resourceRows(t, resKey, open && openItems.has(resKey), section.key);
@@ -1932,7 +1939,7 @@ function itemRow(it, open, forceCost){
         '<i class="fas fa-file-invoice"></i> Convert to claim</button></div>' : '') +
       '</td>' +
     '<td class="spend">' + (showCost ? spendBar(it) : '<span class="spend-cap" style="margin-top:0">—</span>') + '</td>' +
-    moneyCells(it, showCost) + '</tr>';
+    moneyCells(it, showCost, showCost ? registerNode(it.code + ' — ' + it.desc, it, it.cc + ' · ' + it.zone) : null) + '</tr>';
 
   if (showCost){
     html += '<tr class="detail-row' + (open && itemOpen ? ' visible' : '') + '"><td colspan="12">' + drill(it) + '</td></tr>';
@@ -2010,9 +2017,9 @@ function pendingVariationRows(){
       '<td class="spend">' + spendBar(Object.assign({}, v, d)) + '</td>' +
       '<td class="right excluded-money">' + money(v.contract) + '</td>' +
       '<td class="right excluded-money">' + money(v.budget) + '</td>' +
-      '<td class="right ' + (d.committed ? 'money-committed' : 'money-muted') + '">' + (d.committed ? money(d.committed) : '—') + '</td>' +
-      '<td class="right ' + (d.tracked ? 'money-tracked' : 'money-muted') + '">' + (d.tracked ? money(d.tracked) : '—') + '</td>' +
-      '<td class="right ' + (d.actual ? 'money-actual' : 'money-muted') + '">' + (d.actual ? money(d.actual) : '—') + '</td>' +
+      committedCell(Object.assign({}, v, d), vid) +
+      clickable(d.tracked ? money(d.tracked) : '—', 'tracked', d.tracked ? vid : null, d.tracked ? 'money-tracked' : 'money-muted') +
+      clickable(d.actual ? money(d.actual) : '—', 'actual', d.actual ? vid : null, d.actual ? 'money-actual' : 'money-muted') +
       '<td class="right sep money-spent">' + (d.costToDate ? money(d.costToDate) : '—') + '</td>' +
       marginCell(d.marginBudget, v.budget) +
       '<td class="right" style="color:#94a3b8">—</td></tr>';
