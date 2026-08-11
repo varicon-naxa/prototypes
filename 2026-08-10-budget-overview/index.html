@@ -1541,74 +1541,6 @@ function billRegister(node, key){
 }
 
 /* ═══ Source documents (drill-down) ═══ */
-function docsFor(it){
-  const po = [], trk = [], act = [];
-  const n = Math.round;
-  const key = String(it.code).replace(/[^0-9A-Za-z]/g,'');
-  const supplyCost = (it.dktTracked || 0) + (it.billsPaid || 0);
-
-  // Only the part still on order belongs here — a received PO has moved to tracked.
-  if (it.poCommitted > 0){
-    const split = it.poCommitted > 90000 ? [0.6, 0.4] : [1];
-    let consumed = 0;
-    split.forEach((f, i) => {
-      const raised = n(it.poCommitted * f);
-      const rec = Math.max(0, Math.min(raised, supplyCost - consumed));
-      consumed += raised;
-      const open = raised - rec;
-      if (open <= 0) return;   // fully received — it is in the tracked column now
-      po.push({ref:'PO-' + key + (split.length > 1 ? '-' + (i+1) : ''), party:it.suppliers.po,
-               meta: rec > 0
-                 ? 'Part received — ' + money(rec) + ' of ' + money(raised) + ' has moved to tracked'
-                 : 'Approved, awaiting delivery',
-               state: rec > 0 ? 'warn' : 'idle', amt:open});
-    });
-  }
-
-  if (it.dktTracked > 0) trk.push({ref:'Site dockets ×' + (it.dktTracked > 20000 ? 8 : 3), party:it.suppliers.dkt,
-    meta:'PO received on site — moved out of committed, not yet on a paid bill', state:'live', amt:it.dktTracked, icon:'fa-truck'});
-  if (it.tsUnapproved > 0) trk.push({ref:'Timesheets — unapproved', party:'Site crew',
-    meta:'Hours booked to this line, awaiting approval', state:'warn', amt:it.tsUnapproved, icon:'fa-clock'});
-
-  if (it.billsPaid > 0) act.push({ref:'BILL-' + key, party:it.suppliers.bill,
-    meta:'Bill paid ' + payDate(key) + ' — moved out of tracked', state:'ok', amt:it.billsPaid, icon:'fa-file-invoice-dollar'});
-  if (it.tsApproved > 0) act.push({ref:'Timesheets — approved', party:'Site crew',
-    meta:'Approved, so counted as actual cost', state:'ok', amt:it.tsApproved, icon:'fa-clock'});
-
-  return {po, trk, act};
-}
-function payDate(key){
-  const days = ['12 Jun 2026','26 Jun 2026','10 Jul 2026','24 Jul 2026','07 Aug 2026'];
-  return days[key.length % days.length];
-}
-function chipText(s){ return {ok:'Actual', warn:'Awaiting approval', idle:'Open', live:'Tracked'}[s] || s; }
-
-function drill(it){
-  const d = docsFor(it);
-  const col = (title, cls, icon, total, docs, note, iconCls) =>
-    '<div class="drill-col">' +
-      '<div class="drill-head"><div class="drill-title ' + cls + '"><i class="fas ' + icon + '"></i> ' + title + '</div>' +
-      '<div class="drill-total">' + money(total) + '</div></div>' +
-      (docs.length ? docs.map(x =>
-        '<div class="doc"' + (x.ghost ? ' style="border-style:dashed;background:#fbfdff"' : '') + '>' +
-          '<div class="doc-icon ' + iconCls + '"><i class="fas ' + (x.icon || icon) + '"></i></div>' +
-          '<div class="doc-body"><div class="doc-ref">' + x.ref + '</div>' +
-            '<div class="doc-meta">' + (x.party ? x.party + ' · ' : '') + x.meta + '</div></div>' +
-          '<div style="text-align:right"><div class="doc-amt">' + money(x.amt) + '</div>' +
-            '<span class="chip ' + x.state + '" style="margin-top:3px">' + chipText(x.state) + '</span></div>' +
-        '</div>').join('') : '<div class="drill-empty">Nothing raised against this ' + costLevelLabel() + ' yet.</div>') +
-      '<div class="drill-note">' + note + '</div>' +
-    '</div>';
-
-  return '<div class="drill">' +
-    col('Committed — on order', 'committed', 'fa-cart-shopping', it.committed, d.po,
-        'PO value still on order. Once received it leaves this column for tracked, so a fully received PO does not appear here.', 'po') +
-    col('Tracked — site dockets + unapproved timesheets', 'tracked', 'fa-clipboard-list', it.tracked, d.trk,
-        'Received or worked, not yet settled. A site docket leaves here once it is on a paid bill; a timesheet leaves here once approved.', 'dkt') +
-    col('Actual — paid bills + approved timesheets', 'actual', 'fa-file-invoice-dollar', it.actual, d.act,
-        'Actual is what has been settled. It never overlaps tracked — cost moves across, it is not counted twice.', 'bill') +
-  '</div>';
-}
 
 /* ═══ Project type ═══
    The same overview serves both budget structures. A cost centre project rolls
@@ -2013,7 +1945,6 @@ function zoneCostCentreRow(section, zoneKey, open){
 
 function itemRow(it, open, forceCost){
   const showCost = forceCost === undefined ? lineCostsShown() : forceCost;
-  const itemOpen = openItems.has(it.code);
   const claim = it.claim ? CLAIM_STATES[it.claim] : null;
   const badge = it.kind === 'variation'
       ? ' <span class="chip vo">Variation</span>'
@@ -2021,8 +1952,7 @@ function itemRow(it, open, forceCost){
       ? ' <span class="chip prov">From provisional</span>'
       : claim ? ' <span class="chip ' + claim.cls + '">' + claim.label + '</span>' : '';
 
-  let html = '<tr class="item-row' + (open ? ' visible' : '') + (itemOpen ? ' expanded' : '') +
-      (showCost ? '' : ' no-cost-row') + '"' +
+  let html = '<tr class="item-row' + (open ? ' visible' : '') + (showCost ? '' : ' no-cost-row') + '"' +
       (showCost ? ' onclick="toggleItem(\'' + esc(it.code) + '\')"' : '') + '>' +
     '<td></td>' +
     '<td class="cell-code">' + it.code + '</td>' +
