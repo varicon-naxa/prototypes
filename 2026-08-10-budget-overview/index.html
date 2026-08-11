@@ -1732,6 +1732,58 @@ function openDocs(state, nodeId){
     '<div class="drill-empty">Nothing raised here yet.</div>';
   openModal('docModal');
 }
+/* ═══ Where a cost centre came from ═══
+   A cost centre is built by mapping BOQ line items to it during budget setup.
+   This shows that mapping — the BOQ lines behind the cost centre, plus anything
+   added later by an approved variation or an activated provisional sum. */
+const ORIGIN_META = {
+  base:               {label:'BOQ',           cls:'idle'},
+  variation:          {label:'Variation',     cls:'vo'},
+  'provisional-active':{label:'Provisional',  cls:'prov'},
+  daywork:            {label:'Daywork docket',cls:'live'},
+  unassigned:         {label:'Uncoded',       cls:'over'}
+};
+function openBoqSource(nodeId){
+  const entry = docNodes[nodeId];
+  if (!entry || !entry.items) return;
+  const items = entry.items;
+  const t = aggregate(items);
+
+  const rows = items.map(it => {
+    const o = ORIGIN_META[it.kind] || ORIGIN_META.base;
+    const qty = it.qty !== undefined;
+    return '<tr>' +
+      '<td class="mono">' + it.code + '</td>' +
+      '<td>' + it.desc + '<div class="boq-sub">' + (it.zone || '') +
+        (it.ref ? ' · ' + it.ref : '') + '</div></td>' +
+      '<td>' + (qty ? it.unit : '—') + '</td>' +
+      '<td class="right">' + (qty ? it.qty.toLocaleString('en-AU') : '—') + '</td>' +
+      '<td class="right">' + (qty ? '$' + it.rate.toFixed(2) : '—') + '</td>' +
+      '<td class="right">' + money(it.contract) + '</td>' +
+      '<td class="right">' + money(it.budget) + '</td>' +
+      '<td><span class="chip ' + o.cls + '">' + o.label + '</span></td>' +
+    '</tr>';
+  }).join('');
+
+  const counts = {};
+  items.forEach(it => { const k = (ORIGIN_META[it.kind] || ORIGIN_META.base).label; counts[k] = (counts[k] || 0) + 1; });
+
+  document.getElementById('boqModalTitle').innerHTML =
+    '<i class="fas fa-sitemap" style="color:#3b82f6;margin-right:8px"></i>Where ' + entry.label + ' came from';
+  document.getElementById('boqModalSub').innerHTML =
+    'The BOQ line items mapped to this cost centre during budget setup, and anything added to it since. ' +
+    Object.keys(counts).map(k => counts[k] + ' × ' + k).join(' · ') + '.';
+  document.getElementById('boqModalBody').innerHTML =
+    '<table class="boq-table"><thead><tr>' +
+      '<th>Code</th><th>BOQ description</th><th>Unit</th><th class="right">Qty</th>' +
+      '<th class="right">Rate</th><th class="right">Contract</th><th class="right">Budget</th><th>Origin</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody>' +
+    '<tfoot><tr><td></td><td>Total mapped to ' + entry.label + '</td><td></td><td></td><td></td>' +
+      '<td class="right">' + money(t.contract) + '</td>' +
+      '<td class="right">' + money(t.budget) + '</td><td></td></tr></tfoot></table>';
+  openModal('boqModal');
+}
+
 function assignDoc(ref){
   toast('<i class="fas fa-arrow-right-to-bracket"></i> ' + ref + ' would open the coding screen to pick a cost centre and task. ' +
         'Once coded it leaves unassigned and lands on that budget line.');
