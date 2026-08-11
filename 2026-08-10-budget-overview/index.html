@@ -1232,7 +1232,12 @@ function derive(it){
   // Committed holds only what is still on order. The moment a PO is received its
   // value moves out of committed and into tracked, exactly as tracked value later
   // moves into actual. The three states never overlap.
-  const committed = Math.max(0, (it.poCommitted || 0) - supplyCost);
+  // Normally a docket or bill is the receipt of a PO, so it nets the PO down.
+  // Uncoded documents are independent of one another, so that line states its
+  // committed value directly rather than having it netted away.
+  const committed = it.committedFixed !== undefined
+    ? it.committedFixed
+    : Math.max(0, (it.poCommitted || 0) - supplyCost);
   const openPO    = committed;                                      // same thing, kept for the bar
   const engaged   = costToDate + committed;                         // spent or still on order
   const remaining = (it.budget || 0) - engaged;                     // budget still free
@@ -1884,7 +1889,7 @@ function render(){
           (currentView !== 'boq' ? resourceToggle(resKey) : '') + '</div>' : '') +
       '</td>' +
       '<td class="spend">' + (groupCosts ? spendBar(t) : '<span class="spend-cap" style="margin-top:0">—</span>') + '</td>' +
-      moneyCells(t, groupCosts, registerNode(g.key, t, childCount + ' ' + childLabel)) + '</tr>';
+      moneyCells(t, groupCosts, registerNode(g.key, withSuppliers(t, g.items), childCount + ' ' + childLabel)) + '</tr>';
 
     if (groupDrill) html += '<tr class="detail-row' + (drillOpen ? ' visible' : '') + '"><td colspan="12">' +
       drill(Object.assign({}, t, {suppliers:groupSuppliers(g.items), code:g.key})) + '</td></tr>';
@@ -1914,7 +1919,7 @@ function render(){
           '<td></td><td class="cell-code">' + s.key.split(' ')[0] + '</td>' +
           '<td class="cell-desc">' + s.key.replace(/^\S+\s/,'') + '</td>' +
           '<td class="spend">' + (boqIsClaimView ? '<span class="spend-cap" style="margin-top:0">—</span>' : spendBar(t2)) + '</td>' +
-          moneyCells(t2, !boqIsClaimView, registerNode(s.key.replace(/^\S+\s/,''), t2, s.key.split(' ')[0])) + '</tr>';
+          moneyCells(t2, !boqIsClaimView, registerNode(s.key.replace(/^\S+\s/,''), withSuppliers(t2, s.items), s.key.split(' ')[0])) + '</tr>';
         s.items.forEach(it => html += itemRow(it, open, !boqIsClaimView));
       });
     } else {
@@ -1937,7 +1942,7 @@ function render(){
   const provRemaining = provisionals.filter(p => p.status !== 'released').reduce((s,p) => s + (p.allowance - p.drawn), 0);
   let foot = '<tr><td></td><td></td><td>Total' + (list.length !== activeLines().length ? ' (filtered)' : '') + '</td>' +
     '<td class="spend" style="padding:10px 12px">' + spendBar(tot) + '</td>' +
-    moneyCells(tot, true, registerNode('Whole project', tot, 'All cost centres')) + '</tr>';
+    moneyCells(tot, true, registerNode('Whole project', withSuppliers(tot, list), 'All cost centres')) + '</tr>';
   foot += '<tr class="excl"><td></td><td></td><td>Excluded from totals</td><td></td>' +
     '<td class="right">' + money(pend.contract + provRemaining) + '</td>' +
     '<td class="right">' + money(pend.budget) + '</td>' +
@@ -1968,7 +1973,7 @@ function zoneCostCentreRow(section, zoneKey, open){
         ' <span style="color:#f5a623">' + (drillOpen ? 'hide' : 'view') + ' source documents</span>' +
         resourceToggle(resKey) + '</div></td>' +
     '<td class="spend">' + spendBar(t) + '</td>' +
-    moneyCells(t, true, registerNode(section.key + ' — ' + zoneKey, t, 'Cost centre section')) + '</tr>';
+    moneyCells(t, true, registerNode(section.key + ' — ' + zoneKey, withSuppliers(t, section.items), 'Cost centre section')) + '</tr>';
   html += '<tr class="detail-row' + (open && drillOpen ? ' visible' : '') + '"><td colspan="12">' +
     drill(Object.assign({}, t, {suppliers:groupSuppliers(section.items), code:section.key})) + '</td></tr>';
   html += resourceRows(t, resKey, open && openItems.has(resKey), section.key);
@@ -2010,6 +2015,13 @@ function itemRow(it, open, forceCost){
     html += resourceRows(it, 'res:' + it.code, open && openItems.has('res:' + it.code), it.cc);
   }
   return html;
+}
+
+/* Attach representative suppliers to a rolled-up node so its document register
+   names real parties rather than a placeholder. */
+function withSuppliers(node, items){
+  return Object.assign({}, node, {suppliers:groupSuppliers(items),
+    kind:(items.length === 1 ? items[0].kind : node.kind)});
 }
 
 /* Representative suppliers across a cost centre, for the group-level drill-down. */
