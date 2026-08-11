@@ -1293,18 +1293,24 @@ function marginBand(it){
   return cls === 'neg' ? 'negative' : cls === 'warn' ? 'thin' : 'healthy';
 }
 
+/* The three segments are disjoint and add up to "engaged": actual + tracked +
+   the OPEN part of the POs. The received part of a PO is already inside tracked
+   or actual, so drawing total committed here would count it twice. */
 function spendBar(it){
   const scale = Math.max(it.budget || 0, it.engaged || 0, 1);
   const p = v => (v / scale * 100).toFixed(2) + '%';
   const marker = (it.budget || 0) / scale * 100;
   const usedPct = it.budget > 0 ? (it.engaged / it.budget * 100) : 0;
+  const open = it.openPO || 0;
   return '<div class="spend-bar">' +
-      '<span class="sb-actual" style="width:' + p(it.actual) + '"></span>' +
-      '<span class="sb-tracked" style="width:' + p(it.tracked) + '"></span>' +
-      '<span class="sb-committed" style="width:' + p(it.openPO) + '"></span>' +
+      '<span class="sb-actual" style="width:' + p(it.actual) + '" title="Actual ' + money(it.actual) + '"></span>' +
+      '<span class="sb-tracked" style="width:' + p(it.tracked) + '" title="Tracked ' + money(it.tracked) + '"></span>' +
+      '<span class="sb-committed" style="width:' + p(open) + '" title="Open POs not yet received ' + money(open) +
+        ' — the rest of the committed value is already counted in tracked or actual"></span>' +
       (marker < 99.9 ? '<span class="spend-marker" style="left:' + marker.toFixed(2) + '%"></span>' : '') +
     '</div>' +
-    '<span class="spend-cap">' + pct(usedPct) + ' of budget engaged</span>';
+    '<span class="spend-cap">' + pct(usedPct) + ' engaged' +
+      (open > 0 ? ' · ' + money(open) + ' open' : '') + '</span>';
 }
 
 /* Totals roll up line-level derived values — an overrun on one line must not be
