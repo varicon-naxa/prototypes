@@ -353,6 +353,8 @@ tr.scope-note.period td i{color:#d97706}
 .field label{font-size:12px;font-weight:500;color:#64748b;display:block;margin-bottom:5px}
 .field input,.field select,.field textarea{width:100%;padding:9px 11px;border:1px solid #e2e8f0;border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;outline:none;background:#fff;color:#1b2a4a}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:#f5a623;box-shadow:0 0 0 3px rgba(245,166,35,.1)}
+.field-hint{font-size:11px;color:#94a3b8;line-height:1.5;margin-top:6px}
+.field-hint i{color:#3b82f6;margin-right:4px}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 .radio-card{display:flex;gap:10px;align-items:flex-start;border:2px solid #e2e8f0;border-radius:8px;padding:12px 14px;cursor:pointer;margin-bottom:9px;transition:all .15s}
@@ -558,7 +560,7 @@ tr.scope-note.period td i{color:#d97706}
           <option value="nospend">Nothing spent or committed</option>
         </select>
         <select class="filter-select" id="periodFilter" onchange="onPeriodChange()">
-          <option value="all">All time</option>
+          <option value="all">All claim periods</option>
         </select>
         <span id="customRange" style="display:none;align-items:center;gap:6px">
           <input type="date" class="filter-select date-input" id="periodFrom" value="2026-06-01" onchange="render()">
@@ -896,9 +898,17 @@ tr.scope-note.period td i{color:#d97706}
       <h3><i class="fas fa-map-pin" style="color:#f5a623;margin-right:8px"></i>Budget mapping</h3>
       <p class="card-sub">Where this variation lands in the budget overview — and therefore which cost centre its POs, dockets and bills are tracked against.</p>
       <div class="field-row-3">
-        <div class="field"><label>Cost centre</label><select id="vCC"></select></div>
+        <div class="field"><label>Cost centre</label>
+          <select id="vCC" onchange="onCCChoiceChange('vCC','vNewCCWrap','vNewCC', varSuggestedCC())"></select></div>
         <div class="field"><label>Zone</label><select id="vZone"></select></div>
         <div class="field"><label>Budget cost ($)</label><input id="vBudget" class="num" placeholder="0" oninput="calcVarBuild()"></div>
+      </div>
+      <div class="field" id="vNewCCWrap" style="display:none">
+        <label>New cost centre name</label>
+        <input id="vNewCC" placeholder="e.g. VO-004 — Extra hardstand">
+        <div class="field-hint"><i class="fas fa-circle-info"></i> Tracking this variation in its own cost centre keeps its
+          committed, tracked and actual separate from the base scope. Choose an existing cost centre instead if the work is
+          part of that trade and you would rather see it rolled in.</div>
       </div>
       <div class="field" style="margin-bottom:0"><label>Allocation method</label>
         <select id="vAlloc">
@@ -965,8 +975,15 @@ tr.scope-note.period td i{color:#d97706}
       <div class="field"><label>Budget cost ($)</label><input id="provBudget" class="num" oninput="calcProv()"></div>
     </div>
     <div class="field-row">
-      <div class="field"><label>Cost centre</label><select id="provCC"></select></div>
+      <div class="field"><label>Cost centre</label>
+        <select id="provCC" onchange="onCCChoiceChange('provCC','provNewCCWrap','provNewCC', provTarget ? provTarget.code + ' — ' + provTarget.desc : '')"></select></div>
       <div class="field"><label>Zone</label><select id="provZone"></select></div>
+    </div>
+    <div class="field" id="provNewCCWrap" style="display:none">
+      <label>New cost centre name</label>
+      <input id="provNewCC" placeholder="e.g. P.1.2 — Site Investigation">
+      <div class="field-hint"><i class="fas fa-circle-info"></i> An instructed provisional sum often reads better in its own cost
+        centre, so the drawn-down value can be tracked against the allowance it came from.</div>
     </div>
     <div class="field"><label>Instruction reference</label><input id="provRef" placeholder="e.g. SI-018 — Superintendent's instruction"></div>
 
@@ -1120,7 +1137,7 @@ let variations = [
    contract:26800, budget:22500, poCommitted:14000, dktTracked:9600, tsUnapproved:3900, billsPaid:5400, tsApproved:0,
    suppliers:{po:'Ridgeline Civil', dkt:'Ridgeline Civil', bill:'Ridgeline Civil'}},
   {id:'VO-003', title:'Night works traffic management', type:'priced', method:'rates', status:'approved',
-   cc:'Overheads / Prelims', zone:'Project Wide', ref:'VO-003', approvedOn:'31 Jul 2026', claimed:14200,
+   cc:'VO-003 — Night works TM', zone:'Project Wide', ref:'VO-003', approvedOn:'31 Jul 2026', claimed:14200,
    lines:[{desc:'Traffic controllers — night shift', unit:'hr', qty:96, rate:98},
           {desc:'VMS board hire', unit:'week', qty:4, rate:950},
           {desc:'After-hours supervision', unit:'hr', qty:8, rate:124}],
@@ -1290,10 +1307,10 @@ function unassignedLine(){
    single month or a custom range. Contract, budget and claimed are as-at figures
    and are never period-filtered — only cost is. */
 const PERIODS = [
-  {key:'2026-05', label:'May 2026', start:'2026-05-01', end:'2026-05-31'},
-  {key:'2026-06', label:'Jun 2026', start:'2026-06-01', end:'2026-06-30'},
-  {key:'2026-07', label:'Jul 2026', start:'2026-07-01', end:'2026-07-31'},
-  {key:'2026-08', label:'Aug 2026', start:'2026-08-01', end:'2026-08-31'}
+  {key:'2026-05', claim:'Claim #5', label:'Claim #5 · 1–31 May 2026', start:'2026-05-01', end:'2026-05-31', status:'certified'},
+  {key:'2026-06', claim:'Claim #6', label:'Claim #6 · 1–30 Jun 2026', start:'2026-06-01', end:'2026-06-30', status:'certified'},
+  {key:'2026-07', claim:'Claim #7', label:'Claim #7 · 1–31 Jul 2026', start:'2026-07-01', end:'2026-07-31', status:'certified'},
+  {key:'2026-08', claim:'Claim #8', label:'Claim #8 · 1–31 Aug 2026', start:'2026-08-01', end:'2026-08-31', status:'open'}
 ];
 const COST_STREAMS = ['poCommitted','dktTracked','tsUnapproved','billsPaid','tsApproved'];
 
@@ -1310,6 +1327,11 @@ function selectedPeriods(){
   const from = document.getElementById('periodFrom').value;
   const to   = document.getElementById('periodTo').value;
   return PERIODS.filter(p => (!from || p.end >= from) && (!to || p.start <= to)).map(p => p.key);
+}
+function openClaimPeriod(){
+  const el = document.getElementById('periodFilter');
+  const p = el && PERIODS.find(x => x.key === el.value);
+  return !!(p && p.status === 'open');
 }
 function periodLabel(){
   const sel = selectedPeriods();
@@ -2099,7 +2121,8 @@ function render(){
 
   const plabel = periodLabel();
   if (plabel) html += '<tr class="scope-note period"><td colspan="' + colCount() + '">' +
-    '<i class="fas fa-calendar-day"></i> Showing <strong>cost incurred in ' + plabel + '</strong> only. ' +
+    '<i class="fas fa-calendar-day"></i> Showing <strong>cost incurred in ' + plabel + '</strong> only' +
+    (openClaimPeriod() ? ' — this is the cost to claim in the open period' : '') + '. ' +
     'Contract, budget and claimed to date are as-at figures and still show the full project, so margin and budget ' +
     'remaining read against the whole job rather than the period.</td></tr>';
 
@@ -2635,6 +2658,36 @@ function toast(msg){
 }
 function openModal(id){ document.getElementById(id).classList.add('show'); }
 function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+/* Every cost centre in play, including any opened by a variation or a
+   provisional sum. A variation can either be tracked inside an existing cost
+   centre or carry its own — neither is forced. */
+function allCostCentres(){
+  const extra = [];
+  variations.forEach(v => { if (v.cc && !COST_CENTRES.includes(v.cc) && !extra.includes(v.cc)) extra.push(v.cc); });
+  provisionals.forEach(p => p.activations.forEach(a => {
+    if (a.cc && !COST_CENTRES.includes(a.cc) && !extra.includes(a.cc)) extra.push(a.cc);
+  }));
+  return COST_CENTRES.concat(extra);
+}
+/* Cost centre picker with the option to open a dedicated one. */
+function fillCCSelect(id, selected, newLabel){
+  document.getElementById(id).innerHTML =
+    allCostCentres().map(o => '<option' + (o === selected ? ' selected' : '') + '>' + o + '</option>').join('') +
+    '<option value="__new">＋ ' + newLabel + '</option>';
+}
+function onCCChoiceChange(selId, wrapId, inputId, suggested){
+  const isNew = document.getElementById(selId).value === '__new';
+  document.getElementById(wrapId).style.display = isNew ? '' : 'none';
+  if (isNew && !document.getElementById(inputId).value) document.getElementById(inputId).value = suggested;
+}
+function resolveCC(selId, inputId, fallback){
+  const sel = document.getElementById(selId);
+  if (sel.value !== '__new') return sel.value;
+  const name = (document.getElementById(inputId).value || '').trim() || fallback;
+  if (!COST_CENTRES.includes(name)) COST_CENTRES.push(name);
+  return name;
+}
+
 function fillSelect(id, options, selected){
   document.getElementById(id).innerHTML = options.map(o =>
     '<option' + (o === selected ? ' selected' : '') + '>' + o + '</option>').join('');
@@ -2882,7 +2935,9 @@ function openVarBuild(){
   document.getElementById('vDesc').value = '';
   document.getElementById('vBudget').value = attachedRecords.length ? attachedRecords.reduce((s,r) => s + recordTotal(r), 0) : '';
   document.getElementById('vMarkup').value = 15;
-  fillSelect('vCC', COST_CENTRES, prefillCC);
+  fillCCSelect('vCC', prefillCC, 'Create a new cost centre for this variation');
+  document.getElementById('vNewCC').value = '';
+  document.getElementById('vNewCCWrap').style.display = 'none';
   fillSelect('vZone', ZONES, prefillZone);
   renderVarFiles();
   renderVarLines();
@@ -2963,6 +3018,10 @@ function renderRateRows(){
 function rateCost(kind){
   return rateRows[kind].reduce((s,r) => s + (kind === 'material' ? (r.qty||0) * (r.rate||0) : (r.hrs||0) * (r.days||0) * (r.rate||0)), 0);
 }
+function varSuggestedCC(){
+  const t = (document.getElementById('vTitle').value || '').trim();
+  return 'VO-' + String(varCounter + 1).padStart(3,'0') + (t ? ' — ' + t : '');
+}
 function varContractTotal(){
   if (pendingVarMethod === 'rates'){
     const cost = rateCost('labour') + rateCost('plant') + rateCost('material');
@@ -3032,7 +3091,7 @@ function saveVariation(status){
   const id = 'VO-' + String(varCounter).padStart(3,'0');
   const v = {
     id, title, type:pendingVarType, method:pendingVarMethod || 'lumpsum', status,
-    cc:document.getElementById('vCC').value, zone:document.getElementById('vZone').value,
+    cc:resolveCC('vCC', 'vNewCC', id + ' — ' + title), zone:document.getElementById('vZone').value,
     ref:document.getElementById('vRef').value.trim(),
     alloc:document.getElementById('vAlloc').value,
     files:varFiles.slice(), dockets:attachedRecords.map(r => r.id),
@@ -3091,7 +3150,9 @@ function openProvModal(code){
   document.getElementById('provContract').value = rem;
   document.getElementById('provBudget').value = Math.round(rem * 0.84);
   document.getElementById('provRef').value = '';
-  fillSelect('provCC', COST_CENTRES, guessCC(provTarget));
+  fillCCSelect('provCC', guessCC(provTarget), 'Create a new cost centre for this provisional sum');
+  document.getElementById('provNewCC').value = '';
+  document.getElementById('provNewCCWrap').style.display = 'none';
   fillSelect('provZone', ZONES, 'Project Wide');
   calcProv();
   openModal('provModal');
@@ -3132,7 +3193,7 @@ function confirmProvActivation(){
   const draw = Math.min(num('provDraw'), rem);
   const contract = num('provContract');
   const budget = num('provBudget');
-  const cc = document.getElementById('provCC').value;
+  const cc = resolveCC('provCC', 'provNewCC', p.code + ' — ' + p.desc);
   const zone = document.getElementById('provZone').value;
   const ref = document.getElementById('provRef').value.trim() || 'SI-' + (100 + p.activations.length + 1);
   if (draw <= 0){ toast('Enter an amount to draw down from the allowance'); return; }
@@ -3212,9 +3273,10 @@ function releaseProvisional(code){
 
 /* Month options for the period filter. */
 document.getElementById('periodFilter').innerHTML =
-  '<option value="all">All time</option>' +
-  PERIODS.slice().reverse().map(p => '<option value="' + p.key + '">' + p.label + '</option>').join('') +
-  '<option value="custom">Custom range…</option>';
+  '<option value="all">All claim periods</option>' +
+  PERIODS.slice().reverse().map(p => '<option value="' + p.key + '">' + p.label +
+    (p.status === 'open' ? ' — open' : '') + '</option>').join('') +
+  '<option value="custom">Custom dates…</option>';
 
 /* Start as a cost centre project; the toggle re-renders as WBS or dayworks on demand. */
 applyStructureChrome();
