@@ -369,6 +369,7 @@ details.card-collapse summary .opt{font-size:12px;color:#94a3b8;font-weight:400;
 details.card-collapse[open] summary{border-bottom:1px solid #f1f5f9;margin-bottom:16px}
 details.card-collapse>*:not(summary){margin-left:22px;margin-right:22px}
 details.card-collapse>*:last-child{margin-bottom:18px}
+.callout a{color:#92400e;text-decoration:underline;cursor:pointer;font-weight:600}
 .no-rate{color:#b45309;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap}
 .no-rate:hover{text-decoration:underline}
 .field-hint{font-size:11px;color:#94a3b8;line-height:1.5;margin-top:6px}
@@ -674,6 +675,31 @@ details.card-collapse>*:last-child{margin-bottom:18px}
   </div>
 </div>
 
+<!-- ═══ Plant & labour rate mapping gate ═══ -->
+<div class="modal-overlay" id="plantMappingModal">
+  <div class="modal" style="width:500px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div style="width:44px;height:44px;border-radius:10px;background:#fff7ed;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-truck-monster" style="font-size:19px;color:#f5a623"></i></div>
+      <div>
+        <h3 style="font-size:16px;font-weight:600;color:#1b2a4a;margin:0">Are your plant &amp; labour rates mapped?</h3>
+        <p style="font-size:13px;color:#64748b;margin:0">This variation is priced from the schedule of rates.</p>
+      </div>
+    </div>
+    <div class="callout amber" id="newResourceWarning" style="display:none">
+      <i class="fas fa-triangle-exclamation"></i> New resources have been added to this project since rates were last mapped.
+    </div>
+    <div class="callout amber">
+      <i class="fas fa-circle-info"></i> A resource with no mapped rate prices at <strong>$0</strong>. Build the variation up on unmapped
+      resources and the claim value will be wrong — so it is worth getting the mapping right before you price anything.
+    </div>
+    <div id="mapGateStatus" class="callout blue" style="margin-bottom:0"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="plantMappingResponse(true)">Skip — price it anyway</button>
+      <button class="btn btn-primary" onclick="plantMappingResponse(false)"><i class="fas fa-link"></i> Map rates now</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ Rate mapping full-page overlay ═══ -->
 <div class="fp-overlay" id="rateMappingOverlay">
   <div class="fp-header">
@@ -833,6 +859,7 @@ details.card-collapse>*:last-child{margin-bottom:18px}
 
     <!-- Rates build-up -->
     <div id="varRatesSection" style="display:none">
+      <div class="callout amber" id="varRateBlocker" style="display:none"></div>
       <div class="card">
         <h3><i class="fas fa-hard-hat" style="color:#3b82f6;margin-right:8px"></i>Labour</h3>
         <p class="card-sub">Priced from your mapped schedule of rates.</p>
@@ -2742,12 +2769,39 @@ function startVariation(type, method){
   pendingVarType = type;
   pendingVarMethod = method;
   if (type === 'costplus'){ toast('Cost plus variations price from actual cost + an agreed margin — coming soon'); return; }
-  if (type === 'dayworks'){ showDayworksRecordsModal(); return; }
-  openVarBuild();
+  // A lump sum carries its own agreed prices, so rates are irrelevant to it.
+  if (method !== 'rates'){ openVarBuild(); return; }
+  proceedToMappingOrBuild();
+}
+
+/* Anything priced off the schedule of rates has to be built on valid rates —
+   an unmapped resource prices at $0 and the claim would be wrong. The prompt
+   only appears when something is actually unmapped; if the project is fully
+   mapped it goes straight through. */
+function unmappedResources(){
+  return projectPlant.concat(projectLabour).filter(r => !r.rate).length;
+}
+function proceedToMappingOrBuild(){
+  if (unmappedResources() === 0 && !hasNewUnmappedResources){ allResourcesMapped = true; proceedAfterMapping(); return; }
+  const total = projectPlant.length + projectLabour.length;
+  const unmapped = unmappedResources();
+  document.getElementById('newResourceWarning').style.display = hasNewUnmappedResources ? '' : 'none';
+  document.getElementById('mapGateStatus').innerHTML =
+    '<i class="fas fa-list-check"></i> <strong>' + (total - unmapped) + ' of ' + total + '</strong> project resources have a rate mapped' +
+    (unmapped ? ' — <strong>' + unmapped + '</strong> still to do.' : '.');
+  openModal('plantMappingModal');
+}
+function plantMappingResponse(skip){
+  closeModal('plantMappingModal');
+  if (skip){ proceedAfterMapping(); return; }
+  if (hasRatesUploaded) showRateMappingPage(); else showRateUploadForMapping();
 }
 
 /* ── Rate mapping gate ── */
-function proceedAfterMapping(){ openVarBuild(); }
+function proceedAfterMapping(){
+  if (pendingVarType === 'dayworks') showDayworksRecordsModal();
+  else openVarBuild();
+}
 function showRateUploadForMapping(){
   document.getElementById('rateMappingOverlay').classList.add('show');
   document.getElementById('rateUploadSection').style.display = '';
@@ -2832,9 +2886,11 @@ function saveMappings(){
   allResourcesMapped = done === total;
   hasNewUnmappedResources = false;
   closeRateMappingOverlay();
-  renderRateRows();
   toast('<i class="fas fa-check-circle"></i> ' + done + ' of ' + total + ' resources mapped to the schedule of rates.' +
         (allResourcesMapped ? '' : ' Unmapped resources price at $0 until mapped.'));
+  // Back into whichever flow sent us here, or refresh the rows if already building.
+  if (document.getElementById('varBuildOverlay').classList.contains('show')) renderRateRows();
+  else proceedAfterMapping();
 }
 
 /* ── Dayworks records selection ── */
@@ -3073,9 +3129,37 @@ function calcVarBuild(){
 
   const titled = !!document.getElementById('vTitle').value.trim();
   document.getElementById('varDetailsBlocker').style.display = titled ? 'none' : '';
-  const ok = contract > 0 && titled;
+
+  // Last line of defence: a priced row with no rate would make the claim value
+  // wrong, so it cannot be submitted. A draft can still be saved.
+  // Check against the project resource, not just the row, so a row picks the
+  // rate up as soon as the resource is mapped.
+  const unrated = ['labour','plant'].reduce((a, k) => a.concat(
+    rateRows[k].filter(x => {
+      if (!x.name) return false;
+      if (x.rate) return false;
+      const res = (k === 'plant' ? projectPlant : projectLabour).find(p => p.name === x.name);
+      return !res || !res.rate;
+    })), []);
+  // Pull through any rate that has been mapped since the row was added.
+  ['labour','plant'].forEach(k => rateRows[k].forEach(x => {
+    if (x.name && !x.rate){
+      const res = (k === 'plant' ? projectPlant : projectLabour).find(p => p.name === x.name);
+      if (res && res.rate) x.rate = res.rate;
+    }
+  }));
+  const blocker = document.getElementById('varRateBlocker');
+  if (blocker){
+    blocker.style.display = unrated.length ? '' : 'none';
+    if (unrated.length) blocker.innerHTML = '<i class="fas fa-triangle-exclamation"></i> ' +
+      unrated.length + ' resource' + (unrated.length !== 1 ? 's have' : ' has') + ' no mapped rate (' +
+      unrated.map(x => x.name).join(', ') + ') and would price at $0. ' +
+      '<a onclick="showRateMappingPage()">Map the rates</a> before submitting — otherwise the claim value would be wrong.';
+  }
+
+  const ok = contract > 0 && titled && !unrated.length;
   document.getElementById('vSubmitBtn').disabled = !ok;
-  document.getElementById('vDraftBtn').disabled = !ok;
+  document.getElementById('vDraftBtn').disabled = !(contract > 0 && titled);
 }
 
 function addSampleVarFile(){
