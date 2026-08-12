@@ -1553,7 +1553,8 @@ function resourceRows(node, key, visible, ccName){
         '<i class="fas ' + r.cat.icon + '"></i></span>' + r.cat.name +
         (r.cat.key === 'labour' ? '<span class="res-hint">employees on timesheets · ABN contractors on a PO, paid on invoice</span>' : '') +
         (r.cat.key === 'plant' && (r.plantTracked + r.plantActual) > 0
-          ? '<span class="res-hint">incl. ' + money(r.plantTracked + r.plantActual) + ' internal plant (no PO)</span>' : '') + '</td>' +
+          ? '<span class="res-hint">incl. ' + money(r.plantTracked + r.plantActual) + ' internal plant (no PO) · ' +
+            plantIdsFor(r, parentLabel + ' — ' + r.cat.name) + '</span>' : '') + '</td>' +
       spendCell(spendBar(r)) +
       '<td class="right sep">' + (r.contract ? money(r.contract) : '—') + '</td>' +
       (showClaimed() ? '<td class="right money-muted">—</td>' : '') +
@@ -1682,15 +1683,17 @@ function docketRegister(node, key, total, forBills){
   }));
 }
 
-/* Owned plant, charged to the job at an internal hourly rate. No PO, no
-   supplier bill — usage comes off plant dockets and is posted internally. */
+/* Owned plant charged to the job at an internal rate. There is no PO and no
+   supplier bill: usage is captured on the same timesheets and site dockets the
+   crew already fills in, and the charge is posted internally. Rates are not
+   always hourly — plant is commonly charged by the day or the week. */
 const PLANT_FLEET = [
-  {id:'P-04', name:'20T Excavator', rate:145},
-  {id:'P-11', name:'5T Excavator', rate:95},
-  {id:'P-07', name:'10T Tipper', rate:110},
-  {id:'P-02', name:'Bobcat / Skid Steer', rate:85},
-  {id:'P-15', name:'Smooth Drum Roller', rate:98},
-  {id:'P-09', name:'Water Cart', rate:88}
+  {id:'P-04', name:'20T Excavator',       rate:1160, basis:'day'},
+  {id:'P-11', name:'5T Excavator',        rate:95,   basis:'hr'},
+  {id:'P-07', name:'10T Tipper',          rate:880,  basis:'day'},
+  {id:'P-02', name:'Bobcat / Skid Steer', rate:85,   basis:'hr'},
+  {id:'P-15', name:'Smooth Drum Roller',  rate:784,  basis:'day'},
+  {id:'P-09', name:'Water Cart',          rate:3300, basis:'week'}
 ];
 function plantRegister(node, key, total, posted){
   if (!total || total <= 0) return [];
@@ -1699,8 +1702,29 @@ function plantRegister(node, key, total, posted){
   const amounts = splitAmount(total, Array.from({length:n}, (_, i) => 1 + (i % 2) * 0.4));
   return amounts.map((amt, i) => {
     const m = PLANT_FLEET[(seed + i) % PLANT_FLEET.length];
-    return {plant:m, amount:amt, hours:Math.round(amt / m.rate * 10) / 10, date:dateFrom(seed, i)};
+    const qty = amt / m.rate;
+    // Usage is picked up from whichever record the crew filled in that day.
+    const viaTimesheet = ((seed >> i) % 2) === 0;
+    return {
+      plant:m, amount:amt, date:dateFrom(seed, i),
+      qty: m.basis === 'hr' ? Math.round(qty * 10) / 10 : Math.round(qty * 100) / 100,
+      source: viaTimesheet
+        ? {kind:'timesheet', ref:'TS-' + String(880 + (seed % 90) + i)}
+        : {kind:'site docket', ref:'DKT-' + String(4100 + (seed % 500) + i * 5)}
+    };
   });
+}
+/* The plant IDs charged to a node, for display without opening the register. */
+function plantIdsFor(node, label){
+  const ids = [];
+  plantRegister(node, label + '|tracked', node.plantTracked || 0, false)
+    .concat(plantRegister(node, label + '|actual', node.plantActual || 0, true))
+    .forEach(m => { if (!ids.includes(m.plant.id)) ids.push(m.plant.id); });
+  return ids.join(', ');
+}
+function plantUsage(m){
+  const unit = m.plant.basis === 'hr' ? 'hrs' : m.plant.basis === 'day' ? 'days' : 'weeks';
+  return m.qty.toLocaleString('en-AU') + ' ' + unit + ' @ $' + m.plant.rate.toLocaleString('en-AU') + '/' + m.plant.basis;
 }
 
 /* ABN contractors sit on a PO, but their timesheet is the source of truth for
@@ -1896,8 +1920,8 @@ function openDocs(state, nodeId){
     }
     const plantTr = plantRegister(node, key, node.plantTracked || 0, false);
     body += group('Internal plant — usage not yet posted', plantTr.length, plantTr.map(m =>
-      row('fa-truck-monster', '#0d9488', m.plant.name + ' (' + m.plant.id + ')', 'Owned plant',
-        m.hours.toLocaleString('en-AU') + ' hrs @ $' + m.plant.rate + '/hr · booked ' + m.date +
+      row('fa-truck-monster', '#0d9488', m.plant.id + ' — ' + m.plant.name, 'Owned plant',
+        plantUsage(m) + ' · captured on ' + m.source.kind + ' ' + m.source.ref + ', ' + m.date +
         ' — no PO; charged to the job internally', m.amount,
         ' <span class="chip live">Unposted</span>')).join(''));
     body += group(node.abnLabour ? 'Employee timesheets awaiting approval' : 'Timesheets awaiting approval',
@@ -1920,8 +1944,8 @@ function openDocs(state, nodeId){
         '</div>')).join(''));
     const plantAc = plantRegister(node, key, node.plantActual || 0, true);
     body += group('Internal plant — posted to the job', plantAc.length, plantAc.map(m =>
-      row('fa-truck-monster', '#16a34a', m.plant.name + ' (' + m.plant.id + ')', 'Owned plant',
-        m.hours.toLocaleString('en-AU') + ' hrs @ $' + m.plant.rate + '/hr · posted ' + m.date, m.amount,
+      row('fa-truck-monster', '#16a34a', m.plant.id + ' — ' + m.plant.name, 'Owned plant',
+        plantUsage(m) + ' · captured on ' + m.source.kind + ' ' + m.source.ref + ' · posted ' + m.date, m.amount,
         ' <span class="chip ok">Posted</span>')).join(''));
     body += group(abnLab ? 'Employee timesheets approved' : 'Approved timesheets', ts.length, ts.map(t =>
       row('fa-clock', '#16a34a', t.ref, t.crew, 'Week ending ' + t.weekEnding + ' · ' + t.hours + ' hrs', t.amount,
@@ -2582,7 +2606,7 @@ function renderStats(){
            money(t.billsPaid) + ' bills · ' + money(t.tsApproved) + ' timesheets · ' + money(t.plantActual) + ' internal plant', '', 'actual') +
       tile('Internal Plant', money(t.plantTracked + t.plantActual), '',
            'Owned plant charged to the job in ' + lbl,
-           '<strong>Internal plant</strong><br>Owned plant charged at internal hourly rates. No PO and no supplier bill — it is tracked from plant dockets and becomes actual once posted.') +
+           '<strong>Internal plant</strong><br>Owned plant charged at internal rates — hourly, daily or weekly depending on the machine. No PO and no supplier bill: usage is captured on the crew timesheets and site dockets, and becomes actual once the charge is posted to the job.') +
       tile('Contract Sum', money(t.contract), 'blue', 'Whole of job — not period scoped');
     renderSpendPanel(t);
     renderDefs();
@@ -2643,7 +2667,7 @@ function renderDefs(){
     '<div><div class="d-name">' + name + '</div><div class="d-desc">' + desc + '</div></div></div>';
   document.getElementById('defs').innerHTML =
     def('#fbbf24', 'Committed', 'Purchase orders raised and still on order. On delivery the value moves <em>out</em> of committed and into tracked.') +
-    def('#5eead4', 'Tracked', 'Received or worked but not yet settled — site dockets not on a paid bill, timesheets not yet approved, ABN contractor timesheets not yet paid, and internal plant usage not yet posted.') +
+    def('#5eead4', 'Tracked', 'Received or worked but not yet settled — site dockets not on a paid bill, timesheets not yet approved, ABN contractor timesheets not yet paid, and internal plant usage captured on timesheets or site dockets but not yet posted.') +
     def('#16a34a', 'Actual', 'Paid bills, approved employee timesheets, paid ABN contractor invoices, and internal plant charges posted to the job. Cost moves here <em>out of</em> tracked.') +
     (isDayworksProject()
       ? def('#a16207', 'Daywork dockets', 'The project itself. Each docket is a budget line and a claim line — priced off the schedule of rates.')
