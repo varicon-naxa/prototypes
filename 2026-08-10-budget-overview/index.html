@@ -370,6 +370,9 @@ details.card-collapse[open] summary{border-bottom:1px solid #f1f5f9;margin-botto
 details.card-collapse>*:not(summary){margin-left:22px;margin-right:22px}
 details.card-collapse>*:last-child{margin-bottom:18px}
 .callout a{color:#92400e;text-decoration:underline;cursor:pointer;font-weight:600}
+.rate-warn{font-size:11px;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:6px 10px;margin-top:6px;line-height:1.5}
+.rate-warn i{margin-right:5px;color:#d97706}
+.btn-sm[disabled]{opacity:.45;cursor:not-allowed}
 .no-rate{color:#b45309;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap}
 .no-rate:hover{text-decoration:underline}
 .field-hint{font-size:11px;color:#94a3b8;line-height:1.5;margin-top:6px}
@@ -694,7 +697,7 @@ details.card-collapse>*:last-child{margin-bottom:18px}
     </div>
     <div id="mapGateStatus" class="callout blue" style="margin-bottom:0"></div>
     <div class="modal-actions">
-      <button class="btn btn-outline" onclick="plantMappingResponse(true)">Skip — price it anyway</button>
+      <button class="btn btn-outline" onclick="plantMappingResponse(true)">Skip — map later</button>
       <button class="btn btn-primary" onclick="plantMappingResponse(false)"><i class="fas fa-link"></i> Map rates now</button>
     </div>
   </div>
@@ -2426,15 +2429,29 @@ function pendingVariationRows(){
     const d = derive(v);
     const atRisk = d.costToDate > 0;
     const vid = registerNode(v.id + ' — ' + v.title, Object.assign({}, v, d), 'Pending variation');
+    const unrated = varUnrated(v);
+    const canReprice = varCanReprice(v);
     html += '<tr class="pend-row">' +
       '<td></td><td class="cell-code">' + v.id + '</td>' +
       '<td class="cell-desc" style="font-weight:400">' + v.title +
         ' <span class="chip ' + (v.status === 'draft' ? 'draft' : 'vo') + '">' + (v.status === 'draft' ? 'Draft' : 'Awaiting approval') + '</span>' +
         (atRisk ? ' <span class="chip over">Cost at risk</span>' : '') +
+        (unrated.length ? ' <span class="chip warn">Rates not mapped</span>' : '') +
         '<div style="font-size:11px;color:#94a3b8;margin-top:3px">' + v.cc + ' · ' + v.zone + ' · ' + varTypeLabel(v) + (v.ref ? ' · ref ' + v.ref : '') +
         (atRisk ? ' — <span style="color:#dc2626;font-weight:600">' + money(d.costToDate) + ' spent against unapproved revenue</span>' : '') + '</div>' +
+        (unrated.length
+          ? '<div class="rate-warn"><i class="fas fa-triangle-exclamation"></i> ' +
+            unrated.join(', ') + ' ' + (unrated.length !== 1 ? 'have' : 'has') + ' no mapped rate, so ' +
+            (unrated.length !== 1 ? 'they price' : 'it prices') + ' at $0. This variation cannot be approved or claimed until ' +
+            (canReprice ? 'it is re-priced from the mapped rates.' : 'the rates are mapped.') + '</div>'
+          : '') +
         '<div style="margin-top:6px" onclick="event.stopPropagation()">' +
-          '<button class="btn btn-success btn-sm" onclick="approveVariation(\'' + v.id + '\')"><i class="fas fa-check"></i> Approve</button> ' +
+          (unrated.length
+            ? (canReprice
+                ? '<button class="btn btn-primary btn-sm" onclick="repriceVariation(\'' + v.id + '\')"><i class="fas fa-calculator"></i> Re-price from rates</button> '
+                : '<button class="btn btn-primary btn-sm" onclick="showRateMappingPage()"><i class="fas fa-link"></i> Map rates</button> ') +
+              '<button class="btn btn-outline btn-sm" disabled title="Rates must be mapped before this can be approved"><i class="fas fa-check"></i> Approve</button> '
+            : '<button class="btn btn-success btn-sm" onclick="approveVariation(\'' + v.id + '\')"><i class="fas fa-check"></i> Approve</button> ') +
           (v.status === 'draft' ? '<button class="btn btn-outline btn-sm" onclick="submitDraft(\'' + v.id + '\')"><i class="fas fa-paper-plane"></i> Submit</button> ' : '') +
         '</div></td>' +
       spendCell(spendBar(Object.assign({}, v, d))) +
@@ -2454,6 +2471,34 @@ function pendingVariationRows(){
   });
   return html;
 }
+/* Priced lines sitting on a resource with no rate. Re-checked on every render,
+   so mapping the rate later clears the flag without touching the variation. */
+function varUnrated(v){
+  if (!v.lines || v.method !== 'rates') return [];
+  return v.lines.filter(l => !l.rate).map(l => l.desc);
+}
+/* True once every missing rate has since been mapped — the variation can then
+   be re-priced from the schedule and becomes approvable. */
+function varCanReprice(v){
+  const missing = varUnrated(v);
+  if (!missing.length) return false;
+  return missing.every(name =>
+    projectPlant.concat(projectLabour).some(r => r.name === name && r.rate));
+}
+function repriceVariation(id){
+  const v = variations.find(x => x.id === id);
+  v.lines.forEach(l => {
+    if (l.rate) return;
+    const res = projectPlant.concat(projectLabour).find(r => r.name === l.desc);
+    if (res && res.rate) l.rate = res.rate;
+  });
+  const markup = 1.15;
+  v.contract = Math.round(v.lines.reduce((a, l) => a + (l.qty || 0) * (l.rate || 0), 0) * markup);
+  render();
+  toast('<i class="fas fa-calculator"></i> ' + id + ' re-priced from the mapped rates — contract value now ' +
+        money(v.contract) + '. It can be approved.');
+}
+
 function varTypeLabel(v){
   return {priced:'Priced variation', dayworks:'Dayworks variation', costplus:'Cost plus variation'}[v.type] || 'Variation';
 }
@@ -3151,15 +3196,15 @@ function calcVarBuild(){
   const blocker = document.getElementById('varRateBlocker');
   if (blocker){
     blocker.style.display = unrated.length ? '' : 'none';
-    if (unrated.length) blocker.innerHTML = '<i class="fas fa-triangle-exclamation"></i> ' +
-      unrated.length + ' resource' + (unrated.length !== 1 ? 's have' : ' has') + ' no mapped rate (' +
-      unrated.map(x => x.name).join(', ') + ') and would price at $0. ' +
-      '<a onclick="showRateMappingPage()">Map the rates</a> before submitting — otherwise the claim value would be wrong.';
+    if (unrated.length) blocker.innerHTML = '<i class="fas fa-triangle-exclamation"></i> <strong>' +
+      unrated.length + ' resource' + (unrated.length !== 1 ? 's have' : ' has') + ' no mapped rate</strong> (' +
+      unrated.map(x => x.name).join(', ') + ') and price at $0. You can still save and submit this variation, but it ' +
+      '<strong>cannot be approved or claimed</strong> until the rates are mapped. ' +
+      '<a onclick="showRateMappingPage()">Map the rates now</a>';
   }
-
-  const ok = contract > 0 && titled && !unrated.length;
+  const ok = contract > 0 && titled;
   document.getElementById('vSubmitBtn').disabled = !ok;
-  document.getElementById('vDraftBtn').disabled = !(contract > 0 && titled);
+  document.getElementById('vDraftBtn').disabled = !ok;
 }
 
 function addSampleVarFile(){
@@ -3210,9 +3255,14 @@ function saveVariation(status){
   document.getElementById('varBuildOverlay').classList.remove('show');
   attachedRecords = [];
   render();
-  toast('<i class="fas fa-check-circle"></i> ' + id + ' ' + (status === 'draft' ? 'saved as draft' : 'submitted for approval') +
-        ' — ' + money(contract) + ' contract, ' + money(v.budget) + ' budget' +
-        (tracked ? ', ' + money(tracked) + ' already tracked' : '') + '. Outside the totals until approved.');
+  const missing = varUnrated(v);
+  toast(missing.length
+    ? '<i class="fas fa-triangle-exclamation"></i> ' + id + ' ' + (status === 'draft' ? 'saved as draft' : 'submitted') +
+      ' with ' + missing.length + ' unmapped rate' + (missing.length !== 1 ? 's' : '') +
+      ' (' + missing.join(', ') + '). It cannot be approved or claimed until those rates are mapped.'
+    : '<i class="fas fa-check-circle"></i> ' + id + ' ' + (status === 'draft' ? 'saved as draft' : 'submitted for approval') +
+      ' — ' + money(contract) + ' contract, ' + money(v.budget) + ' budget' +
+      (tracked ? ', ' + money(tracked) + ' already tracked' : '') + '. Outside the totals until approved.');
 }
 function submitDraft(id){
   const v = variations.find(x => x.id === id);
@@ -3222,6 +3272,13 @@ function submitDraft(id){
 }
 function approveVariation(id){
   const v = variations.find(x => x.id === id);
+  const missing = varUnrated(v);
+  if (missing.length){
+    toast('<i class="fas fa-ban"></i> ' + id + ' cannot be approved — ' + missing.join(', ') +
+          ' ' + (missing.length !== 1 ? 'have' : 'has') + ' no mapped rate, so the claim value is unknown. ' +
+          'Map the rates, then re-price the variation.');
+    return;
+  }
   v.status = 'approved';
   v.approvedOn = '10 Aug 2026';
   render();
