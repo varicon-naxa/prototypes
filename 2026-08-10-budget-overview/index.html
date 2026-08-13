@@ -370,6 +370,8 @@ details.card-collapse[open] summary{border-bottom:1px solid #f1f5f9;margin-botto
 details.card-collapse>*:not(summary){margin-left:22px;margin-right:22px}
 details.card-collapse>*:last-child{margin-bottom:18px}
 .callout a{color:#92400e;text-decoration:underline;cursor:pointer;font-weight:600}
+.markup-edit{font-size:11px;color:#64748b;margin-left:8px}
+.markup-edit input{width:56px;padding:3px 6px;border:1px solid #e2e8f0;border-radius:5px;font-size:11px;font-family:'Inter',sans-serif;text-align:right;margin-left:4px}
 .rate-warn{font-size:11px;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:6px 10px;margin-top:6px;line-height:1.5}
 .rate-warn i{margin-right:5px;color:#d97706}
 .btn-sm[disabled]{opacity:.45;cursor:not-allowed}
@@ -582,6 +584,8 @@ details.card-collapse>*:last-child{margin-bottom:18px}
           <span class="active" data-view="cc" onclick="switchView('cc')"><i class="fas fa-layer-group" style="margin-right:5px"></i> Cost Centres</span>
           <span data-view="zone" onclick="switchView('zone')"><i class="fas fa-map-marker-alt" style="margin-right:5px"></i> Zones</span>
           <span data-view="boq" onclick="switchView('boq')"><i class="fas fa-list" style="margin-right:5px"></i> BOQ Line Items</span>
+          <span data-view="people" onclick="switchView('people')"><i class="fas fa-users" style="margin-right:5px"></i> People &amp; Plant</span>
+          <span data-view="claim" onclick="switchView('claim')"><i class="fas fa-file-invoice-dollar" style="margin-right:5px"></i> Claim</span>
         </div>
         <select class="filter-select" id="statusFilter" onchange="render()">
           <option value="all">All margins</option>
@@ -766,6 +770,16 @@ details.card-collapse>*:last-child{margin-bottom:18px}
               <tbody id="labourMappingBody"></tbody>
             </table>
           </div>
+          <div class="card">
+            <h3><i class="fas fa-user-gear" style="color:#0d9488;margin-right:8px"></i>Wet hire — plant and operator</h3>
+            <p class="card-sub">One charge-out rate covering the machine <em>and</em> the person running it. Cost is the two
+              internal rates added together; the sell is this single wet hire rate, so labour is never charged out on top.</p>
+            <table class="mini-table">
+              <thead><tr><th>Machine</th><th style="width:34%">Wet hire rate</th>
+                <th class="right" style="width:110px">Sell ($/hr)</th><th class="right" style="width:130px">Cost ($/hr)</th></tr></thead>
+              <tbody id="wetMappingBody"></tbody>
+            </table>
+          </div>
         </div>
         <div class="mapping-sidebar">
           <div class="card" style="padding:16px">
@@ -847,8 +861,10 @@ details.card-collapse>*:last-child{margin-bottom:18px}
     <!-- Details -->
     <div class="card">
       <div class="field-row">
-        <div class="field"><label>Variation title</label><input id="vTitle" placeholder="e.g. Additional drainage works — Zone B" oninput="calcVarBuild()"></div>
-        <div class="field"><label>Client reference</label><input id="vRef" placeholder="e.g. SI-018, RFI-042"></div>
+        <div class="field"><label>Variation title</label>
+          <input id="vTitle" placeholder="e.g. Additional drainage works — Zone B" oninput="calcVarBuild();syncSuggestedCC()"></div>
+        <div class="field"><label>Client reference</label><input id="vRef" placeholder="e.g. VAR001">
+          <div class="field-hint" id="vRefHint"></div></div>
       </div>
       <details class="adv" style="margin-bottom:0">
         <summary>Scope description</summary>
@@ -917,7 +933,7 @@ details.card-collapse>*:last-child{margin-bottom:18px}
         </div>
         <div class="field" id="vNewCCWrap" style="display:none;margin:14px 0 0">
           <label>New cost centre name</label>
-          <input id="vNewCC" placeholder="e.g. VO-004 — Extra hardstand">
+          <input id="vNewCC" placeholder="e.g. VO-004 — Extra hardstand" oninput="this.dataset.edited=1">
           <div class="field-hint"><i class="fas fa-circle-info"></i> Its own cost centre keeps this variation's committed, tracked
             and actual separate from the base scope. Pick an existing one to roll it in with that trade.</div>
         </div>
@@ -1159,6 +1175,94 @@ const dayworksRecords = [
     plant:[{name:'Bobcat — Wet Hire', hrs:3, days:1, rate:165, amount:495}],
     materials:[{desc:'Concrete kerb units', qty:18, unit:'lm', rate:95, amount:1710}]}}
 ];
+/* ══════════════════════════════════════════════════════════════
+   DAYWORKS — people, wet hire, and cost plus
+
+   On a dayworks job the timesheet is the record that matters. Each line
+   says who worked, for how long, and on what machine. From that:
+
+     cost  = the person's cost rate + the machine's internal cost rate
+     sell  = the WET HIRE rate for that machine, which covers the operator
+             as well — so labour is never charged out separately when
+             someone is on plant. A person working without a machine is
+             charged at their labour sell rate.
+
+   Cost plus covers materials only: a supplier invoice is scanned in and a
+   percentage is added on top. The claim shows the invoice and the marked-up
+   total.
+   ══════════════════════════════════════════════════════════════ */
+const DAYWORK_PEOPLE = [
+  {id:'W-01', name:'J. Whitton',  role:'Plant operator',   costRate:78,  labourSell:112},
+  {id:'W-02', name:'M. Rakes',    role:'Plant operator',   costRate:74,  labourSell:108},
+  {id:'W-03', name:'T. Bui',      role:'Skilled labourer', costRate:66,  labourSell:98},
+  {id:'W-04', name:'S. Okafor',   role:'Site foreman',     costRate:92,  labourSell:135},
+  {id:'W-05', name:'D. Papadakis', role:'General labourer', costRate:58, labourSell:88}
+];
+
+/* Wet hire = machine + operator, charged as one rate. Cost is the two
+   internal rates added together; the sell is this single figure. */
+const WET_HIRE_RATES = [
+  {plant:'P-04', name:'20T Excavator + operator', rate:265},
+  {plant:'P-11', name:'5T Excavator + operator',  rate:195},
+  {plant:'P-07', name:'10T Tipper + operator',    rate:210},
+  {plant:'P-02', name:'Bobcat + operator',        rate:168},
+  {plant:'P-15', name:'Roller + operator',        rate:186}
+];
+function wetHireFor(plantId){ return WET_HIRE_RATES.find(w => w.plant === plantId) || null; }
+function plantById(id){ return PLANT_FLEET.find(m => m.id === id) || null; }
+function personById(id){ return DAYWORK_PEOPLE.find(w => w.id === id) || null; }
+
+/* Timesheet lines — the source of truth for dayworks cost and revenue. */
+const DAYWORK_TIMESHEETS = [
+  {date:'22 Jul 2026', person:'W-01', plant:'P-04', hours:9,  docket:'DW-1042', cc:'Earthworks'},
+  {date:'22 Jul 2026', person:'W-05', plant:null,   hours:9,  docket:'DW-1042', cc:'Earthworks'},
+  {date:'23 Jul 2026', person:'W-02', plant:'P-15', hours:8,  docket:'DW-1045', cc:'Earthworks'},
+  {date:'23 Jul 2026', person:'W-03', plant:null,   hours:8,  docket:'DW-1045', cc:'Earthworks'},
+  {date:'25 Jul 2026', person:'W-01', plant:'P-11', hours:7.5, docket:'DW-1051', cc:'Drainage'},
+  {date:'25 Jul 2026', person:'W-04', plant:null,   hours:6,  docket:'DW-1051', cc:'Drainage'},
+  {date:'26 Jul 2026', person:'W-04', plant:null,   hours:8,  docket:'DW-1058', cc:'Overheads / Prelims'},
+  {date:'26 Jul 2026', person:'W-05', plant:null,   hours:8,  docket:'DW-1058', cc:'Overheads / Prelims'},
+  {date:'27 Jul 2026', person:'W-03', plant:null,   hours:6,  docket:'DW-1063', cc:'Concrete'},
+  {date:'27 Jul 2026', person:'W-02', plant:'P-02', hours:4,  docket:'DW-1063', cc:'Concrete'},
+  {date:'28 Jul 2026', person:'W-03', plant:null,   hours:16, docket:'DW-1067', cc:'Steel & Rebar'},
+  {date:'29 Jul 2026', person:'W-05', plant:null,   hours:8,  docket:'DW-1071', cc:'Roadway'},
+  {date:'29 Jul 2026', person:'W-01', plant:'P-02', hours:3,  docket:'DW-1071', cc:'Roadway'},
+  {date:'03 Aug 2026', person:'W-02', plant:'P-07', hours:8,  docket:'DW-1078', cc:'Drainage'},
+  {date:'05 Aug 2026', person:'W-04', plant:null,   hours:6,  docket:'DW-1082', cc:'Overheads / Prelims'},
+  {date:'05 Aug 2026', person:'W-01', plant:'P-04', hours:6,  docket:'DW-1082', cc:'Overheads / Prelims'}
+];
+
+/* Cost and charge-out for one timesheet line. */
+function timesheetLine(t){
+  const person = personById(t.person);
+  const plant  = t.plant ? plantById(t.plant) : null;
+  const wet    = t.plant ? wetHireFor(t.plant) : null;
+  // Plant cost rates can be daily or weekly; normalise to an hourly cost.
+  const plantHourly = plant
+    ? (plant.basis === 'hr' ? plant.rate : plant.basis === 'day' ? plant.rate / 8 : plant.rate / 38)
+    : 0;
+  const labourCost = person.costRate * t.hours;
+  const plantCost  = plantHourly * t.hours;
+  // Wet hire covers the operator, so labour is not charged out on top.
+  const sell = wet ? wet.rate * t.hours : person.labourSell * t.hours;
+  return Object.assign({}, t, {
+    person, plant, wet,
+    labourCost:Math.round(labourCost), plantCost:Math.round(plantCost),
+    cost:Math.round(labourCost + plantCost), sell:Math.round(sell),
+    sellBasis: wet ? 'wet hire' : 'labour'
+  });
+}
+function dayworkTimesheetLines(){ return DAYWORK_TIMESHEETS.map(timesheetLine); }
+
+/* Cost plus — materials only. Scanned supplier invoice plus a percentage. */
+let costPlusInvoices = [
+  {ref:'INV-8842', supplier:'Boral Quarries',   desc:'Road base 20mm',       amount:12480, markup:15, docket:'DW-1045', date:'24 Jul 2026', scanned:true},
+  {ref:'INV-8871', supplier:'Vinidex Pipe Co',  desc:'600mm RCP + fittings', amount:9260,  markup:12, docket:'DW-1051', date:'26 Jul 2026', scanned:true},
+  {ref:'INV-8903', supplier:'ARC Reinforcing',  desc:'N16 bar & mesh',       amount:6540,  markup:15, docket:'DW-1067', date:'29 Jul 2026', scanned:true},
+  {ref:'INV-8940', supplier:'Hanson Concrete',  desc:'N32 patch concrete',   amount:2180,  markup:10, docket:'DW-1063', date:'30 Jul 2026', scanned:false}
+];
+function invoiceSell(i){ return Math.round(i.amount * (1 + i.markup / 100)); }
+
 function recordTotal(r){
   let t = 0;
   ['labour','plant','materials'].forEach(k => (r.items[k] || []).forEach(i => t += (i.amount || 0)));
@@ -1739,7 +1843,7 @@ const PROJECT_TYPES = {
         contractHeader:'Contract', contractSub:'Contract sum',
         note:'Every BOQ line item is budgeted and tracked individually, so cost lands on the line. No zones — the WBS is the only breakdown.',
         lineCosts:true, dayworks:false},
-  dw:  {label:'Dayworks Only', views:['cc','zone'], defaultView:'cc',
+  dw:  {label:'Dayworks Only', views:['cc','zone','people','claim'], defaultView:'cc',
         codeHeader:'Docket', descHeader:'Daywork Docket',
         contractHeader:'Claimable', contractSub:'At schedule of rates',
         note:'No fixed BOQ — every daywork docket is both the unit of work and the unit of revenue.',
@@ -1777,7 +1881,7 @@ function applyStructureChrome(){
     s.style.display = cfg.views.includes(s.dataset.view) ? '' : 'none');
   document.getElementById('viewToggle').style.display = cfg.views.length > 1 ? '' : 'none';
   // A dayworks-only project has no contract to vary and no provisional sums.
-  document.getElementById('btnAddVariation').style.display = cfg.dayworks ? 'none' : '';
+  document.getElementById('btnAddVariation').style.display = '';
   document.getElementById('btnCreateClaim').style.display = cfg.dayworks ? '' : 'none';
 }
 
@@ -2140,6 +2244,8 @@ function marginCell(m, budget){
 }
 
 function render(){
+  if (currentView === 'people'){ renderPeopleView(); return; }
+  if (currentView === 'claim'){ renderClaimView(); return; }
   const list = visibleItems();
   docNodes = {}; docNodeSeq = 0;   // rebuilt each render so ids stay valid
   let html = '';
@@ -2409,6 +2515,245 @@ function groupSuppliers(items){
   return {po:pick('po'), dkt:pick('dkt'), bill:pick('bill')};
 }
 
+/* ══ Claim ══
+   What goes on the claim for a dayworks job: dockets priced at the schedule
+   of rates, and cost-plus material invoices with their percentage on top.
+   Both are shown at the value claimed, with the cost behind them. */
+let claimSelection = new Set();
+
+function claimDocketRows(){
+  const lines = dayworkTimesheetLines();
+  const byDocket = {};
+  lines.forEach(l => {
+    if (!byDocket[l.docket]) byDocket[l.docket] = {docket:l.docket, cc:l.cc, date:l.date, cost:0, sell:0, lines:[]};
+    const d = byDocket[l.docket];
+    d.cost += l.cost; d.sell += l.sell; d.lines.push(l);
+  });
+  return Object.keys(byDocket).map(k => {
+    const d = byDocket[k];
+    const src = dayworksLines.find(x => x.code === d.docket);
+    d.claim = src ? src.claim : 'unclaimed';
+    return d;
+  });
+}
+
+function renderClaimView(){
+  claimMode = false;
+  document.getElementById('tableCols').innerHTML =
+    '<col style="width:34px"><col style="width:110px"><col style="width:auto">' +
+    '<col style="width:130px"><col style="width:130px"><col style="width:120px"><col style="width:130px">';
+  document.getElementById('tableHead').innerHTML =
+    '<tr><th></th><th>Reference</th><th>Description</th>' +
+      '<th class="right sep">Cost</th><th class="right">Claim value</th><th class="right">Margin</th>' +
+      '<th class="right sep">Status</th></tr>' +
+    '<tr class="sub-header"><th></th><th></th><th>What is being claimed</th>' +
+      '<th class="right sep">To us</th><th class="right">Rates / cost plus</th><th class="right">On this line</th>' +
+      '<th class="right sep">This claim</th></tr>';
+
+  const dockets = claimDocketRows();
+  const unclaimedDkt = dockets.filter(d => d.claim === 'unclaimed');
+  const unclaimedInv = costPlusInvoices.filter(i => !i.claimed);
+  const selValue =
+    dockets.filter(d => claimSelection.has(d.docket)).reduce((a, d) => a + d.sell, 0) +
+    costPlusInvoices.filter(i => claimSelection.has(i.ref)).reduce((a, i) => a + invoiceSell(i), 0);
+
+  let html = '<tr class="section-banner dayworks"><td colspan="7">' +
+    '<i class="fas fa-clipboard-list" style="margin-right:8px"></i>Dayworks dockets — schedule of rates' +
+    '<span class="banner-note">' + unclaimedDkt.length + ' unclaimed · priced from the rates, wet hire covers the operator</span>' +
+    '</td></tr>';
+
+  dockets.forEach(d => {
+    const m = d.sell > 0 ? (d.sell - d.cost) / d.sell * 100 : 0;
+    const st = CLAIM_STATES[d.claim];
+    const picked = claimSelection.has(d.docket);
+    const open = openItems.has('cl:' + d.docket);
+    html += '<tr class="' + (picked ? 'pend-row' : '') + '">' +
+      '<td>' + (d.claim === 'unclaimed'
+        ? '<input type="checkbox"' + (picked ? ' checked' : '') + ' onclick="toggleClaimPick(\'' + d.docket + '\')">'
+        : '') + '</td>' +
+      '<td class="cell-code">' + d.docket + '</td>' +
+      '<td class="cell-desc">' + d.cc + ' · ' + d.date +
+        '<div style="font-size:11px;font-weight:400;color:#94a3b8;margin-top:2px" onclick="toggleItem(\'cl:' + d.docket + '\')">' +
+          '<i class="fas fa-chevron-' + (open ? 'up' : 'down') + '" style="font-size:9px;margin-right:4px;color:#f5a623"></i>' +
+          '<span style="color:#f5a623">' + (open ? 'hide' : 'show') + ' the ' + d.lines.length + ' timesheet lines behind this</span></div></td>' +
+      '<td class="right sep">' + money(d.cost) + '</td>' +
+      '<td class="right claimed-cell">' + money(d.sell) + '</td>' +
+      '<td class="right margin-cell ' + marginClass(m) + '">' + pct(m) + '</td>' +
+      '<td class="right sep"><span class="chip ' + st.cls + '">' + st.label + '</span></td></tr>';
+
+    d.lines.forEach(l => {
+      html += '<tr class="item-row' + (open ? ' visible' : '') + '">' +
+        '<td></td><td class="cell-code">' + l.person.id + '</td>' +
+        '<td class="cell-desc" style="font-weight:400">' + l.person.name + ' — ' +
+          (l.plant ? l.plant.id + ' ' + l.plant.name : 'no machine') +
+          '<div style="font-size:11px;color:#94a3b8;margin-top:2px">' + l.hours + ' hrs @ ' +
+          (l.wet ? '$' + l.wet.rate + '/hr wet hire' : '$' + l.person.labourSell + '/hr labour') + '</div></td>' +
+        '<td class="right sep">' + money(l.cost) + '</td>' +
+        '<td class="right">' + money(l.sell) + '</td>' +
+        '<td class="right money-muted">—</td><td class="right money-muted sep">—</td></tr>';
+    });
+  });
+
+  html += '<tr class="section-banner variations"><td colspan="7">' +
+    '<i class="fas fa-file-invoice" style="margin-right:8px"></i>Cost plus — materials' +
+    '<span class="banner-note">' + unclaimedInv.length + ' unclaimed · supplier invoice plus an agreed percentage</span>' +
+    '</td></tr>';
+
+  costPlusInvoices.forEach((i, idx) => {
+    const sell = invoiceSell(i);
+    const m = (sell - i.amount) / sell * 100;
+    const picked = claimSelection.has(i.ref);
+    html += '<tr class="' + (picked ? 'pend-row' : '') + '">' +
+      '<td>' + (!i.claimed ? '<input type="checkbox"' + (picked ? ' checked' : '') +
+        ' onclick="toggleClaimPick(\'' + i.ref + '\')">' : '') + '</td>' +
+      '<td class="cell-code">' + i.ref + '</td>' +
+      '<td class="cell-desc">' + i.desc +
+        ' <span class="chip ' + (i.scanned ? 'ok' : 'warn') + '">' + (i.scanned ? 'Scanned' : 'Awaiting scan') + '</span>' +
+        '<div style="font-size:11px;font-weight:400;color:#94a3b8;margin-top:2px">' + i.supplier + ' · ' + i.date +
+        ' · against ' + i.docket + ' · invoice ' + money(i.amount) + ' + ' + i.markup + '%</div>' +
+        '<div style="margin-top:6px">' +
+          '<button class="btn btn-outline btn-sm" onclick="viewInvoice(\'' + i.ref + '\')"><i class="fas fa-file-image"></i> View invoice</button> ' +
+          '<span class="markup-edit">% on top <input type="number" value="' + i.markup + '" min="0" max="100" ' +
+            'onchange="setMarkup(' + idx + ',this.value)"></span>' +
+        '</div></td>' +
+      '<td class="right sep">' + money(i.amount) + '</td>' +
+      '<td class="right claimed-cell">' + money(sell) + '</td>' +
+      '<td class="right margin-cell ' + marginClass(m) + '">' + pct(m) + '</td>' +
+      '<td class="right sep"><span class="chip ' + (i.claimed ? 'ok' : 'warn') + '">' +
+        (i.claimed ? 'Claimed' : 'Unclaimed') + '</span></td></tr>';
+  });
+
+  document.getElementById('tableBody').innerHTML = html;
+
+  const totCost = dockets.reduce((a, d) => a + d.cost, 0) + costPlusInvoices.reduce((a, i) => a + i.amount, 0);
+  const totSell = dockets.reduce((a, d) => a + d.sell, 0) + costPlusInvoices.reduce((a, i) => a + invoiceSell(i), 0);
+  const tm = totSell > 0 ? (totSell - totCost) / totSell * 100 : 0;
+  document.getElementById('tableFoot').innerHTML =
+    '<tr><td></td><td></td><td>Everything claimable</td>' +
+    '<td class="right sep">' + money(totCost) + '</td>' +
+    '<td class="right">' + money(totSell) + '</td>' +
+    '<td class="right margin-cell ' + marginClass(tm) + '">' + pct(tm) + '</td>' +
+    '<td class="right sep"></td></tr>' +
+    '<tr class="excl"><td></td><td></td><td>Selected for this claim — ' + claimSelection.size + ' items</td>' +
+    '<td class="right sep"></td><td class="right" style="font-weight:700;color:#1d4ed8">' + money(selValue) + '</td>' +
+    '<td colspan="2" class="right"><button class="btn btn-primary btn-sm"' +
+      (claimSelection.size ? '' : ' disabled') + ' onclick="buildClaim()">' +
+      '<i class="fas fa-file-invoice-dollar"></i> Build claim</button></td></tr>';
+  document.getElementById('rowCount').textContent =
+    dockets.length + ' dockets · ' + costPlusInvoices.length + ' cost plus invoices';
+  renderStats();
+}
+
+function toggleClaimPick(ref){
+  claimSelection.has(ref) ? claimSelection.delete(ref) : claimSelection.add(ref);
+  render();
+}
+function setMarkup(idx, v){
+  costPlusInvoices[idx].markup = parseFloat(v) || 0;
+  render();
+  toast('<i class="fas fa-percent"></i> ' + costPlusInvoices[idx].ref + ' now claims at ' +
+        money(invoiceSell(costPlusInvoices[idx])) + ' — invoice ' + money(costPlusInvoices[idx].amount) +
+        ' plus ' + costPlusInvoices[idx].markup + '%.');
+}
+function viewInvoice(ref){
+  const i = costPlusInvoices.find(x => x.ref === ref);
+  toast('<i class="fas fa-file-image"></i> ' + ref + ' — ' + i.supplier + ', ' + money(i.amount) +
+        (i.scanned ? '. The scan opens here; the claim shows the invoice and the marked-up total.'
+                   : '. Not scanned yet — the claim needs the document attached.'));
+}
+function buildClaim(){
+  const dockets = claimDocketRows().filter(d => claimSelection.has(d.docket));
+  const invs = costPlusInvoices.filter(i => claimSelection.has(i.ref));
+  const value = dockets.reduce((a, d) => a + d.sell, 0) + invs.reduce((a, i) => a + invoiceSell(i), 0);
+  dockets.forEach(d => { const src = dayworksLines.find(x => x.code === d.docket); if (src) src.claim = 'in-claim'; });
+  invs.forEach(i => i.claimed = true);
+  claimSelection.clear();
+  render();
+  toast('<i class="fas fa-check-circle"></i> Claim drafted at ' + money(value) + ' — ' +
+        dockets.length + ' dockets at the schedule of rates and ' + invs.length +
+        ' cost plus invoices with their percentage on top.');
+}
+
+/* ══ People & Plant ══
+   Every person used on dayworks: what they cost the business and what they
+   were charged out at. On plant the charge-out is the wet hire rate, which
+   covers the operator; off plant it is their labour sell rate. */
+function renderPeopleView(){
+  claimMode = false;
+  document.getElementById('tableCols').innerHTML =
+    '<col style="width:34px"><col style="width:90px"><col style="width:auto">' +
+    '<col style="width:90px"><col style="width:130px"><col style="width:130px">' +
+    '<col style="width:130px"><col style="width:120px"><col style="width:110px">';
+  document.getElementById('tableHead').innerHTML =
+    '<tr><th></th><th>ID</th><th>Person</th><th class="right">Hours</th>' +
+      '<th class="right sep">Labour cost</th><th class="right">Plant cost</th><th class="right">Total cost</th>' +
+      '<th class="right sep">Charged out</th><th class="right">Margin</th></tr>' +
+    '<tr class="sub-header"><th></th><th></th><th>Role</th><th class="right">On dayworks</th>' +
+      '<th class="right sep">Their time</th><th class="right">Machine time</th><th class="right">Cost to us</th>' +
+      '<th class="right sep">Wet hire or labour rate</th><th class="right">Sell less cost</th></tr>';
+
+  const lines = dayworkTimesheetLines();
+  const byPerson = {};
+  lines.forEach(l => {
+    const k = l.person.id;
+    if (!byPerson[k]) byPerson[k] = {person:l.person, hours:0, labourCost:0, plantCost:0, cost:0, sell:0, lines:[]};
+    const b = byPerson[k];
+    b.hours += l.hours; b.labourCost += l.labourCost; b.plantCost += l.plantCost;
+    b.cost += l.cost; b.sell += l.sell; b.lines.push(l);
+  });
+
+  let html = '', tot = {hours:0, labourCost:0, plantCost:0, cost:0, sell:0};
+  Object.keys(byPerson).forEach(k => {
+    const b = byPerson[k];
+    ['hours','labourCost','plantCost','cost','sell'].forEach(f => tot[f] += b[f]);
+    const m = b.sell > 0 ? (b.sell - b.cost) / b.sell * 100 : 0;
+    const open = openGroups.has(k);
+    html += '<tr class="grp-row' + (open ? ' expanded' : '') + '" onclick="toggleGroup(\'' + k + '\')">' +
+      '<td><i class="fas fa-chevron-right expand-icon"></i></td>' +
+      '<td class="cell-code">' + b.person.id + '</td>' +
+      '<td class="cell-desc">' + b.person.name +
+        '<div style="font-size:11px;font-weight:400;color:#94a3b8;margin-top:2px">' + b.person.role +
+        ' · ' + b.lines.length + ' timesheet lines</div></td>' +
+      '<td class="right">' + b.hours.toLocaleString('en-AU') + '</td>' +
+      '<td class="right sep">' + money(b.labourCost) + '</td>' +
+      '<td class="right ' + (b.plantCost ? 'money-committed' : 'money-muted') + '">' + (b.plantCost ? money(b.plantCost) : '—') + '</td>' +
+      '<td class="right money-spent">' + money(b.cost) + '</td>' +
+      '<td class="right sep claimed-cell">' + money(b.sell) + '</td>' +
+      '<td class="right margin-cell ' + marginClass(m) + '">' + pct(m) + '</td></tr>';
+
+    b.lines.forEach(l => {
+      const lm = l.sell > 0 ? (l.sell - l.cost) / l.sell * 100 : 0;
+      html += '<tr class="item-row' + (open ? ' visible' : '') + '">' +
+        '<td></td><td class="cell-code">' + l.date + '</td>' +
+        '<td class="cell-desc" style="font-weight:400">' +
+          (l.plant ? l.plant.id + ' — ' + l.plant.name : 'No machine') +
+          ' <span class="chip ' + (l.wet ? 'live' : 'idle') + '">' + l.sellBasis + '</span>' +
+          '<div style="font-size:11px;color:#94a3b8;margin-top:2px">' + l.docket + ' · ' + l.cc +
+          (l.wet ? ' · charged at $' + l.wet.rate + '/hr wet — covers the operator' :
+                   ' · charged at $' + l.person.labourSell + '/hr') + '</div></td>' +
+        '<td class="right">' + l.hours + '</td>' +
+        '<td class="right sep">' + money(l.labourCost) + '</td>' +
+        '<td class="right ' + (l.plantCost ? '' : 'money-muted') + '">' + (l.plantCost ? money(l.plantCost) : '—') + '</td>' +
+        '<td class="right">' + money(l.cost) + '</td>' +
+        '<td class="right sep">' + money(l.sell) + '</td>' +
+        '<td class="right margin-cell ' + marginClass(lm) + '">' + pct(lm) + '</td></tr>';
+    });
+  });
+
+  document.getElementById('tableBody').innerHTML = html;
+  const tm = tot.sell > 0 ? (tot.sell - tot.cost) / tot.sell * 100 : 0;
+  document.getElementById('tableFoot').innerHTML =
+    '<tr><td></td><td></td><td>Total — ' + Object.keys(byPerson).length + ' people</td>' +
+    '<td class="right">' + tot.hours.toLocaleString('en-AU') + '</td>' +
+    '<td class="right sep">' + money(tot.labourCost) + '</td>' +
+    '<td class="right">' + money(tot.plantCost) + '</td>' +
+    '<td class="right">' + money(tot.cost) + '</td>' +
+    '<td class="right sep">' + money(tot.sell) + '</td>' +
+    '<td class="right margin-cell ' + marginClass(tm) + '">' + pct(tm) + '</td></tr>';
+  document.getElementById('rowCount').textContent = lines.length + ' timesheet lines';
+  renderStats();
+}
+
 /* ── Dayworks claim status strip (dayworks-only projects) ── */
 function dayworksClaimRow(){
   if (!isDayworksProject()) return '';
@@ -2440,10 +2785,11 @@ function createClaimFromDayworks(){
 
 /* ── Pending variations section ── */
 function pendingVariationRows(){
-  if (isDayworksProject()) return '';
   // Variations belong to the BOQ — that is what claims are made against. They
   // reach the Cost Centres view only when given a cost centre of their own.
-  if (currentView !== 'boq') return '';
+  // A dayworks job has no BOQ, so they surface on its Cost Centres view.
+  if (isDayworksProject()){ if (currentView !== 'cc') return ''; }
+  else if (currentView !== 'boq') return '';
   const pending = variations.filter(v => v.status !== 'approved');
   if (!pending.length) return '';
   const t = aggregate(pending.map(v => Object.assign({}, v, derive(v))));
@@ -2923,6 +3269,20 @@ function buildMappingTables(){
   document.getElementById('availPlantRates').innerHTML = drag(uploadedPlantRates, 'plant');
   document.getElementById('availLabourRates').innerHTML = drag(uploadedLabourRates, 'labour');
 
+  // Wet hire: machine cost + a typical operator cost, sold as one rate.
+  document.getElementById('wetMappingBody').innerHTML = WET_HIRE_RATES.map(w => {
+    const m = plantById(w.plant);
+    const hourly = m ? (m.basis === 'hr' ? m.rate : m.basis === 'day' ? m.rate / 8 : m.rate / 38) : 0;
+    const op = DAYWORK_PEOPLE.find(x => x.role === 'Plant operator');
+    const cost = hourly + (op ? op.costRate : 0);
+    const mgn = w.rate > 0 ? (w.rate - cost) / w.rate * 100 : 0;
+    return '<tr><td style="font-weight:500;color:#1b2a4a">' + w.plant + ' — ' + (m ? m.name : '') + '</td>' +
+      '<td><span class="mapped-rate"><i class="fas fa-check-circle" style="color:#0d9488"></i> ' + w.name + '</span></td>' +
+      '<td class="right" style="font-weight:600;color:#1b2a4a">$' + w.rate.toFixed(2) + '</td>' +
+      '<td class="right" style="font-size:11px;color:#94a3b8">$' + cost.toFixed(2) +
+        '<div style="color:' + (mgn >= 0 ? '#0d9488' : '#ef4444') + ';font-weight:600">' + mgn.toFixed(1) + '% margin</div></td></tr>';
+  }).join('');
+
   const total = projectPlant.length + projectLabour.length;
   const done = projectPlant.filter(p => p.mapped).length + projectLabour.filter(l => l.mapped).length;
   document.getElementById('mapProgress').innerHTML = done === total
@@ -3072,13 +3432,22 @@ function openVarBuild(){
   }
 
   document.getElementById('vTitle').value = title;
-  document.getElementById('vRef').value = '';
+  document.getElementById('vRef').value = nextClientRef();
+  document.getElementById('vRefHint').innerHTML =
+    '<i class="fas fa-circle-info"></i> Next in sequence — edit if this variation belongs to another series.';
   document.getElementById('vDesc').value = '';
   document.getElementById('vBudget').value = attachedRecords.length ? attachedRecords.reduce((s,r) => s + recordTotal(r), 0) : '';
   document.getElementById('vMarkup').value = 15;
+  // Default to a cost centre of its own, named after the variation.
   fillCCSelect('vCC', prefillCC, 'Create a new cost centre for this variation');
-  document.getElementById('vNewCC').value = '';
-  document.getElementById('vNewCCWrap').style.display = 'none';
+  if (!prefillCC){
+    document.getElementById('vCC').value = '__new';
+    document.getElementById('vNewCCWrap').style.display = '';
+    document.getElementById('vNewCC').value = varSuggestedCC();
+  } else {
+    document.getElementById('vNewCC').value = '';
+    document.getElementById('vNewCCWrap').style.display = 'none';
+  }
   fillSelect('vZone', ZONES, prefillZone);
   renderVarFiles();
   renderVarLines();
@@ -3162,10 +3531,32 @@ function renderRateRows(){
 function rateCost(kind){
   return rateRows[kind].reduce((s,r) => s + (kind === 'material' ? (r.qty||0) * (r.rate||0) : (r.hrs||0) * (r.days||0) * (r.rate||0)), 0);
 }
+/* Next reference in whatever series the last variation used — VAR001 -> VAR002,
+   VO-014 -> VO-015. Falls back to VAR001 when there is nothing to follow. */
+function nextClientRef(){
+  const used = variations.map(v => (v.ref || '').trim()).filter(Boolean);
+  for (let i = used.length - 1; i >= 0; i--){
+    const m = used[i].match(/^(.*?)(\d+)$/);
+    if (m){
+      const width = m[2].length;
+      return m[1] + String(parseInt(m[2], 10) + 1).padStart(width, '0');
+    }
+  }
+  return 'VAR001';
+}
+
 function varSuggestedCC(){
   const t = (document.getElementById('vTitle').value || '').trim();
   return 'VO-' + String(varCounter + 1).padStart(3,'0') + (t ? ' — ' + t : '');
 }
+/* While the cost centre is still the auto-named one, keep it tracking the title. */
+function syncSuggestedCC(){
+  const sel = document.getElementById('vCC');
+  if (!sel || sel.value !== '__new') return;
+  const box = document.getElementById('vNewCC');
+  if (box && !box.dataset.edited) box.value = varSuggestedCC();
+}
+
 function varContractTotal(){
   if (pendingVarMethod === 'rates'){
     const cost = rateCost('labour') + rateCost('plant') + rateCost('material');
