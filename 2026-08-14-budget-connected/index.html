@@ -1241,18 +1241,18 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
           </div>
           <div class="source-card" id="srcLaterCC" onclick="setBOQSource('cc','later')">
             <div class="sc-icon"><i class="fas fa-hourglass-half"></i></div>
-            <h4>BOQ Not Signed Yet</h4>
-            <p>Set the cost centres up now and start coding cost to them. Import the BOQ when the contract is signed.</p>
-            <p style="font-size:11px;color:#d97706;margin-top:6px;font-weight:500"><i class="fas fa-info-circle" style="margin-right:3px"></i>For jobs that start before the paperwork lands</p>
+            <h4>BOQ Unavailable for Project</h4>
+            <p>Set the cost centres up now and start coding cost to them. Import the BOQ whenever it becomes available.</p>
+            <p style="font-size:11px;color:#d97706;margin-top:6px;font-weight:500"><i class="fas fa-info-circle" style="margin-right:3px"></i>For jobs that start before the BOQ is in hand</p>
           </div>
         </div>
 
         <div id="laterAreaCC" style="display:none">
           <div class="callout amber" style="margin-bottom:16px">
-            <strong>The job can start without the contract breakdown.</strong> Your cost centres are created and
-            purchase orders, dockets, timesheets and bills can be coded to them straight away. Until the BOQ is
-            imported there is no contract value to claim against and no budget to measure spend against — the
-            overview will say so rather than showing a budget of zero as though it meant something.
+            <strong>The job can start without the BOQ.</strong> Your cost centres are created and purchase orders,
+            dockets, timesheets and bills can be coded to them straight away. Until the BOQ is imported there is no
+            contract value to claim against and no budget to measure spend against — the overview will say so rather
+            than showing a budget of zero as though it meant something.
           </div>
           <div class="actions-bar">
             <div></div>
@@ -4607,7 +4607,7 @@ function renderStats(){
   const dwVal = s => dayworksLines.filter(d => d.claim === s).reduce((a,d) => a + d.contract, 0);
   const noContract = boqPending;
   const dash = (v) => noContract ? '—' : v;
-  const dashSub = (sub) => noContract ? 'No BOQ imported yet' : sub;
+  const dashSub = (sub) => noContract ? 'No BOQ available yet' : sub;
 
   /* Inside a claim period the overview becomes a period P&L: what was claimed,
      what it cost, and the margin between them. */
@@ -4793,7 +4793,7 @@ function renderSpendPanel(t){
   if (boqPending){
     document.getElementById('spendPanel').innerHTML =
       '<div class="sp-head"><div><div class="sp-title">Spend to date</div>' +
-      '<div class="sp-sub">' + COST_CENTRES.length + ' cost centres · no BOQ imported, so there is no budget to ' +
+      '<div class="sp-sub">' + COST_CENTRES.length + ' cost centres · no BOQ available, so there is no budget to ' +
       'compare against yet</div></div>' +
       '<div class="sp-headline"><div class="sp-headline-value">' + money(t.costToDate) + '</div>' +
       '<div class="sp-headline-label">tracked + actual</div></div></div>' +
@@ -5758,7 +5758,7 @@ function captureDemoProject(){
 
 /* Read the wizard's screens into budget lines the overview understands. */
 function harvestSetup(){
-  // Cost centres only: the contract breakdown has not been signed yet, so there is
+  // Cost centres only: no BOQ is available for this project yet, so there is
   // nothing to budget against — one placeholder line per cost centre, carrying no
   // contract and no budget, ready to receive cost.
   if (boqPending){
@@ -5961,7 +5961,7 @@ function renderProjectBadge(){
   el.innerHTML = fresh
     ? '<span class="chip warn">Just set up</span> <span class="pb-note">' +
       (boqPending
-        ? COST_CENTRES.length + ' cost centres · no BOQ yet'
+        ? COST_CENTRES.length + ' cost centres · BOQ unavailable'
         : baseItems.length + ' budget lines from your upload') +
       (t.costToDate ? '' : ' · no cost yet') + '</span>' +
       (t.costToDate ? '' : ' <button class="btn btn-outline btn-sm" onclick="simulateActivity()">' +
@@ -6013,7 +6013,7 @@ function setWizChrome(inWizard){
 
    2. The BOQ's arrival. Cost centres are chosen before the BOQ in the
       setup flow, and on plenty of jobs the work starts before the
-      contract is signed. So a project can exist with cost centres
+      BOQ is available. So a project can exist with cost centres
       tracking real cost and no contract breakdown at all, with the BOQ
       imported onto those cost centres when it lands.
    ══════════════════════════════════════════════════════════════ */
@@ -6187,7 +6187,7 @@ function openImportBoq(){
   });
 
   document.getElementById('importBoqSub').innerHTML = boqPending
-    ? 'The contract breakdown has arrived. Map each BOQ line to the cost centre it belongs to — the cost centres ' +
+    ? 'The BOQ is now available. Map each BOQ line to the cost centre it belongs to — the cost centres ' +
       'are already set up, and anything coded to them stays where it is.'
     : 'Bringing in a BOQ over the top of an existing budget. Lines matching a code already in the budget will ' +
       'update it; the rest are added.';
@@ -6310,8 +6310,8 @@ function confirmImportBoq(){
     const l = baseItems[i];
     if (!l.placeholder) continue;
     if (!lineHasCost(l) && !l.budget){ dropped.push(l.cc); baseItems.splice(i, 1); continue; }
-    l.desc = l.cc + ' — cost incurred before the BOQ arrived';
-    l.l1 = 'CC Pre-contract cost';
+    l.desc = l.cc + ' — cost incurred before the BOQ was available';
+    l.l1 = 'CC Pre-BOQ cost';
     l.l2 = 'CC.1 Coded to cost centres before the BOQ';
   }
 
@@ -6333,9 +6333,9 @@ function renderBoqPendingBanner(){
   if (!boqPending){ el.style.display = 'none'; return; }
   el.style.display = '';
   el.innerHTML = '<i class="fas fa-hourglass-half"></i><div>' +
-    '<strong>No BOQ yet — the contract has not been loaded.</strong>' +
+    '<strong>BOQ unavailable — no contract breakdown loaded for this project.</strong>' +
     '<p>Cost centres are set up and cost can be coded to them, so spend is tracked from day one. There is no ' +
-    'contract value to claim against and no budget to measure against until the BOQ arrives, so contract, budget, ' +
+    'contract value to claim against and no budget to measure against until the BOQ is imported, so contract, budget, ' +
     'margin and claim figures are blank rather than zero.</p>' +
     '<p style="margin-top:8px"><button class="btn btn-primary btn-sm" onclick="openImportBoq()">' +
     '<i class="fas fa-file-import"></i> Import BOQ now</button></p></div>';
@@ -9003,7 +9003,7 @@ function submitBudget() {
   const t = aggregate(activeLines());
   if (boqPending){
     toast('<i class="fas fa-check-circle"></i> Set up with ' + COST_CENTRES.length + ' cost centres and no BOQ. ' +
-          'Cost can be coded to them from today. Import the BOQ when the contract is signed and it maps onto ' +
+          'Cost can be coded to them from today. Import the BOQ whenever it becomes available and it maps onto ' +
           'these same cost centres.');
     return;
   }
