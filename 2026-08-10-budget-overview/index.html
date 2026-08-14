@@ -281,6 +281,7 @@ tr.scope-note.period td i{color:#d97706}
 .sb-actual{background:#16a34a}
 .sb-tracked{background:#5eead4}
 .sb-committed{background:#fbbf24}
+.sb-claimgap{background:repeating-linear-gradient(45deg,#dbeafe,#dbeafe 5px,#eff6ff 5px,#eff6ff 10px)}
 .spend-marker{position:absolute;top:-2px;width:2px;height:12px;background:#1b2a4a;border-radius:1px}
 .spend-cap{font-size:10px;color:#94a3b8;margin-top:4px;display:block}
 
@@ -1621,7 +1622,12 @@ function derive(it){
     ? it.committedFixed
     : Math.max(0, (it.poCommitted || 0) - supplyCost);
   const openPO    = committed;                                      // same thing, kept for the bar
-  const engaged   = costToDate + committed;                         // spent or still on order
+  // Whole-of-job, "engaged" is spend plus what is still on order. Inside a claim
+  // period it is spend alone: a PO raised in the period was not money spent in
+  // it, and the period comparison is claimed against cost.
+  const engaged   = (typeof periodMode === 'function' && periodMode())
+    ? costToDate
+    : costToDate + committed;
   const remaining = (it.budget || 0) - engaged;                     // budget still free
   // Margin as at today, net of everything already locked in — spend to date AND
   // open POs. Ignoring committed would flatter a line that has ordered its way
@@ -3414,7 +3420,6 @@ function renderStats(){
            open ? '' : marginClass(t.marginBudget) === 'neg' ? 'red' : marginClass(t.marginBudget) === 'warn' ? 'amber' : 'green',
            open ? 'No claim to measure against yet' : 'Claimed less spent, over claimed',
            '<strong>Period margin</strong><br>(Claimed in period − spent in period) ÷ claimed in period. Measured claim-to-cost because budget is a whole-of-job figure, not a period one.', 'margin') +
-      tile('Committed', money(t.committed), 'amber', 'POs raised in ' + lbl, '', 'committed') +
       tile('Tracked', money(t.tracked), 'teal',
            money(t.dktTracked) + ' dockets · ' + money(t.tsUnapproved) + ' timesheets · ' + money(t.plantTracked) + ' internal plant', '', 'tracked') +
       tile('Actual', money(t.actual), 'green',
@@ -3422,6 +3427,8 @@ function renderStats(){
       tile('Internal Plant', money(t.plantTracked + t.plantActual), '',
            'Owned plant charged to the job in ' + lbl,
            '<strong>Internal plant</strong><br>Owned plant charged at internal rates — hourly, daily or weekly depending on the machine. No PO and no supplier bill: usage is captured on the crew timesheets and site dockets, and becomes actual once the charge is posted to the job.') +
+      tile('On Order', money(t.committed), '', 'Committed in ' + lbl + ' — not spent, not in the comparison',
+           '<strong>On order</strong><br>Purchase orders raised in this period. Deliberately kept out of the period comparison: nothing on order has been spent yet, and the period figure is claimed against cost.') +
       tile('Contract Sum', money(t.contract), 'blue', 'Whole of job — not period scoped');
     renderSpendPanel(t);
     renderDefs();
@@ -3489,6 +3496,72 @@ function renderDefs(){
       : def('#cbd5e1', 'Daywork dockets', 'Not tracked here. They are a claim instrument — they reach the budget only once a variation is raised and approved.'));
 }
 
+/* Inside a claim period the question is not how much budget is left — it is
+   what was claimed against what it cost. Committed value has no place in it. */
+function renderPeriodPanel(t){
+  const lbl = periodLabel();
+  const open = openClaimPeriod();
+  const scale = Math.max(t.claimed, t.costToDate, 1);
+  const pw = v => (v / scale * 100).toFixed(2) + '%';
+  const margin = t.claimed > 0 ? (t.claimed - t.costToDate) / t.claimed * 100 : 0;
+
+  document.getElementById('spendPanel').innerHTML =
+    '<div class="sp-head">' +
+      '<div><div class="sp-title">Claimed vs Cost — ' + lbl + '</div>' +
+      '<div class="sp-sub">What was certified in this period against what it cost to do. ' +
+      'Committed value is excluded: a PO raised in the period is not money spent in it.</div></div>' +
+      '<div class="sp-headline">' +
+        (open ? '<div class="sp-headline-value">—</div><div class="sp-headline-label">nothing certified yet</div>'
+              : '<div class="sp-headline-value ' + (margin < 0 ? 'red' : '') + '">' + pct(margin) + '</div>' +
+                '<div class="sp-headline-label">margin on the period</div>') +
+      '</div>' +
+    '</div>' +
+    '<div class="sp-live">' +
+      '<div class="sp-live-main">' +
+        '<div class="sp-live-label">Claimed in period</div>' +
+        '<div class="sp-live-value">' + (open ? 'Not yet claimed' : money(t.claimed)) + '</div>' +
+        '<div class="sp-live-sub">' + (open ? 'This period is still open' : 'Certified in ' + lbl) + '</div>' +
+      '</div>' +
+      '<div class="sp-live-split">' +
+        '<div class="sp-live-part"><span class="sp-dot" style="background:#16a34a"></span>' +
+          '<div><div class="sp-part-label">Actual</div><div class="sp-part-value">' + money(t.actual) + '</div>' +
+          '<div class="sp-part-sub">paid bills + approved timesheets</div></div></div>' +
+        '<div class="sp-plus">+</div>' +
+        '<div class="sp-live-part"><span class="sp-dot" style="background:#5eead4"></span>' +
+          '<div><div class="sp-part-label">Tracked</div><div class="sp-part-value">' + money(t.tracked) + '</div>' +
+          '<div class="sp-part-sub">site dockets + unapproved timesheets</div></div></div>' +
+        '<div class="sp-plus">=</div>' +
+        '<div class="sp-live-part"><span class="sp-dot" style="background:#7c3aed"></span>' +
+          '<div><div class="sp-part-label">Cost</div><div class="sp-part-value">' + money(t.costToDate) + '</div>' +
+          '<div class="sp-part-sub">spent in ' + lbl + '</div></div></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="sp-bar">' +
+      '<span class="sb-actual" style="width:' + pw(t.actual) + '" title="Actual ' + money(t.actual) + '"></span>' +
+      '<span class="sb-tracked" style="width:' + pw(t.tracked) + '" title="Tracked ' + money(t.tracked) + '"></span>' +
+      (t.claimed > t.costToDate
+        ? '<span class="sb-claimgap" style="width:' + pw(t.claimed - t.costToDate) + '" title="Margin ' + money(t.claimed - t.costToDate) + '"></span>'
+        : '') +
+      (t.claimed > 0 && t.claimed < scale - 0.5
+        ? '<span class="sp-marker" style="left:' + (t.claimed / scale * 100).toFixed(2) + '%">' +
+          '<span class="sp-marker-tag">Claimed ' + money(t.claimed) + '</span></span>' : '') +
+    '</div>' +
+    '<div class="sp-figs">' +
+      '<div class="sp-fig"><div class="sp-fig-label"><span class="sp-dot" style="background:#1d4ed8"></span>Claimed in period</div>' +
+        '<div class="sp-fig-value">' + (open ? '—' : money(t.claimed)) + '</div>' +
+        '<div class="sp-fig-sub">' + (open ? 'not yet certified' : 'certified in ' + lbl) + '</div></div>' +
+      '<div class="sp-fig"><div class="sp-fig-label"><span class="sp-dot" style="background:#7c3aed"></span>Cost in period</div>' +
+        '<div class="sp-fig-value">' + money(t.costToDate) + '</div>' +
+        '<div class="sp-fig-sub">tracked + actual</div></div>' +
+      '<div class="sp-fig"><div class="sp-fig-label"><span class="sp-dot" style="background:#16a34a"></span>Margin</div>' +
+        '<div class="sp-fig-value">' + (open ? '—' : money(t.claimed - t.costToDate)) + '</div>' +
+        '<div class="sp-fig-sub">' + (open ? 'no claim to measure against' : pct(margin) + ' of the claim') + '</div></div>' +
+      '<div class="sp-fig"><div class="sp-fig-label"><span class="sp-dot" style="background:#fbbf24"></span>On order</div>' +
+        '<div class="sp-fig-value">' + money(t.committed) + '</div>' +
+        '<div class="sp-fig-sub">excluded — not spent in this period</div></div>' +
+    '</div>';
+}
+
 /* ═══ Project-level Spend vs Budget ═══
    Same four states as the per-line bar, at project scale, with the figures
    spelled out so tracked and actual are never read as one number. */
@@ -3510,6 +3583,7 @@ function renderSpendPanel(t){
       '<div class="sp-fig-sub">' + share + '</div>' +
     '</div>';
 
+  if (periodMode()){ renderPeriodPanel(t); return; }
   document.getElementById('spendPanel').innerHTML =
     '<div class="sp-head">' +
       '<div><div class="sp-title">Project Spend vs Budget</div>' +
