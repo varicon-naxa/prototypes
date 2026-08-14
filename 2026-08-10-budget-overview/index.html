@@ -422,6 +422,15 @@ details.card-collapse>*:last-child{margin-bottom:18px}
 .mini-table input.mk{width:64px;text-align:right}
 @media(max-width:1100px){.wf-steps{flex-wrap:wrap;gap:14px}.wf-line{display:none}}
 
+.cp-strip{display:flex;align-items:center;gap:16px;background:#faf7ff;border:1px solid #ede9fe;border-radius:10px;padding:14px 18px;margin-top:16px;flex-wrap:wrap}
+.cp-fig{min-width:120px}
+.cp-fig span{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:#94a3b8;margin-bottom:3px}
+.cp-fig strong{font-size:19px;font-weight:700;color:#1b2a4a;display:flex;align-items:center;gap:2px}
+.cp-fig em{display:block;font-size:11.5px;color:#7c3aed;font-style:normal;font-weight:600;margin-top:2px}
+.cp-fig.cp-margin strong input{width:56px;padding:2px 6px;border:1px solid #ddd6fe;border-radius:5px;font-size:17px;
+  font-weight:700;font-family:'Inter',sans-serif;text-align:right;color:#7c3aed;background:#fff}
+.cp-fig.cp-total strong{color:#7c3aed}
+.cp-op{font-size:20px;color:#c4b5fd;font-weight:700}
 .markup-edit{font-size:11px;color:#64748b;margin-left:8px}
 .markup-edit input{width:56px;padding:3px 6px;border:1px solid #e2e8f0;border-radius:5px;font-size:11px;font-family:'Inter',sans-serif;text-align:right;margin-left:4px}
 .rate-warn{font-size:11px;color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:6px 10px;margin-top:6px;line-height:1.5}
@@ -637,7 +646,6 @@ details.card-collapse>*:last-child{margin-bottom:18px}
           <span data-view="zone" onclick="switchView('zone')"><i class="fas fa-map-marker-alt" style="margin-right:5px"></i> Zones</span>
           <span data-view="boq" onclick="switchView('boq')"><i class="fas fa-list" style="margin-right:5px"></i> BOQ Line Items</span>
           <span data-view="people" onclick="switchView('people')"><i class="fas fa-users" style="margin-right:5px"></i> People &amp; Plant</span>
-          <span data-view="costplus" onclick="switchView('costplus')"><i class="fas fa-receipt" style="margin-right:5px"></i> Cost Plus</span>
           <span data-view="claim" onclick="switchView('claim')"><i class="fas fa-file-invoice-dollar" style="margin-right:5px"></i> Claim</span>
         </div>
         <select class="filter-select" id="statusFilter" onchange="render()">
@@ -736,9 +744,10 @@ details.card-collapse>*:last-child{margin-bottom:18px}
       <div><div class="var-type-name">Dayworks dockets</div><div class="var-type-desc">Pull in approved daywork dockets already booked on site and price them.</div></div>
       <div class="var-type-arrow"><i class="fas fa-chevron-right"></i></div>
     </div>
-    <div class="var-type-card" onclick="startVariation('costplus','rates')">
+    <div class="var-type-card" onclick="startVariation('costplus','costplus')">
       <div class="var-type-icon" style="background:#faf5ff;color:#9333ea"><i class="fas fa-percentage"></i></div>
-      <div><div class="var-type-name">Cost plus</div><div class="var-type-desc">Actual cost plus an agreed margin percentage.</div></div>
+      <div><div class="var-type-name">Cost plus</div><div class="var-type-desc">Build it from the actual cost — invoices,
+        hire and labour as they land — and add the agreed margin.</div></div>
       <div class="var-type-arrow"><i class="fas fa-chevron-right"></i></div>
     </div>
   </div>
@@ -935,6 +944,30 @@ details.card-collapse>*:last-child{margin-bottom:18px}
         <tbody id="vLines"></tbody>
       </table>
       <button class="add-line-btn" onclick="addVarLine()"><i class="fas fa-plus"></i> Add line item</button>
+    </div>
+
+    <!-- Cost plus build-up -->
+    <div id="varCostPlusSection" style="display:none">
+      <h3><i class="fas fa-percentage" style="color:#9333ea;margin-right:8px"></i>Actual cost incurred
+        <span class="h3-note">what the work has actually cost, evidenced by the document behind each line</span></h3>
+      <table class="mini-table">
+        <thead><tr><th>What it was</th><th style="width:150px">Supplier</th><th style="width:120px">Reference</th>
+          <th class="right" style="width:120px">Cost ($)</th><th style="width:110px">Evidence</th>
+          <th style="width:30px"></th></tr></thead>
+        <tbody id="vCPLines"></tbody>
+      </table>
+      <button class="add-line-btn" onclick="addCPLine()"><i class="fas fa-plus"></i> Add a cost line</button>
+
+      <div class="cp-strip">
+        <div class="cp-fig"><span>Actual cost</span><strong id="cpCost">$0</strong></div>
+        <div class="cp-op">+</div>
+        <div class="cp-fig cp-margin"><span>Agreed margin</span>
+          <strong><input id="vCPMargin" type="number" min="0" max="100" value="15" oninput="calcVarBuild()">%</strong>
+          <em id="cpMarginVal">$0</em></div>
+        <div class="cp-op">=</div>
+        <div class="cp-fig cp-total"><span>Claim value</span><strong id="cpClaim">$0</strong></div>
+      </div>
+      <div class="callout blue" id="cpEvidence" style="margin-bottom:0"></div>
     </div>
 
     <!-- Rates build-up -->
@@ -2002,7 +2035,7 @@ const PROJECT_TYPES = {
         contractHeader:'Contract', contractSub:'Contract sum',
         note:'Every BOQ line item is budgeted and tracked individually, so cost lands on the line. No zones — the WBS is the only breakdown.',
         lineCosts:true, dayworks:false},
-  dw:  {label:'Dayworks Only', views:['cc','zone','people','costplus','claim'], defaultView:'cc',
+  dw:  {label:'Dayworks Only', views:['cc','zone','people','claim'], defaultView:'cc',
         codeHeader:'Docket', descHeader:'Daywork Docket',
         contractHeader:'Claimable', contractSub:'At schedule of rates',
         note:'No fixed BOQ — every daywork docket is both the unit of work and the unit of revenue.',
@@ -3606,7 +3639,7 @@ function fillSelect(id, options, selected){
      → approved           (becomes a live budget line in the overview)
 */
 let pendingVarType = null, pendingVarMethod = null, varCounter = 3;
-let varLines = [], rateRows = {labour:[], plant:[], material:[]};
+let varLines = [], rateRows = {labour:[], plant:[], material:[]}, cpLines = [];
 let attachedRecords = [], varFiles = [];
 
 function showVariationModal(){ pendingVarType = null; pendingVarMethod = null; openModal('variationModal'); }
@@ -3618,7 +3651,9 @@ function startVariation(type, method){
   closeModal('variationModal');
   pendingVarType = type;
   pendingVarMethod = method;
-  if (type === 'costplus'){ toast('Cost plus variations price from actual cost + an agreed margin — coming soon'); return; }
+  // Cost plus is priced from real cost as it arrives, so there is nothing to
+  // map and nothing to build up from rates.
+  if (type === 'costplus'){ pendingVarMethod = 'costplus'; openVarBuild(); return; }
   // A lump sum carries its own agreed prices, so rates are irrelevant to it.
   if (method !== 'rates'){ openVarBuild(); return; }
   proceedToMappingOrBuild();
@@ -3827,15 +3862,24 @@ function addSelectedDayworksToVariation(){
 
 /* ── Build-up page ── */
 function openVarBuild(){
+  const isCostPlus = pendingVarMethod === 'costplus';
   const isRates = pendingVarMethod === 'rates';
   document.getElementById('varBuildTitle').textContent =
-    pendingVarType === 'dayworks' ? 'Dayworks Variation' : 'Priced Variation';
+    isCostPlus ? 'Cost Plus Variation'
+    : pendingVarType === 'dayworks' ? 'Dayworks Variation' : 'Priced Variation';
   document.getElementById('varBuildSub').textContent =
-    pendingVarType === 'dayworks' ? 'Dayworks build-up from tracked dockets'
+    isCostPlus ? 'Actual cost plus an agreed margin'
+    : pendingVarType === 'dayworks' ? 'Dayworks build-up from tracked dockets'
     : isRates ? 'Priced from the schedule of rates' : 'Lump sum build-up';
 
-  document.getElementById('varLumpSection').style.display = isRates ? 'none' : '';
+  document.getElementById('varLumpSection').style.display = (isRates || isCostPlus) ? 'none' : '';
   document.getElementById('varRatesSection').style.display = isRates ? '' : 'none';
+  document.getElementById('varCostPlusSection').style.display = isCostPlus ? '' : 'none';
+  if (isCostPlus){
+    cpLines = [{desc:'', supplier:'', ref:'', cost:0, evidence:false}];
+    document.getElementById('vCPMargin').value = 15;
+    renderCPLines();
+  }
 
   varLines = [{desc:'', qty:1, unit:'item', rate:0}];
   rateRows = {labour:[], plant:[], material:[]};
@@ -3901,6 +3945,41 @@ function renderVarLines(){
     '</tr>').join('');
   calcVarBuild();
 }
+/* Cost plus: each line is a real cost with a document behind it. The claim is
+   that cost plus the agreed margin, so the evidence is what the client is
+   actually being asked to accept. */
+function renderCPLines(){
+  document.getElementById('vCPLines').innerHTML = cpLines.map(function(l, i){
+    return '<tr>' +
+      '<td><input value="' + (l.desc || '').replace(/"/g, '&quot;') + '" placeholder="e.g. Rock excavation — subcontract" ' +
+        'oninput="cpLines[' + i + '].desc=this.value"></td>' +
+      '<td><input value="' + (l.supplier || '').replace(/"/g, '&quot;') + '" placeholder="Supplier" ' +
+        'oninput="cpLines[' + i + '].supplier=this.value"></td>' +
+      '<td><input value="' + (l.ref || '').replace(/"/g, '&quot;') + '" placeholder="INV / docket" ' +
+        'oninput="cpLines[' + i + '].ref=this.value"></td>' +
+      '<td><input class="num" value="' + (l.cost || 0) + '" ' +
+        'oninput="cpLines[' + i + '].cost=parseFloat(this.value)||0;calcVarBuild()"></td>' +
+      '<td>' + (l.evidence
+        ? '<span class="chip ok" style="cursor:pointer" onclick="toast(\'Opens the scanned document for this cost line\')">Attached</span>'
+        : '<button class="btn btn-outline btn-sm" onclick="attachCPEvidence(' + i + ')"><i class="fas fa-paperclip"></i> Attach</button>') + '</td>' +
+      '<td><span class="row-del" onclick="removeCPLine(' + i + ')"><i class="fas fa-trash-alt"></i></span></td>' +
+    '</tr>';
+  }).join('');
+  calcVarBuild();
+}
+function addCPLine(){ cpLines.push({desc:'', supplier:'', ref:'', cost:0, evidence:false}); renderCPLines(); }
+function removeCPLine(i){
+  cpLines.splice(i, 1);
+  if (!cpLines.length) cpLines.push({desc:'', supplier:'', ref:'', cost:0, evidence:false});
+  renderCPLines();
+}
+function attachCPEvidence(i){
+  cpLines[i].evidence = true;
+  renderCPLines();
+  toast('<i class="fas fa-paperclip"></i> Document attached to ' + (cpLines[i].ref || 'this cost line') +
+        ' — the claim shows the cost, the evidence and the margin on top.');
+}
+
 function addVarLine(){ varLines.push({desc:'', qty:1, unit:'item', rate:0}); renderVarLines(); }
 function removeVarLine(i){ varLines.splice(i,1); if (!varLines.length) varLines.push({desc:'',qty:1,unit:'item',rate:0}); renderVarLines(); }
 
@@ -3987,7 +4066,13 @@ function syncSuggestedCC(){
   if (box && !box.dataset.edited) box.value = varSuggestedCC();
 }
 
+function cpCostTotal(){ return cpLines.reduce((t, l) => t + (l.cost || 0), 0); }
+function cpMarginPct(){ return parseFloat(document.getElementById('vCPMargin').value) || 0; }
+
 function varContractTotal(){
+  if (pendingVarMethod === 'costplus'){
+    return Math.round(cpCostTotal() * (1 + cpMarginPct() / 100));
+  }
   if (pendingVarMethod === 'rates'){
     const cost = rateCost('labour') + rateCost('plant') + rateCost('material');
     return Math.round(cost * (1 + (parseFloat(document.getElementById('vMarkup').value) || 0) / 100));
@@ -4002,6 +4087,29 @@ function calcVarBuild(){
   rateRows.material.forEach((r,i) => {
     const el = document.getElementById('materialAmt' + i); if (el) el.textContent = money((r.qty||0)*(r.rate||0));
   });
+
+  if (pendingVarMethod === 'costplus'){
+    const cost = cpCostTotal();
+    const pctv = cpMarginPct();
+    const margin = Math.round(cost * pctv / 100);
+    document.getElementById('cpCost').textContent = money(cost);
+    document.getElementById('cpMarginVal').textContent = money(margin);
+    document.getElementById('cpClaim').textContent = money(cost + margin);
+    const noEvidence = cpLines.filter(l => l.cost > 0 && !l.evidence);
+    const ev = document.getElementById('cpEvidence');
+    if (noEvidence.length){
+      ev.className = 'callout amber';
+      ev.innerHTML = '<i class="fas fa-triangle-exclamation"></i> <strong>' + noEvidence.length + ' cost line' +
+        (noEvidence.length !== 1 ? 's have' : ' has') + ' no document attached.</strong> A cost plus claim is the ' +
+        'client paying against actual cost — without the invoice or docket behind each line there is nothing to accept.';
+    } else {
+      ev.className = 'callout blue';
+      ev.innerHTML = '<i class="fas fa-circle-info"></i> Every cost line has its document. The claim shows the actual ' +
+        'cost of ' + money(cost) + ', the agreed ' + pctv + '% margin of ' + money(margin) + ', and the total.';
+    }
+    // On cost plus the budget cost is the actual cost — there is nothing to estimate.
+    document.getElementById('vBudget').value = cost || '';
+  }
 
   if (pendingVarMethod === 'rates'){
     const l = rateCost('labour'), p = rateCost('plant'), m = rateCost('material');
@@ -4088,7 +4196,13 @@ function saveVariation(status){
     ref:document.getElementById('vRef').value.trim(),
     files:varFiles.slice(), dockets:attachedRecords.map(r => r.id),
     // the priced build-up carries through to the claim once approved
-    lines:(pendingVarMethod === 'rates'
+    costPlus: pendingVarMethod === 'costplus'
+      ? {margin:cpMarginPct(), cost:cpCostTotal(), lines:cpLines.filter(l => l.cost > 0).map(l => Object.assign({}, l))}
+      : null,
+    lines:(pendingVarMethod === 'costplus'
+      ? cpLines.filter(l => l.cost > 0).map(l => ({desc:l.desc || l.ref || 'Cost line', unit:'item', qty:1,
+          rate:Math.round(l.cost * (1 + cpMarginPct() / 100))}))
+      : pendingVarMethod === 'rates'
       ? [].concat(rateRows.labour, rateRows.plant).filter(x => x.name).map(x =>
           ({desc:x.name, unit:'hr', qty:(x.hrs || 0) * (x.days || 0), rate:x.rate || 0}))
          .concat(rateRows.material.filter(x => x.name).map(x =>
