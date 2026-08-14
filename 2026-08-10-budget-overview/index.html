@@ -99,6 +99,7 @@ body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#333;display:flex;m
 .sp-bar>span:first-child{border-radius:5px 0 0 5px}
 .sp-marker{position:absolute;top:-5px;width:2px;height:30px;background:#1b2a4a;border-radius:1px}
 .sp-marker-tag{position:absolute;top:32px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:600;color:#1b2a4a;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:2px 7px;white-space:nowrap}
+.period-panel .sp-figs{grid-template-columns:repeat(3,1fr)}
 .sp-figs{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#f1f5f9;border:1px solid #f1f5f9;border-radius:8px;overflow:hidden}
 .sp-fig{background:#fff;padding:11px 14px}
 .sp-fig-label{font-size:11px;color:#64748b;display:flex;align-items:center;gap:6px;line-height:1.35;margin-bottom:5px}
@@ -547,8 +548,8 @@ input.locked{background:#f8fafc;color:#64748b;cursor:not-allowed;border-style:da
 /* Toast */
 .toast{position:fixed;bottom:24px;right:24px;background:#1b2a4a;color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;display:none;align-items:center;gap:8px;z-index:400;box-shadow:0 8px 24px rgba(0,0,0,.2);max-width:460px}
 .toast.show{display:flex}
-@media(max-width:1400px){.stat-grid{grid-template-columns:repeat(3,1fr)}.sp-figs{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:1000px){.stat-grid{grid-template-columns:repeat(2,1fr)}.sp-figs{grid-template-columns:1fr}.sp-live-split{padding-left:0;border-left:none}.defs{flex-direction:column}.def{border-right:none;border-bottom:1px solid #f1f5f9}.drill{grid-template-columns:1fr}.drill-col{border-right:none;border-bottom:1px dashed #e2e8f0}.field-row,.field-row-3{grid-template-columns:1fr}}
+@media(max-width:1400px){.stat-grid{grid-template-columns:repeat(3,1fr)}.sp-figs,.period-panel .sp-figs{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:1000px){.stat-grid{grid-template-columns:repeat(2,1fr)}.sp-figs,.period-panel .sp-figs{grid-template-columns:1fr}.sp-live-split{padding-left:0;border-left:none}.defs{flex-direction:column}.def{border-right:none;border-bottom:1px solid #f1f5f9}.drill{grid-template-columns:1fr}.drill-col{border-right:none;border-bottom:1px dashed #e2e8f0}.field-row,.field-row-3{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -3427,8 +3428,6 @@ function renderStats(){
       tile('Internal Plant', money(t.plantTracked + t.plantActual), '',
            'Owned plant charged to the job in ' + lbl,
            '<strong>Internal plant</strong><br>Owned plant charged at internal rates — hourly, daily or weekly depending on the machine. No PO and no supplier bill: usage is captured on the crew timesheets and site dockets, and becomes actual once the charge is posted to the job.') +
-      tile('On Order', money(t.committed), '', 'Committed in ' + lbl + ' — not spent, not in the comparison',
-           '<strong>On order</strong><br>Purchase orders raised in this period. Deliberately kept out of the period comparison: nothing on order has been spent yet, and the period figure is claimed against cost.') +
       tile('Contract Sum', money(t.contract), 'blue', 'Whole of job — not period scoped');
     renderSpendPanel(t);
     renderDefs();
@@ -3499,6 +3498,7 @@ function renderDefs(){
 /* Inside a claim period the question is not how much budget is left — it is
    what was claimed against what it cost. Committed value has no place in it. */
 function renderPeriodPanel(t){
+  document.getElementById('spendPanel').classList.add('period-panel');
   const lbl = periodLabel();
   const open = openClaimPeriod();
   const scale = Math.max(t.claimed, t.costToDate, 1);
@@ -3556,9 +3556,6 @@ function renderPeriodPanel(t){
       '<div class="sp-fig"><div class="sp-fig-label"><span class="sp-dot" style="background:#16a34a"></span>Margin</div>' +
         '<div class="sp-fig-value">' + (open ? '—' : money(t.claimed - t.costToDate)) + '</div>' +
         '<div class="sp-fig-sub">' + (open ? 'no claim to measure against' : pct(margin) + ' of the claim') + '</div></div>' +
-      '<div class="sp-fig"><div class="sp-fig-label"><span class="sp-dot" style="background:#fbbf24"></span>On order</div>' +
-        '<div class="sp-fig-value">' + money(t.committed) + '</div>' +
-        '<div class="sp-fig-sub">excluded — not spent in this period</div></div>' +
     '</div>';
 }
 
@@ -3584,6 +3581,7 @@ function renderSpendPanel(t){
     '</div>';
 
   if (periodMode()){ renderPeriodPanel(t); return; }
+  document.getElementById('spendPanel').classList.remove('period-panel');
   document.getElementById('spendPanel').innerHTML =
     '<div class="sp-head">' +
       '<div><div class="sp-title">Project Spend vs Budget</div>' +
