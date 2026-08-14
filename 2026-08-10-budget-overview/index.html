@@ -410,6 +410,13 @@ details.card-collapse>*:last-child{margin-bottom:18px}
 .wf-table td{vertical-align:middle}
 .wf-table tfoot td{font-weight:700;color:#1b2a4a;background:#f1f5f9;border-top:2px solid #cbd5e1;padding:9px 8px}
 .wf-note{font-size:10.5px;color:#94a3b8;margin-top:2px}
+.wf-nofile{color:#b45309}
+.wf-files{display:flex;flex-direction:column;gap:3px;margin-top:4px}
+.wf-file{font-size:10.5px;color:#1d4ed8;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.wf-file:hover{text-decoration:underline}
+.wf-file i{color:#ef4444}
+.qty-edit{width:88px;padding:5px 7px;border:1px solid #cbd5e1;border-radius:5px;font-size:12px;font-family:'Inter',sans-serif;text-align:right;font-weight:600;color:#1b2a4a}
+.qty-edit:focus{outline:none;border-color:#f5a623;box-shadow:0 0 0 3px rgba(245,166,35,.12)}
 .wf-empty{font-size:12px;color:#94a3b8;background:#f8fafc;border:1px dashed #e2e8f0;border-radius:8px;padding:12px 14px;line-height:1.55}
 .wf-empty i{margin-right:6px;color:#cbd5e1}
 .mini-table input.mk{width:64px;text-align:right}
@@ -1052,7 +1059,13 @@ details.card-collapse>*:last-child{margin-bottom:18px}
       </div>
     </div>
 
-    <div class="field-row-3">
+    <div class="field-row-3" id="provRateFields" style="display:none">
+      <div class="field"><label>Quantity instructed</label>
+        <input id="provQty" class="num" oninput="calcProv()"><div class="field-hint" id="provQtyHint"></div></div>
+      <div class="field"><label>Rate ($)</label><input id="provRate" class="num" oninput="calcProv()"></div>
+      <div class="field"><label>Budget cost ($)</label><input id="provBudgetRate" class="num" oninput="calcProv()"></div>
+    </div>
+    <div class="field-row-3" id="provLumpFields">
       <div class="field"><label>Allowance drawn down ($)</label><input id="provDraw" class="num" oninput="calcProv()"></div>
       <div class="field"><label>Agreed contract value ($)</label><input id="provContract" class="num" oninput="calcProv()"></div>
       <div class="field"><label>Budget cost ($)</label><input id="provBudget" class="num" oninput="calcProv()"></div>
@@ -1070,6 +1083,20 @@ details.card-collapse>*:last-child{margin-bottom:18px}
     </div>
     <div class="field"><label>Instruction reference</label>
       <input id="provRef" placeholder="e.g. SI-018 — Superintendent's instruction"></div>
+
+    <div class="field">
+      <label>Supporting documents</label>
+      <div class="dropzone" style="padding:18px 16px" onclick="addProvFile()"
+           ondragover="event.preventDefault();this.classList.add('dragover')"
+           ondragleave="this.classList.remove('dragover')"
+           ondrop="event.preventDefault();this.classList.remove('dragover');addProvFile()">
+        <i class="fas fa-cloud-arrow-up" style="font-size:20px;color:#f5a623;margin-bottom:6px"></i>
+        <div style="font-size:12.5px;font-weight:600;color:#1b2a4a">Attach the instruction</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:3px">PDF, drawing, email or survey — stored against the
+          instruction and shown on the claim</div>
+      </div>
+      <div id="provFileList"></div>
+    </div>
 
     <div class="callout blue" id="provOutcome" style="margin-bottom:0"></div>
 
@@ -1217,11 +1244,28 @@ let variations = [
 /* ── Provisional sums ──
    Excluded from contract and budget totals until instructed. Activating draws
    down the allowance and creates a live budget line (or a variation for the excess). */
+/* Provisional sums come in two shapes.
+
+   A LUMP allowance is a dollar cap: the contract carries $12,000 for site
+   investigation and instructing it draws that pot down.
+
+   A RATE-ONLY item fixes the unit rate and leaves the quantity to be measured.
+   The BOQ might carry 1 m3 of clay placement at $48.50 purely to establish the
+   rate — then 1,000 m3 gets placed and claimed at that rate. The "allowance" is
+   indicative only; exceeding it is the normal case, not an exception. What has
+   to be adjustable is the QUANTITY. */
 let provisionals = [
-  {code:'P.1.1', desc:'Survey & Set-Out', allowance:8500,  status:'provisional', drawn:0, activations:[]},
-  {code:'P.1.2', desc:'Site Investigation Allowance', allowance:12000, status:'provisional', drawn:0, activations:[]},
-  {code:'P.1.3', desc:'Traffic Management Contingency', allowance:15000, status:'provisional', drawn:0, activations:[]}
+  {code:'P.1.1', kind:'lump', desc:'Survey & Set-Out', allowance:8500,  status:'provisional', drawn:0, activations:[]},
+  {code:'P.1.2', kind:'lump', desc:'Site Investigation Allowance', allowance:12000, status:'provisional', drawn:0, activations:[]},
+  {code:'P.1.3', kind:'lump', desc:'Traffic Management Contingency', allowance:15000, status:'provisional', drawn:0, activations:[]},
+  {code:'P.2.1', kind:'rate', desc:'Clay placement to embankment', unit:'m\u00b3', rate:48.50, provQty:1,
+   allowance:48.50, status:'provisional', drawn:0, activations:[]},
+  {code:'P.2.2', kind:'rate', desc:'Imported select fill', unit:'m\u00b3', rate:62.00, provQty:1,
+   allowance:62.00, status:'provisional', drawn:0, activations:[]}
 ];
+function isRateProv(p){ return p.kind === 'rate'; }
+/* Quantity measured against a rate-only item so far. */
+function provQtyInstructed(p){ return p.activations.reduce((t, a) => t + (a.qty || 0), 0); }
 
 /* ── Project resources and the schedule of rates they map to ── */
 let projectPlant = [
@@ -2651,7 +2695,7 @@ function renderPanel(html, count){
    down, creates a budget line to track cost against, and makes the value
    claimable. This view shows where each allowance has got to. */
 const PROV_STAGES = [
-  {key:'allowance', label:'Allowance', hint:'In the contract, outside the budget'},
+  {key:'allowance', label:'Allowance / rate', hint:'In the contract, outside the budget'},
   {key:'instructed', label:'Instructed', hint:'Drawn down against an instruction'},
   {key:'mapped', label:'Budget mapped', hint:'Cost centre, zone and budget set'},
   {key:'claimed', label:'Claimed', hint:'Certified in a progress claim'}
@@ -2693,20 +2737,31 @@ function renderProvisionalView(){
   provisionals.forEach(p => {
     const rem = p.allowance - p.drawn;
     const first = p.activations[0] || null;
-    const chip = p.status === 'activated' ? '<span class="chip ok">Fully instructed</span>'
+    const rateOnly = isRateProv(p);
+    const qtyDone = rateOnly ? provQtyInstructed(p) : 0;
+    const chip = p.status === 'measured' ? '<span class="chip live">Measured</span>'
+      : p.status === 'activated' ? '<span class="chip ok">Fully instructed</span>'
       : p.status === 'partial' ? '<span class="chip warn">Part instructed</span>'
       : p.status === 'released' ? '<span class="chip idle">Not required</span>'
       : '<span class="chip prov">Awaiting instruction</span>';
+    const kindChip = rateOnly
+      ? ' <span class="chip vo">Rate only</span>'
+      : ' <span class="chip idle">Lump allowance</span>';
 
     html += '<div class="wf-card">' +
       '<div class="wf-head">' +
-        '<div><div class="wf-title">' + p.code + ' — ' + p.desc + ' ' + chip + '</div>' +
-        '<div class="wf-sub">Allowance ' + money(p.allowance) +
-          (p.drawn ? ' · ' + money(p.drawn) + ' instructed · ' + money(rem) + ' remaining' : ' · nothing instructed yet') +
+        '<div><div class="wf-title">' + p.code + ' — ' + p.desc + ' ' + chip + kindChip + '</div>' +
+        '<div class="wf-sub">' + (rateOnly
+          ? '$' + p.rate.toFixed(2) + ' per ' + p.unit + ' · provisional quantity ' + p.provQty + ' ' + p.unit +
+            ' (' + money(p.allowance) + ' nominal)' +
+            (qtyDone ? ' · <strong>' + qtyDone.toLocaleString('en-AU') + ' ' + p.unit + ' measured</strong> = ' + money(p.drawn) : ' · nothing measured yet')
+          : 'Allowance ' + money(p.allowance) +
+            (p.drawn ? ' · ' + money(p.drawn) + ' instructed · ' + money(rem) + ' remaining' : ' · nothing instructed yet')) +
         '</div></div>' +
         '<div class="wf-actions">' +
-          (p.status !== 'released' && rem > 0
-            ? '<button class="btn btn-primary btn-sm" onclick="openProvModal(\'' + p.code + '\')"><i class="fas fa-bolt"></i> Instruct</button> ' +
+          (p.status !== 'released' && (rateOnly || rem > 0)
+            ? '<button class="btn btn-primary btn-sm" onclick="openProvModal(\'' + p.code + '\')"><i class="fas fa-bolt"></i> ' +
+              (qtyDone ? 'Instruct more' : 'Instruct') + '</button> ' +
               '<button class="btn btn-outline btn-sm" onclick="releaseProvisional(\'' + p.code + '\')">Not required</button>'
             : '') +
         '</div>' +
@@ -2716,8 +2771,10 @@ function renderProvisionalView(){
         PROV_STAGES.map(function(st, i){
           const state = provStageState(p, first, st.key);
           let val = '';
-          if (st.key === 'allowance') val = money(p.allowance);
-          else if (st.key === 'instructed') val = p.drawn ? money(p.drawn) : 'not yet';
+          if (st.key === 'allowance') val = rateOnly ? '$' + p.rate.toFixed(2) + '/' + p.unit : money(p.allowance);
+          else if (st.key === 'instructed') val = rateOnly
+            ? (qtyDone ? qtyDone.toLocaleString('en-AU') + ' ' + p.unit : 'not yet')
+            : (p.drawn ? money(p.drawn) : 'not yet');
           else if (st.key === 'mapped') val = first ? first.cc : 'not yet';
           else val = first ? (first.claimed ? money(first.claimed) + ' of ' + money(first.contract) : 'not yet') : 'not yet';
           return '<div class="wf-step ' + state + '">' +
@@ -2734,17 +2791,30 @@ function renderProvisionalView(){
     if (p.activations.length){
       html += '<table class="mini-table wf-table"><thead><tr>' +
         '<th>Instruction</th><th>Budget line</th><th>Cost centre · zone</th>' +
-        '<th class="right">Drawn</th><th class="right">Contract</th><th class="right">Budget</th>' +
+        (rateOnly ? '<th class="right" style="width:110px">Qty</th><th class="right">Rate</th>'
+                  : '<th class="right">Drawn</th>') +
+        '<th class="right">Contract</th><th class="right">Budget</th>' +
         '<th class="right">Spent</th><th class="right">Claimed</th><th></th></tr></thead><tbody>';
       p.activations.forEach(function(a, ai){
         const d = derive(a);
         const unclaimed = (a.contract || 0) - (a.claimed || 0);
+        const files = (a.files || []);
         html += '<tr>' +
           '<td><strong>' + a.ref + '</strong>' + (a.variationId ?
-            '<div class="wf-note">excess raised as ' + a.variationId + '</div>' : '') + '</td>' +
+            '<div class="wf-note">excess raised as ' + a.variationId + '</div>' : '') +
+            (files.length
+              ? '<div class="wf-files">' + files.map(f =>
+                  '<span class="wf-file" onclick="toast(\'Opens ' + f.name.replace(/'/g, '') + '\')">' +
+                  '<i class="fas ' + f.icon + '"></i> ' + f.name + '</span>').join('') + '</div>'
+              : '<div class="wf-note wf-nofile"><i class="fas fa-paperclip"></i> no document attached</div>') + '</td>' +
           '<td class="mono">' + a.code + '</td>' +
           '<td>' + a.cc + '<div class="wf-note">' + a.zone + '</div></td>' +
-          '<td class="right">' + money(a.drawn) + '</td>' +
+          (rateOnly
+            ? '<td class="right"><input class="qty-edit" type="number" min="0" step="any" value="' + (a.qty || 0) +
+                '" onchange="adjustProvQty(\'' + p.code + '\',' + ai + ',this.value)">' +
+              '<div class="wf-note">' + a.unit + ' — editable</div></td>' +
+              '<td class="right">$' + (a.rate || 0).toFixed(2) + '</td>'
+            : '<td class="right">' + money(a.drawn) + '</td>') +
           '<td class="right">' + money(a.contract) + '</td>' +
           '<td class="right">' + money(a.budget) + '</td>' +
           '<td class="right money-spent">' + money(d.costToDate) + '</td>' +
@@ -2766,6 +2836,29 @@ function renderProvisionalView(){
   });
 
   renderPanel(html, provisionals.length + ' provisional sums · ' + acts.length + ' instructed');
+}
+
+/* Re-measure: the rate is fixed, the quantity moves. Contract value follows,
+   and anything already claimed above the new value is flagged rather than
+   silently written off. */
+function adjustProvQty(code, idx, v){
+  const p = provisionals.find(x => x.code === code);
+  const a = p.activations[idx];
+  const qty = parseFloat(v) || 0;
+  if (qty <= 0){ render(); return; }
+  const was = a.contract;
+  const prevQty = a.qty;
+  a.qty = qty;
+  a.contract = Math.round(qty * a.rate);
+  a.drawn = a.contract;
+  if (a.lines && a.lines[0]) a.lines[0].qty = qty;
+  // Budget moves with the quantity so the rate-per-unit margin is preserved.
+  if (prevQty > 0) a.budget = Math.round(a.budget * (qty / prevQty));
+  p.drawn = p.activations.reduce((t, x) => t + (x.drawn || 0), 0);
+  render();
+  toast('<i class="fas fa-ruler-combined"></i> ' + a.code + ' re-measured to ' + qty.toLocaleString('en-AU') + ' ' +
+        a.unit + ' \u2014 contract value ' + money(was) + ' \u2192 ' + money(a.contract) +
+        (a.claimed > a.contract ? '. Already claimed ' + money(a.claimed) + ', which is now above the measured value.' : '.'));
 }
 
 function claimProvisional(code, idx){
@@ -4046,25 +4139,71 @@ function approveVariation(id){
 
 /* ═══ PROVISIONAL SUM ACTIVATION ═══ */
 let provTarget = null, provMode = 'budget';
+let provFiles = [];
+const PROV_FILE_SAMPLES = [
+  {name:'SI-018 superintendent instruction.pdf', size:'184 KB', icon:'fa-file-pdf', colour:'#ef4444'},
+  {name:'Survey pickup \u2014 measured quantities.pdf', size:'612 KB', icon:'fa-file-pdf', colour:'#ef4444'},
+  {name:'Marked-up drawing C-212.pdf', size:'1.3 MB', icon:'fa-file-pdf', colour:'#ef4444'},
+  {name:'Email approval \u2014 superintendent.msg', size:'46 KB', icon:'fa-envelope', colour:'#3b82f6'}
+];
+function addProvFile(){
+  provFiles.push(PROV_FILE_SAMPLES[provFiles.length % PROV_FILE_SAMPLES.length]);
+  renderProvFiles();
+}
+function removeProvFile(i){ provFiles.splice(i, 1); renderProvFiles(); }
+function renderProvFiles(){
+  document.getElementById('provFileList').innerHTML = provFiles.map((f, i) =>
+    '<div class="file-row"><div class="fr-icon" style="background:' + f.colour + '18;color:' + f.colour + '">' +
+    '<i class="fas ' + f.icon + '"></i></div>' +
+    '<div><div class="fr-name">' + f.name + '</div><div class="fr-size">' + f.size + '</div></div>' +
+    '<span class="fr-del" onclick="removeProvFile(' + i + ')"><i class="fas fa-trash-alt"></i></span></div>').join('');
+}
 
 function openProvModal(code){
   provTarget = provisionals.find(p => p.code === code);
   provMode = 'budget';
   setProvMode('budget');
+  const rateOnly = isRateProv(provTarget);
   const rem = provTarget.allowance - provTarget.drawn;
-  document.getElementById('provSub').textContent =
-    provTarget.code + ' — ' + provTarget.desc + '. Activating turns the allowance into a live budget line that POs, dockets and bills can be tracked against.';
-  document.getElementById('provAllowance').innerHTML =
-    '<i class="fas fa-hourglass-half"></i> Allowance <strong>' + money(provTarget.allowance) + '</strong>' +
-    (provTarget.drawn > 0 ? ' · already drawn ' + money(provTarget.drawn) : '') +
-    ' · <strong>' + money(rem) + ' remaining</strong>. Nothing in this allowance counts toward the contract sum, budget or spend until it is instructed.';
-  document.getElementById('provDraw').value = rem;
-  document.getElementById('provContract').value = rem;
-  document.getElementById('provBudget').value = Math.round(rem * 0.84);
+  document.getElementById('provRateFields').style.display = rateOnly ? '' : 'none';
+  document.getElementById('provLumpFields').style.display = rateOnly ? 'none' : '';
+
+  if (rateOnly){
+    const done = provQtyInstructed(provTarget);
+    document.getElementById('provSub').textContent =
+      provTarget.code + ' — ' + provTarget.desc + '. The rate is fixed by the contract; the quantity is measured. ' +
+      'Instructing it creates a live budget line at quantity x rate.';
+    document.getElementById('provAllowance').innerHTML =
+      '<i class="fas fa-ruler-combined"></i> Rate-only item — <strong>$' + provTarget.rate.toFixed(2) + ' per ' +
+      provTarget.unit + '</strong>, provisional quantity <strong>' + provTarget.provQty + ' ' + provTarget.unit +
+      '</strong> (' + money(provTarget.allowance) + ' nominal)' +
+      (done ? ' · <strong>' + done.toLocaleString('en-AU') + ' ' + provTarget.unit + ' measured so far</strong>' : '') +
+      '. The nominal quantity only establishes the rate — measuring well above it is normal.';
+    document.getElementById('provQty').value = '';
+    document.getElementById('provQtyHint').innerHTML =
+      '<i class="fas fa-circle-info"></i> In ' + provTarget.unit + '. Adjustable later as the work is re-measured.';
+    document.getElementById('provRate').value = provTarget.rate;
+    document.getElementById('provBudgetRate').value = '';
+  } else {
+    document.getElementById('provSub').textContent =
+      provTarget.code + ' — ' + provTarget.desc + '. Instructing turns the allowance into a live budget line that POs, dockets and bills can be tracked against.';
+    document.getElementById('provAllowance').innerHTML =
+      '<i class="fas fa-hourglass-half"></i> Allowance <strong>' + money(provTarget.allowance) + '</strong>' +
+      (provTarget.drawn > 0 ? ' · already drawn ' + money(provTarget.drawn) : '') +
+      ' · <strong>' + money(rem) + ' remaining</strong>. Nothing in this allowance counts toward the contract sum, budget or spend until it is instructed.';
+    document.getElementById('provDraw').value = rem;
+    document.getElementById('provContract').value = rem;
+    document.getElementById('provBudget').value = Math.round(rem * 0.84);
+  }
   document.getElementById('provRef').value = '';
-  fillCCSelect('provCC', guessCC(provTarget), 'Create a new cost centre for this provisional sum');
-  document.getElementById('provNewCC').value = '';
-  document.getElementById('provNewCCWrap').style.display = 'none';
+  provFiles = [];
+  renderProvFiles();
+  // Default to its own cost centre, so the drawn-down value can be tracked
+  // against the allowance it came from.
+  fillCCSelect('provCC', null, 'Create a new cost centre for this provisional sum');
+  document.getElementById('provCC').value = '__new';
+  document.getElementById('provNewCCWrap').style.display = '';
+  document.getElementById('provNewCC').value = provTarget.code + ' \u2014 ' + provTarget.desc;
   fillSelect('provZone', ZONES, 'Project Wide');
   calcProv();
   openModal('provModal');
@@ -4081,6 +4220,21 @@ function setProvMode(mode){
 }
 function calcProv(){
   if (!provTarget) return;
+  if (isRateProv(provTarget)){
+    const qty  = num('provQty');
+    const rate = num('provRate');
+    const value = Math.round(qty * rate);
+    const budget = num('provBudgetRate');
+    const mgn = value > 0 ? (value - budget) / value * 100 : 0;
+    document.getElementById('provOutcome').innerHTML =
+      '<i class="fas fa-circle-info"></i> ' + qty.toLocaleString('en-AU') + ' ' + provTarget.unit + ' at $' +
+      rate.toFixed(2) + ' = <strong>' + money(value) + '</strong> to the contract sum' +
+      (budget ? ', budget <strong>' + money(budget) + '</strong>, margin <strong>' + pct(mgn) + '</strong>' : '') +
+      '. The nominal quantity was ' + provTarget.provQty + ' ' + provTarget.unit +
+      ' — this instruction is ' + (provTarget.provQty > 0 ? Math.round(qty / provTarget.provQty).toLocaleString('en-AU') : '—') +
+      'x that, which is expected on a rate-only item.';
+    return;
+  }
   const rem = provTarget.allowance - provTarget.drawn;
   const draw = Math.min(num('provDraw'), rem);
   const contract = num('provContract');
@@ -4101,14 +4255,20 @@ function calcProv(){
 }
 function confirmProvActivation(){
   const p = provTarget;
+  const rateOnly = isRateProv(p);
   const rem = p.allowance - p.drawn;
-  const draw = Math.min(num('provDraw'), rem);
-  const contract = num('provContract');
-  const budget = num('provBudget');
+  const qty  = rateOnly ? num('provQty') : 0;
+  const rate = rateOnly ? num('provRate') : 0;
+  // A rate-only item is not capped by the allowance — the quantity is what is
+  // being instructed, and the value follows the rate.
+  const draw = rateOnly ? Math.round(qty * rate) : Math.min(num('provDraw'), rem);
+  const contract = rateOnly ? Math.round(qty * rate) : num('provContract');
+  const budget = rateOnly ? num('provBudgetRate') : num('provBudget');
+  if (rateOnly && qty <= 0){ toast('Enter the quantity being instructed'); return; }
   const cc = resolveCC('provCC', 'provNewCC', p.code + ' — ' + p.desc);
   const zone = document.getElementById('provZone').value;
   const ref = document.getElementById('provRef').value.trim() || 'SI-' + (100 + p.activations.length + 1);
-  if (draw <= 0){ toast('Enter an amount to draw down from the allowance'); return; }
+  if (!rateOnly && draw <= 0){ toast('Enter an amount to draw down from the allowance'); return; }
 
   const excess = Math.max(0, contract - draw);
   const activatedContract = provMode === 'variation' ? draw : contract;
@@ -4122,7 +4282,11 @@ function confirmProvActivation(){
     desc: p.desc + ' (instructed' + (provMode === 'variation' ? ' — allowance portion' : '') + ')',
     cc, zone, ref, drawn:draw,
     contract:activatedContract, budget:activatedBudget, claimed:0,
-    lines:[{desc:p.desc + ' — instructed', unit:'item', qty:1, rate:activatedContract}],
+    qty:rateOnly ? qty : undefined, unit:rateOnly ? p.unit : undefined, rate:rateOnly ? rate : undefined,
+    files:provFiles.slice(),
+    lines:[rateOnly
+      ? {desc:p.desc, unit:p.unit, qty:qty, rate:rate}
+      : {desc:p.desc + ' — instructed', unit:'item', qty:1, rate:activatedContract}],
     poCommitted:0, dktTracked:0, tsUnapproved:0, billsPaid:0, tsApproved:0,
     suppliers:{po:'', dkt:'', bill:''}
   };
@@ -4143,10 +4307,19 @@ function confirmProvActivation(){
 
   p.activations.push(line);
   p.drawn += draw;
-  p.status = p.drawn >= p.allowance - 0.5 ? 'activated' : 'partial';
+  // A rate-only item stays open for further measurement; a lump allowance
+  // closes once it is fully drawn.
+  p.status = rateOnly ? 'measured' : (p.drawn >= p.allowance - 0.5 ? 'activated' : 'partial');
 
   closeModal('provModal');
   render();
+  if (rateOnly){
+    render();
+    toast('<i class="fas fa-ruler-combined"></i> ' + p.code + ' instructed — ' + qty.toLocaleString('en-AU') + ' ' +
+          p.unit + ' at $' + rate.toFixed(2) + ' = ' + money(contract) + ' into ' + cc +
+          ' as budget line ' + line.code + '. Adjust the quantity from the workflow as it is re-measured.');
+    return;
+  }
   toast('<i class="fas fa-bolt"></i> ' + p.code + ' activated — ' + money(draw) + ' drawn from the allowance into ' + cc +
         ' as budget line ' + line.code + '.' + (voId ? ' Excess of ' + money(excess) + ' raised as ' + voId + ', awaiting approval.' : '') +
         ' ' + money(p.allowance - p.drawn) + ' allowance remaining.');
