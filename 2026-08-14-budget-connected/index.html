@@ -6165,15 +6165,19 @@ function openImportBoq(){
   // Standing in for the file the client sends through.
   impRows = boqData.filter(r => !r.isHeader).map(function(r){
     const existing = baseItems.find(l => l.code === r.code);
+    const guess = guessCostCentre(r);
     return {
       code:r.code, desc:r.desc, unit:r.unit || 'item',
       qty:r.qty !== undefined ? r.qty : 1,
       rate:r.rate !== undefined ? r.rate : (r.amount || 0),
       amount:r.amount || 0,
       isProvisional:!!r.isProvisional,
-      cc:existing ? existing.cc : (COST_CENTRES[0] || 'Unassigned'),
+      cc:existing ? existing.cc : (guess || COST_CENTRES[0] || 'Unassigned'),
       zone:existing ? existing.zone : 'Project Wide',
       include:true,
+      // A provisional sum goes to the register, not to a cost centre, so its
+      // mapping is not something to check.
+      guessed:!existing && !guess && !r.isProvisional,
       replaces:existing ? existing.code : null
     };
   });
@@ -6204,6 +6208,22 @@ function openImportBoq(){
   openModal('importBoqModal');
 }
 
+/* A BOQ line's cost centre is usually written on the section it sits under —
+   "2 Concrete Works" over "2.1.1 Concrete Supply & Pour". Match on that, then on the
+   line's own words. Anything that matches nothing is flagged rather than guessed at. */
+function guessCostCentre(row){
+  const parent = boqData.find(x => x.level === 1 && String(row.code).split('.')[0] === String(x.code));
+  const hay = ((parent ? parent.desc + ' ' : '') + row.desc).toLowerCase();
+  let best = null, bestLen = 0;
+  COST_CENTRES.forEach(function(cc){
+    // Match on the distinctive words of the cost centre name, longest wins.
+    cc.toLowerCase().split(/[^a-z]+/).filter(w => w.length > 3).forEach(function(word){
+      if (hay.indexOf(word) !== -1 && word.length > bestLen){ best = cc; bestLen = word.length; }
+    });
+  });
+  return best;
+}
+
 function renderImportTable(){
   let html = '<thead><tr><th style="width:34px"></th><th style="width:82px">Code</th><th>Description</th>' +
     '<th style="width:70px">Unit</th><th class="num" style="width:80px">Qty</th>' +
@@ -6215,11 +6235,12 @@ function renderImportTable(){
       '<option value="' + esc(c) + '"' + (c === r.cc ? ' selected' : '') + '>' + c + '</option>').join('');
     const zOpts = ZONES.map(z =>
       '<option value="' + esc(z) + '"' + (z === r.zone ? ' selected' : '') + '>' + z + '</option>').join('');
-    html += '<tr>' +
+    html += '<tr' + (r.guessed ? ' class="locked"' : '') + '>' +
       '<td><input type="checkbox" style="width:auto"' + (r.include ? ' checked' : '') +
         ' onchange="impRows[' + i + '].include=this.checked;renderImportFoot()"></td>' +
       '<td>' + r.code + (r.isProvisional ? ' <span class="chip vo">Prov</span>' : '') +
-        (r.replaces ? ' <span class="ed-lock">Updates</span>' : '') + '</td>' +
+        (r.replaces ? ' <span class="ed-lock">Updates</span>' : '') +
+        (r.guessed ? ' <span class="ed-lock" title="Nothing in this line matched a cost centre name">Check</span>' : '') + '</td>' +
       '<td>' + r.desc + '</td><td>' + r.unit + '</td>' +
       '<td class="num">' + r.qty + '</td><td class="num">' + money(r.rate) + '</td>' +
       '<td class="num">' + money(r.amount) + '</td>' +
@@ -6237,8 +6258,11 @@ function renderImportFoot(){
   const inc = impRows.filter(r => r.include);
   const total = inc.reduce((a, r) => a + r.amount, 0);
   const prov = inc.filter(r => r.isProvisional).length;
+  const unmatched = inc.filter(r => r.guessed).length;
   document.getElementById('impFoot').innerHTML =
     '<div><span class="ed-tot">' + inc.length + ' of ' + impRows.length + ' lines selected</span>' +
+    (unmatched ? '<span class="ed-tot" style="margin-left:14px;color:#a16207">' + unmatched +
+      ' matched no cost centre — check before importing</span>' : '') +
     (prov ? '<span class="ed-tot" style="margin-left:14px">' + prov +
       ' provisional — these go to the provisional sums register, not the budget</span>' : '') + '</div>' +
     '<div><span class="ed-tot">Contract value<b>' + money(total) + '</b></span></div>';
