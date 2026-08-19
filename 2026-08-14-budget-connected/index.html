@@ -2320,7 +2320,7 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
 
 <!-- ═══ Client assessment of a submitted variation ═══ -->
 <div class="modal-overlay" id="assessModal">
-  <div class="modal" style="width:940px;max-width:96vw">
+  <div class="modal" style="width:1080px;max-width:96vw">
     <div class="modal-head">
       <h3 id="assessTitle">Record the client's assessment</h3>
       <span class="modal-close" onclick="closeModal('assessModal')"><i class="fas fa-times"></i></span>
@@ -5829,12 +5829,36 @@ function approveVariation(id){
    numbers part company and the difference gets a name. */
 let assessTarget = null;
 
-/* Approved quantities and rates start life as the submitted ones. */
+/* Approved quantities and rates start life as the submitted ones, and each
+   line carries its share of the estimate. */
 function seedAssessLines(v){
   (v.lines || []).forEach(function(l){
     if (l.aQty === undefined) l.aQty = l.qty;
     if (l.aRate === undefined) l.aRate = l.rate;
   });
+  if (!v.lines || !v.lines.length) return;
+  if (v.lines.every(l => l.budget !== undefined)) return;
+  apportionLineBudgets(v);
+}
+
+/* Split the variation's estimate across its priced lines by value, with the
+   rounding remainder going to the largest lines so the parts sum to the whole. */
+function apportionLineBudgets(v){
+  const total = v.budget || 0;
+  const weights = v.lines.map(l => lineSubmitted(l));
+  const sum = weights.reduce((a, w) => a + w, 0);
+  if (!sum){ v.lines.forEach(l => { l.budget = 0; }); return; }
+  const exact = weights.map(w => total * w / sum);
+  const floors = exact.map(x => Math.floor(x));
+  let left = Math.round(total - floors.reduce((a, x) => a + x, 0));
+  const order = exact.map((x, i) => ({i, frac:x - Math.floor(x)}))
+                     .sort((a, b) => b.frac - a.frac);
+  order.forEach(function(o, k){ floors[o.i] += (k < left ? 1 : 0); });
+  v.lines.forEach(function(l, i){ l.budget = floors[i]; });
+}
+
+function lineBudgetTotal(v){
+  return (v.lines || []).reduce((a, l) => a + (l.budget || 0), 0);
 }
 function lineSubmitted(l){ return (l.qty || 0) * (l.rate || 0); }
 function lineApproved(l){ return (l.aQty !== undefined ? l.aQty : l.qty || 0) *
@@ -5879,7 +5903,9 @@ function renderAssessBuildUp(){
     '<th class="num" style="width:78px">Qty priced</th><th class="num" style="width:88px">Rate priced</th>' +
     '<th class="num" style="width:96px">Submitted</th>' +
     '<th class="num" style="width:76px">Qty approved</th><th class="num" style="width:88px">Rate approved</th>' +
-    '<th class="num" style="width:96px">Approved</th><th style="width:104px">Change</th></tr></thead><tbody>';
+    '<th class="num" style="width:96px">Approved</th>' +
+    '<th class="num" style="width:96px">Budget</th><th class="num" style="width:74px">Margin</th>' +
+    '<th style="width:104px">Change</th></tr></thead><tbody>';
 
   v.lines.forEach(function(l, i){
     const subA = lineSubmitted(l);
@@ -5898,6 +5924,9 @@ function renderAssessBuildUp(){
       '<td><input class="' + (rateCut ? 'cut' : '') + '" value="' + (l.aRate !== undefined ? l.aRate : l.rate) +
         '" oninput="editAssessLine(' + i + ',\'aRate\',this.value)"' + (byLine ? '' : ' disabled') + '></td>' +
       '<td class="num" style="font-weight:600">' + money(appA) + '</td>' +
+      '<td><input value="' + (l.budget || 0) + '" oninput="editAssessLine(' + i + ',\'budget\',this.value)"></td>' +
+      '<td class="num"><span style="font-size:11px;color:' + lineMarginColour(appA, l.budget || 0) + '">' +
+        (appA > 0 ? pct((appA - (l.budget || 0)) / appA * 100) : '—') + '</span></td>' +
       '<td><span class="delta ' + (appA < subA ? 'cut' : 'same') + '">' +
         (bits.length ? bits.join('<br>') : appA === subA ? 'as priced' : money(appA - subA)) + '</span></td>' +
       '</tr>';
@@ -5911,14 +5940,26 @@ function renderAssessBuildUp(){
   document.getElementById('assessBuFoot').innerHTML =
     (moved ? '<span>' + moved + ' of ' + v.lines.length + ' lines assessed down</span>' : '<span>Nothing changed</span>') +
     '<span>Submitted<b>' + money(sub) + '</b></span>' +
-    '<span>Build-up total<b' + (total < sub ? ' style="color:#dc2626"' : '') + '>' + money(total) + '</b></span>';
+    '<span>Approved<b' + (total < sub ? ' style="color:#dc2626"' : '') + '>' + money(total) + '</b></span>' +
+    '<span>Estimated cost<b>' + money(lineBudgetTotal(v)) + '</b></span>' +
+    '<span>Margin<b style="color:' + lineMarginColour(total, lineBudgetTotal(v)) + '">' +
+      (total > 0 ? pct((total - lineBudgetTotal(v)) / total * 100) : '—') + '</b></span>';
+}
+
+/* Margin per line, so a line assessed below what it costs is visible where the
+   decision is being made rather than after it. */
+function lineMarginColour(approved, budget){
+  if (!approved) return '#94a3b8';
+  const m = (approved - budget) / approved * 100;
+  return m < 0 ? '#dc2626' : m < 10 ? '#d97706' : '#16a34a';
 }
 
 function editAssessLine(i, field, value){
   const v = assessTarget;
   v.lines[i][field] = parseFloat(String(value).replace(/[^0-9.-]/g, '')) || 0;
-  // The total is the sum of what was actually agreed, never typed over it.
+  // Both totals are sums of the build-up, never typed over it.
   document.getElementById('assessApproved').value = buildUpTotal(v);
+  document.getElementById('assessBudget').value = lineBudgetTotal(v);
   onAssessChange();
 }
 
@@ -5944,6 +5985,20 @@ function onAssessChange(){
     approvedInput.readOnly = false;
     approvedInput.title = '';
     approvedInput.style.background = '';
+  }
+  // The estimate is built up per line just as the price is, so where there is a
+  // build-up the header figure is its sum. It is independent of how the client
+  // assessed: they can send a single number and we still budget line by line.
+  const budgetInput = document.getElementById('assessBudget');
+  if (hasBuildUp(v)){
+    budgetInput.value = lineBudgetTotal(v);
+    budgetInput.readOnly = true;
+    budgetInput.title = 'Summed from the build-up below — edit it per line';
+    budgetInput.style.background = '#f8fafc';
+  } else {
+    budgetInput.readOnly = false;
+    budgetInput.title = '';
+    budgetInput.style.background = '';
   }
   if (hasBuildUp(v)) renderAssessBuildUp();
   const approved = assessNum('assessApproved');
@@ -5972,8 +6027,10 @@ function onAssessChange(){
         ? 'Re-estimating does not undo cost already incurred — the tracked and actual figures below do not move.'
         : 'Make sure the extra scope is real — this widens the gap to the approved value.')
     : '<i class="fas fa-circle-info"></i> Budget is the estimate of what this work <b>should</b> cost — what it is ' +
-      'actually costing is the tracked and actual figures below. It is left as priced; change it only if scope ' +
-      'actually came out, and it is never calculated from the approved figure.';
+      'actually costing is the tracked and actual figures below. ' +
+      (hasBuildUp(v) ? 'It is estimated per line in the build-up and summed here.'
+                     : 'It is left as priced; change it only if scope actually came out.') +
+      ' It is never calculated from the approved figure.';
 
   if (short){
     const d = derive(v);
@@ -6041,7 +6098,7 @@ function confirmAssessment(){
   v.status = 'approved';
   v.approved = approved;
   v.approvedOn = '19 Aug 2026';
-  const newBudget = assessNum('assessBudget');
+  const newBudget = hasBuildUp(v) ? lineBudgetTotal(v) : assessNum('assessBudget');
   const budgetMoved = newBudget !== (v.budget || 0);
   const oldBudget = v.budget || 0;
   v.budget = newBudget;
@@ -6071,7 +6128,7 @@ function rejectVariation(){
                       outcome:'rejected', reason:reason});
   v.status = 'rejected';
   v.approved = 0;
-  v.budget = assessNum('assessBudget');
+  v.budget = hasBuildUp(v) ? lineBudgetTotal(v) : assessNum('assessBudget');
   closeModal('assessModal');
   render();
   const d = derive(v);
