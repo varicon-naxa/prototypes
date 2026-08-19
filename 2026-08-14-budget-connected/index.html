@@ -2330,7 +2330,6 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
       <div style="flex:1"></div>
       <button class="btn btn-outline" onclick="rejectVariation()" style="color:#dc2626;border-color:#fecaca">
         <i class="fas fa-ban"></i> Rejected in full</button>
-      <button class="btn btn-outline" onclick="sendBackForRepricing()"><i class="fas fa-rotate-left"></i> Send back for re-pricing</button>
       <button class="btn btn-success" onclick="confirmAssessment()"><i class="fas fa-check"></i> Record assessment</button>
     </div>
   </div>
@@ -4626,13 +4625,10 @@ function pendingVariationRows(){
       '<td></td><td class="cell-code">' + v.id + '</td>' +
       '<td class="cell-desc" style="font-weight:400">' + v.title +
         ' <span class="chip ' + (v.status === 'draft' ? 'draft' : 'vo') + '">' + (v.status === 'draft' ? 'Draft' : 'Awaiting assessment') + '</span>' +
-        (v.lastAssessed !== undefined ? ' <span class="chip warn">Sent back — being re-priced</span>' : '') +
         (atRisk ? ' <span class="chip over">Cost at risk</span>' : '') +
         (unrated.length ? ' <span class="chip warn">Rates not mapped</span>' : '') +
         '<div style="font-size:11px;color:#94a3b8;margin-top:3px">' + v.cc + ' · ' + v.zone + ' · ' + varTypeLabel(v) + (v.ref ? ' · ref ' + v.ref : '') +
         ' · submitted ' + money(varSubmitted(v)) +
-        (v.lastAssessed !== undefined ? ' · last assessed at <span style="color:#b45309;font-weight:600">' +
-          money(v.lastAssessed) + '</span>' : '') +
         (atRisk ? ' — <span style="color:#dc2626;font-weight:600">' + money(d.costToDate) + ' spent against unapproved revenue</span>' : '') + '</div>' +
         (unrated.length
           ? '<div class="rate-warn"><i class="fas fa-triangle-exclamation"></i> ' +
@@ -4709,7 +4705,7 @@ function pendingVariationRows(){
 function assessTrail(v){
   if (!v.assessments || !v.assessments.length) return '';
   return '<div style="font-size:10.5px;color:#94a3b8;margin-top:3px">' +
-    v.assessments.map(a => 'R' + a.round + ': ' + money(a.submitted) + ' → ' + money(a.assessed)).join('  ·  ') +
+    v.assessments.map(a => money(a.submitted) + ' → ' + money(a.assessed)).join('  ·  ') +
     (v.assessments[v.assessments.length - 1].reason
       ? '<br><span style="font-style:italic">' + v.assessments[v.assessments.length - 1].reason + '</span>' : '') +
     '</div>';
@@ -5819,7 +5815,7 @@ function renderAssessHistory(v){
   const el = document.getElementById('assessHistory');
   if (!v.assessments || !v.assessments.length){ el.innerHTML = ''; return; }
   el.innerHTML = '<div class="assess-hist"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;' +
-    'color:#94a3b8;font-weight:600;margin-bottom:4px">Earlier rounds</div>' +
+    'color:#94a3b8;font-weight:600;margin-bottom:4px">Assessments recorded</div>' +
     v.assessments.map(function(a){
       return '<div class="assess-round"><span class="ar-when">' + a.on + '</span>' +
         '<span class="ar-money">Submitted ' + money(a.submitted) + ' → assessed ' + money(a.assessed) + '</span>' +
@@ -5843,7 +5839,6 @@ function confirmAssessment(){
   v.status = 'approved';
   v.approved = approved;
   v.approvedOn = '19 Aug 2026';
-  v.lastAssessed = undefined;
   closeModal('assessModal');
   render();
 
@@ -5857,23 +5852,7 @@ function confirmAssessment(){
       ' added to the contract sum and ' + money(v.budget) + ' to the budget.');
 }
 
-/* Not agreed, and not settled either. It goes back with the round on record and
-   stays out of the contract sum until there is a number both sides accept. */
-function sendBackForRepricing(){
-  const v = assessTarget;
-  if (!v) return;
-  const sub = varSubmitted(v);
-  const approved = assessNum('assessApproved');
-  const reason = document.getElementById('assessReason').value.trim();
-  v.assessments.push({round:(v.assessments.length + 1), submitted:sub, assessed:approved,
-                      on:'19 Aug 2026', outcome:'sent-back', reason:reason});
-  v.status = 'submitted';
-  v.lastAssessed = approved;
-  closeModal('assessModal');
-  render();
-  toast('<i class="fas fa-rotate-left"></i> ' + v.id + ' assessed at ' + money(approved) + ' against ' + money(sub) +
-        ' submitted, and is going back for re-pricing. It stays out of the contract sum until it is agreed.');
-}
+
 
 function rejectVariation(){
   const v = assessTarget;
