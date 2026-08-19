@@ -472,6 +472,11 @@ input.locked{background:#f8fafc;color:#64748b;cursor:not-allowed;border-style:da
 .ed-del[disabled]{cursor:not-allowed;color:#e2e8f0}
 .ed-lock{font-size:10px;color:#a16207;background:#fef3c7;border-radius:4px;padding:2px 6px;white-space:nowrap}
 .assess-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+.assess-grid.three{grid-template-columns:1fr 1fr 1fr}
+.assess-budget-note{font-size:11.5px;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;
+  padding:9px 14px;margin-bottom:16px;line-height:1.5}
+.assess-budget-note i{color:#94a3b8;margin-right:5px}
+.assess-budget-note b{color:#1b2a4a}
 .assess-box{border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;background:#f8fafc}
 .assess-box .ab-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#94a3b8;font-weight:600}
 .assess-box .ab-value{font-size:19px;font-weight:700;color:#1b2a4a;margin-top:3px}
@@ -2262,8 +2267,10 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
       <span class="modal-close" onclick="closeModal('budgetEditModal')"><i class="fas fa-times"></i></span>
     </div>
     <p class="modal-sub">Correct anything that came through wrong in the upload — descriptions, quantities, rates,
-      budgets, and which cost centre or zone a line belongs to. Lines that already carry cost can be edited but not
-      deleted, because the cost would have nowhere to go.</p>
+      budgets, and which cost centre or zone a line belongs to. Variations <span class="chip vo" style="font-size:9px">VO</span>
+      and instructed provisional sums <span class="chip prov" style="font-size:9px">PS</span> are here too: their budget is
+      editable, their contract value is not, because that is set by the client assessment and the instruction. Lines that
+      already carry cost can be edited but not deleted, because the cost would have nowhere to go.</p>
     <div class="ed-scroll"><table class="ed-table" id="edTable"></table></div>
     <div class="ed-foot" id="edFoot"></div>
     <div class="modal-actions">
@@ -2302,7 +2309,7 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
     </div>
     <p class="modal-sub" id="assessSub"></p>
 
-    <div class="assess-grid">
+    <div class="assess-grid three">
       <div class="assess-box sub">
         <div class="ab-label">Submitted to client</div>
         <div class="ab-value" id="assessSubmitted"></div>
@@ -2311,9 +2318,15 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
         <div class="ab-label">Approved by client</div>
         <input id="assessApproved" oninput="onAssessChange()">
       </div>
+      <div class="assess-box">
+        <div class="ab-label">Budget — what it costs us</div>
+        <input id="assessBudget" oninput="onAssessChange()">
+      </div>
     </div>
 
     <div class="variance-strip" id="assessVariance"></div>
+
+    <div class="assess-budget-note" id="assessBudgetNote"></div>
 
     <div id="assessLossBlock" style="display:none">
       <div class="loss-detail" id="assessLoss"></div>
@@ -5754,6 +5767,7 @@ function openAssessment(v){
     'The submitted figure is kept either way; it is never overwritten by their answer.';
   document.getElementById('assessSubmitted').textContent = money(sub);
   document.getElementById('assessApproved').value = sub;
+  document.getElementById('assessBudget').value = v.budget || 0;
   document.getElementById('assessReason').value = '';
   renderAssessHistory(v);
   onAssessChange();
@@ -5784,6 +5798,18 @@ function onAssessChange(){
 
   document.getElementById('assessLossBlock').style.display = short ? '' : 'none';
 
+  // The budget is never derived from the approved amount. If scope came out, the
+  // person assessing knows what is left and types it; the product does not guess.
+  const budget = assessNum('assessBudget');
+  const moved = budget !== (v.budget || 0);
+  document.getElementById('assessBudgetNote').innerHTML = moved
+    ? '<i class="fas fa-pen"></i> Budget changed from <b>' + money(v.budget || 0) + '</b> to <b>' + money(budget) +
+      '</b>. ' + (budget < (v.budget || 0)
+        ? 'Cost already booked against this variation does not come down with it.'
+        : 'Make sure the extra cost is real — this widens the gap to the approved value.')
+    : '<i class="fas fa-circle-info"></i> Budget is what the work costs us, not what the client agreed to pay. ' +
+      'It is left as priced — change it only if scope actually came out, and it is never calculated from the approved figure.';
+
   if (short){
     const d = derive(v);
     // What has already been spent against revenue the client has now declined to
@@ -5793,10 +5819,13 @@ function onAssessChange(){
     document.getElementById('assessLoss').innerHTML =
       '<table>' +
       '<tr><td>Approved revenue</td><td class="num">' + money(approved) + '</td></tr>' +
-      '<tr><td>Budget on this variation</td><td class="num">' + money(v.budget || 0) + '</td></tr>' +
+      '<tr><td>Budget on this variation</td><td class="num">' + money(budget) + '</td></tr>' +
       '<tr><td>Cost already tracked against it</td><td class="num">' + money(d.tracked) + '</td></tr>' +
       '<tr><td>Cost already actual against it</td><td class="num">' + money(d.actual) + '</td></tr>' +
       (d.committed ? '<tr><td>Still on order</td><td class="num">' + money(d.committed) + '</td></tr>' : '') +
+      '<tr><td>' + (budget - d.costToDate >= 0 ? 'Budget still unspent' : 'Spent beyond budget') +
+        '</td><td class="num"' + (budget - d.costToDate < 0 ? ' style="color:#dc2626"' : '') + '>' +
+        money(Math.abs(budget - d.costToDate)) + '</td></tr>' +
       '<tr class="total"><td>' + (overspend > 0 ? 'Spent beyond what was approved' : 'Margin left on this variation') +
         '</td><td class="num">' + money(Math.abs(overspend)) + '</td></tr>' +
       '</table>' +
@@ -5806,8 +5835,8 @@ function onAssessChange(){
         : '<div style="margin-top:9px;color:#64748b;font-size:11.5px"><i class="fas fa-circle-info"></i> ' +
           'Nothing has been spent against this variation yet, so the shortfall is lost revenue rather than a realised loss.</div>') +
       '<div style="margin-top:7px;color:#64748b;font-size:11.5px"><i class="fas fa-circle-info"></i> ' +
-      'The budget is left alone. If less work is now being done, rebuild it in ' +
-      '<strong>Edit budget lines</strong> against the scope that is actually left.</div>';
+      'Adjust the budget above if scope came out of this variation. For a full rebuild across the job, ' +
+      '<strong>Edit budget lines</strong> has every line.</div>';
   }
 }
 
@@ -5839,6 +5868,10 @@ function confirmAssessment(){
   v.status = 'approved';
   v.approved = approved;
   v.approvedOn = '19 Aug 2026';
+  const newBudget = assessNum('assessBudget');
+  const budgetMoved = newBudget !== (v.budget || 0);
+  const oldBudget = v.budget || 0;
+  v.budget = newBudget;
   closeModal('assessModal');
   render();
 
@@ -5850,6 +5883,8 @@ function confirmAssessment(){
       (d.costToDate > approved ? ' ' + money(d.costToDate - approved) + ' has already been spent beyond it.' : '')
     : '<i class="fas fa-check-circle"></i> ' + v.id + ' approved in full — ' + money(approved) +
       ' added to the contract sum and ' + money(v.budget) + ' to the budget.');
+  if (budgetMoved) toast('<i class="fas fa-pen"></i> Budget on ' + v.id + ' changed from ' + money(oldBudget) +
+    ' to ' + money(newBudget) + '. Cost already booked against it is unchanged.');
 }
 
 
@@ -5863,6 +5898,7 @@ function rejectVariation(){
                       outcome:'rejected', reason:reason});
   v.status = 'rejected';
   v.approved = 0;
+  v.budget = assessNum('assessBudget');
   closeModal('assessModal');
   render();
   const d = derive(v);
@@ -6368,7 +6404,17 @@ function openBudgetEditor(){
     toast('A dayworks project has no budget lines to edit — the dockets are the budget.');
     return;
   }
-  editDraft = baseItems.map(l => Object.assign({}, l));
+  editDraft = [];
+  baseItems.forEach(l => editDraft.push(Object.assign({}, l, {_src:'base', _ref:l})));
+  // A variation and an instructed provisional sum both carry budget and cost.
+  // Their contract value is not editable here — that is set by the client's
+  // assessment and by the instruction respectively — but what they cost us is.
+  variations.forEach(v => editDraft.push(Object.assign({}, v, {
+    _src:'variation', _ref:v, code:v.id, desc:v.title,
+    contract: v.status === 'approved' ? varLiveValue(v) : varSubmitted(v)
+  })));
+  provisionals.forEach(p => (p.activations || []).forEach(a => editDraft.push(
+    Object.assign({}, a, {_src:'prov', _ref:a}))));
   renderBudgetEditor();
   openModal('budgetEditModal');
 }
@@ -6386,20 +6432,34 @@ function renderBudgetEditor(){
 
   editDraft.forEach(function(l, i){
     const locked = lineHasCost(l);
+    const kind = l._src || 'base';
+    const fixedContract = kind !== 'base';
+    const tag = kind === 'variation'
+      ? ' <span class="chip vo" style="font-size:9px">VO</span>'
+      : kind === 'prov' ? ' <span class="chip prov" style="font-size:9px">PS</span>' : '';
     const ccOpts = COST_CENTRES.concat(COST_CENTRES.includes(l.cc) || !l.cc ? [] : [l.cc])
       .map(c => '<option value="' + esc(c) + '"' + (c === l.cc ? ' selected' : '') + '>' + c + '</option>').join('');
     const zOpts = ZONES.map(z => '<option value="' + esc(z) + '"' + (z === l.zone ? ' selected' : '') + '>' + z + '</option>').join('');
     html += '<tr class="' + (locked ? 'locked' : '') + '">' +
-      '<td><input value="' + esc(l.code || '') + '" oninput="editField(' + i + ',\'code\',this.value)"></td>' +
+      '<td>' + (fixedContract
+        ? '<span style="font-size:11px;color:#64748b">' + (l.code || '') + '</span>' + tag
+        : '<input value="' + esc(l.code || '') + '" oninput="editField(' + i + ',\'code\',this.value)">') + '</td>' +
       '<td><input value="' + esc(l.desc || '') + '" oninput="editField(' + i + ',\'desc\',this.value)"></td>' +
       '<td><select onchange="editField(' + i + ',\'cc\',this.value)">' + ccOpts + '</select></td>' +
       '<td><select onchange="editField(' + i + ',\'zone\',this.value)">' + zOpts + '</select></td>' +
       '<td><input value="' + esc(l.unit || 'item') + '" oninput="editField(' + i + ',\'unit\',this.value)"></td>' +
       '<td><input class="num" value="' + (l.qty !== undefined ? l.qty : 1) + '" oninput="editField(' + i + ',\'qty\',this.value)"></td>' +
       '<td><input class="num" value="' + (l.rate || 0) + '" oninput="editField(' + i + ',\'rate\',this.value)"></td>' +
-      '<td><input class="num" value="' + (l.contract || 0) + '" oninput="editField(' + i + ',\'contract\',this.value)"></td>' +
+      '<td>' + (fixedContract
+        ? '<span class="num" style="display:block;text-align:right;font-size:11.5px;color:#64748b" title="' +
+          (kind === 'variation' ? 'Set by the client assessment, not editable here'
+                                : 'Set when the provisional sum was instructed') + '">' + money(l.contract || 0) + '</span>'
+        : '<input class="num" value="' + (l.contract || 0) + '" oninput="editField(' + i + ',\'contract\',this.value)">') + '</td>' +
       '<td><input class="num" value="' + (l.budget || 0) + '" oninput="editField(' + i + ',\'budget\',this.value)"></td>' +
-      '<td>' + (locked
+      '<td>' + (fixedContract
+        ? '<span class="ed-lock" title="' + (kind === 'variation' ? 'Remove this from the variation register, not here'
+                                                                  : 'Release the provisional sum instead') + '">—</span>'
+        : locked
         ? '<span class="ed-lock" title="This line already has cost coded to it">Has cost</span>'
         : '<button class="ed-del" onclick="removeBudgetLine(' + i + ')" title="Remove line"><i class="fas fa-trash"></i></button>') +
       '</td></tr>';
@@ -6415,8 +6475,12 @@ function renderEditorFoot(){
   const budget = editDraft.reduce((a, l) => a + (l.budget || 0), 0);
   const margin = contract > 0 ? (contract - budget) / contract * 100 : 0;
   const withCost = editDraft.filter(lineHasCost).length;
+  const vo = editDraft.filter(l => l._src === 'variation').length;
+  const ps = editDraft.filter(l => l._src === 'prov').length;
   document.getElementById('edFoot').innerHTML =
     '<div><span class="ed-tot">' + editDraft.length + ' lines</span>' +
+    (vo ? '<span class="ed-tot" style="margin-left:14px">' + vo + ' variation' + (vo === 1 ? '' : 's') + '</span>' : '') +
+    (ps ? '<span class="ed-tot" style="margin-left:14px">' + ps + ' provisional' + (ps === 1 ? '' : 's') + '</span>' : '') +
     (withCost ? '<span class="ed-tot" style="margin-left:14px">' + withCost + ' already carrying cost</span>' : '') + '</div>' +
     '<div><span class="ed-tot">Contract<b>' + money(contract) + '</b></span>' +
     '<span class="ed-tot" style="margin-left:18px">Budget<b>' + money(budget) + '</b></span>' +
@@ -6439,7 +6503,7 @@ function editField(i, field, value){
 
 function addBudgetLine(){
   editDraft.push({
-    kind:'base', code:'', desc:'', cc:COST_CENTRES[0] || 'Unassigned', zone:'Project Wide',
+    _src:'base', kind:'base', code:'', desc:'', cc:COST_CENTRES[0] || 'Unassigned', zone:'Project Wide',
     l1:'A Added after upload', l2:'A.1 Added after upload',
     unit:'item', qty:1, rate:0, contract:0, budget:0, claimed:0,
     poCommitted:0, dktTracked:0, tsUnapproved:0, billsPaid:0, tsApproved:0,
@@ -6451,6 +6515,7 @@ function addBudgetLine(){
 }
 
 function removeBudgetLine(i){
+  if (editDraft[i]._src !== 'base') return;
   if (lineHasCost(editDraft[i])) return;
   editDraft.splice(i, 1);
   renderBudgetEditor();
@@ -6472,15 +6537,37 @@ function saveBudgetEdits(){
   });
 
   const before = baseItems.length;
+  let touchedVO = 0, touchedPS = 0;
+
+  // Variations and provisional activations are edited in place — they live in
+  // their own registers and only their budget side is the editor's business.
+  editDraft.filter(l => l._src === 'variation').forEach(function(l){
+    const v = l._ref;
+    if (v.budget !== l.budget || v.cc !== l.cc || v.zone !== l.zone || v.title !== l.desc) touchedVO++;
+    v.budget = l.budget; v.cc = l.cc; v.zone = l.zone; v.title = l.desc;
+  });
+  editDraft.filter(l => l._src === 'prov').forEach(function(l){
+    const a = l._ref;
+    if (a.budget !== l.budget || a.cc !== l.cc || a.zone !== l.zone || a.desc !== l.desc) touchedPS++;
+    a.budget = l.budget; a.cc = l.cc; a.zone = l.zone; a.desc = l.desc;
+  });
+
   baseItems.length = 0;
-  editDraft.forEach(l => baseItems.push(l));
+  editDraft.filter(l => l._src === 'base').forEach(function(l){
+    const clean = Object.assign({}, l);
+    delete clean._src; delete clean._ref;
+    baseItems.push(clean);
+  });
+
   closeModal('budgetEditModal');
   render();
   renderProjectBadge();
   const delta = baseItems.length - before;
-  toast('<i class="fas fa-check"></i> Budget updated — ' + baseItems.length + ' lines' +
+  toast('<i class="fas fa-check"></i> Budget updated — ' + baseItems.length + ' budget lines' +
     (delta > 0 ? ', ' + delta + ' added' : delta < 0 ? ', ' + Math.abs(delta) + ' removed' : '') +
-    '. Cost already coded to these lines is untouched.');
+    (touchedVO ? ', ' + touchedVO + ' variation' + (touchedVO === 1 ? '' : 's') + ' changed' : '') +
+    (touchedPS ? ', ' + touchedPS + ' provisional sum' + (touchedPS === 1 ? '' : 's') + ' changed' : '') +
+    '. Cost already coded is untouched.');
 }
 
 /* ── The BOQ arriving late ───────────────────────────────────── */
