@@ -471,6 +471,24 @@ input.locked{background:#f8fafc;color:#64748b;cursor:not-allowed;border-style:da
 .ed-del:hover{color:#dc2626}
 .ed-del[disabled]{cursor:not-allowed;color:#e2e8f0}
 .ed-lock{font-size:10px;color:#a16207;background:#fef3c7;border-radius:4px;padding:2px 6px;white-space:nowrap}
+.assess-bu-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:8px}
+.assess-bu-head .bu-title{font-size:12px;font-weight:600;color:#1b2a4a}
+.assess-bu-head label{font-size:11.5px;color:#64748b;display:flex;align-items:center;gap:6px;cursor:pointer}
+.assess-bu-head input[type=checkbox]{width:auto;cursor:pointer}
+.bu-table td.was{color:#94a3b8;font-variant-numeric:tabular-nums}
+.bu-table td.was s{color:#cbd5e1}
+.bu-table input{width:100%;border:1px solid #e2e8f0;border-radius:6px;padding:4px 6px;font-size:11.5px;
+  font-family:inherit;text-align:right;color:#1b2a4a}
+.bu-table input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.12)}
+.bu-table input.cut{border-color:#fca5a5;background:#fef2f2;color:#991b1b;font-weight:600}
+.bu-table input:disabled{background:#f8fafc;color:#94a3b8}
+.bu-table .delta{font-size:10.5px;white-space:nowrap}
+.bu-table .delta.cut{color:#dc2626;font-weight:600}
+.bu-table .delta.same{color:#cbd5e1}
+.bu-foot{display:flex;justify-content:flex-end;gap:18px;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;
+  border-radius:0 0 8px 8px;padding:9px 14px;font-size:12px;color:#64748b}
+.bu-foot b{color:#1b2a4a;margin-left:5px}
+.bd-change{color:#dc2626;font-weight:600}
 .assess-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
 .assess-grid.three{grid-template-columns:1fr 1fr 1fr}
 .assess-budget-note{font-size:11.5px;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;
@@ -2302,7 +2320,7 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
 
 <!-- ═══ Client assessment of a submitted variation ═══ -->
 <div class="modal-overlay" id="assessModal">
-  <div class="modal" style="width:720px;max-width:96vw">
+  <div class="modal" style="width:940px;max-width:96vw">
     <div class="modal-head">
       <h3 id="assessTitle">Record the client's assessment</h3>
       <span class="modal-close" onclick="closeModal('assessModal')"><i class="fas fa-times"></i></span>
@@ -2327,6 +2345,16 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
     <div class="variance-strip" id="assessVariance"></div>
 
     <div class="assess-budget-note" id="assessBudgetNote"></div>
+
+    <div id="assessBuildUp" style="display:none;margin-bottom:16px">
+      <div class="assess-bu-head">
+        <span class="bu-title">Priced build-up — what the client actually assessed</span>
+        <label><input type="checkbox" id="assessByLine" checked onchange="onAssessChange()">
+          Assess line by line</label>
+      </div>
+      <div class="ed-scroll" style="max-height:30vh"><table class="ed-table bu-table" id="assessBuTable"></table></div>
+      <div class="bu-foot" id="assessBuFoot"></div>
+    </div>
 
     <div id="assessLossBlock" style="display:none">
       <div class="loss-detail" id="assessLoss"></div>
@@ -2976,12 +3004,21 @@ variations.forEach(function(v){
 (function(){
   const v = variations.find(x => x.id === 'VO-001');
   if (!v) return;
-  v.submitted = 44000;
-  v.approved = 38500;
+  // The rock pitching line was measured down from 126 m² to 60 m²; everything
+  // else was agreed as priced. Both totals are summed from the lines, so the
+  // build-up and the headline figures cannot disagree.
+  const rock = v.lines.find(l => /rock pitching/i.test(l.desc));
+  v.lines.forEach(function(l){ l.aQty = l.qty; l.aRate = l.rate; });
+  if (rock){ rock.qty = 126; rock.aQty = 60; }
+  v.assessedByLine = true;
+  v.submitted = Math.round(v.lines.reduce((a, l) => a + l.qty * l.rate, 0));
+  v.approved  = Math.round(v.lines.reduce((a, l) => a + l.aQty * l.aRate, 0));
+  v.contract  = v.submitted;
   v.assessments = [{
-    round:1, submitted:44000, assessed:38500, on:'18 Jun 2026', outcome:'part',
-    reason:'Superintendent assessed rock pitching at 40 m² against the 60 m² claimed. ' +
-           'Scope reduced to match the measured area.'
+    round:1, submitted:v.submitted, assessed:v.approved, on:'18 Jun 2026', outcome:'part',
+    reason:'Superintendent assessed rock pitching against the measured area.',
+    lines: rock ? [{desc:rock.desc, unit:rock.unit, qty:rock.qty, aQty:rock.aQty,
+                    rate:rock.rate, aRate:rock.aRate}] : []
   }];
 })();
 
@@ -4038,17 +4075,27 @@ function breakdownRows(it, open){
   const key = 'bd:' + it.code;
   const isOpen = openItems.has(key);
   return it.lines.map(l => {
-    const amount = l.qty * l.rate;
-    const detail = l.qty.toLocaleString('en-AU') + ' ' + l.unit +
-      ' @ $' + l.rate.toLocaleString('en-AU', {minimumFractionDigits:2});
+    // What the claim is made against is the agreed figure where there is one.
+    const qty    = (l.aQty  !== undefined ? l.aQty  : l.qty);
+    const rate   = (l.aRate !== undefined ? l.aRate : l.rate);
+    const amount = qty * rate;
+    const moved  = (l.aQty !== undefined && l.aQty !== l.qty) || (l.aRate !== undefined && l.aRate !== l.rate);
+    const detail = qty.toLocaleString('en-AU') + ' ' + l.unit +
+      ' @ $' + rate.toLocaleString('en-AU', {minimumFractionDigits:2}) +
+      (moved ? ' <span class="bd-change">· priced at ' + l.qty.toLocaleString('en-AU') + ' ' + l.unit +
+        ' @ $' + l.rate.toLocaleString('en-AU', {minimumFractionDigits:2}) +
+        ', assessed down ' + money(l.qty * l.rate - amount) + '</span>' : '');
     return '<tr class="bd-row' + (open && isOpen ? ' visible' : '') + '">' +
       '<td></td><td></td>' +
       '<td class="cell-desc">' + l.desc +
-        (claimMode ? '' : '<div class="bd-detail">' + detail + '</div>') + '</td>' +
+        '<div class="bd-detail">' + detail + '</div></td>' +
       (claimMode
         ? '<td>' + l.unit + '</td>' +
-          '<td class="right">' + l.qty.toLocaleString('en-AU') + '</td>' +
-          '<td class="right">$' + l.rate.toLocaleString('en-AU', {minimumFractionDigits:2}) + '</td>' +
+          '<td class="right">' + qty.toLocaleString('en-AU') +
+            (moved ? '<div class="bd-change" style="font-size:10px"><s>' + l.qty.toLocaleString('en-AU') + '</s></div>' : '') + '</td>' +
+          '<td class="right">$' + rate.toLocaleString('en-AU', {minimumFractionDigits:2}) +
+            (moved && l.aRate !== l.rate ? '<div class="bd-change" style="font-size:10px"><s>$' +
+              l.rate.toLocaleString('en-AU', {minimumFractionDigits:2}) + '</s></div>' : '') + '</td>' +
           '<td class="right sep">' + money(amount) + '</td>' +
           '<td class="right money-muted">—</td>' + (showClaimMargin() ? '<td class="right money-muted">—</td>' : '') +
           '<td class="right money-muted">—</td>'
@@ -4066,9 +4113,13 @@ function breakdownToggle(it){
   if (currentView !== 'boq' || !it.lines || !it.lines.length) return '';
   const key = 'bd:' + it.code;
   const isOpen = openItems.has(key);
+  const moved = it.lines.filter(l =>
+    (l.aQty !== undefined && l.aQty !== l.qty) || (l.aRate !== undefined && l.aRate !== l.rate)).length;
   return '<span style="margin-left:10px" onclick="event.stopPropagation();toggleItem(\'' + esc(key) + '\')">' +
     '<i class="fas fa-chevron-' + (isOpen ? 'up' : 'down') + '" style="font-size:9px;margin-right:4px;color:#1d4ed8"></i>' +
-    '<span style="color:#1d4ed8">' + (isOpen ? 'hide' : 'view') + ' priced build-up (' + it.lines.length + ')</span></span>';
+    '<span style="color:#1d4ed8">' + (isOpen ? 'hide' : 'view') + ' priced build-up (' + it.lines.length + ')</span>' +
+    (moved ? '<span class="chip over" style="margin-left:6px;font-size:9px">' + moved +
+      ' line' + (moved === 1 ? '' : 's') + ' assessed down</span>' : '') + '</span>';
 }
 
 /* Attach representative suppliers to a rolled-up node so its document register
@@ -4723,11 +4774,22 @@ function pendingVariationRows(){
   return html;
 }
 
+/* "50 m³ → 40 m³", or "$72.00 → $65.00", or both. */
+function lineChangeText(l){
+  const bits = [];
+  if (l.aQty !== undefined && l.aQty !== l.qty)
+    bits.push(l.qty.toLocaleString('en-AU') + ' → ' + l.aQty.toLocaleString('en-AU') + ' ' + l.unit);
+  if (l.aRate !== undefined && l.aRate !== l.rate)
+    bits.push('$' + l.rate.toLocaleString('en-AU') + ' → $' + l.aRate.toLocaleString('en-AU'));
+  return l.desc + ' ' + bits.join(', ');
+}
+
 /* The negotiation, in one line, wherever a variation appears. */
 function assessTrail(v){
   if (!v.assessments || !v.assessments.length) return '';
   return '<div style="font-size:10.5px;color:#94a3b8;margin-top:3px">' +
-    v.assessments.map(a => money(a.submitted) + ' → ' + money(a.assessed)).join('  ·  ') +
+    v.assessments.map(a => money(a.submitted) + ' → ' + money(a.assessed) +
+      (a.lines && a.lines.length ? ' (' + a.lines.map(lineChangeText).join('; ') + ')' : '')).join('  ·  ') +
     (v.assessments[v.assessments.length - 1].reason
       ? '<br><span style="font-style:italic">' + v.assessments[v.assessments.length - 1].reason + '</span>' : '') +
     '</div>';
@@ -5767,8 +5829,26 @@ function approveVariation(id){
    numbers part company and the difference gets a name. */
 let assessTarget = null;
 
+/* Approved quantities and rates start life as the submitted ones. */
+function seedAssessLines(v){
+  (v.lines || []).forEach(function(l){
+    if (l.aQty === undefined) l.aQty = l.qty;
+    if (l.aRate === undefined) l.aRate = l.rate;
+  });
+}
+function lineSubmitted(l){ return (l.qty || 0) * (l.rate || 0); }
+function lineApproved(l){ return (l.aQty !== undefined ? l.aQty : l.qty || 0) *
+                                 (l.aRate !== undefined ? l.aRate : l.rate || 0); }
+function buildUpTotal(v){ return (v.lines || []).reduce((a, l) => a + lineApproved(l), 0); }
+function hasBuildUp(v){ return !!(v.lines && v.lines.length); }
+/* A line the client moved — quantity, rate or both. */
+function lineChanged(l){
+  return (l.aQty !== undefined && l.aQty !== l.qty) || (l.aRate !== undefined && l.aRate !== l.rate);
+}
+
 function openAssessment(v){
   assessTarget = v;
+  seedAssessLines(v);
   const sub = varSubmitted(v);
   document.getElementById('assessTitle').textContent = 'Assessment of ' + v.id;
   document.getElementById('assessSub').innerHTML = v.title +
@@ -5778,9 +5858,68 @@ function openAssessment(v){
   document.getElementById('assessApproved').value = sub;
   document.getElementById('assessBudget').value = v.budget || 0;
   document.getElementById('assessReason').value = '';
+  document.getElementById('assessBuildUp').style.display = hasBuildUp(v) ? '' : 'none';
+  document.getElementById('assessByLine').checked = hasBuildUp(v);
   renderAssessHistory(v);
   onAssessChange();
   openModal('assessModal');
+}
+
+function assessByLine(){
+  const cb = document.getElementById('assessByLine');
+  return !!(cb && cb.checked && hasBuildUp(assessTarget));
+}
+
+function renderAssessBuildUp(){
+  const v = assessTarget;
+  if (!hasBuildUp(v)) return;
+  const byLine = assessByLine();
+
+  let html = '<thead><tr><th>Item</th><th style="width:52px">Unit</th>' +
+    '<th class="num" style="width:78px">Qty priced</th><th class="num" style="width:88px">Rate priced</th>' +
+    '<th class="num" style="width:96px">Submitted</th>' +
+    '<th class="num" style="width:76px">Qty approved</th><th class="num" style="width:88px">Rate approved</th>' +
+    '<th class="num" style="width:96px">Approved</th><th style="width:104px">Change</th></tr></thead><tbody>';
+
+  v.lines.forEach(function(l, i){
+    const subA = lineSubmitted(l);
+    const appA = lineApproved(l);
+    const qtyCut = l.aQty !== l.qty, rateCut = l.aRate !== l.rate;
+    const bits = [];
+    if (qtyCut) bits.push(l.qty.toLocaleString('en-AU') + ' → ' + (l.aQty || 0).toLocaleString('en-AU') + ' ' + l.unit);
+    if (rateCut) bits.push('$' + l.rate.toLocaleString('en-AU') + ' → $' + (l.aRate || 0).toLocaleString('en-AU'));
+    html += '<tr>' +
+      '<td>' + l.desc + '</td><td>' + l.unit + '</td>' +
+      '<td class="num was">' + l.qty.toLocaleString('en-AU') + '</td>' +
+      '<td class="num was">$' + l.rate.toLocaleString('en-AU', {minimumFractionDigits:2}) + '</td>' +
+      '<td class="num was">' + money(subA) + '</td>' +
+      '<td><input class="' + (qtyCut ? 'cut' : '') + '" value="' + (l.aQty !== undefined ? l.aQty : l.qty) +
+        '" oninput="editAssessLine(' + i + ',\'aQty\',this.value)"' + (byLine ? '' : ' disabled') + '></td>' +
+      '<td><input class="' + (rateCut ? 'cut' : '') + '" value="' + (l.aRate !== undefined ? l.aRate : l.rate) +
+        '" oninput="editAssessLine(' + i + ',\'aRate\',this.value)"' + (byLine ? '' : ' disabled') + '></td>' +
+      '<td class="num" style="font-weight:600">' + money(appA) + '</td>' +
+      '<td><span class="delta ' + (appA < subA ? 'cut' : 'same') + '">' +
+        (bits.length ? bits.join('<br>') : appA === subA ? 'as priced' : money(appA - subA)) + '</span></td>' +
+      '</tr>';
+  });
+  html += '</tbody>';
+  document.getElementById('assessBuTable').innerHTML = html;
+
+  const total = buildUpTotal(v);
+  const sub = varSubmitted(v);
+  const moved = v.lines.filter(lineChanged).length;
+  document.getElementById('assessBuFoot').innerHTML =
+    (moved ? '<span>' + moved + ' of ' + v.lines.length + ' lines assessed down</span>' : '<span>Nothing changed</span>') +
+    '<span>Submitted<b>' + money(sub) + '</b></span>' +
+    '<span>Build-up total<b' + (total < sub ? ' style="color:#dc2626"' : '') + '>' + money(total) + '</b></span>';
+}
+
+function editAssessLine(i, field, value){
+  const v = assessTarget;
+  v.lines[i][field] = parseFloat(String(value).replace(/[^0-9.-]/g, '')) || 0;
+  // The total is the sum of what was actually agreed, never typed over it.
+  document.getElementById('assessApproved').value = buildUpTotal(v);
+  onAssessChange();
 }
 
 function assessNum(id){
@@ -5791,6 +5930,22 @@ function onAssessChange(){
   const v = assessTarget;
   if (!v) return;
   const sub = varSubmitted(v);
+  const byLine = assessByLine();
+  // Assessed line by line, the total is the build-up. Assessed as a single
+  // figure — some clients just send a number — the total is typed and the
+  // build-up stays as priced.
+  const approvedInput = document.getElementById('assessApproved');
+  if (byLine){
+    approvedInput.value = buildUpTotal(v);
+    approvedInput.readOnly = true;
+    approvedInput.title = 'Total of the assessed build-up below';
+    approvedInput.style.background = '#f8fafc';
+  } else {
+    approvedInput.readOnly = false;
+    approvedInput.title = '';
+    approvedInput.style.background = '';
+  }
+  if (hasBuildUp(v)) renderAssessBuildUp();
   const approved = assessNum('assessApproved');
   const variance = approved - sub;
   const short = variance < 0;
@@ -5870,9 +6025,17 @@ function confirmAssessment(){
   const reason = document.getElementById('assessReason').value.trim();
   const short = approved < sub;
 
+  // If the client just gave a number, the build-up was never assessed — leave
+  // the priced lines alone rather than implying they were agreed line by line.
+  if (!assessByLine() && hasBuildUp(v)) v.lines.forEach(function(l){ l.aQty = undefined; l.aRate = undefined; });
+  v.assessedByLine = assessByLine() && hasBuildUp(v);
+
   v.assessments.push({
     round:(v.assessments.length + 1), submitted:sub, assessed:approved, on:'19 Aug 2026',
-    outcome: approved >= sub ? 'full' : 'part', reason:reason
+    outcome: approved >= sub ? 'full' : 'part', reason:reason,
+    lines: v.assessedByLine ? v.lines.filter(lineChanged).map(l => ({
+      desc:l.desc, unit:l.unit, qty:l.qty, aQty:l.aQty, rate:l.rate, aRate:l.aRate
+    })) : []
   });
 
   v.status = 'approved';
