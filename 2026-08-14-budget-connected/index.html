@@ -2315,34 +2315,8 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
 
     <div class="variance-strip" id="assessVariance"></div>
 
-    <div id="assessShortfallBlock" style="display:none">
-      <div class="field"><label>Was the scope reduced, or just the money?</label>
-        <div class="radio-card" id="assessScopeCut" onclick="setAssessScope(true)">
-          <span class="radio-dot"></span>
-          <div><div class="rc-name">The scope was reduced</div><div class="rc-desc">Work came out of the variation, so it
-            should cost less to do. The budget comes down with it — adjust it below.</div></div>
-        </div>
-        <div class="radio-card selected" id="assessMoneyCut" onclick="setAssessScope(false)">
-          <span class="radio-dot"></span>
-          <div><div class="rc-name">Only the money was cut</div><div class="rc-desc">The work was done in full and still
-            costs what it costs. The budget stays and the margin takes the hit.</div></div>
-        </div>
-      </div>
-
-      <div class="field"><label>Budget for this variation</label>
-        <input id="assessBudget" oninput="onAssessChange()">
-        <div class="field-note" id="assessBudgetNote"></div>
-      </div>
-
+    <div id="assessLossBlock" style="display:none">
       <div class="loss-detail" id="assessLoss"></div>
-
-      <div class="field"><label>What happens to the shortfall?</label>
-        <select id="assessShortfall" onchange="onAssessChange()">
-          <option value="absorbed">Absorbed — written off against margin, not being pursued</option>
-          <option value="disputed">Under dispute — escalated with the client, still live</option>
-          <option value="resubmit">To resubmit — being re-priced and put back in</option>
-        </select>
-      </div>
     </div>
 
     <div class="field"><label>Assessment note <span style="color:#94a3b8;font-weight:400">— the superintendent's reasoning, kept for the record</span></label>
@@ -2356,6 +2330,7 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
       <div style="flex:1"></div>
       <button class="btn btn-outline" onclick="rejectVariation()" style="color:#dc2626;border-color:#fecaca">
         <i class="fas fa-ban"></i> Rejected in full</button>
+      <button class="btn btn-outline" onclick="sendBackForRepricing()"><i class="fas fa-rotate-left"></i> Send back for re-pricing</button>
       <button class="btn btn-success" onclick="confirmAssessment()"><i class="fas fa-check"></i> Record assessment</button>
     </div>
   </div>
@@ -2982,8 +2957,6 @@ variations.forEach(function(v){
   if (!v) return;
   v.submitted = 44000;
   v.approved = 38500;
-  v.scopeReduced = true;
-  v.shortfall = 'absorbed';
   v.assessments = [{
     round:1, submitted:44000, assessed:38500, on:'18 Jun 2026', outcome:'part',
     reason:'Superintendent assessed rock pitching at 40 m² against the 60 m² claimed. ' +
@@ -3003,11 +2976,6 @@ function varVariance(v){
 function varSubmitted(v){
   return v.submitted !== undefined ? v.submitted : v.contract;
 }
-const SHORTFALL_LABELS = {
-  absorbed:{label:'Absorbed',      chip:'over',  desc:'Written off against margin — not being pursued'},
-  disputed:{label:'Under dispute', chip:'warn',  desc:'Escalated with the client, still live'},
-  resubmit:{label:'To resubmit',   chip:'vo',    desc:'Being re-priced and put back in'}
-};
 
 /* Active budget lines = base BOQ + approved variations + activated provisional sums.
    Rebuilt on every render so approvals and activations flow straight through. */
@@ -3991,10 +3959,8 @@ function varianceBadge(it){
   if (!v) return '';
   const variance = varVariance(v);
   if (variance >= 0) return '';
-  const sf = SHORTFALL_LABELS[v.shortfall] || SHORTFALL_LABELS.absorbed;
   return ' <span class="chip over" title="Submitted ' + money(varSubmitted(v)) + ', approved ' +
-    money(v.approved) + '">Approved ' + money(Math.abs(variance)) + ' short</span>' +
-    ' <span class="chip ' + sf.chip + '" title="' + sf.desc + '">' + sf.label + '</span>';
+    money(v.approved) + '">Approved ' + money(Math.abs(variance)) + ' short</span>';
 }
 
 function varianceNote(it){
@@ -4007,7 +3973,6 @@ function varianceNote(it){
   return '<div style="font-size:11px;font-weight:400;color:#94a3b8;margin-top:3px">' +
     'Submitted ' + money(varSubmitted(v)) + ' · approved <strong style="color:#1b2a4a">' + money(v.approved) +
     '</strong> · <span style="color:#dc2626;font-weight:600">' + money(Math.abs(variance)) + ' not recovered</span>' +
-    (v.scopeReduced ? ' · scope reduced, budget cut to match' : ' · money only, budget unchanged') +
     (over > 0 ? ' · <span style="color:#dc2626;font-weight:600">' + money(over) +
       ' already spent beyond the approved value</span>' : '') +
     '</div>' + assessTrail(v);
@@ -4661,7 +4626,7 @@ function pendingVariationRows(){
       '<td></td><td class="cell-code">' + v.id + '</td>' +
       '<td class="cell-desc" style="font-weight:400">' + v.title +
         ' <span class="chip ' + (v.status === 'draft' ? 'draft' : 'vo') + '">' + (v.status === 'draft' ? 'Draft' : 'Awaiting assessment') + '</span>' +
-        (v.shortfall === 'resubmit' ? ' <span class="chip warn">Assessed low — being re-priced</span>' : '') +
+        (v.lastAssessed !== undefined ? ' <span class="chip warn">Sent back — being re-priced</span>' : '') +
         (atRisk ? ' <span class="chip over">Cost at risk</span>' : '') +
         (unrated.length ? ' <span class="chip warn">Rates not mapped</span>' : '') +
         '<div style="font-size:11px;color:#94a3b8;margin-top:3px">' + v.cc + ' · ' + v.zone + ' · ' + varTypeLabel(v) + (v.ref ? ' · ref ' + v.ref : '') +
@@ -5782,11 +5747,10 @@ function approveVariation(id){
 /* ═══ CLIENT ASSESSMENT ═══
    The client rarely approves what was submitted. This is where the two
    numbers part company and the difference gets a name. */
-let assessTarget = null, assessScopeReduced = false;
+let assessTarget = null;
 
 function openAssessment(v){
   assessTarget = v;
-  assessScopeReduced = false;
   const sub = varSubmitted(v);
   document.getElementById('assessTitle').textContent = 'Assessment of ' + v.id;
   document.getElementById('assessSub').innerHTML = v.title +
@@ -5794,28 +5758,10 @@ function openAssessment(v){
     'The submitted figure is kept either way; it is never overwritten by their answer.';
   document.getElementById('assessSubmitted').textContent = money(sub);
   document.getElementById('assessApproved').value = sub;
-  document.getElementById('assessBudget').value = v.budget || 0;
   document.getElementById('assessReason').value = '';
-  document.getElementById('assessShortfall').value = 'absorbed';
-  setAssessScope(false);
   renderAssessHistory(v);
   onAssessChange();
   openModal('assessModal');
-}
-
-function setAssessScope(reduced){
-  assessScopeReduced = reduced;
-  document.getElementById('assessScopeCut').classList.toggle('selected', reduced);
-  document.getElementById('assessMoneyCut').classList.toggle('selected', !reduced);
-  const v = assessTarget;
-  if (!v) return;
-  const sub = varSubmitted(v);
-  const approved = assessNum('assessApproved');
-  // Cutting scope cuts what it should cost. Cutting only the money does not.
-  document.getElementById('assessBudget').value = reduced && sub > 0
-    ? Math.round((v.budget || 0) * (approved / sub))
-    : (v.budget || 0);
-  onAssessChange();
 }
 
 function assessNum(id){
@@ -5840,22 +5786,18 @@ function onAssessChange(){
       ? '<span><i class="fas fa-arrow-trend-up"></i> Approved <b>' + money(variance) + '</b> above what was submitted</span>'
       : '<span><i class="fas fa-check"></i> <b>Approved in full</b> — no variance to account for</span>';
 
-  document.getElementById('assessShortfallBlock').style.display = short ? '' : 'none';
+  document.getElementById('assessLossBlock').style.display = short ? '' : 'none';
 
   if (short){
-    const budget = assessNum('assessBudget');
     const d = derive(v);
-    document.getElementById('assessBudgetNote').textContent = assessScopeReduced
-      ? 'Scaled to the approved share of the submitted value. Adjust it to what the reduced scope will actually cost.'
-      : 'Unchanged — the work still costs what it costs. Reduce it only if less work is now being done.';
-
-    // The number that matters: what has already been spent against revenue the
-    // client has now declined to pay.
+    // What has already been spent against revenue the client has now declined to
+    // pay. The budget is untouched by any of this — if the scope came down, the
+    // budget gets rebuilt from the reduced scope by whoever priced it.
     const overspend = d.costToDate - approved;
     document.getElementById('assessLoss').innerHTML =
       '<table>' +
       '<tr><td>Approved revenue</td><td class="num">' + money(approved) + '</td></tr>' +
-      '<tr><td>Budget after this assessment</td><td class="num">' + money(budget) + '</td></tr>' +
+      '<tr><td>Budget on this variation</td><td class="num">' + money(v.budget || 0) + '</td></tr>' +
       '<tr><td>Cost already tracked against it</td><td class="num">' + money(d.tracked) + '</td></tr>' +
       '<tr><td>Cost already actual against it</td><td class="num">' + money(d.actual) + '</td></tr>' +
       (d.committed ? '<tr><td>Still on order</td><td class="num">' + money(d.committed) + '</td></tr>' : '') +
@@ -5864,12 +5806,12 @@ function onAssessChange(){
       '</table>' +
       (d.costToDate > 0
         ? '<div style="margin-top:9px;color:#991b1b;font-size:11.5px"><i class="fas fa-circle-info"></i> ' +
-          money(d.costToDate) + ' of cost is already booked against this variation and does not move. ' +
-          (assessScopeReduced
-            ? 'Reducing the budget does not reduce cost already incurred — if the crew had already done the work, the loss shows here.'
-            : 'That cost stands whatever the client approves.') + '</div>'
+          money(d.costToDate) + ' is already booked against this variation and does not move, whatever the client approved.</div>'
         : '<div style="margin-top:9px;color:#64748b;font-size:11.5px"><i class="fas fa-circle-info"></i> ' +
-          'Nothing has been spent against this variation yet, so the shortfall is lost revenue rather than a realised loss.</div>');
+          'Nothing has been spent against this variation yet, so the shortfall is lost revenue rather than a realised loss.</div>') +
+      '<div style="margin-top:7px;color:#64748b;font-size:11.5px"><i class="fas fa-circle-info"></i> ' +
+      'The budget is left alone. If less work is now being done, rebuild it in ' +
+      '<strong>Edit budget lines</strong> against the scope that is actually left.</div>';
   }
 }
 
@@ -5892,43 +5834,45 @@ function confirmAssessment(){
   const approved = assessNum('assessApproved');
   const reason = document.getElementById('assessReason').value.trim();
   const short = approved < sub;
-  const shortfall = short ? document.getElementById('assessShortfall').value : null;
 
   v.assessments.push({
     round:(v.assessments.length + 1), submitted:sub, assessed:approved, on:'19 Aug 2026',
     outcome: approved >= sub ? 'full' : 'part', reason:reason
   });
 
-  // A variation going back for re-pricing is not settled — it returns to
-  // submitted with its history intact, rather than being closed off.
-  if (shortfall === 'resubmit'){
-    v.status = 'submitted';
-    v.shortfall = 'resubmit';
-    v.lastAssessed = approved;
-    closeModal('assessModal');
-    render();
-    toast('<i class="fas fa-rotate-left"></i> ' + v.id + ' assessed at ' + money(approved) + ' against ' + money(sub) +
-          ' submitted, and is going back for re-pricing. It stays out of the contract sum until it is agreed.');
-    return;
-  }
-
   v.status = 'approved';
   v.approved = approved;
   v.approvedOn = '19 Aug 2026';
-  v.budget = short ? assessNum('assessBudget') : v.budget;
-  v.scopeReduced = short ? assessScopeReduced : false;
-  v.shortfall = shortfall;
+  v.lastAssessed = undefined;
   closeModal('assessModal');
   render();
 
   const d = derive(v);
   toast(short
     ? '<i class="fas fa-check-circle"></i> ' + v.id + ' approved at ' + money(approved) + ' against ' + money(sub) +
-      ' submitted — ' + money(sub - approved) + ' not recovered, marked ' + SHORTFALL_LABELS[shortfall].label.toLowerCase() +
-      '. ' + money(approved) + ' goes to the contract sum, not the submitted figure.' +
+      ' submitted — ' + money(sub - approved) + ' not recovered. ' + money(approved) +
+      ' goes to the contract sum, not the submitted figure.' +
       (d.costToDate > approved ? ' ' + money(d.costToDate - approved) + ' has already been spent beyond it.' : '')
     : '<i class="fas fa-check-circle"></i> ' + v.id + ' approved in full — ' + money(approved) +
       ' added to the contract sum and ' + money(v.budget) + ' to the budget.');
+}
+
+/* Not agreed, and not settled either. It goes back with the round on record and
+   stays out of the contract sum until there is a number both sides accept. */
+function sendBackForRepricing(){
+  const v = assessTarget;
+  if (!v) return;
+  const sub = varSubmitted(v);
+  const approved = assessNum('assessApproved');
+  const reason = document.getElementById('assessReason').value.trim();
+  v.assessments.push({round:(v.assessments.length + 1), submitted:sub, assessed:approved,
+                      on:'19 Aug 2026', outcome:'sent-back', reason:reason});
+  v.status = 'submitted';
+  v.lastAssessed = approved;
+  closeModal('assessModal');
+  render();
+  toast('<i class="fas fa-rotate-left"></i> ' + v.id + ' assessed at ' + money(approved) + ' against ' + money(sub) +
+        ' submitted, and is going back for re-pricing. It stays out of the contract sum until it is agreed.');
 }
 
 function rejectVariation(){
@@ -5940,7 +5884,6 @@ function rejectVariation(){
                       outcome:'rejected', reason:reason});
   v.status = 'rejected';
   v.approved = 0;
-  v.shortfall = 'disputed';
   closeModal('assessModal');
   render();
   const d = derive(v);
