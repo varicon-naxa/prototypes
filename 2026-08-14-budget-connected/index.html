@@ -2319,7 +2319,7 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
         <input id="assessApproved" oninput="onAssessChange()">
       </div>
       <div class="assess-box">
-        <div class="ab-label">Budget — what it costs us</div>
+        <div class="ab-label">Budget — estimated cost</div>
         <input id="assessBudget" oninput="onAssessChange()">
       </div>
     </div>
@@ -2949,9 +2949,18 @@ function derive(it){
    submitted amount is exposure, not revenue, and never reaches either.
 
    Cost is the other half of the picture and it does not care about any
-   of this. The crew did the work; it cost what it cost. Where the scope
-   was genuinely cut the budget comes down with it, but the tracked and
-   actual cost already incurred stays exactly where it is — which is
+   of this. The crew did the work; it cost what it cost.
+
+   Three separate things, easily and expensively confused:
+
+     budget  — the estimate of what the work SHOULD cost
+     tracked — cost incurred, not yet settled  ┐ what it IS costing
+     actual  — cost settled                    ┘
+
+   The budget is editable, because a re-scoped variation deserves a
+   re-estimate. It is never calculated from the approved amount: only the
+   person who priced it knows what is left to do. And re-estimating moves
+   nothing else — tracked and actual stay exactly where they are, which is
    precisely what exposes the loss.
    ══════════════════════════════════════════════════════════════ */
 
@@ -5803,12 +5812,13 @@ function onAssessChange(){
   const budget = assessNum('assessBudget');
   const moved = budget !== (v.budget || 0);
   document.getElementById('assessBudgetNote').innerHTML = moved
-    ? '<i class="fas fa-pen"></i> Budget changed from <b>' + money(v.budget || 0) + '</b> to <b>' + money(budget) +
+    ? '<i class="fas fa-pen"></i> Estimated cost changed from <b>' + money(v.budget || 0) + '</b> to <b>' + money(budget) +
       '</b>. ' + (budget < (v.budget || 0)
-        ? 'Cost already booked against this variation does not come down with it.'
-        : 'Make sure the extra cost is real — this widens the gap to the approved value.')
-    : '<i class="fas fa-circle-info"></i> Budget is what the work costs us, not what the client agreed to pay. ' +
-      'It is left as priced — change it only if scope actually came out, and it is never calculated from the approved figure.';
+        ? 'Re-estimating does not undo cost already incurred — the tracked and actual figures below do not move.'
+        : 'Make sure the extra scope is real — this widens the gap to the approved value.')
+    : '<i class="fas fa-circle-info"></i> Budget is the estimate of what this work <b>should</b> cost — what it is ' +
+      'actually costing is the tracked and actual figures below. It is left as priced; change it only if scope ' +
+      'actually came out, and it is never calculated from the approved figure.';
 
   if (short){
     const d = derive(v);
@@ -5819,11 +5829,11 @@ function onAssessChange(){
     document.getElementById('assessLoss').innerHTML =
       '<table>' +
       '<tr><td>Approved revenue</td><td class="num">' + money(approved) + '</td></tr>' +
-      '<tr><td>Budget on this variation</td><td class="num">' + money(budget) + '</td></tr>' +
-      '<tr><td>Cost already tracked against it</td><td class="num">' + money(d.tracked) + '</td></tr>' +
-      '<tr><td>Cost already actual against it</td><td class="num">' + money(d.actual) + '</td></tr>' +
+      '<tr><td>Budget — estimated cost</td><td class="num">' + money(budget) + '</td></tr>' +
+      '<tr><td>Tracked — cost incurred, not yet settled</td><td class="num">' + money(d.tracked) + '</td></tr>' +
+      '<tr><td>Actual — cost settled</td><td class="num">' + money(d.actual) + '</td></tr>' +
       (d.committed ? '<tr><td>Still on order</td><td class="num">' + money(d.committed) + '</td></tr>' : '') +
-      '<tr><td>' + (budget - d.costToDate >= 0 ? 'Budget still unspent' : 'Spent beyond budget') +
+      '<tr><td>' + (budget - d.costToDate >= 0 ? 'Estimate not yet spent' : 'Spent beyond the estimate') +
         '</td><td class="num"' + (budget - d.costToDate < 0 ? ' style="color:#dc2626"' : '') + '>' +
         money(Math.abs(budget - d.costToDate)) + '</td></tr>' +
       '<tr class="total"><td>' + (overspend > 0 ? 'Spent beyond what was approved' : 'Margin left on this variation') +
