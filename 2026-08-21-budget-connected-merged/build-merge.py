@@ -248,8 +248,7 @@ def build_site_diary():
                       "miscEntries:[],deliveries:[],dockets:[]};", "SD rows")
     # setMode('wbs') at the foot of the guest script would render the empty
     # arrays; the sync does it instead, once there is data.
-    old_init = "/* init */
-setMode('wbs');"
+    old_init = "/* init */\nsetMode('wbs');"
     if old_init not in js:
         raise SystemExit("FAIL: SD init not found")
     js = js.replace(old_init, "/* init runs from sdSyncData once VDATA has built the day */")
