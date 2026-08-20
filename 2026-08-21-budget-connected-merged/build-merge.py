@@ -169,16 +169,32 @@ def replace_decl(js, decl, new_text, label):
     if j >= len(js):
         raise SystemExit("FAIL: no literal after %s" % label)
     close, depth, k = OPENERS[js[j]], 1, j + 1
+    # Strings AND comments must be skipped, not just strings: these data blocks
+    # are heavily commented, and one apostrophe in prose ("Today's entries")
+    # reads as an opening quote and throws the whole scan off.
     while k < len(js) and depth:
-        c = js[k]
+        c, nxt = js[k], js[k + 1:k + 2]
+        if c == "/" and nxt == "*":
+            k = js.find("*/", k + 2)
+            if k == -1:
+                raise SystemExit("FAIL: unterminated comment in %s" % label)
+            k += 2
+            continue
+        if c == "/" and nxt == "/":
+            k = js.find("\n", k)
+            if k == -1:
+                break
+            continue
+        if c in "'\"`":
+            q, k = c, k + 1
+            while k < len(js) and js[k] != q:
+                k += 2 if js[k] == "\\" else 1
+            k += 1
+            continue
         if c == js[j]:
             depth += 1
         elif c == close:
             depth -= 1
-        elif c in "'\"":                       # skip string bodies
-            q, k = c, k + 1
-            while k < len(js) and js[k] != q:
-                k += 2 if js[k] == "\\" else 1
         k += 1
     while k < len(js) and js[k] in " ;\n":
         k += 1
