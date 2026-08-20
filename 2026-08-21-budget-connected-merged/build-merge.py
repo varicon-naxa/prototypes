@@ -15,6 +15,7 @@ SD = os.path.join(ROOT, "2026-06-02-site-diary-unified-workflow", "index.html")
 DC = os.path.join(ROOT, "2026-06-04-daily-cost-calendar", "index.html")
 OUT_DIR = os.path.join(ROOT, "2026-08-21-budget-connected-merged")
 OUT = os.path.join(OUT_DIR, "index.html")
+SHARED = os.path.join(OUT_DIR, "shared-data.js")
 
 
 def read(p):
@@ -149,6 +150,41 @@ def strip_scripts(html):
     return out
 
 
+
+OPENERS = {"{": "}", "[": "]", "(": ")"}
+
+
+def replace_decl(js, decl, new_text, label):
+    """Replace a whole `var NAME = <literal>;` declaration, however many lines.
+
+    Matches on the declaration head, then walks brackets to its terminator, so
+    a guest rewriting the contents of its own data block does not break this.
+    """
+    i = js.find(decl)
+    if i == -1:
+        raise SystemExit("FAIL: declaration not found (%s): %s" % (label, decl))
+    j = i + len(decl)
+    while j < len(js) and js[j] not in OPENERS:
+        j += 1
+    if j >= len(js):
+        raise SystemExit("FAIL: no literal after %s" % label)
+    close, depth, k = OPENERS[js[j]], 1, j + 1
+    while k < len(js) and depth:
+        c = js[k]
+        if c == js[j]:
+            depth += 1
+        elif c == close:
+            depth -= 1
+        elif c in "'\"":                       # skip string bodies
+            q, k = c, k + 1
+            while k < len(js) and js[k] != q:
+                k += 2 if js[k] == "\\" else 1
+        k += 1
+    while k < len(js) and js[k] in " ;\n":
+        k += 1
+    return js[:i] + new_text + "\n" + js[k:]
+
+
 def rename_in_handlers(html, pairs):
     """Rename identifiers only inside on*="..." attribute values.
 
@@ -177,6 +213,10 @@ def build_site_diary():
     html = remove_element(html, '<div class="topbar">', "SD topbar")
     html = remove_element(html, '<div class="proj-tabs">', "SD proj-tabs")
     html = html.replace("<!-- Top header -->", "").replace("<!-- Project tabs -->", "")
+    # the diary's date is set from the ledger, so it needs a handle
+    if "02/06/2026" not in html:
+        raise SystemExit("FAIL: SD date display not found")
+    html = html.replace("02/06/2026", '<span id="sdDiaryDate">02/06/2026</span>', 1)
 
     ids = [("toastTxt", "sdToastTxt"), ("toast", "sdToastEl"),
            ("stepper", "sdStepper"), ("drawer", "sdDrawer")]
@@ -196,6 +236,24 @@ def build_site_diary():
         js = js.replace('getElementById("%s")' % old, 'getElementById("%s")' % new)
         js = js.replace("querySelector('#%s" % old, "querySelector('#%s" % new)
     js = rename_all(js, fns)
+
+    # The diary's seeded arrays give way to the shared dataset.
+    js = replace_decl(js, "var WBS=", "var WBS=[];", "SD WBS")
+    js = replace_decl(js, "var COSTCENTRES=", "var COSTCENTRES=[];", "SD COSTCENTRES")
+    js = replace_decl(js, "var WORKERS=", "var WORKERS=[];", "SD WORKERS")
+    js = replace_decl(js, "var PLANTITEMS=", "var PLANTITEMS=[];", "SD PLANTITEMS")
+    js = replace_decl(js, "var ALLOC_OPTIONS=", "var ALLOC_OPTIONS=[];", "SD ALLOC_OPTIONS")
+    js = replace_decl(js, "var rows=",
+                      "var rows={labour:[],plant:[],materials:[],misc:[],"
+                      "miscEntries:[],deliveries:[],dockets:[]};", "SD rows")
+    # setMode('wbs') at the foot of the guest script would render the empty
+    # arrays; the sync does it instead, once there is data.
+    old_init = "/* init */
+setMode('wbs');"
+    if old_init not in js:
+        raise SystemExit("FAIL: SD init not found")
+    js = js.replace(old_init, "/* init runs from sdSyncData once VDATA has built the day */")
+    js += SD_SYNC
 
     css = scope_css(css, "#pageSiteDiary", "sd_")
     css += """
@@ -226,6 +284,18 @@ def build_daily_cost():
         js = js.replace('getElementById("%s")' % old, 'getElementById("%s")' % new)
     js = rename_all(js, fns)
 
+    # The calendar's own month of mock data gives way to the shared ledger.
+    js = replace_decl(js, "const DATA =", "let DATA = {};", "DC DATA")
+    js = replace_decl(js, "let viewYear =",
+                      "let viewYear = 2026, viewMonth = 5;  /* set from the ledger period */",
+                      "DC viewMonth")
+    old_today = "function goToday() { viewYear = 2026; viewMonth = 5; renderCalendar(); }"
+    if old_today not in js:
+        raise SystemExit("FAIL: DC goToday not found")
+    js = js.replace(old_today,
+                    "function goToday() { dcSyncData(); }")
+    js += DC_SYNC
+
     css = scope_css(css, "#pageDailyCost", "dc_")
     css += """
 /* merge shims — daily cost tracking */
@@ -250,6 +320,47 @@ TAB_BAR_NEW = '''    <div class="budget-view-tabs">
       <span class="bv-tab" onclick="gotoTab(this,'pageSiteDiary')">Site Diary</span>
       <span class="bv-tab">Daywork Docket</span>
     </div>'''
+
+DC_SYNC = """
+
+/* ── shared dataset ──────────────────────────────────────────────────────
+   The calendar is a view of the budget's cost for the open claim period, not
+   a dataset of its own. Re-derive whenever the budget has moved. */
+var _dcVersion = -1;
+function dcSyncData() {
+  var p = VDATA.period();
+  viewYear  = parseInt(p.start.slice(0, 4), 10);
+  viewMonth = parseInt(p.start.slice(5, 7), 10) - 1;
+  DATA = vdataCalendarData();
+  var badge = document.querySelector('#pageDailyCost .subtab .badge');
+  if (badge) badge.textContent = (typeof unassignedDocs !== 'undefined') ? unassignedDocs.length : 0;
+  renderCalendar();
+  _dcVersion = VDATA.version();
+}
+function dcSyncIfStale() { if (_dcVersion !== VDATA.version()) dcSyncData(); }
+"""
+
+SD_SYNC = """
+
+/* ── shared dataset ──────────────────────────────────────────────────────
+   The diary records one day of the same ledger the calendar shows. Its own
+   in-session edits (dockets added, materials amended) are kept, so this only
+   rebuilds when the budget underneath has actually changed. */
+var _sdVersion = -1;
+function sdSyncData() {
+  WBS           = VDATA.wbsTree();
+  COSTCENTRES   = VDATA.costCentres().map(function (n) { return {c: VDATA.ccCode(n), n: n}; });
+  WORKERS       = VDATA.workers();
+  PLANTITEMS    = VDATA.plant();
+  ALLOC_OPTIONS = VDATA.allocOptions();
+  rows          = vdataDiaryRows();
+  var lbl = document.getElementById('sdDiaryDate');
+  if (lbl) lbl.textContent = vdataDiaryDateLabel();
+  setMode(MODE);
+  _sdVersion = VDATA.version();
+}
+function sdSyncIfStale() { if (_sdVersion !== VDATA.version()) sdSyncData(); }
+"""
 
 MERGE_JS = '''
 /* ══════════════════════════════════════════════════════════════
@@ -281,6 +392,14 @@ setWizChrome = function(inWizard) {
   _baseSetWizChrome(inWizard);
 };
 
+/* The budget moving is the only thing that can stale the guest datasets, and
+   every path that moves it ends in render(). */
+var _baseRender = render;
+render = function() {
+  _baseRender.apply(null, arguments);
+  VDATA.refreshIfChanged();
+};
+
 function gotoTab(el, pageId) {
   IN_GUEST = !!GUEST_PAGES[pageId];
   document.querySelectorAll('.budget-view-tabs .bv-tab').forEach(function(t) {
@@ -293,6 +412,8 @@ function gotoTab(el, pageId) {
     if (st) st.style.display = 'none';
   }
   showPage(pageId);
+  if (pageId === 'pageDailyCost') dcSyncIfStale();
+  if (pageId === 'pageSiteDiary') sdSyncIfStale();
 }
 '''
 
