@@ -464,7 +464,9 @@ def main():
     base = base.replace(anchor, pages, 1)
 
     # 5. scripts before </body>
-    scripts = ("\n<script>" + MERGE_JS + "</script>\n"
+    scripts = ("\n<!-- ═══ shared dataset: one project behind all three tabs ═══ -->\n"
+               "<script>\n" + read(SHARED) + "\n</script>\n"
+               "\n<script>" + MERGE_JS + "</script>\n"
                "\n<!-- ═══ merged script: daily cost tracking ═══ -->\n<script>\n"
                + dc_js + "\n</script>\n"
                "\n<!-- ═══ merged script: site diary ═══ -->\n<script>\n"
