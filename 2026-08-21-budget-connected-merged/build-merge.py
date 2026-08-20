@@ -271,6 +271,7 @@ def build_site_diary():
     js += SD_SYNC
 
     css = scope_css(css, "#pageSiteDiary", "sd_")
+    css += SD_PALETTE
     css += """
 /* merge shims — site diary */
 #pageSiteDiary{background:#eef0f4;margin:0 -24px -24px;padding-bottom:24px}
@@ -301,6 +302,16 @@ def build_daily_cost():
 
     # The calendar's own month of mock data gives way to the shared ledger.
     js = replace_decl(js, "const DATA =", "let DATA = {};", "DC DATA")
+    # Every entry in the day drawer says which cost state it is in, coloured
+    # from the budget's own committed/tracked/actual palette.
+    old_amt = '<div class="e-amt">${fmt2(e.cost)}</div>'
+    if old_amt not in js:
+        raise SystemExit("FAIL: DC entry amount markup not found")
+    js = js.replace(old_amt,
+                    '<div class="e-amt">${fmt2(e.cost)}'
+                    '<span class="e-state" style="color:${VDATA.stateColour(e.state)};'
+                    'background:${VDATA.stateColour(e.state)}1a">'
+                    '${VDATA.stateTitle(e.state)}</span></div>')
     js = replace_decl(js, "let viewYear =",
                       "let viewYear = 2026, viewMonth = 5;  /* set from the ledger period */",
                       "DC viewMonth")
@@ -312,6 +323,7 @@ def build_daily_cost():
     js += DC_SYNC
 
     css = scope_css(css, "#pageDailyCost", "dc_")
+    css += DC_PALETTE
     css += """
 /* merge shims — daily cost tracking */
 #pageDailyCost{background:#f3f4f6;margin:0 -24px -24px;padding-bottom:24px}
@@ -336,6 +348,30 @@ TAB_BAR_NEW = '''    <div class="budget-view-tabs">
       <span class="bv-tab">Daywork Docket</span>
     </div>'''
 
+# The budget's cost-state palette — committed #b45309, tracked #0d9488,
+# actual #16a34a — restated for the two guest tabs. Both had invented their own
+# colours for the same three states, and worse, had them crossed: the diary
+# painted a paid bill in the committed colour and an unapproved timesheet in
+# amber, when a bill is actual and an unapproved timesheet is tracked.
+# Same state, same colour, all three tabs.
+SD_PALETTE = """
+/* ═══ cost-state palette, from the budget ═══ */
+/* An approved timesheet is actual cost. */
+#pageSiteDiary .tag.app{background:#16a34a1a;color:#16a34a}
+/* An unapproved timesheet is tracked, not committed — it was amber before. */
+#pageSiteDiary .tag.pend{background:#0d94881a;color:#0d9488}
+/* A PO is cost committed but not yet received. */
+#pageSiteDiary .src-tag.po{background:#b453091a;color:#b45309}
+/* A bill is actual cost. */
+#pageSiteDiary .src-tag.bill{background:#16a34a1a;color:#16a34a}
+"""
+
+DC_PALETTE = """
+/* ═══ cost-state chip on a day's entries ═══ */
+#pageDailyCost .e-state{display:block;font-size:9px;font-weight:700;letter-spacing:.4px;
+  text-transform:uppercase;padding:1px 5px;border-radius:4px;margin-top:3px;text-align:center}
+"""
+
 DC_SYNC = """
 
 /* ── shared dataset ──────────────────────────────────────────────────────
@@ -346,9 +382,12 @@ function dcSyncData() {
   var p = VDATA.period();
   viewYear  = parseInt(p.start.slice(0, 4), 10);
   viewMonth = parseInt(p.start.slice(5, 7), 10) - 1;
+  /* One palette. The calendar drew every swatch, dot, bar and icon from
+     CATS[].color, so recolouring that array recolours the whole tab. */
+  CATS.forEach(function (c) { c.color = VDATA.catColour(c.key); });
   DATA = vdataCalendarData();
   var badge = document.querySelector('#pageDailyCost .subtab .badge');
-  if (badge) badge.textContent = (typeof unassignedDocs !== 'undefined') ? unassignedDocs.length : 0;
+  if (badge) badge.textContent = VDATA.uncodedCount();
   renderCalendar();
   _dcVersion = VDATA.version();
 }
