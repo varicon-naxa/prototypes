@@ -259,6 +259,24 @@ def build_site_diary():
     js = replace_decl(js, "var WORKERS=", "var WORKERS=[];", "SD WORKERS")
     js = replace_decl(js, "var PLANTITEMS=", "var PLANTITEMS=[];", "SD PLANTITEMS")
     js = replace_decl(js, "var ALLOC_OPTIONS=", "var ALLOC_OPTIONS=[];", "SD ALLOC_OPTIONS")
+    # The diary recomputed each row's cost as rate x hours, which lands a dollar
+    # or two off the ledger amount the calendar shows for the very same row. The
+    # ledger is the authority; where a row carries a cost, display it.
+    # Matched on the arithmetic, not the money() wrapper — that has already been
+    # renamed to sdMoney by this point. Order matters: the labour expression
+    # contains the plant one as a prefix, so labour is rewritten first.
+    for old, new in [
+        ("(r.rate*hoursNum(r.hrs)+allow)*cnt",
+         "(r.cost!=null?r.cost:(r.rate*hoursNum(r.hrs)+allow)*cnt)"),
+        ("s+(r.rate?(r.rate*hoursNum(r.hrs)+(r.allow||0))*(r.count||1):0)",
+         "s+(r.cost!=null?r.cost:(r.rate?(r.rate*hoursNum(r.hrs)+(r.allow||0))*(r.count||1):0))"),
+        ("(r.rate*hoursNum(r.hrs))",
+         "(r.cost!=null?r.cost:r.rate*hoursNum(r.hrs))"),
+    ]:
+        if old not in js:
+            raise SystemExit("FAIL: diary cost expression not found: %s" % old)
+        js = js.replace(old, new)
+
     js = replace_decl(js, "var rows=",
                       "var rows={labour:[],plant:[],materials:[],misc:[],"
                       "miscEntries:[],deliveries:[],dockets:[]};", "SD rows")
@@ -360,9 +378,11 @@ SD_PALETTE = """
 #pageSiteDiary .tag.app{background:#16a34a1a;color:#16a34a}
 /* An unapproved timesheet is tracked, not committed — it was amber before. */
 #pageSiteDiary .tag.pend{background:#0d94881a;color:#0d9488}
-/* A PO is cost committed but not yet received. */
+/* A purchase order is cost committed but not yet received. */
 #pageSiteDiary .src-tag.po{background:#b453091a;color:#b45309}
-/* A bill is actual cost. */
+/* A site docket matched to its order is tracked. */
+#pageSiteDiary .src-tag.docket{background:#0d94881a;color:#0d9488}
+/* A paid bill is actual cost. */
 #pageSiteDiary .src-tag.bill{background:#16a34a1a;color:#16a34a}
 """
 

@@ -28,11 +28,30 @@ var VDATA = (function () {
 
   /* ── plumbing ───────────────────────────────────────────────────────── */
 
+  var UNCODED = 'Unassigned';
   var _version = 0;          /* bumped whenever the base's cost data changes */
   var _cache = {};
 
   function invalidate() { _version++; _cache = {}; }
   function version() { return _version; }
+
+  /* The base re-renders constantly; the budget itself changes rarely. Bumping
+     the version on every render would throw away the diary's in-session edits
+     for nothing, so the trigger is a fingerprint of the money, not the render. */
+  var _print = null;
+  function fingerprint() {
+    var lines = liveLines(), n = lines.length, t = 0;
+    lines.forEach(function (l) {
+      COST_STREAMS.forEach(function (k) { t += (l[k] || 0); });
+      t += (l.contract || 0) + (l.budget || 0);
+    });
+    return n + ':' + Math.round(t) + ':' + costCentres().join(',');
+  }
+  function refreshIfChanged() {
+    var f;
+    try { f = fingerprint(); } catch (e) { return; }
+    if (f !== _print) { _print = f; invalidate(); }
+  }
 
   /* The base's own seeded hash, so anything derived here stays put between
      renders instead of reshuffling under the user. */
@@ -86,18 +105,25 @@ var VDATA = (function () {
   /* ── the shared registry, read off the base's budget lines ──────────── */
 
   function liveLines() {
-    try { return activeLines().filter(function (l) { return l.kind !== 'unassigned'; }); }
-    catch (e) { return []; }
+    try { return activeLines(); } catch (e) { return []; }
   }
 
-  /* Cost centres actually carrying lines, in the base's own order. */
+  /* Cost centres actually carrying lines, in the base's own order.
+
+     Only real cost centres count. A variation raised without one, and the
+     base's own unassigned-cost line, are cost that has not been coded yet —
+     the budget models that as uncoded and so does this. Inventing a cost
+     centre called "VO-003" to hold it would put a number on the diary's
+     allocation picker that no one could ever allocate to. */
+  function isCoded(l) { return !!l.cc && COST_CENTRES.indexOf(l.cc) >= 0; }
   function costCentres() {
     var seen = {}, out = [];
     liveLines().forEach(function (l) {
-      if (l.cc && !seen[l.cc]) { seen[l.cc] = 1; out.push(l.cc); }
+      if (isCoded(l) && !seen[l.cc]) { seen[l.cc] = 1; out.push(l.cc); }
     });
     return out.length ? out : COST_CENTRES.slice();
   }
+  function uncodedLines() { return liveLines().filter(function (l) { return !isCoded(l); }); }
 
   /* A stable CC-nnn code per cost centre — the diary shows codes, the budget
      does not, so they are minted here once and used by both tabs. */
@@ -105,14 +131,16 @@ var VDATA = (function () {
     var i = costCentres().indexOf(name);
     return 'CC-' + (i < 0 ? 900 : (i + 1) * 100);
   }
-  function ccLabel(name) { return ccCode(name) + ' ' + name; }
+  function ccLabel(name) {
+    return name === UNCODED ? UNCODED : ccCode(name) + ' ' + name;
+  }
 
   /* The base's l1 › l2 › line hierarchy is exactly the diary's
      task › subtask › sub-subtask. */
   function wbsTree() {
     var l1s = [];
     liveLines().forEach(function (l) {
-      if (!l.l1) return;
+      if (!l.l1 || !isCoded(l)) return;
       var t = l1s.filter(function (x) { return x.key === l.l1; })[0];
       if (!t) { t = { key: l.l1, t: strip(l.l1), subs: [] }; l1s.push(t); }
       var s = t.subs.filter(function (x) { return x.key === l.l2; })[0];
@@ -128,6 +156,7 @@ var VDATA = (function () {
   function allocOptions() {
     var out = [];
     liveLines().forEach(function (l) {
+      if (!isCoded(l)) return;
       var label = strip(l.l2 || l.l1 || '') + ' › ' + l.desc;
       if (!out.some(function (o) { return o.l === label; })) {
         out.push({ l: label, c: ccLabel(l.cc), cc: l.cc, code: l.code });
@@ -160,9 +189,13 @@ var VDATA = (function () {
 
   /* Supply lines behind a cost centre — the base's own unit, rate and
      supplier, so a delivery on the diary names a real contract line. */
+  /* Units you can take delivery of. A budget line priced by the day or the
+     week is a time charge, not a supply — reading its unit onto a delivery
+     produced entries like "delivered 0.056 day", which is nonsense. */
+  var DELIVERABLE = ['m³', 'm3', 'm²', 'm2', 'm', 't', 'kg', 'L', 'ea', 'no', 'lm', 'sheets', 'each'];
   function supplyLines(cc) {
     return liveLines().filter(function (l) {
-      return l.cc === cc && l.unit && l.unit !== 'item' && l.rate > 0;
+      return l.cc === cc && l.rate > 0 && l.unit && DELIVERABLE.indexOf(l.unit) >= 0;
     });
   }
   function supplierFor(cc, kind) {
@@ -175,8 +208,8 @@ var VDATA = (function () {
   /* Cost for one cost centre in one period, split the way the budget splits
      it. This is the pool a day's rows are drawn from — nothing is added to it
      and nothing is lost from it. */
-  function poolsFor(cc, p) {
-    var lines = liveLines().filter(function (l) { return l.cc === cc; });
+  function poolsFor(cc, p, lineSet) {
+    var lines = lineSet || liveLines().filter(function (l) { return l.cc === cc; });
     if (!lines.length) return null;
     var node = {};
     SUM_KEYS.forEach(function (k) { node[k] = 0; });
@@ -184,11 +217,33 @@ var VDATA = (function () {
       var inPeriod = applyPeriod(l, [p.key]);
       SUM_KEYS.forEach(function (k) { node[k] += (inPeriod[k] || 0); });
     });
+    /* Tracked and actual are kept apart all the way down to the row. The
+       budget never adds them into one figure, so neither does the ledger —
+       that is what lets a calendar entry and a diary row say which state they
+       are in, in the same colours the overview uses. */
     var out = {};
     resourceBreakdown(node, cc).forEach(function (r) {
-      out[r.cat.key] = Math.round(r.costToDate || 0);
+      out[r.cat.key] = { tracked: Math.round(r.tracked || 0), actual: Math.round(r.actual || 0) };
     });
     return out;
+  }
+
+  /* ── the shared palette ─────────────────────────────────────────────────
+     Both guests had their own hex values for the same five categories and
+     their own idea of what a pending timesheet or a paid bill looks like.
+     There is one source for both now: the budget's. */
+  function stateColour(state) {
+    var m = STATE_META[state];
+    return m ? m.colour : '#94a3b8';
+  }
+  function stateTitle(state) {
+    var m = STATE_META[state];
+    return m ? m.title : state;
+  }
+  function catColour(key) {
+    var k = key === 'subcontract' ? 'sub' : key;
+    var c = RESOURCE_CATEGORIES.filter(function (x) { return x.key === k; })[0];
+    return c ? c.colour : '#94a3b8';
   }
 
   /* Which days a cost centre worked, and how hard. A cost centre does not run
@@ -206,18 +261,32 @@ var VDATA = (function () {
   /* One detail row: what was used, at what rate, for how much.
      The money comes first — quantity is back-solved from it, so the rows
      always add to the pool. */
-  function detailRows(cc, cat, day, amount) {
+  function detailRows(cc, cat, day, amount, state) {
     if (amount <= 0) return [];
-    var key = cc + cat + day, rows = [];
+    var key = cc + cat + day + state, rows = [];
+    /* Tracked supply is a site docket against a PO; actual supply is a paid
+       bill. Tracked labour is an unapproved timesheet; actual labour is an
+       approved one. The state decides the document, not a coin toss. */
+    /* The budget is explicit about which document carries which state:
+       committed is a purchase order, tracked is a site docket matched to that
+       order, actual is the paid bill. Tracked supply is therefore a docket —
+       calling it a PO would put committed's colour on tracked cost. */
+    var srcType = state === 'actual' ? 'Bill' : 'Docket';
+    var srcPrefix = state === 'actual' ? 'BILL-' : 'DKT-';
 
     if (cat === 'labour') {
       var crew = workers();
-      var n = amount > 2200 ? 3 : amount > 900 ? 2 : 1;
-      split(amount, [3, 2, 1.4].slice(0, n)).forEach(function (amt, i) {
+      /* A day's labour on a cost centre is spread over as many of the crew as
+         the money needs. Sizing the crew by a fixed threshold instead put one
+         worker on a 12-hour shift whenever a cost centre had a big day. */
+      var DAY_HOURS = 9, midRate = 70;
+      var n = Math.max(1, Math.min(crew.length, Math.ceil(amount / (midRate * DAY_HOURS))));
+      var weights = [];
+      for (var wi = 0; wi < n; wi++) weights.push(3 - wi * (1.4 / Math.max(1, n)));
+      split(amount, weights).forEach(function (amt, i) {
         if (amt <= 0) return;
         var w = pick(crew, key + 'w', i);
-        var hrs = Math.round(amt / w.rate * 10) / 10;
-        if (hrs <= 0) return;
+        var hrs = qtyOf(amt, w.rate);
         rows.push({
           cat: 'labour', cc: cc, cost: amt, resource: w.nm,
           meta: hrs + ' hrs @ $' + w.rate + '/hr',
@@ -226,12 +295,15 @@ var VDATA = (function () {
       });
     } else if (cat === 'plant') {
       var fleet = plant();
-      var np = amount > 1800 ? 2 : 1;
-      split(amount, [3, 1.8].slice(0, np)).forEach(function (amt, i) {
+      /* Machines are hired by the day; splitting keeps any one of them from
+         reading as 20 hours on site. */
+      var np = Math.max(1, Math.min(3, Math.ceil(amount / (120 * 9))));
+      var pw = [];
+      for (var pi = 0; pi < np; pi++) pw.push(3 - pi * 0.6);
+      split(amount, pw).forEach(function (amt, i) {
         if (amt <= 0) return;
         var m = pick(fleet, key + 'p', i);
-        var hrs = Math.round(amt / m.rate * 10) / 10;
-        if (hrs <= 0) return;
+        var hrs = qtyOf(amt, m.rate);
         rows.push({
           cat: 'plant', cc: cc, cost: amt, resource: m.nm + ' (' + m.id + ')',
           meta: hrs + ' hrs @ $' + m.rate + '/hr' +
@@ -247,17 +319,18 @@ var VDATA = (function () {
         var line = supply.length ? pick(supply, key + 'm', i) : null;
         var unit = line ? line.unit : 'ea';
         var rate = line ? line.rate : 100;
+        if (!line) { unit = 'ea'; rate = Math.max(25, Math.round(amt / 4)); }
         var sup = line && line.suppliers ? (line.suppliers.bill || line.suppliers.po || 'Supplier')
                                          : supplierFor(cc, 'bill');
-        var qty = Math.round(amt / rate * 10) / 10;
-        if (qty <= 0) return;
+        var qty = qtyOf(amt, rate);
         var name = line ? line.desc : cc + ' materials';
         rows.push({
           cat: 'material', cc: cc, cost: amt, resource: name,
           meta: qty + ' ' + unit + ' @ $' + fmtRate(rate) + '/' + unit + ' · ' + sup,
           detail: {
             kind: 'material', nm: name, sup: sup, unit: unit, rate: rate, qty: qty,
-            src: 'PO-' + (1000 + (seed(key + 'src') % 900)), srcType: 'PO', code: line ? line.code : null
+            src: srcPrefix + (1000 + (seed(key + 'src') % 900)), srcType: srcType,
+            code: line ? line.code : null
           }
         });
       });
@@ -268,7 +341,7 @@ var VDATA = (function () {
         meta: cc + ' — progress claim',
         detail: {
           kind: 'sub', nm: sub, unit: 'claim', rate: amount, qty: 1,
-          src: 'BILL-' + (3000 + (seed(key + 'b') % 900)), srcType: 'Bill'
+          src: srcPrefix + (3000 + (seed(key + 'b') % 900)), srcType: srcType
         }
       });
     } else {
@@ -285,11 +358,23 @@ var VDATA = (function () {
         meta: m2.nm + ' · ' + sup2,
         detail: {
           kind: 'misc', nm: m2.nm, sup: sup2, unit: m2.unit, rate: amount, qty: 1,
-          src: 'BILL-' + (3300 + (seed(key + 'm') % 90)), srcType: 'Bill'
+          src: srcPrefix + (3300 + (seed(key + 'm') % 90)), srcType: srcType
         }
       });
     }
     return rows;
+  }
+
+  /* Quantity is back-solved from the money. One decimal reads naturally for
+     hours and tonnes, but a small amount against a big rate rounds to zero at
+     that precision — and a dropped row is dropped money, which would put the
+     calendar out against the budget. So the precision follows the number. */
+  function qtyOf(amount, rate) {
+    if (!rate) return 0;
+    var q = amount / rate;
+    if (q >= 1) return Math.round(q * 10) / 10;
+    if (q >= 0.1) return Math.round(q * 100) / 100;
+    return Math.max(0.01, Math.round(q * 1000) / 1000);
   }
 
   function fmtRate(r) {
@@ -302,21 +387,39 @@ var VDATA = (function () {
     var p = period(), days = workingDays(p), byDate = {};
     days.forEach(function (d) { byDate[d] = []; });
 
-    costCentres().forEach(function (cc) {
-      var pools = poolsFor(cc, p);
+    function spread(cc, pools, uncoded) {
       if (!pools) return;
       Object.keys(pools).forEach(function (cat) {
-        var total = pools[cat];
-        if (total <= 0) return;
-        var w = dayWeights(cc, cat, days);
-        split(total, w).forEach(function (amt, i) {
-          if (amt <= 0) return;
-          detailRows(cc, cat, days[i], amt).forEach(function (r) {
-            byDate[days[i]].push(r);
+        ['tracked', 'actual'].forEach(function (state) {
+          var total = pools[cat][state];
+          if (total <= 0) return;
+          var w = dayWeights(cc, cat + state, days);
+          split(total, w).forEach(function (amt, i) {
+            if (amt <= 0) return;
+            var group = detailRows(cc, cat, days[i], amt, state);
+            /* Whatever the row-level rounding did, the group still has to add
+               back to the money it was given. Without this the calendar drifts
+               a few hundred dollars off the budget and there is no way to see
+               from the page which side is wrong. */
+            var got = group.reduce(function (a, r) { return a + r.cost; }, 0);
+            if (group.length && got !== amt) group[group.length - 1].cost += amt - got;
+            group.forEach(function (r) {
+              r.state = state;
+              if (uncoded) { r.uncoded = true; r.cc = UNCODED; }
+              byDate[days[i]].push(r);
+            });
           });
         });
       });
-    });
+    }
+
+    costCentres().forEach(function (cc) { spread(cc, poolsFor(cc, p), false); });
+
+    /* Cost the budget has not coded to a cost centre yet. It is real money and
+       it belongs on the calendar — that is what its Unassigned tab is for — but
+       it has no allocation, so the diary does not show it. */
+    var un = uncodedLines();
+    if (un.length) spread(UNCODED, poolsFor(UNCODED, p, un), true);
 
     _cache.ledger = { period: p, days: days, byDate: byDate };
     return _cache.ledger;
@@ -334,16 +437,27 @@ var VDATA = (function () {
   function diaryDate() {
     var l = ledger();
     for (var i = l.days.length - 1; i >= 0; i--) {
-      if (l.byDate[l.days[i]].length) return l.days[i];
+      var coded = l.byDate[l.days[i]].filter(function (r) { return !r.uncoded; });
+      if (coded.length) return l.days[i];
     }
     return l.days[l.days.length - 1] || l.period.start;
   }
 
   return {
     invalidate: invalidate, version: version, period: period, ledger: ledger,
+    refreshIfChanged: refreshIfChanged, fingerprint: fingerprint,
     costCentres: costCentres, ccCode: ccCode, ccLabel: ccLabel,
     wbsTree: wbsTree, allocOptions: allocOptions, workers: workers, plant: plant,
     supplyLines: supplyLines, supplierFor: supplierFor,
+    stateColour: stateColour, stateTitle: stateTitle, catColour: catColour,
+    uncodedLines: uncodedLines, isCoded: isCoded, UNCODED: UNCODED,
+    uncodedCount: function () {
+      var l = ledger(), n = 0;
+      l.days.forEach(function (d) {
+        l.byDate[d].forEach(function (r) { if (r.uncoded) n++; });
+      });
+      return n;
+    },
     dayTotal: dayTotal, monthTotal: monthTotal, diaryDate: diaryDate,
     rowsFor: function (d) { return ledger().byDate[d] || []; },
     split: split, seed: seed, strip: strip
@@ -365,7 +479,8 @@ function vdataCalendarData() {
         resource: r.resource,
         cc: VDATA.ccLabel(r.cc),
         meta: r.meta,
-        cost: r.cost
+        cost: r.cost,
+        state: r.state
       };
     });
   });
@@ -374,7 +489,8 @@ function vdataCalendarData() {
 
 /* ── Site Diary ─────────────────────────────────────────────────────────── */
 function vdataDiaryRows() {
-  var d = VDATA.diaryDate(), rows = VDATA.rowsFor(d);
+  var d = VDATA.diaryDate();
+  var rows = VDATA.rowsFor(d).filter(function (r) { return !r.uncoded; });
   var out = { labour: [], plant: [], materials: [], misc: [], miscEntries: [], deliveries: [], dockets: [] };
   var alloc = VDATA.allocOptions();
 
@@ -402,7 +518,8 @@ function vdataDiaryRows() {
         who: dt.worker.nm, role: dt.worker.role, rate: dt.rate, allow: 0,
         in: t.in, out: t.out, brk: t.brk, hrs: t.hrs,
         alloc: allocFor(r.cc, d + 'l' + i, i),
-        status: (VDATA.seed(d + dt.worker.id) % 3) === 0 ? 'pend' : 'app',
+        /* approved timesheet = actual, unapproved = tracked */
+        status: r.state === 'actual' ? 'app' : 'pend',
         cost: r.cost
       });
     } else if (dt.kind === 'plant') {

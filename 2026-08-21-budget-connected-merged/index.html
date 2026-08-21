@@ -1068,6 +1068,10 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
 #pageDailyCost .drawer-foot .df-total b{ font-size: 20px; color: #143666; }
 #pageDailyCost .empty-day{ text-align: center; color: #98a2b3; padding: 50px 20px; font-size: 14px; }
 #pageDailyCost .empty-day .big{ font-size: 34px; margin-bottom: 10px; }
+/* ═══ cost-state chip on a day's entries ═══ */
+#pageDailyCost .e-state{display:block;font-size:9px;font-weight:700;letter-spacing:.4px;
+  text-transform:uppercase;padding:1px 5px;border-radius:4px;margin-top:3px;text-align:center}
+
 /* merge shims — daily cost tracking */
 #pageDailyCost{background:#f3f4f6;margin:0 -24px -24px;padding-bottom:24px}
 #pageDailyCost .layout{min-height:0}
@@ -1284,6 +1288,18 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
 #pageSiteDiary .usage-card .uc-head span{font-weight:400;color:var(--muted);font-size:12px;margin-left:6px}
 #pageSiteDiary .usage-card .uc-sub{font-size:12px;color:var(--muted);margin:5px 0 11px;display:flex;gap:14px;flex-wrap:wrap}
 #pageSiteDiary .usage-card .uc-sub b{color:var(--navy)}
+/* ═══ cost-state palette, from the budget ═══ */
+/* An approved timesheet is actual cost. */
+#pageSiteDiary .tag.app{background:#16a34a1a;color:#16a34a}
+/* An unapproved timesheet is tracked, not committed — it was amber before. */
+#pageSiteDiary .tag.pend{background:#0d94881a;color:#0d9488}
+/* A purchase order is cost committed but not yet received. */
+#pageSiteDiary .src-tag.po{background:#b453091a;color:#b45309}
+/* A site docket matched to its order is tracked. */
+#pageSiteDiary .src-tag.docket{background:#0d94881a;color:#0d9488}
+/* A paid bill is actual cost. */
+#pageSiteDiary .src-tag.bill{background:#16a34a1a;color:#16a34a}
+
 /* merge shims — site diary */
 #pageSiteDiary{background:#eef0f4;margin:0 -24px -24px;padding-bottom:24px}
 
@@ -1460,7 +1476,7 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
     <button class="btn btn-ai"><i class="fa-solid fa-wand-magic-sparkles"></i> AI Summary</button>
     <div class="date-nav">
       <button><i class="fa-solid fa-chevron-left"></i></button>
-      <span class="date-display"><i class="fa-regular fa-calendar"></i> 02/06/2026</span>
+      <span class="date-display"><i class="fa-regular fa-calendar"></i> <span id="sdDiaryDate">02/06/2026</span></span>
       <button><i class="fa-solid fa-chevron-right"></i></button>
     </div>
     <button class="btn"><i class="fa-solid fa-download"></i> Export</button>
@@ -10964,6 +10980,570 @@ function downloadBOQTemplateLegacy_unused() {
 }
 </script>
 
+<!-- ═══ shared dataset: one project behind all three tabs ═══ -->
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   VDATA — one dataset behind all three tabs.
+
+   The budget is the authority. Everything the Daily Cost and Site Diary tabs
+   show is derived from the base prototype's own budget lines: its cost
+   centres, its WBS levels, its crew, its plant fleet, its suppliers, its
+   units and rates, and its claim periods.
+
+   The consequence that matters: a project that was just set up carries no
+   cost, so the calendar and the diary are empty too. Simulate activity and
+   they fill in. Nothing here invents cost the budget does not have.
+
+   How the numbers tie:
+
+     budget line cost for a period          (base, per cost centre)
+       └─ split by resource category        (base's resourceBreakdown)
+           └─ spread over the period's working days      (here)
+               └─ one detail row per worker / machine / delivery
+                   ├─ Daily Cost tab renders these as calendar entries
+                   └─ Site Diary renders one day of them as diary rows
+
+   So a day cell on the calendar and the diary for that same day are the same
+   rows, and the month total is the budget's cost for that claim period. The
+   pool is authoritative: quantities are back-solved from the money, which is
+   why hours read 8.4 rather than a tidy 8.
+   ══════════════════════════════════════════════════════════════════════════ */
+var VDATA = (function () {
+
+  /* ── plumbing ───────────────────────────────────────────────────────── */
+
+  var UNCODED = 'Unassigned';
+  var _version = 0;          /* bumped whenever the base's cost data changes */
+  var _cache = {};
+
+  function invalidate() { _version++; _cache = {}; }
+  function version() { return _version; }
+
+  /* The base re-renders constantly; the budget itself changes rarely. Bumping
+     the version on every render would throw away the diary's in-session edits
+     for nothing, so the trigger is a fingerprint of the money, not the render. */
+  var _print = null;
+  function fingerprint() {
+    var lines = liveLines(), n = lines.length, t = 0;
+    lines.forEach(function (l) {
+      COST_STREAMS.forEach(function (k) { t += (l[k] || 0); });
+      t += (l.contract || 0) + (l.budget || 0);
+    });
+    return n + ':' + Math.round(t) + ':' + costCentres().join(',');
+  }
+  function refreshIfChanged() {
+    var f;
+    try { f = fingerprint(); } catch (e) { return; }
+    if (f !== _print) { _print = f; invalidate(); }
+  }
+
+  /* The base's own seeded hash, so anything derived here stays put between
+     renders instead of reshuffling under the user. */
+  function seed(key) {
+    var h = 2166136261;
+    for (var i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return Math.abs(h);
+  }
+  function pick(list, key, i) {
+    if (!list.length) return null;
+    return list[(seed(key) + (i || 0) * 7) % list.length];
+  }
+
+  /* Largest-remainder split — the parts always add back to the whole, which is
+     what keeps a day's rows summing to the day and the days to the month. */
+  function split(total, weights) {
+    var sum = weights.reduce(function (a, b) { return a + b; }, 0);
+    if (!sum || !total) return weights.map(function () { return 0; });
+    var raw = weights.map(function (w) { return total * w / sum; });
+    var out = raw.map(Math.floor);
+    var rem = Math.round(total - out.reduce(function (a, b) { return a + b; }, 0));
+    var order = raw.map(function (v, i) { return [v - Math.floor(v), i]; })
+                   .sort(function (a, b) { return b[0] - a[0]; });
+    for (var k = 0; k < rem; k++) out[order[k % order.length][1]]++;
+    return out;
+  }
+
+  /* ── the period the two tabs sit in ─────────────────────────────────── */
+
+  /* The open claim period. The diary is a record of a day being worked, so it
+     belongs in the period still being built up, not a certified one. */
+  function period() {
+    var open = PERIODS.filter(function (p) { return p.status === 'open'; });
+    return open.length ? open[open.length - 1] : PERIODS[PERIODS.length - 1];
+  }
+
+  function workingDays(p) {
+    var out = [], d = new Date(p.start + 'T00:00:00'), end = new Date(p.end + 'T00:00:00');
+    while (d <= end) {
+      var dow = d.getDay();
+      if (dow !== 0 && dow !== 6) out.push(iso(d));
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }
+  function iso(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+           '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  /* ── the shared registry, read off the base's budget lines ──────────── */
+
+  function liveLines() {
+    try { return activeLines(); } catch (e) { return []; }
+  }
+
+  /* Cost centres actually carrying lines, in the base's own order.
+
+     Only real cost centres count. A variation raised without one, and the
+     base's own unassigned-cost line, are cost that has not been coded yet —
+     the budget models that as uncoded and so does this. Inventing a cost
+     centre called "VO-003" to hold it would put a number on the diary's
+     allocation picker that no one could ever allocate to. */
+  function isCoded(l) { return !!l.cc && COST_CENTRES.indexOf(l.cc) >= 0; }
+  function costCentres() {
+    var seen = {}, out = [];
+    liveLines().forEach(function (l) {
+      if (isCoded(l) && !seen[l.cc]) { seen[l.cc] = 1; out.push(l.cc); }
+    });
+    return out.length ? out : COST_CENTRES.slice();
+  }
+  function uncodedLines() { return liveLines().filter(function (l) { return !isCoded(l); }); }
+
+  /* A stable CC-nnn code per cost centre — the diary shows codes, the budget
+     does not, so they are minted here once and used by both tabs. */
+  function ccCode(name) {
+    var i = costCentres().indexOf(name);
+    return 'CC-' + (i < 0 ? 900 : (i + 1) * 100);
+  }
+  function ccLabel(name) {
+    return name === UNCODED ? UNCODED : ccCode(name) + ' ' + name;
+  }
+
+  /* The base's l1 › l2 › line hierarchy is exactly the diary's
+     task › subtask › sub-subtask. */
+  function wbsTree() {
+    var l1s = [];
+    liveLines().forEach(function (l) {
+      if (!l.l1 || !isCoded(l)) return;
+      var t = l1s.filter(function (x) { return x.key === l.l1; })[0];
+      if (!t) { t = { key: l.l1, t: strip(l.l1), subs: [] }; l1s.push(t); }
+      var s = t.subs.filter(function (x) { return x.key === l.l2; })[0];
+      if (!s) { s = { key: l.l2, s: strip(l.l2 || 'General'), ss: [] }; t.subs.push(s); }
+      if (l.desc && s.ss.indexOf(l.desc) < 0) s.ss.push(l.desc);
+    });
+    return l1s;
+  }
+  /* "1.1 Site Preparation" -> "Site Preparation" */
+  function strip(s) { return String(s).replace(/^[\dA-Z]+(\.[\dA-Z]+)*\s+/, ''); }
+
+  /* Allocation targets: every WBS leaf, carrying the cost centre it belongs to. */
+  function allocOptions() {
+    var out = [];
+    liveLines().forEach(function (l) {
+      if (!isCoded(l)) return;
+      var label = strip(l.l2 || l.l1 || '') + ' › ' + l.desc;
+      if (!out.some(function (o) { return o.l === label; })) {
+        out.push({ l: label, c: ccLabel(l.cc), cc: l.cc, code: l.code });
+      }
+    });
+    return out;
+  }
+
+  /* The crew, from the base's people. */
+  function workers() {
+    return DAYWORK_PEOPLE.map(function (p) {
+      return { id: p.id, nm: p.name, role: p.role, rate: p.costRate, in: false };
+    });
+  }
+
+  /* Plant, from the base's fleet. Fleet rates are daily/weekly as well as
+     hourly; the diary charges by the hour, so they are normalised here and the
+     basis is kept so the meta line can still say how it is really charged. */
+  function plantHourly(m) {
+    return m.basis === 'hr' ? m.rate : m.basis === 'day' ? m.rate / 8 : m.rate / 38;
+  }
+  function plant() {
+    return PLANT_FLEET.map(function (m) {
+      return {
+        id: m.id, nm: m.name, no: m.id, sup: 'Owned',
+        rate: Math.round(plantHourly(m)), basis: m.basis, listRate: m.rate
+      };
+    });
+  }
+
+  /* Supply lines behind a cost centre — the base's own unit, rate and
+     supplier, so a delivery on the diary names a real contract line. */
+  /* Units you can take delivery of. A budget line priced by the day or the
+     week is a time charge, not a supply — reading its unit onto a delivery
+     produced entries like "delivered 0.056 day", which is nonsense. */
+  var DELIVERABLE = ['m³', 'm3', 'm²', 'm2', 'm', 't', 'kg', 'L', 'ea', 'no', 'lm', 'sheets', 'each'];
+  function supplyLines(cc) {
+    return liveLines().filter(function (l) {
+      return l.cc === cc && l.rate > 0 && l.unit && DELIVERABLE.indexOf(l.unit) >= 0;
+    });
+  }
+  function supplierFor(cc, kind) {
+    var l = liveLines().filter(function (x) { return x.cc === cc && x.suppliers && x.suppliers[kind]; })[0];
+    return (l && l.suppliers[kind]) || 'Supplier';
+  }
+
+  /* ── the ledger ─────────────────────────────────────────────────────── */
+
+  /* Cost for one cost centre in one period, split the way the budget splits
+     it. This is the pool a day's rows are drawn from — nothing is added to it
+     and nothing is lost from it. */
+  function poolsFor(cc, p, lineSet) {
+    var lines = lineSet || liveLines().filter(function (l) { return l.cc === cc; });
+    if (!lines.length) return null;
+    var node = {};
+    SUM_KEYS.forEach(function (k) { node[k] = 0; });
+    lines.forEach(function (l) {
+      var inPeriod = applyPeriod(l, [p.key]);
+      SUM_KEYS.forEach(function (k) { node[k] += (inPeriod[k] || 0); });
+    });
+    /* Tracked and actual are kept apart all the way down to the row. The
+       budget never adds them into one figure, so neither does the ledger —
+       that is what lets a calendar entry and a diary row say which state they
+       are in, in the same colours the overview uses. */
+    var out = {};
+    resourceBreakdown(node, cc).forEach(function (r) {
+      out[r.cat.key] = { tracked: Math.round(r.tracked || 0), actual: Math.round(r.actual || 0) };
+    });
+    return out;
+  }
+
+  /* ── the shared palette ─────────────────────────────────────────────────
+     Both guests had their own hex values for the same five categories and
+     their own idea of what a pending timesheet or a paid bill looks like.
+     There is one source for both now: the budget's. */
+  function stateColour(state) {
+    var m = STATE_META[state];
+    return m ? m.colour : '#94a3b8';
+  }
+  function stateTitle(state) {
+    var m = STATE_META[state];
+    return m ? m.title : state;
+  }
+  function catColour(key) {
+    var k = key === 'subcontract' ? 'sub' : key;
+    var c = RESOURCE_CATEGORIES.filter(function (x) { return x.key === k; })[0];
+    return c ? c.colour : '#94a3b8';
+  }
+
+  /* Which days a cost centre worked, and how hard. A cost centre does not run
+     every day of a month; giving each one its own pattern is what stops every
+     calendar cell looking identical. */
+  function dayWeights(cc, cat, days) {
+    var s = seed(cc + '|' + cat);
+    return days.map(function (d, i) {
+      var v = (s >> (i % 12)) % 5;                    /* 0..4 */
+      var quiet = ((s + i * 3) % 7) === 0;            /* the odd day off */
+      return quiet ? 0 : v + 1;
+    });
+  }
+
+  /* One detail row: what was used, at what rate, for how much.
+     The money comes first — quantity is back-solved from it, so the rows
+     always add to the pool. */
+  function detailRows(cc, cat, day, amount, state) {
+    if (amount <= 0) return [];
+    var key = cc + cat + day + state, rows = [];
+    /* Tracked supply is a site docket against a PO; actual supply is a paid
+       bill. Tracked labour is an unapproved timesheet; actual labour is an
+       approved one. The state decides the document, not a coin toss. */
+    /* The budget is explicit about which document carries which state:
+       committed is a purchase order, tracked is a site docket matched to that
+       order, actual is the paid bill. Tracked supply is therefore a docket —
+       calling it a PO would put committed's colour on tracked cost. */
+    var srcType = state === 'actual' ? 'Bill' : 'Docket';
+    var srcPrefix = state === 'actual' ? 'BILL-' : 'DKT-';
+
+    if (cat === 'labour') {
+      var crew = workers();
+      /* A day's labour on a cost centre is spread over as many of the crew as
+         the money needs. Sizing the crew by a fixed threshold instead put one
+         worker on a 12-hour shift whenever a cost centre had a big day. */
+      var DAY_HOURS = 9, midRate = 70;
+      var n = Math.max(1, Math.min(crew.length, Math.ceil(amount / (midRate * DAY_HOURS))));
+      var weights = [];
+      for (var wi = 0; wi < n; wi++) weights.push(3 - wi * (1.4 / Math.max(1, n)));
+      split(amount, weights).forEach(function (amt, i) {
+        if (amt <= 0) return;
+        var w = pick(crew, key + 'w', i);
+        var hrs = qtyOf(amt, w.rate);
+        rows.push({
+          cat: 'labour', cc: cc, cost: amt, resource: w.nm,
+          meta: hrs + ' hrs @ $' + w.rate + '/hr',
+          detail: { kind: 'labour', worker: w, hrs: hrs, rate: w.rate }
+        });
+      });
+    } else if (cat === 'plant') {
+      var fleet = plant();
+      /* Machines are hired by the day; splitting keeps any one of them from
+         reading as 20 hours on site. */
+      var np = Math.max(1, Math.min(3, Math.ceil(amount / (120 * 9))));
+      var pw = [];
+      for (var pi = 0; pi < np; pi++) pw.push(3 - pi * 0.6);
+      split(amount, pw).forEach(function (amt, i) {
+        if (amt <= 0) return;
+        var m = pick(fleet, key + 'p', i);
+        var hrs = qtyOf(amt, m.rate);
+        rows.push({
+          cat: 'plant', cc: cc, cost: amt, resource: m.nm + ' (' + m.id + ')',
+          meta: hrs + ' hrs @ $' + m.rate + '/hr' +
+                (m.basis !== 'hr' ? ' · charged by the ' + m.basis : ''),
+          detail: { kind: 'plant', plant: m, hrs: hrs, rate: m.rate, by: pick(workers(), key + 'op', i).nm }
+        });
+      });
+    } else if (cat === 'material') {
+      var supply = supplyLines(cc);
+      var nm2 = amount > 6000 ? 2 : 1;
+      split(amount, [3, 1.6].slice(0, nm2)).forEach(function (amt, i) {
+        if (amt <= 0) return;
+        var line = supply.length ? pick(supply, key + 'm', i) : null;
+        var unit = line ? line.unit : 'ea';
+        var rate = line ? line.rate : 100;
+        if (!line) { unit = 'ea'; rate = Math.max(25, Math.round(amt / 4)); }
+        var sup = line && line.suppliers ? (line.suppliers.bill || line.suppliers.po || 'Supplier')
+                                         : supplierFor(cc, 'bill');
+        var qty = qtyOf(amt, rate);
+        var name = line ? line.desc : cc + ' materials';
+        rows.push({
+          cat: 'material', cc: cc, cost: amt, resource: name,
+          meta: qty + ' ' + unit + ' @ $' + fmtRate(rate) + '/' + unit + ' · ' + sup,
+          detail: {
+            kind: 'material', nm: name, sup: sup, unit: unit, rate: rate, qty: qty,
+            src: srcPrefix + (1000 + (seed(key + 'src') % 900)), srcType: srcType,
+            code: line ? line.code : null
+          }
+        });
+      });
+    } else if (cat === 'sub') {
+      var sub = supplierFor(cc, 'po');
+      rows.push({
+        cat: 'sub', cc: cc, cost: amount, resource: sub,
+        meta: cc + ' — progress claim',
+        detail: {
+          kind: 'sub', nm: sub, unit: 'claim', rate: amount, qty: 1,
+          src: srcPrefix + (3000 + (seed(key + 'b') % 900)), srcType: srcType
+        }
+      });
+    } else {
+      var MISC = [
+        { nm: 'Fuel & consumables', unit: 'fill' },
+        { nm: 'Spoil disposal', unit: 'loads' },
+        { nm: 'Survey set-out', unit: 'visit' },
+        { nm: 'Traffic control permit', unit: 'ea' }
+      ];
+      var m2 = pick(MISC, key + 'x', 0);
+      var sup2 = supplierFor(cc, 'dkt');
+      rows.push({
+        cat: 'misc', cc: cc, cost: amount, resource: m2.nm,
+        meta: m2.nm + ' · ' + sup2,
+        detail: {
+          kind: 'misc', nm: m2.nm, sup: sup2, unit: m2.unit, rate: amount, qty: 1,
+          src: srcPrefix + (3300 + (seed(key + 'm') % 90)), srcType: srcType
+        }
+      });
+    }
+    return rows;
+  }
+
+  /* Quantity is back-solved from the money. One decimal reads naturally for
+     hours and tonnes, but a small amount against a big rate rounds to zero at
+     that precision — and a dropped row is dropped money, which would put the
+     calendar out against the budget. So the precision follows the number. */
+  function qtyOf(amount, rate) {
+    if (!rate) return 0;
+    var q = amount / rate;
+    if (q >= 1) return Math.round(q * 10) / 10;
+    if (q >= 0.1) return Math.round(q * 100) / 100;
+    return Math.max(0.01, Math.round(q * 1000) / 1000);
+  }
+
+  function fmtRate(r) {
+    return r >= 100 ? String(Math.round(r)) : String(Math.round(r * 100) / 100);
+  }
+
+  /* The whole ledger for the open claim period, keyed by date. */
+  function ledger() {
+    if (_cache.ledger) return _cache.ledger;
+    var p = period(), days = workingDays(p), byDate = {};
+    days.forEach(function (d) { byDate[d] = []; });
+
+    function spread(cc, pools, uncoded) {
+      if (!pools) return;
+      Object.keys(pools).forEach(function (cat) {
+        ['tracked', 'actual'].forEach(function (state) {
+          var total = pools[cat][state];
+          if (total <= 0) return;
+          var w = dayWeights(cc, cat + state, days);
+          split(total, w).forEach(function (amt, i) {
+            if (amt <= 0) return;
+            var group = detailRows(cc, cat, days[i], amt, state);
+            /* Whatever the row-level rounding did, the group still has to add
+               back to the money it was given. Without this the calendar drifts
+               a few hundred dollars off the budget and there is no way to see
+               from the page which side is wrong. */
+            var got = group.reduce(function (a, r) { return a + r.cost; }, 0);
+            if (group.length && got !== amt) group[group.length - 1].cost += amt - got;
+            group.forEach(function (r) {
+              r.state = state;
+              if (uncoded) { r.uncoded = true; r.cc = UNCODED; }
+              byDate[days[i]].push(r);
+            });
+          });
+        });
+      });
+    }
+
+    costCentres().forEach(function (cc) { spread(cc, poolsFor(cc, p), false); });
+
+    /* Cost the budget has not coded to a cost centre yet. It is real money and
+       it belongs on the calendar — that is what its Unassigned tab is for — but
+       it has no allocation, so the diary does not show it. */
+    var un = uncodedLines();
+    if (un.length) spread(UNCODED, poolsFor(UNCODED, p, un), true);
+
+    _cache.ledger = { period: p, days: days, byDate: byDate };
+    return _cache.ledger;
+  }
+
+  function dayTotal(isoDate) {
+    return (ledger().byDate[isoDate] || []).reduce(function (a, r) { return a + r.cost; }, 0);
+  }
+  function monthTotal() {
+    return ledger().days.reduce(function (a, d) { return a + dayTotal(d); }, 0);
+  }
+
+  /* The diary's day: the last working day with cost in the open period, so the
+     diary always opens on a day that has something on it. */
+  function diaryDate() {
+    var l = ledger();
+    for (var i = l.days.length - 1; i >= 0; i--) {
+      var coded = l.byDate[l.days[i]].filter(function (r) { return !r.uncoded; });
+      if (coded.length) return l.days[i];
+    }
+    return l.days[l.days.length - 1] || l.period.start;
+  }
+
+  return {
+    invalidate: invalidate, version: version, period: period, ledger: ledger,
+    refreshIfChanged: refreshIfChanged, fingerprint: fingerprint,
+    costCentres: costCentres, ccCode: ccCode, ccLabel: ccLabel,
+    wbsTree: wbsTree, allocOptions: allocOptions, workers: workers, plant: plant,
+    supplyLines: supplyLines, supplierFor: supplierFor,
+    stateColour: stateColour, stateTitle: stateTitle, catColour: catColour,
+    uncodedLines: uncodedLines, isCoded: isCoded, UNCODED: UNCODED,
+    uncodedCount: function () {
+      var l = ledger(), n = 0;
+      l.days.forEach(function (d) {
+        l.byDate[d].forEach(function (r) { if (r.uncoded) n++; });
+      });
+      return n;
+    },
+    dayTotal: dayTotal, monthTotal: monthTotal, diaryDate: diaryDate,
+    rowsFor: function (d) { return ledger().byDate[d] || []; },
+    split: split, seed: seed, strip: strip
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ADAPTERS — the two guest prototypes, fed from VDATA
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Daily Cost Tracking ────────────────────────────────────────────────── */
+function vdataCalendarData() {
+  var l = VDATA.ledger(), out = {};
+  Object.keys(l.byDate).forEach(function (d) {
+    out[d] = l.byDate[d].map(function (r) {
+      return {
+        /* the calendar calls subcontract what the budget calls sub */
+        cat: r.cat === 'sub' ? 'subcontract' : r.cat,
+        resource: r.resource,
+        cc: VDATA.ccLabel(r.cc),
+        meta: r.meta,
+        cost: r.cost,
+        state: r.state
+      };
+    });
+  });
+  return out;
+}
+
+/* ── Site Diary ─────────────────────────────────────────────────────────── */
+function vdataDiaryRows() {
+  var d = VDATA.diaryDate();
+  var rows = VDATA.rowsFor(d).filter(function (r) { return !r.uncoded; });
+  var out = { labour: [], plant: [], materials: [], misc: [], miscEntries: [], deliveries: [], dockets: [] };
+  var alloc = VDATA.allocOptions();
+
+  function allocFor(cc, key, i) {
+    var opts = alloc.filter(function (o) { return o.cc === cc; });
+    var o = opts.length ? opts[(VDATA.seed(key) + i) % opts.length] : null;
+    return [{ l: o ? o.l : cc, c: VDATA.ccLabel(cc), p: 100 }];
+  }
+  function clock(hrs, key) {
+    var start = 7 + (VDATA.seed(key) % 2);                 /* 07:00 or 08:00 */
+    var end = start + hrs + 0.5;                           /* + unpaid break */
+    function hm(v) {
+      var h = Math.floor(v), m = Math.round((v - h) * 60);
+      return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    }
+    return { in: hm(start), out: hm(end), brk: '30',
+             hrs: Math.floor(hrs) + 'h ' + String(Math.round((hrs % 1) * 60)).padStart(2, '0') + 'm' };
+  }
+
+  rows.forEach(function (r, i) {
+    var dt = r.detail;
+    if (dt.kind === 'labour') {
+      var t = clock(dt.hrs, d + i);
+      out.labour.push({
+        who: dt.worker.nm, role: dt.worker.role, rate: dt.rate, allow: 0,
+        in: t.in, out: t.out, brk: t.brk, hrs: t.hrs,
+        alloc: allocFor(r.cc, d + 'l' + i, i),
+        /* approved timesheet = actual, unapproved = tracked */
+        status: r.state === 'actual' ? 'app' : 'pend',
+        cost: r.cost
+      });
+    } else if (dt.kind === 'plant') {
+      out.plant.push({
+        nm: dt.plant.nm, no: dt.plant.no, sup: dt.plant.sup, rate: dt.rate, by: dt.by,
+        hrs: Math.floor(dt.hrs) + 'h ' + String(Math.round((dt.hrs % 1) * 60)).padStart(2, '0') + 'm',
+        alloc: allocFor(r.cc, d + 'p' + i, i), cost: r.cost
+      });
+    } else if (dt.kind === 'material') {
+      out.materials.push({
+        id: dt.src, srcType: dt.srcType, src: dt.src, nm: dt.nm, sup: dt.sup,
+        unit: dt.unit, rate: dt.rate, ordered: Math.round(dt.qty * 2.5), delivered: dt.qty,
+        cc: r.cc
+      });
+      out.deliveries.push({
+        time: ['08:10', '10:45', '13:20', '14:50'][i % 4], mat: dt.nm,
+        src: dt.src, srcType: dt.srcType, sup: dt.sup, qty: dt.qty, unit: dt.unit
+      });
+    } else {
+      out.misc.push({
+        id: dt.src, srcType: dt.srcType, src: dt.src, nm: dt.nm,
+        sup: dt.sup || dt.nm, unit: dt.unit, rate: dt.rate, ordered: 1, delivered: 1,
+        cc: r.cc
+      });
+      out.miscEntries.push({
+        time: ['09:30', '07:15', '15:05'][i % 3], mat: dt.nm, src: dt.src,
+        srcType: dt.srcType, sup: dt.sup || dt.nm, qty: 1, unit: dt.unit
+      });
+    }
+  });
+  return out;
+}
+
+function vdataDiaryDateLabel() {
+  var d = VDATA.diaryDate().split('-');
+  return d[2] + '/' + d[1] + '/' + d[0];
+}
+
+</script>
+
 <script>
 /* ══════════════════════════════════════════════════════════════
    MERGE LAYER — tab routing across the three merged prototypes
@@ -10994,6 +11574,14 @@ setWizChrome = function(inWizard) {
   _baseSetWizChrome(inWizard);
 };
 
+/* The budget moving is the only thing that can stale the guest datasets, and
+   every path that moves it ends in render(). */
+var _baseRender = render;
+render = function() {
+  _baseRender.apply(null, arguments);
+  VDATA.refreshIfChanged();
+};
+
 function gotoTab(el, pageId) {
   IN_GUEST = !!GUEST_PAGES[pageId];
   document.querySelectorAll('.budget-view-tabs .bv-tab').forEach(function(t) {
@@ -11006,6 +11594,8 @@ function gotoTab(el, pageId) {
     if (st) st.style.display = 'none';
   }
   showPage(pageId);
+  if (pageId === 'pageDailyCost') dcSyncIfStale();
+  if (pageId === 'pageSiteDiary') sdSyncIfStale();
 }
 </script>
 
@@ -11025,101 +11615,7 @@ const hidden = new Set();   // categories toggled off in legend
 
 /* ---- Mock data: entries keyed by ISO date (2026-06) ---- */
 /* Each entry: {cat, resource, cc, qty, cost} */
-const DATA = {
-  '2026-06-01': [
-    { cat:'labour', resource:'Site Crew (3 labourers)', cc:'(001) Preliminaries', meta:'24 hrs @ $65/hr', cost:1560 },
-    { cat:'plant', resource:'Excavator 20t', cc:'(002) Bulk Earthworks', meta:'8 hrs @ $185/hr', cost:1480 },
-    { cat:'material', resource:'Road base — 40t', cc:'(002) Bulk Earthworks', meta:'40 t @ $38/t', cost:1520 },
-  ],
-  '2026-06-02': [
-    { cat:'labour', resource:'Site Crew (3 labourers)', cc:'(001) Preliminaries', meta:'24 hrs @ $65/hr', cost:1560 },
-    { cat:'plant', resource:'Excavator 20t', cc:'(002) Bulk Earthworks', meta:'9 hrs @ $185/hr', cost:1665 },
-    { cat:'plant', resource:'Dump Truck', cc:'(002) Bulk Earthworks', meta:'6 hrs @ $140/hr', cost:840 },
-    { cat:'misc', resource:'Fuel & consumables', cc:'(001) Preliminaries', meta:'Diesel top-up', cost:320 },
-  ],
-  '2026-06-03': [
-    { cat:'subcontract', resource:'ABC Demolition Pty Ltd', cc:'(004) Demolition', meta:'Slab removal — progress claim', cost:6400 },
-    { cat:'labour', resource:'Supervisor', cc:'(001) Preliminaries', meta:'8 hrs @ $95/hr', cost:760 },
-  ],
-  '2026-06-04': [
-    { cat:'labour', resource:'Site Crew (4 labourers)', cc:'(001) Preliminaries', meta:'32 hrs @ $65/hr', cost:2080 },
-    { cat:'plant', resource:'Excavator 20t', cc:'(002) Bulk Earthworks', meta:'8 hrs @ $185/hr', cost:1480 },
-    { cat:'material', resource:'Concrete N32 — 12m³', cc:'(005) Footings', meta:'12 m³ @ $245/m³', cost:2940 },
-    { cat:'material', resource:'Reo mesh SL82', cc:'(005) Footings', meta:'18 sheets', cost:1260 },
-    { cat:'misc', resource:'Pump hire', cc:'(005) Footings', meta:'Concrete pump — half day', cost:650 },
-  ],
-  '2026-06-05': [
-    { cat:'labour', resource:'Site Crew (4 labourers)', cc:'(005) Footings', meta:'32 hrs @ $65/hr', cost:2080 },
-    { cat:'subcontract', resource:'FormRight Formwork', cc:'(005) Footings', meta:'Footing formwork', cost:3200 },
-  ],
-  '2026-06-08': [
-    { cat:'material', resource:'Concrete N32 — 24m³', cc:'(006) Slab', meta:'24 m³ @ $245/m³', cost:5880 },
-    { cat:'labour', resource:'Concrete crew (5)', cc:'(006) Slab', meta:'40 hrs @ $70/hr', cost:2800 },
-    { cat:'plant', resource:'Concrete pump', cc:'(006) Slab', meta:'Full day', cost:1350 },
-    { cat:'misc', resource:'Curing compound', cc:'(006) Slab', meta:'Materials', cost:280 },
-  ],
-  '2026-06-09': [
-    { cat:'labour', resource:'Site Crew (2 labourers)', cc:'(001) Preliminaries', meta:'16 hrs @ $65/hr', cost:1040 },
-  ],
-  '2026-06-10': [
-    { cat:'subcontract', resource:'Apex Plumbing', cc:'(007) Services', meta:'Under-slab rough-in', cost:4150 },
-    { cat:'subcontract', resource:'VoltX Electrical', cc:'(007) Services', meta:'Conduit rough-in', cost:2380 },
-    { cat:'labour', resource:'Supervisor', cc:'(001) Preliminaries', meta:'8 hrs @ $95/hr', cost:760 },
-  ],
-  '2026-06-11': [
-    { cat:'plant', resource:'Compactor plate', cc:'(002) Bulk Earthworks', meta:'Day hire', cost:240 },
-    { cat:'labour', resource:'Site Crew (3 labourers)', cc:'(002) Bulk Earthworks', meta:'24 hrs @ $65/hr', cost:1560 },
-    { cat:'material', resource:'Sand bedding — 15t', cc:'(002) Bulk Earthworks', meta:'15 t @ $42/t', cost:630 },
-  ],
-  '2026-06-12': [
-    { cat:'labour', resource:'Site Crew (3 labourers)', cc:'(001) Preliminaries', meta:'24 hrs @ $65/hr', cost:1560 },
-    { cat:'misc', resource:'Site amenities', cc:'(001) Preliminaries', meta:'Weekly toilet hire', cost:180 },
-  ],
-  '2026-06-15': [
-    { cat:'material', resource:'Brick delivery', cc:'(008) Masonry', meta:'4,500 bricks', cost:3825 },
-    { cat:'subcontract', resource:'Solid Bricklaying Co', cc:'(008) Masonry', meta:'Progress claim 1', cost:5200 },
-    { cat:'labour', resource:'Hoist operator', cc:'(008) Masonry', meta:'8 hrs @ $72/hr', cost:576 },
-    { cat:'plant', resource:'Telehandler', cc:'(008) Masonry', meta:'Day hire', cost:520 },
-  ],
-  '2026-06-16': [
-    { cat:'subcontract', resource:'Solid Bricklaying Co', cc:'(008) Masonry', meta:'Continued', cost:4800 },
-    { cat:'material', resource:'Mortar & sand', cc:'(008) Masonry', meta:'Materials', cost:740 },
-  ],
-  '2026-06-17': [
-    { cat:'labour', resource:'Site Crew (3 labourers)', cc:'(001) Preliminaries', meta:'24 hrs @ $65/hr', cost:1560 },
-    { cat:'misc', resource:'Waste removal', cc:'(001) Preliminaries', meta:'2 bins', cost:560 },
-  ],
-  '2026-06-18': [
-    { cat:'plant', resource:'Scaffold hire', cc:'(008) Masonry', meta:'Weekly', cost:890 },
-    { cat:'labour', resource:'Site Crew (2 labourers)', cc:'(008) Masonry', meta:'16 hrs @ $65/hr', cost:1040 },
-  ],
-  '2026-06-22': [
-    { cat:'labour', resource:'Site Crew (4 labourers)', cc:'(001) Preliminaries', meta:'32 hrs @ $65/hr', cost:2080 },
-    { cat:'material', resource:'Timber framing pack', cc:'(009) Framing', meta:'Delivery', cost:6200 },
-    { cat:'plant', resource:'Crane truck', cc:'(009) Framing', meta:'Unload — 3 hrs', cost:540 },
-  ],
-  '2026-06-23': [
-    { cat:'subcontract', resource:'TrueLine Carpentry', cc:'(009) Framing', meta:'Wall frames', cost:7400 },
-    { cat:'misc', resource:'Fixings & brackets', cc:'(009) Framing', meta:'Materials', cost:430 },
-  ],
-  '2026-06-24': [
-    { cat:'labour', resource:'Site Crew (3 labourers)', cc:'(001) Preliminaries', meta:'24 hrs @ $65/hr', cost:1560 },
-  ],
-  '2026-06-25': [
-    { cat:'subcontract', resource:'TrueLine Carpentry', cc:'(009) Framing', meta:'Roof trusses', cost:6900 },
-    { cat:'plant', resource:'Crane hire', cc:'(009) Framing', meta:'Truss lift — half day', cost:1450 },
-    { cat:'labour', resource:'Dogger / spotter', cc:'(009) Framing', meta:'8 hrs @ $78/hr', cost:624 },
-  ],
-  '2026-06-29': [
-    { cat:'labour', resource:'Site Crew (3 labourers)', cc:'(001) Preliminaries', meta:'24 hrs @ $65/hr', cost:1560 },
-    { cat:'misc', resource:'Fuel & consumables', cc:'(001) Preliminaries', meta:'Diesel', cost:295 },
-  ],
-  '2026-06-30': [
-    { cat:'material', resource:'Roof sheeting', cc:'(010) Roofing', meta:'Colorbond delivery', cost:4380 },
-    { cat:'subcontract', resource:'Peak Roofing', cc:'(010) Roofing', meta:'Progress claim 1', cost:3600 },
-  ],
-};
-
+let DATA = {};
 /* ---- Helpers ---- */
 const dcFmt = n => '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const fmt2 = n => '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -11127,8 +11623,7 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const DOW = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const TODAY = '2026-06-04';
 
-let viewYear = 2026, viewMonth = 5; // June (0-indexed)
-
+let viewYear = 2026, viewMonth = 5;  /* set from the ledger period */
 function dayTotals(iso) {
   const entries = DATA[iso] || [];
   const t = { labour:0, plant:0, material:0, subcontract:0, misc:0, total:0 };
@@ -11221,7 +11716,7 @@ function changeMonth(delta) {
   if (viewMonth > 11) { viewMonth = 0; viewYear++; }
   renderCalendar();
 }
-function goToday() { viewYear = 2026; viewMonth = 5; renderCalendar(); }
+function goToday() { dcSyncData(); }
 
 /* ---- Drawer ---- */
 function dcOpenDrawer(iso) {
@@ -11265,7 +11760,7 @@ function dcOpenDrawer(iso) {
           <div class="e-meta">${c.name} · ${e.meta}</div>
           <span class="e-cc">${e.cc}</span>
         </div>
-        <div class="e-amt">${fmt2(e.cost)}</div>
+        <div class="e-amt">${fmt2(e.cost)}<span class="e-state" style="color:${VDATA.stateColour(e.state)};background:${VDATA.stateColour(e.state)}1a">${VDATA.stateTitle(e.state)}</span></div>
       </div>`;
     });
     body.innerHTML = html;
@@ -11282,6 +11777,26 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') dcCloseDrawe
 
 renderCalendar();
 
+
+/* ── shared dataset ──────────────────────────────────────────────────────
+   The calendar is a view of the budget's cost for the open claim period, not
+   a dataset of its own. Re-derive whenever the budget has moved. */
+var _dcVersion = -1;
+function dcSyncData() {
+  var p = VDATA.period();
+  viewYear  = parseInt(p.start.slice(0, 4), 10);
+  viewMonth = parseInt(p.start.slice(5, 7), 10) - 1;
+  /* One palette. The calendar drew every swatch, dot, bar and icon from
+     CATS[].color, so recolouring that array recolours the whole tab. */
+  CATS.forEach(function (c) { c.color = VDATA.catColour(c.key); });
+  DATA = vdataCalendarData();
+  var badge = document.querySelector('#pageDailyCost .subtab .badge');
+  if (badge) badge.textContent = VDATA.uncodedCount();
+  renderCalendar();
+  _dcVersion = VDATA.version();
+}
+function dcSyncIfStale() { if (_dcVersion !== VDATA.version()) dcSyncData(); }
+
 </script>
 
 <!-- ═══ merged script: site diary ═══ -->
@@ -11290,35 +11805,10 @@ renderCalendar();
 /* ---------------- DATA ---------------- */
 var MODE='wbs'; // 'wbs' | 'cc'
 
-var WBS=[
-  {t:'Earthworks',subs:[{s:'Excavation',ss:['Bulk dig','Trim to level']},{s:'Backfill',ss:['Compaction']}]},
-  {t:'Drainage',subs:[{s:'Pipe laying',ss:['RCP 375','RCP 450']},{s:'Pits',ss:['Junction pits']}]},
-  {t:'Pavement',subs:[{s:'Subbase',ss:['Class 2 placement']},{s:'Asphalt',ss:['AC10 wearing']}]},
-  {t:'Traffic Management',subs:[{s:'Setup',ss:['Signage','Barriers']}]}
-];
-var COSTCENTRES=[
-  {c:'CC-100',n:'Site Establishment'},
-  {c:'CC-200',n:'Earthworks'},
-  {c:'CC-300',n:'Drainage'},
-  {c:'CC-400',n:'Pavement'},
-  {c:'CC-500',n:'Traffic Management'}
-];
-
-var WORKERS=[
-  {id:'rasik',nm:'Rasik Manandhar',role:'Foreman',rate:78,in:false},
-  {id:'alec',nm:'Alec Neill',role:'Site Engineer',rate:92,in:false},
-  {id:'john',nm:'John Tahana',role:'Plant Operator',rate:68,in:false},
-  {id:'maria',nm:'Maria Costa',role:'Labourer',rate:55,in:false},
-  {id:'dave',nm:'Dave Wiremu',role:'Pipelayer',rate:62,in:false},
-  {id:'sam',nm:'Sam Okoro',role:'Traffic Controller',rate:52,in:false}
-];
-var PLANTITEMS=[
-  {id:'ex20',nm:'Excavator 20T',no:'EX-2201',sup:'Coates Hire',rate:185},
-  {id:'roller',nm:'Smooth Drum Roller',no:'RL-1144',sup:'Kennards Hire',rate:140},
-  {id:'water',nm:'Water Cart 10kL',no:'WC-0307',sup:'Owned',rate:95},
-  {id:'bobcat',nm:'Bobcat S650',no:'BC-5650',sup:'Coates Hire',rate:110},
-  {id:'truck',nm:'Tipper Truck',no:'TT-8841',sup:'Owned',rate:120}
-];
+var WBS=[];
+var COSTCENTRES=[];
+var WORKERS=[];
+var PLANTITEMS=[];
 /* MATERIALS are source-backed — the pick list IS the live source lines (rows.materials), PO or bill. */
 var MISCITEMS=[
   {id:'survey',nm:'Survey Set-out',meta:'Subcontractor'},
@@ -11328,60 +11818,9 @@ var MISCITEMS=[
 ];
 
 /* seeded table rows */
-var rows={
-  labour:[
-    {who:'Rasik Manandhar',role:'Foreman',rate:78,allow:35,in:'07:00',out:'15:30',brk:'30',hrs:'8h 00m',alloc:[{l:'Earthworks › Excavation',c:'CC-200 Earthworks',p:100}],status:'app'},
-    {who:'Alec Neill',role:'Site Engineer',rate:92,allow:35,in:'07:00',out:'15:30',brk:'30',hrs:'8h 00m',alloc:[{l:'Drainage › Pipe laying',c:'CC-300 Drainage',p:60},{l:'Pavement › Subbase',c:'CC-400 Pavement',p:40}],status:'pend'},
-    {who:'Maria Costa',role:'Labourer',rate:55,allow:25,in:'07:00',out:'13:30',brk:'30',hrs:'6h 00m',alloc:[{l:'Drainage › Pits',c:'CC-300 Drainage',p:100}],status:'pend'}
-  ],
-  plant:[
-    {nm:'Excavator 20T',no:'EX-2201',sup:'Coates Hire',rate:185,by:'John Tahana',hrs:'8h 00m',alloc:[{l:'Earthworks › Excavation',c:'CC-200 Earthworks',p:100}]},
-    {nm:'Smooth Drum Roller',no:'RL-1144',sup:'Kennards Hire',rate:140,by:'Sam Okoro',hrs:'7h 00m',alloc:[{l:'Pavement › Subbase',c:'CC-400 Pavement',p:100}]}
-  ],
-  /* Materials are source-backed. Each row = one line item from a source document —
-     either a Purchase Order (ordered up-front) or a supplier Bill / invoice (goods already received).
-     Delivered/Used accumulate from site-diary delivery & usage entries, and are editable from the overview. */
-  materials:[
-    {id:'PO-1042',srcType:'PO',src:'PO-1042',nm:'Class 2 Crushed Rock',sup:'Boral',unit:'t',rate:52,ordered:120,delivered:84},
-    {id:'PO-1048',srcType:'PO',src:'PO-1048',nm:'RCP Pipe 375mm',sup:'Humes',unit:'m',rate:95,ordered:180,delivered:120},
-    {id:'PO-1051',srcType:'PO',src:'PO-1051',nm:'Concrete 32MPa',sup:'Hanson',unit:'m³',rate:280,ordered:48,delivered:24},
-    {id:'BILL-2207',srcType:'Bill',src:'BILL-2207',nm:'Geofabric A14',sup:'Geofabrics',unit:'m²',rate:4,ordered:600,delivered:600}
-  ],
-  /* Misc mirrors materials: each line is source-backed (PO / Bill / Docket / Manual),
-     tracked ordered → delivered with a rate and delivered cost. */
-  misc:[
-    {id:'BILL-3310',srcType:'Bill',src:'BILL-3310',nm:'Spoil Disposal',sup:'Cleanaway',unit:'loads',rate:180,ordered:5,delivered:3},
-    {id:'PO-1090',srcType:'PO',src:'PO-1090',nm:'Survey Set-out',sup:'GeoSurvey',unit:'visit',rate:650,ordered:2,delivered:1},
-    {id:'BILL-3318',srcType:'Bill',src:'BILL-3318',nm:'Lane Closure Permit',sup:'Council',unit:'ea',rate:420,ordered:1,delivered:1}
-  ],
-  /* Today's misc entries — per-event log mirroring material deliveries. */
-  miscEntries:[
-    {time:'09:30',mat:'Spoil Disposal',src:'BILL-3310',srcType:'Bill',sup:'Cleanaway',qty:3,unit:'loads'},
-    {time:'07:15',mat:'Survey Set-out',src:'PO-1090',srcType:'PO',sup:'GeoSurvey',qty:1,unit:'visit'}
-  ],
-  /* Today's delivery events — each is one drop-off received on site against a source line.
-     These roll up into the tracker's "delivered" totals; this list is the per-delivery view. */
-  deliveries:[
-    {time:'08:10',mat:'Class 2 Crushed Rock',src:'PO-1042',srcType:'PO',sup:'Boral',qty:24,unit:'t'},
-    {time:'10:45',mat:'RCP Pipe 375mm',src:'PO-1048',srcType:'PO',sup:'Humes',qty:60,unit:'m'},
-    {time:'13:20',mat:'Concrete 32MPa',src:'PO-1051',srcType:'PO',sup:'Hanson',qty:12,unit:'m³'}
-  ],
-  /* Site dockets — paper records captured on site. Each docket is the source document for a
-     manual entry in one of the four sections; saving it also creates the linked section row. */
-  dockets:[]
-};
-
+var rows={labour:[],plant:[],materials:[],misc:[],miscEntries:[],deliveries:[],dockets:[]};
 /* single-pick allocation options for the docket flow (WBS label + matching cost centre) */
-var ALLOC_OPTIONS=[
-  {l:'Site Establishment',c:'CC-100 Site Establishment'},
-  {l:'Earthworks › Excavation',c:'CC-200 Earthworks'},
-  {l:'Earthworks › Backfill',c:'CC-200 Earthworks'},
-  {l:'Drainage › Pipe laying',c:'CC-300 Drainage'},
-  {l:'Drainage › Pits',c:'CC-300 Drainage'},
-  {l:'Pavement › Subbase',c:'CC-400 Pavement'},
-  {l:'Pavement › Asphalt',c:'CC-400 Pavement'},
-  {l:'Traffic Management › Setup',c:'CC-500 Traffic Management'}
-];
+var ALLOC_OPTIONS=[];
 var DKT_SEQ=6; // next docket number = DKT-000(7)
 
 /* ---------------- MODE ---------------- */
@@ -11418,7 +11857,7 @@ function renderLabour(){
     var allow=r.allow||0,cnt=r.count||1;
     var rateCell=r.rate?sdMoney(r.rate)+'<span style="color:var(--muted);font-size:12px">/hr</span>':'—';
     var allowCell=allow?'+'+sdMoney(allow)+(r.byType?'<span style="color:var(--muted);font-size:11px">/ea</span>':''):'<span style="color:var(--muted)">—</span>';
-    var costCell=r.rate?'<b style="color:var(--navy)">'+sdMoney((r.rate*hoursNum(r.hrs)+allow)*cnt)+'</b>':'—';
+    var costCell=r.rate?'<b style="color:var(--navy)">'+sdMoney((r.cost!=null?r.cost:(r.rate*hoursNum(r.hrs)+allow)*cnt))+'</b>':'—';
     var av=r.byType?'<div class="w-av" style="background:#0f766e">×'+cnt+'</div>':'<div class="w-av">'+initials(r.who)+'</div>';
     var typeChip=r.byType?'<span class="dkt-chip" style="background:#e0e7ff;color:#4338ca"><i class="fa-solid fa-users"></i>Resource type</span>':'';
     b.innerHTML+='<tr><td><div class="w-cell">'+av+'<div><div class="w-name">'+r.who+typeChip+dktChip(r)+'</div><div class="w-role">'+r.role+'</div></div></div></td>'+
@@ -11428,7 +11867,7 @@ function renderLabour(){
     '<td><span class="tag '+(r.status==='app'?'app':'pend')+'">'+(r.status==='app'?'Approved':'Pending')+'</span></td>'+
     '<td><span class="row-act"><i class="fa-solid fa-pen"></i></span></td></tr>';
   });
-  var lc=rows.labour.reduce(function(s,r){return s+(r.rate?(r.rate*hoursNum(r.hrs)+(r.allow||0))*(r.count||1):0);},0);
+  var lc=rows.labour.reduce(function(s,r){return s+(r.cost!=null?r.cost:(r.rate?(r.rate*hoursNum(r.hrs)+(r.allow||0))*(r.count||1):0));},0);
   document.getElementById('sLabourCost').textContent=sdMoney(lc);
 }
 function hoursNum(h){var m=(h||'').match(/(\d+)\s*h(?:\s*(\d+))?/);if(!m)return 0;return parseInt(m[1],10)+(m[2]?parseInt(m[2],10)/60:0);}
@@ -11437,7 +11876,7 @@ function renderPlant(){
   var b=document.getElementById('tbody-plant');b.innerHTML='';
   rows.plant.forEach(function(r){
     var rateCell=r.rate?sdMoney(r.rate)+'<span style="color:var(--muted);font-size:12px">/hr</span>':'—';
-    var costCell=r.rate?'<b style="color:var(--navy)">'+sdMoney(r.rate*hoursNum(r.hrs))+'</b>':'—';
+    var costCell=r.rate?'<b style="color:var(--navy)">'+sdMoney(r.cost!=null?r.cost:r.rate*hoursNum(r.hrs))+'</b>':'—';
     b.innerHTML+='<tr><td><b style="color:var(--navy)">'+r.nm+'</b>'+dktChip(r)+'</td><td><span style="font-family:monospace;font-size:12px;color:var(--muted)">'+r.no+'</span></td><td>'+r.sup+'</td><td>'+r.by+'</td><td class="hrs">'+r.hrs+'</td><td>'+rateCell+'</td><td>'+costCell+'</td><td>'+allocChips(r.alloc)+'</td><td><span class="row-act"><i class="fa-solid fa-pen"></i></span></td></tr>';
   });
 }
@@ -12047,8 +12486,27 @@ function sdToast(msg){
   t.classList.add('show');setTimeout(function(){t.classList.remove('show')},2600);
 }
 
-/* init */
-setMode('wbs');
+/* init runs from sdSyncData once VDATA has built the day */
+
+
+/* ── shared dataset ──────────────────────────────────────────────────────
+   The diary records one day of the same ledger the calendar shows. Its own
+   in-session edits (dockets added, materials amended) are kept, so this only
+   rebuilds when the budget underneath has actually changed. */
+var _sdVersion = -1;
+function sdSyncData() {
+  WBS           = VDATA.wbsTree();
+  COSTCENTRES   = VDATA.costCentres().map(function (n) { return {c: VDATA.ccCode(n), n: n}; });
+  WORKERS       = VDATA.workers();
+  PLANTITEMS    = VDATA.plant();
+  ALLOC_OPTIONS = VDATA.allocOptions();
+  rows          = vdataDiaryRows();
+  var lbl = document.getElementById('sdDiaryDate');
+  if (lbl) lbl.textContent = vdataDiaryDateLabel();
+  setMode(MODE);
+  _sdVersion = VDATA.version();
+}
+function sdSyncIfStale() { if (_sdVersion !== VDATA.version()) sdSyncData(); }
 
 </script>
 </body>
