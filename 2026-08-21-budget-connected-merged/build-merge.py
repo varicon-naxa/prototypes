@@ -524,6 +524,12 @@ def main():
              '\n    </div>\n\n'
              '    <!-- ════ MERGED PAGE: Site Diary ════ -->\n'
              '    <div class="page" id="pageSiteDiary">\n' + sd_html +
+             '\n    </div>\n\n'
+             '    <!-- ════ TOP-LEVEL PAGE: Timesheet ════ -->\n'
+             '    <div class="page" id="pageTimesheet">\n' + read(TS_HTML) +
+             '\n    </div>\n\n'
+             '    <!-- ════ TOP-LEVEL PAGE: Add Timesheet ════ -->\n'
+             '    <div class="page" id="pageAddTimesheet">\n' + read(TS_ADD_HTML) +
              '\n    </div>\n')
     base = base.replace(anchor, pages, 1)
 
