@@ -540,7 +540,9 @@ def main():
                "\n<!-- ═══ merged script: daily cost tracking ═══ -->\n<script>\n"
                + dc_js + "\n</script>\n"
                "\n<!-- ═══ merged script: site diary ═══ -->\n<script>\n"
-               + sd_js + "\n</script>\n")
+               + sd_js + "\n</script>\n"
+               "\n<!-- ═══ timesheet: list and add flow ═══ -->\n<script>\n"
+               + read(TS_JS) + "\n</script>\n")
     base = base.replace("</body>", scripts + "</body>", 1)
 
     os.makedirs(OUT_DIR, exist_ok=True)
