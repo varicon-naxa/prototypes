@@ -457,10 +457,27 @@ var _baseShowPage = showPage;
 var _baseSetWizChrome = setWizChrome;
 
 showPage = function(id) {
-  if (!GUEST_PAGES[id]) {
+  var top = TOP_PAGES[id];
+  if (!GUEST_PAGES[id] && !top) {
     IN_GUEST = false;
     var wb = document.getElementById('wizBar');
     if (wb) wb.style.display = '';
+  }
+  /* A top-level page is not in a project: no project tab bar, no budget
+     wizard chrome, and the topbar names the page instead of the job. */
+  var tabs = document.querySelector('.budget-view-tabs');
+  var h1 = document.querySelector('.topbar-left h1');
+  var back = document.querySelector('.topbar-left .back-btn');
+  if (h1 && PROJECT_TITLE === null) PROJECT_TITLE = h1.textContent;
+  if (tabs) tabs.style.display = top ? 'none' : '';
+  if (h1) h1.textContent = top ? top : PROJECT_TITLE;
+  if (back) back.style.display = top ? 'none' : '';
+  if (top) {
+    IN_GUEST = true;                      /* keep setWizChrome off our page */
+    var wb2 = document.getElementById('wizBar');
+    var st2 = document.getElementById('stepper');
+    if (wb2) wb2.style.display = 'none';
+    if (st2) st2.style.display = 'none';
   }
   _baseShowPage(id);
 };
@@ -478,7 +495,42 @@ render = function() {
   VDATA.refreshIfChanged();
 };
 
+/* ── top-level pages ─────────────────────────────────────────────────────
+   The project tab bar belongs to a project. Timesheet spans projects — it
+   carries a Project filter of its own — so it hangs off the sidebar instead,
+   and the project chrome comes off while it is open. */
+var TOP_PAGES = { pageTimesheet: 'Timesheet', pageAddTimesheet: 'Add Timesheet' };
+var PROJECT_TITLE = null;
+
+function gotoTop(el, pageId) {
+  if (el) {
+    document.querySelectorAll('.sidebar .nav-item').forEach(function (n) {
+      n.classList.toggle('active', n === el);
+    });
+  }
+  showPage(pageId);
+  if (pageId === 'pageTimesheet') tsSyncData();
+}
+
+/* Back to the project the app was already showing. */
+function gotoProjects(el) {
+  if (el) {
+    document.querySelectorAll('.sidebar .nav-item').forEach(function (n) {
+      n.classList.toggle('active', n === el);
+    });
+  }
+  var tab = [].slice.call(document.querySelectorAll('.budget-view-tabs .bv-tab'))
+    .filter(function (t) { return t.classList.contains('active'); })[0];
+  gotoTab(tab || null, tab ? (tab.textContent.trim() === 'Daily Cost Tracking'
+    ? 'pageDailyCost' : tab.textContent.trim() === 'Site Diary'
+    ? 'pageSiteDiary' : 'pageOverview') : 'pageOverview');
+}
+
 function gotoTab(el, pageId) {
+  /* leaving a top-level page puts the project chrome back */
+  document.querySelectorAll('.sidebar .nav-item').forEach(function (n) {
+    n.classList.toggle('active', /Projects/.test(n.textContent));
+  });
   IN_GUEST = !!GUEST_PAGES[pageId];
   document.querySelectorAll('.budget-view-tabs .bv-tab').forEach(function(t) {
     t.classList.toggle('active', t === el);
@@ -501,12 +553,34 @@ def main():
     sd_css, sd_html, sd_js = build_site_diary()
     dc_css, dc_html, dc_js = build_daily_cost()
 
+    # 0. the sidebar's Timesheet entry becomes a real destination, and
+    #    Projects goes back to the project it was already showing.
+    for old, new in [
+        ('<a class="nav-item"><i class="far fa-clock nav-icon"></i> Timesheet</a>',
+         '<a class="nav-item" onclick="gotoTop(this,&#39;pageTimesheet&#39;)">'
+         '<i class="far fa-clock nav-icon"></i> Timesheet</a>'),
+        ('<a class="nav-item active"><i class="fas fa-folder nav-icon"></i> Projects</a>',
+         '<a class="nav-item active" onclick="gotoProjects(this)">'
+         '<i class="fas fa-folder nav-icon"></i> Projects</a>'),
+    ]:
+        if old not in base:
+            raise SystemExit("FAIL: sidebar item not found: %s" % old[:60])
+        base = base.replace(old, new, 1)
+
     # 1. tab bar
     old_bar_start = base.find('    <div class="budget-view-tabs">')
     if old_bar_start == -1:
         raise SystemExit("FAIL: tab bar not found")
     old_bar_end = find_element_end(base, base.find("<div", old_bar_start))
     base = base[:old_bar_start] + TAB_BAR_NEW + base[old_bar_end:]
+
+    # 1b. the list's Add Timesheet button opens the add flow
+    if 'class="btn btn-primary btn-sm"><i class="fas fa-circle-plus"></i> Add Timesheet' not in base:
+        raise SystemExit("FAIL: Add Timesheet button not found")
+    base = base.replace(
+        '<button class="btn btn-primary btn-sm"><i class="fas fa-circle-plus"></i> Add Timesheet</button>',
+        '<button class="btn btn-primary btn-sm" onclick="tsOpenAdd()">'
+        '<i class="fas fa-circle-plus"></i> Add Timesheet</button>', 1)
 
     # 2. child CSS before </head>
     style_block = ("\n<style>\n/* ═══ timesheet ═══ */\n" + read(TS_CSS) +
