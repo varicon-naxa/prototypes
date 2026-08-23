@@ -16,6 +16,10 @@ DC = os.path.join(ROOT, "2026-06-04-daily-cost-calendar", "index.html")
 OUT_DIR = os.path.join(ROOT, "2026-08-21-budget-connected-merged")
 OUT = os.path.join(OUT_DIR, "index.html")
 SHARED = os.path.join(OUT_DIR, "shared-data.js")
+TS_HTML = os.path.join(OUT_DIR, "timesheet.html")
+TS_ADD_HTML = os.path.join(OUT_DIR, "add-timesheet.html")
+TS_CSS = os.path.join(OUT_DIR, "timesheet.css")
+TS_JS = os.path.join(OUT_DIR, "timesheet.js")
 
 
 def read(p):
@@ -505,7 +509,8 @@ def main():
     base = base[:old_bar_start] + TAB_BAR_NEW + base[old_bar_end:]
 
     # 2. child CSS before </head>
-    style_block = ("\n<style>\n/* ═══ merged: daily cost tracking ═══ */\n" + dc_css +
+    style_block = ("\n<style>\n/* ═══ timesheet ═══ */\n" + read(TS_CSS) +
+                   "\n/* ═══ merged: daily cost tracking ═══ */\n" + dc_css +
                    "\n/* ═══ merged: site diary ═══ */\n" + sd_css + "\n</style>\n")
     base = base.replace("</head>", style_block + "</head>", 1)
 
