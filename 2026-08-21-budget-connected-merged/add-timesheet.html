@@ -1,15 +1,23 @@
 <!-- ════ TOP-LEVEL PAGE: Add Timesheet ════
-     The original was one flat column: date, project, workers, times, remarks,
-     attachments, then four empty tables announcing "no data". Save was live
-     from the first paint, the workers picker was greyed with nothing saying
-     why, and the one thing the page exists to do — put the hours against a
-     task or cost centre so the cost lands on the budget — sat at the bottom
-     under an UNASSIGNED HOURS figure in red.
+     One page, in order, sections unlocking as they become answerable.
 
-     Rebuilt on the budget setup flow's pattern: a stepper, one decision at a
-     time, later sections locked until the earlier one is answered, the
-     allocation promoted to its own step, and Save held back until the hours
-     reconcile. -->
+     The first cut of this was a four-step wizard, borrowed from the budget
+     setup flow. Wrong borrowing: that flow is paginated because each step is
+     genuinely heavy — upload a BOQ, map its columns, review hundreds of lines.
+     A timesheet is one day, one crew, one set of times. Four steps for a form
+     that fits on one screen is ceremony.
+
+     What was worth taking from the budget flow is the discipline, not the
+     pagination: a forced order, sections that stay shut until they can be
+     answered, an allocation that has to reconcile to zero, and a footer that
+     names what is blocking Save rather than letting it fail.
+
+     What the original product form did wrong, and this fixes:
+       · Save live from the first paint          → held, with the reason shown
+       · Workers greyed with no explanation      → locked, and says why
+       · 07:00–23:30 implying a 16h day          → an 8h shift by default
+       · allocation last, under a red figure     → its own section, reconciling
+       · four empty tables up front              → optional, folded away -->
 <div class="ts-add">
 
   <div class="wiz-bar" id="tsWizBar">
@@ -22,167 +30,143 @@
         <i class="fas fa-arrow-left"></i> Back to timesheets</button>
     </div>
   </div>
-  <div class="stepper" id="tsStepper"></div>
 
-  <!-- ── Step 1: the day and the job ────────────────────────────────── -->
-  <div class="ts-step" id="tsStep1">
-    <div class="card-section">
-      <h2 class="section-title"><i class="far fa-calendar" style="color:#f5a623;margin-right:8px"></i>Which day, and on which job?</h2>
-      <p class="section-subtitle">The job decides which tasks and cost centres the hours can go against, so it comes first.</p>
+  <!-- ── 1. the day and the job ──────────────────────────────────────── -->
+  <div class="card-section ts-sec" id="tsSec1">
+    <h2 class="section-title"><i class="far fa-calendar" style="color:#f5a623;margin-right:8px"></i>Which day, and on which job?</h2>
+    <p class="section-subtitle">The job decides which tasks and cost centres the hours can go against, so it comes first.</p>
 
-      <div class="ts-field-row">
-        <div class="ts-field">
-          <label>Date</label>
-          <input type="date" id="tsDate" onchange="tsOnDate()">
+    <div class="ts-field-row">
+      <div class="ts-field">
+        <label>Date</label>
+        <input type="date" id="tsDate" onchange="tsOnDate()">
+      </div>
+      <div class="ts-field">
+        <label>Project</label>
+        <select id="tsProject" onchange="tsOnProject()">
+          <option value="">Select project…</option>
+        </select>
+        <!-- A modifier on the field above, not a decision of its own. Most
+             days are one job, so this stays out of the way until switched. -->
+        <label class="ts-toggle" id="tsMultiToggle" onclick="tsToggleMulti(event)">
+          <span class="ts-switch"><span class="ts-knob"></span></span>
+          <span class="ts-toggle-label">Split across more than one job</span>
+          <i class="fas fa-circle-info ts-info" title="Only if the worker moved between jobs today. The hours still have to add up to the shift across every job."></i>
+        </label>
+      </div>
+    </div>
+
+    <p class="ts-warn" id="tsMultiNote" style="display:none">
+      <i class="fas fa-triangle-exclamation"></i> <strong>Splitting the day:</strong>
+      each job gets its own share, and the shares still have to add up to the shift —
+      across every job, not within each one.</p>
+  </div>
+
+  <!-- ── 2. who, and how long ────────────────────────────────────────── -->
+  <div class="card-section ts-sec ts-locked" id="tsSec2">
+    <div class="ts-lock-note"><i class="fas fa-lock"></i> <span></span></div>
+    <h2 class="section-title"><i class="fas fa-hard-hat" style="color:#f5a623;margin-right:8px"></i>Who worked, and for how long?</h2>
+    <p class="section-subtitle">Pick the crew on this shift. Everyone selected gets the same times.</p>
+
+    <div class="ts-workers" id="tsWorkers"></div>
+
+    <h3 class="ts-sub">Approved time</h3>
+    <div class="ts-field-row ts-time-row">
+      <div class="ts-field">
+        <label>Clock in <span class="ts-req">*</span></label>
+        <input type="time" id="tsIn" value="07:00" onchange="tsOnTime()">
+      </div>
+      <div class="ts-field">
+        <label>Clock out <span class="ts-req">*</span></label>
+        <input type="time" id="tsOut" value="15:30" onchange="tsOnTime()">
+      </div>
+      <div class="ts-field ts-field-narrow">
+        <label>Break (min)</label>
+        <input type="number" id="tsBreak" value="30" min="0" step="15" onchange="tsOnTime()">
+      </div>
+      <div class="ts-total">
+        <span>Total time</span>
+        <b id="tsTotalTime">8h 00m</b>
+        <em id="tsTotalNote">per worker</em>
+      </div>
+    </div>
+    <p class="ts-hint" id="tsShiftHint"></p>
+  </div>
+
+  <!-- ── 3. where the cost lands ─────────────────────────────────────── -->
+  <div class="card-section ts-sec ts-locked" id="tsSec3">
+    <div class="ts-lock-note"><i class="fas fa-lock"></i> <span></span></div>
+    <h2 class="section-title"><i class="fas fa-layer-group" style="color:#f5a623;margin-right:8px"></i>Where should the cost land?</h2>
+    <p class="section-subtitle">Hours with nowhere to go become unassigned cost on the budget. Allocate the shift and this closes itself.</p>
+
+    <div class="ts-alloc-head">
+      <div class="ts-alloc-bar"><div class="ts-alloc-fill" id="tsAllocFill"></div></div>
+      <div class="ts-alloc-nums">
+        <span class="ts-assigned">Assigned <b id="tsAssigned">0h 00m</b></span>
+        <span class="ts-unassigned" id="tsUnassignedWrap">Unassigned <b id="tsUnassigned">8h 00m</b></span>
+      </div>
+    </div>
+
+    <div class="table-wrapper">
+      <table class="ts-alloc-table">
+        <thead><tr>
+          <th>Task / cost centre</th>
+          <th class="ts-job-col" style="display:none">Job</th>
+          <th style="width:150px">Hours</th><th style="width:120px">Cost</th><th style="width:44px"></th>
+        </tr></thead>
+        <tbody id="tsAllocRows"></tbody>
+      </table>
+    </div>
+    <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="tsAddAlloc()">
+      <i class="fas fa-plus"></i> Add allocation</button>
+    <button class="btn btn-outline btn-sm" style="margin-top:12px;margin-left:8px" onclick="tsFillRemainder()">
+      <i class="fas fa-wand-magic-sparkles"></i> Put the rest on one task</button>
+  </div>
+
+  <!-- ── 4. optional, folded away ────────────────────────────────────── -->
+  <div class="card-section ts-sec ts-locked" id="tsSec4">
+    <div class="ts-lock-note"><i class="fas fa-lock"></i> <span></span></div>
+    <h2 class="section-title"><i class="fas fa-plus-minus" style="color:#94a3b8;margin-right:8px"></i>Anything else on this shift?</h2>
+    <p class="section-subtitle">Optional. Most timesheets have none of these.</p>
+    <div class="ts-extras">
+      <div class="ts-extra" id="tsExtraAllow">
+        <div class="ts-extra-head" onclick="tsToggleExtra('Allow')">
+          <i class="fas fa-chevron-right ts-extra-chev"></i><b>Allowance</b>
+          <span class="ts-extra-sum" id="tsAllowSum">none</span>
         </div>
-        <div class="ts-field">
-          <label>Project</label>
-          <select id="tsProject" onchange="tsOnProject()">
-            <option value="">Select project…</option>
-          </select>
+        <div class="ts-extra-body">
+          <div id="tsAllowRows"></div>
+          <button class="btn btn-outline btn-sm" onclick="tsAddAllow()"><i class="fas fa-plus"></i> Add allowance</button>
         </div>
       </div>
-
-      <h2 class="section-title" style="margin-top:26px"><i class="fas fa-diagram-project" style="color:#94a3b8;margin-right:8px"></i>Is this day split across more than one job?</h2>
-      <p class="section-subtitle">Most days are not. Splitting a day across jobs means allocating the hours twice, so it is off unless you need it.</p>
-      <div class="choice-cards" style="grid-template-columns:1fr 1fr">
-        <div class="choice-card" id="tsCardSingle" onclick="tsSetMulti(false)">
-          <div class="check-mark"><i class="fas fa-check"></i></div>
-          <span class="recommended">Recommended</span>
-          <div class="card-icon cc"><i class="fas fa-location-dot"></i></div>
-          <h3>One job</h3>
-          <p>The whole shift belongs to the job above. Allocate the hours across its tasks in the next step.</p>
+      <div class="ts-extra" id="tsExtraEquip">
+        <div class="ts-extra-head" onclick="tsToggleExtra('Equip')">
+          <i class="fas fa-chevron-right ts-extra-chev"></i><b>Equipment</b>
+          <span class="ts-extra-sum" id="tsEquipSum">none</span>
         </div>
-        <div class="choice-card" id="tsCardMulti" onclick="tsSetMulti(true)">
-          <div class="check-mark"><i class="fas fa-check"></i></div>
-          <div class="card-icon wbs"><i class="fas fa-shuffle"></i></div>
-          <h3>More than one job</h3>
-          <p>The worker moved between jobs today. Each job gets its own share of the hours.</p>
-          <p class="ts-warn"><i class="fas fa-triangle-exclamation"></i> <strong>Note:</strong> the hours have to add up to the shift across every job, not within each one.</p>
+        <div class="ts-extra-body">
+          <div id="tsEquipRows"></div>
+          <button class="btn btn-outline btn-sm" onclick="tsAddEquip()"><i class="fas fa-plus"></i> Assign equipment</button>
+        </div>
+      </div>
+      <div class="ts-extra" id="tsExtraNote">
+        <div class="ts-extra-head" onclick="tsToggleExtra('Note')">
+          <i class="fas fa-chevron-right ts-extra-chev"></i><b>Remarks and attachments</b>
+          <span class="ts-extra-sum" id="tsNoteSum">none</span>
+        </div>
+        <div class="ts-extra-body">
+          <textarea id="tsRemarks" class="ts-remarks" oninput="tsAddFlowRender()"
+            placeholder="Weather, delays, anything the approver should know…"></textarea>
+          <div class="ts-attach"><i class="fas fa-paperclip"></i> Attach a docket or photo</div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ── Step 2: who, and how long ──────────────────────────────────── -->
-  <div class="ts-step" id="tsStep2">
-    <div class="card-section">
-      <h2 class="section-title"><i class="fas fa-hard-hat" style="color:#f5a623;margin-right:8px"></i>Who worked, and for how long?</h2>
-      <p class="section-subtitle">Pick the crew on this shift. Everyone selected gets the same times — adjust an individual afterwards if they differ.</p>
-
-      <div id="tsWorkerLock" class="schedule-tooltip" style="display:none">
-        <span class="ts-lock-chip"><i class="fas fa-arrow-up"></i> Choose a project first</span>
-      </div>
-
-      <div class="ts-workers" id="tsWorkers"></div>
-
-      <h3 class="ts-sub">Approved time</h3>
-      <div class="ts-field-row ts-time-row">
-        <div class="ts-field">
-          <label>Clock in <span class="ts-req">*</span></label>
-          <input type="time" id="tsIn" value="07:00" onchange="tsOnTime()">
-        </div>
-        <div class="ts-field">
-          <label>Clock out <span class="ts-req">*</span></label>
-          <input type="time" id="tsOut" value="15:30" onchange="tsOnTime()">
-        </div>
-        <div class="ts-field ts-field-narrow">
-          <label>Break (min)</label>
-          <input type="number" id="tsBreak" value="30" min="0" step="15" onchange="tsOnTime()">
-        </div>
-        <div class="ts-total">
-          <span>Total time</span>
-          <b id="tsTotalTime">8h 00m</b>
-          <em id="tsTotalNote">per worker</em>
-        </div>
-      </div>
-      <p class="ts-hint" id="tsShiftHint"></p>
-    </div>
-  </div>
-
-  <!-- ── Step 3: where the cost lands ───────────────────────────────── -->
-  <div class="ts-step" id="tsStep3">
-    <div class="card-section">
-      <h2 class="section-title"><i class="fas fa-layer-group" style="color:#f5a623;margin-right:8px"></i>Where should the cost land?</h2>
-      <p class="section-subtitle">Hours with nowhere to go become unassigned cost on the budget. Allocate the shift and this step closes itself.</p>
-
-      <div class="ts-alloc-head">
-        <div class="ts-alloc-bar">
-          <div class="ts-alloc-fill" id="tsAllocFill"></div>
-        </div>
-        <div class="ts-alloc-nums">
-          <span class="ts-assigned">Assigned <b id="tsAssigned">0h 00m</b></span>
-          <span class="ts-unassigned" id="tsUnassignedWrap">Unassigned <b id="tsUnassigned">8h 00m</b></span>
-        </div>
-      </div>
-
-      <div class="table-wrapper">
-        <table class="ts-alloc-table">
-          <thead><tr><th>Task / cost centre</th><th style="width:150px">Hours</th><th style="width:120px">Cost</th><th style="width:44px"></th></tr></thead>
-          <tbody id="tsAllocRows"></tbody>
-        </table>
-      </div>
-      <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="tsAddAlloc()">
-        <i class="fas fa-plus"></i> Add allocation</button>
-      <button class="btn btn-outline btn-sm" style="margin-top:12px;margin-left:8px" onclick="tsFillRemainder()">
-        <i class="fas fa-wand-magic-sparkles"></i> Put the rest on one task</button>
-    </div>
-
-    <!-- Allowances and equipment: optional, and out of the way until asked
-         for. The original showed both as empty tables before anything had
-         been entered. -->
-    <div class="card-section">
-      <h2 class="section-title"><i class="fas fa-plus-minus" style="color:#94a3b8;margin-right:8px"></i>Anything else on this shift?</h2>
-      <p class="section-subtitle">Optional. Most timesheets have neither.</p>
-      <div class="ts-extras">
-        <div class="ts-extra" id="tsExtraAllow">
-          <div class="ts-extra-head" onclick="tsToggleExtra('Allow')">
-            <i class="fas fa-chevron-right ts-extra-chev"></i>
-            <b>Allowance</b>
-            <span class="ts-extra-sum" id="tsAllowSum">none</span>
-          </div>
-          <div class="ts-extra-body">
-            <div id="tsAllowRows"></div>
-            <button class="btn btn-outline btn-sm" onclick="tsAddAllow()"><i class="fas fa-plus"></i> Add allowance</button>
-          </div>
-        </div>
-        <div class="ts-extra" id="tsExtraEquip">
-          <div class="ts-extra-head" onclick="tsToggleExtra('Equip')">
-            <i class="fas fa-chevron-right ts-extra-chev"></i>
-            <b>Equipment</b>
-            <span class="ts-extra-sum" id="tsEquipSum">none</span>
-          </div>
-          <div class="ts-extra-body">
-            <div id="tsEquipRows"></div>
-            <button class="btn btn-outline btn-sm" onclick="tsAddEquip()"><i class="fas fa-plus"></i> Assign equipment</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card-section">
-      <h2 class="section-title"><i class="far fa-note-sticky" style="color:#94a3b8;margin-right:8px"></i>Remarks and attachments</h2>
-      <p class="section-subtitle">Optional. A note here shows on the diary for the same day.</p>
-      <textarea id="tsRemarks" class="ts-remarks" placeholder="Weather, delays, anything the approver should know…"></textarea>
-      <div class="ts-attach"><i class="fas fa-paperclip"></i> Attach a docket or photo</div>
-    </div>
-  </div>
-
-  <!-- ── Step 4: review ─────────────────────────────────────────────── -->
-  <div class="ts-step" id="tsStep4">
-    <div class="card-section">
-      <h2 class="section-title"><i class="fas fa-clipboard-check" style="color:#f5a623;margin-right:8px"></i>Review before saving</h2>
-      <p class="section-subtitle">This is what gets created, and where the cost shows up.</p>
-      <div id="tsReview"></div>
-    </div>
-  </div>
-
-  <!-- The footer is the only place Save lives, and it says why it cannot be
-       pressed rather than sitting there enabled and failing. -->
+  <!-- ── the footer carries the summary, the blocker and Save ────────── -->
   <div class="ts-footer">
-    <button class="btn btn-outline" id="tsPrev" onclick="tsGoStep(-1)"><i class="fas fa-chevron-left"></i> Back</button>
+    <div class="ts-summary" id="tsSummary"></div>
     <span class="ts-blocker" id="tsBlocker"></span>
-    <button class="btn btn-outline" id="tsNext" onclick="tsGoStep(1)">Next <i class="fas fa-chevron-right"></i></button>
     <button class="btn btn-primary" id="tsSave" onclick="tsSave()"><i class="fas fa-check"></i> Save timesheet</button>
   </div>
 </div>
