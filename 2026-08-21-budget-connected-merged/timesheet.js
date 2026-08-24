@@ -260,18 +260,56 @@ function tsGoPage(n) { if (n >= 1) { TS.page = n; tsRender(); } }
 
 /* ══════════════════════════════ ADD FLOW ══════════════════════════════ */
 
-var TS_STEPS = [
-  { num: 1, label: 'Day & job' },
-  { num: 2, label: 'Crew & time' },
-  { num: 3, label: 'Allocate' },
-  { num: 4, label: 'Review' }
-];
+/* Sections unlock in order. Each entry says what the section is waiting for;
+   null means it is open. This replaces the four-step wizard — same discipline,
+   one page.
+
+   Why not a wizard: the budget setup flow is paginated because each of its
+   steps is heavy — upload a BOQ, map its columns, review hundreds of lines. A
+   timesheet is one day, one crew, one set of times. What was worth borrowing
+   from that flow is the order and the gating, not the pagination. */
+function tsSectionGate(n) {
+  var shift = tsShiftHours();
+  if (n === 1) return null;                       /* always open */
+  if (n === 2) return TS.project ? null : 'Choose a project first';
+  if (n === 3) {
+    if (!TS.project) return 'Choose a project first';
+    if (!TS.workers.length) return 'Select who worked';
+    if (shift <= 0) return 'Clock out has to be after clock in';
+    return null;
+  }
+  if (n === 4) {
+    if (!TS.project) return 'Choose a project first';
+    if (!TS.workers.length) return 'Select who worked';
+    return null;
+  }
+  return null;
+}
+
+/* What is stopping Save, in the order a person would hit it. */
+function tsBlocker() {
+  var shift = tsShiftHours();
+  if (!TS.project) return 'Choose a project';
+  if (!TS.workers.length) return 'Select at least one worker';
+  if (shift <= 0) return 'Clock out has to be after clock in';
+  if (shift > 14) return 'That is a ' + tsHM(shift) + ' shift — check the times';
+  if (TS.allocs.some(function (r) { return r.hours > 0 && !r.target; }))
+    return 'Every allocated row needs a task';
+  if (TS.multi && TS.allocs.some(function (r) { return r.hours > 0 && !r.job; }))
+    return 'Every allocated row needs a job';
+  var alloc = TS.allocs.reduce(function (a, r) { return a + r.hours; }, 0);
+  if (Math.abs(alloc - shift) > 0.01) {
+    return alloc > shift
+      ? tsHM(alloc - shift) + ' more allocated than worked'
+      : tsHM(shift - alloc) + ' of the shift still unallocated';
+  }
+  return null;
+}
 
 function tsOpenAdd() {
-  TS.step = 1;
   TS.date = TS.date || VDATA.diaryDate();
   TS.project = '';
-  TS.multi = null;
+  TS.multi = false;
   TS.workers = [];
   TS.allocs = [];
   TS.allow = [];
@@ -285,6 +323,12 @@ function tsOpenAdd() {
     sel.innerHTML = '<option value="">Select project…</option>' +
       '<option value="' + VDATA.projectName() + '">' + VDATA.projectName() + '</option>';
   }
+  var rm = document.getElementById('tsRemarks');
+  if (rm) rm.value = '';
+  ['Allow', 'Equip', 'Note'].forEach(function (k) {
+    var el = document.getElementById('tsExtra' + k);
+    if (el) el.classList.remove('open');
+  });
   tsBuildWorkers();
   tsAddFlowRender();
   showPage('pageAddTimesheet');
@@ -299,21 +343,26 @@ function tsOnDate() { TS.date = document.getElementById('tsDate').value; tsAddFl
 
 function tsOnProject() {
   TS.project = document.getElementById('tsProject').value;
-  if (TS.project && TS.multi === null) tsSetMulti(false);
   tsAddFlowRender();
 }
 
-function tsSetMulti(on) {
-  if (!TS.project) return;                      /* the gate, not a silent no-op */
-  TS.multi = on;
+/* The multi-project modifier. It sits on the Project field rather than being a
+   decision of its own: it is a rare case, and the first cut gave it two large
+   choice cards that read as a co-equal question to "which job". */
+function tsToggleMulti(ev) {
+  if (ev) ev.preventDefault();
+  if (!TS.project) return;                 /* gated, and the chip says so */
+  TS.multi = !TS.multi;
+  if (!TS.multi) TS.allocs.forEach(function (r) { delete r.job; });
   tsAddFlowRender();
 }
 
 function tsBuildWorkers() {
-  var box = document.getElementById('tsWorkers');
+  var box = document.getElementById('tsCrewPicker');
   if (!box) return;
   box.innerHTML = VDATA.workers().map(function (w) {
-    return '<div class="ts-wcard" id="tsW-' + w.id + '" onclick="tsToggleWorker(\'' + w.id + '\')">' +
+    return '<div class="ts-wcard" id="tsW-' + w.id + '" onclick="tsToggleWorker(&#39;' +
+      w.id + '&#39;)">' +
       '<div class="ts-avatar">' + tsInitials(w.nm) + '</div>' +
       '<div><div class="ts-worker-name">' + w.nm + '</div>' +
       '<div class="ts-worker-role">' + w.role + '</div></div>' +
@@ -322,6 +371,8 @@ function tsBuildWorkers() {
 }
 
 function tsToggleWorker(id) {
+  /* pointer-events:none stops a mouse but not a synthetic or keyboard click */
+  if (tsSectionGate(2)) return;
   var i = TS.workers.indexOf(id);
   if (i < 0) TS.workers.push(id); else TS.workers.splice(i, 1);
   tsAddFlowRender();
@@ -339,17 +390,16 @@ function tsShiftHours() {
 function tsOnTime() { tsAddFlowRender(); }
 
 /* ── allocation ── */
-function tsAddAlloc() {
-  TS.allocs.push({ target: '', hours: 0 });
-  tsAddFlowRender();
-}
+function tsAddAlloc() { TS.allocs.push({ target: '', hours: 0 }); tsAddFlowRender(); }
 function tsRmAlloc(i) { TS.allocs.splice(i, 1); tsAddFlowRender(); }
 function tsSetAllocTarget(i, v) { TS.allocs[i].target = v; tsAddFlowRender(); }
+function tsSetAllocJob(i, v) { TS.allocs[i].job = v; tsAddFlowRender(); }
 function tsSetAllocHours(i, v) { TS.allocs[i].hours = parseFloat(v) || 0; tsAddFlowRender(); }
 
-/* The shortcut the old page needed and did not have: one press to clear the
-   remaining hours rather than arithmetic in your head. */
+/* The shortcut the original form needed and did not have: one press to clear
+   the remainder rather than arithmetic in your head. */
 function tsFillRemainder() {
+  if (tsSectionGate(3)) return;
   var left = tsShiftHours() - TS.allocs.reduce(function (a, r) { return a + r.hours; }, 0);
   if (left <= 0) return;
   var open = TS.allocs.filter(function (r) { return !r.hours; })[0];
@@ -366,9 +416,12 @@ function tsRenderAllocs() {
   if (!tb) return;
   var opts = VDATA.allocOptions();
   var rate = tsCrewRate();
+  document.querySelectorAll('#pageAddTimesheet .ts-job-col').forEach(function (th) {
+    th.style.display = TS.multi ? '' : 'none';
+  });
   if (!TS.allocs.length) {
-    tb.innerHTML = '<tr><td colspan="4" style="color:#94a3b8;padding:18px 14px">' +
-      'Nothing allocated yet — add a row, or use “Put the rest on one task”.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="' + (TS.multi ? 5 : 4) + '" class="ts-alloc-none">' +
+      'Nothing allocated yet — add a row, or use the shortcut below.</td></tr>';
     return;
   }
   tb.innerHTML = TS.allocs.map(function (r, i) {
@@ -378,7 +431,13 @@ function tsRenderAllocs() {
         return '<option value="' + o.l + '"' + (o.l === r.target ? ' selected' : '') + '>' +
                o.c + ' · ' + o.l + '</option>';
       }).join('') + '</select>';
-    return '<tr><td>' + sel + '</td>' +
+    var jobCell = TS.multi
+      ? '<td><select onchange="tsSetAllocJob(' + i + ',this.value)">' +
+        '<option value="">Select job…</option><option value="' + VDATA.projectName() + '"' +
+        (r.job === VDATA.projectName() ? ' selected' : '') + '>' + VDATA.projectName() +
+        '</option></select></td>'
+      : '';
+    return '<tr><td>' + sel + '</td>' + jobCell +
       '<td><input type="number" step="0.25" min="0" value="' + (r.hours || '') +
         '" onchange="tsSetAllocHours(' + i + ',this.value)"></td>' +
       '<td class="ts-alloc-cost">' + tsMoney(r.hours * rate) + '</td>' +
@@ -398,6 +457,7 @@ function tsCrewRate() {
 
 /* ── optional extras ── */
 function tsToggleExtra(which) {
+  if (tsSectionGate(4)) return;
   TS.open[which] = !TS.open[which];
   var el = document.getElementById('tsExtra' + which);
   if (el) el.classList.toggle('open', TS.open[which]);
@@ -405,27 +465,37 @@ function tsToggleExtra(which) {
 function tsAddAllow() {
   TS.allow.push({ type: 'Site allowance', amount: 35 });
   TS.open.Allow = true;
+  var el = document.getElementById('tsExtraAllow');
+  if (el) el.classList.add('open');
   tsAddFlowRender();
 }
 function tsRmAllow(i) { TS.allow.splice(i, 1); tsAddFlowRender(); }
-function tsSetAllow(i, k, v) { TS.allow[i][k] = k === 'amount' ? (parseFloat(v) || 0) : v; tsAddFlowRender(); }
+function tsSetAllow(i, k, v) {
+  TS.allow[i][k] = k === 'amount' ? (parseFloat(v) || 0) : v;
+  tsAddFlowRender();
+}
 function tsAddEquip() {
   var p = VDATA.plant();
   TS.equip.push({ id: p.length ? p[0].id : '', hours: 0 });
   TS.open.Equip = true;
+  var el = document.getElementById('tsExtraEquip');
+  if (el) el.classList.add('open');
   tsAddFlowRender();
 }
 function tsRmEquip(i) { TS.equip.splice(i, 1); tsAddFlowRender(); }
-function tsSetEquip(i, k, v) { TS.equip[i][k] = k === 'hours' ? (parseFloat(v) || 0) : v; tsAddFlowRender(); }
+function tsSetEquip(i, k, v) {
+  TS.equip[i][k] = k === 'hours' ? (parseFloat(v) || 0) : v;
+  tsAddFlowRender();
+}
 
 function tsRenderExtras() {
   var a = document.getElementById('tsAllowRows');
   if (a) {
     a.innerHTML = TS.allow.map(function (r, i) {
       return '<div class="ts-xrow"><input class="ts-xgrow" value="' + r.type +
-        '" onchange="tsSetAllow(' + i + ',\'type\',this.value)">' +
+        '" onchange="tsSetAllow(' + i + ',&#39;type&#39;,this.value)">' +
         '<input type="number" style="width:110px" value="' + r.amount +
-        '" onchange="tsSetAllow(' + i + ',\'amount\',this.value)">' +
+        '" onchange="tsSetAllow(' + i + ',&#39;amount&#39;,this.value)">' +
         '<span class="ts-rm" onclick="tsRmAllow(' + i + ')"><i class="fas fa-xmark"></i></span></div>';
     }).join('');
     var tot = TS.allow.reduce(function (s, r) { return s + r.amount; }, 0);
@@ -436,56 +506,23 @@ function tsRenderExtras() {
   if (e) {
     var plant = VDATA.plant();
     e.innerHTML = TS.equip.map(function (r, i) {
-      return '<div class="ts-xrow"><select class="ts-xgrow" onchange="tsSetEquip(' + i + ',\'id\',this.value)">' +
+      return '<div class="ts-xrow">' +
+        '<select class="ts-xgrow" onchange="tsSetEquip(' + i + ',&#39;id&#39;,this.value)">' +
         plant.map(function (p) {
           return '<option value="' + p.id + '"' + (p.id === r.id ? ' selected' : '') + '>' +
                  p.nm + ' (' + p.id + ') · $' + p.rate + '/hr</option>';
         }).join('') + '</select>' +
         '<input type="number" step="0.25" style="width:110px" placeholder="hours" value="' +
-        (r.hours || '') + '" onchange="tsSetEquip(' + i + ',\'hours\',this.value)">' +
+        (r.hours || '') + '" onchange="tsSetEquip(' + i + ',&#39;hours&#39;,this.value)">' +
         '<span class="ts-rm" onclick="tsRmEquip(' + i + ')"><i class="fas fa-xmark"></i></span></div>';
     }).join('');
     var hrs = TS.equip.reduce(function (s, r) { return s + r.hours; }, 0);
     var es = document.getElementById('tsEquipSum');
     if (es) es.textContent = TS.equip.length ? tsHM(hrs) : 'none';
   }
-}
-
-/* ── gating: what is missing before this step is done ── */
-function tsBlockerFor(step) {
-  var shift = tsShiftHours();
-  if (step === 1) {
-    if (!TS.project) return 'Choose a project to carry on';
-    if (TS.multi === null) return 'Say whether the day is split across jobs';
-    return null;
-  }
-  if (step === 2) {
-    if (!TS.workers.length) return 'Select at least one worker';
-    if (shift <= 0) return 'Clock out has to be after clock in';
-    if (shift > 14) return 'That is a ' + tsHM(shift) + ' shift — check the times';
-    return null;
-  }
-  if (step === 3) {
-    var alloc = TS.allocs.reduce(function (a, r) { return a + r.hours; }, 0);
-    if (TS.allocs.some(function (r) { return r.hours > 0 && !r.target; }))
-      return 'Every allocated row needs a task';
-    if (Math.abs(alloc - shift) > 0.01) {
-      return alloc > shift
-        ? tsHM(alloc - shift) + ' more allocated than worked'
-        : tsHM(shift - alloc) + ' of the shift still unallocated';
-    }
-    return null;
-  }
-  return null;
-}
-
-function tsGoStep(delta) {
-  var next = TS.step + delta;
-  if (next < 1 || next > TS_STEPS.length) return;
-  if (delta > 0 && tsBlockerFor(TS.step)) return;
-  TS.step = next;
-  tsAddFlowRender();
-  window.scrollTo(0, 0);
+  var ns = document.getElementById('tsNoteSum');
+  var rm = document.getElementById('tsRemarks');
+  if (ns) ns.textContent = (rm && rm.value.trim()) ? 'note added' : 'none';
 }
 
 function tsAddFlowRender() {
@@ -493,43 +530,28 @@ function tsAddFlowRender() {
   var rate = tsCrewRate();
   var allocated = TS.allocs.reduce(function (a, r) { return a + r.hours; }, 0);
 
-  /* stepper, in the budget flow's own markup */
-  var st = document.getElementById('tsStepper');
-  if (st) {
-    st.innerHTML = TS_STEPS.map(function (s, i) {
-      var cls = s.num === TS.step ? 'active' : s.num < TS.step ? 'done' : '';
-      var icon = s.num < TS.step ? '<i class="fas fa-check"></i>' : s.num;
-      var h = '<div class="step ' + cls + '"><div class="step-circle">' + icon +
-              '</div><span class="step-label">' + s.label + '</span></div>';
-      if (i < TS_STEPS.length - 1) {
-        h += '<div class="step-line' + (s.num < TS.step ? ' done' : '') + '"></div>';
-      }
-      return h;
-    }).join('');
+  /* Sections dim and stop taking input until they can be answered, and each
+     says what it is waiting for. The original form greyed its Workers picker
+     with nothing to explain it. */
+  for (var n = 1; n <= 4; n++) {
+    var sec = document.getElementById('tsSec' + n);
+    if (!sec) continue;
+    var gate = tsSectionGate(n);
+    sec.classList.toggle('ts-locked', !!gate);
+    var note = sec.querySelector('.ts-lock-note span');
+    if (note) note.textContent = gate || '';
   }
 
-  document.querySelectorAll('#pageAddTimesheet .ts-step').forEach(function (el, i) {
-    el.classList.toggle('active', i + 1 === TS.step);
-  });
-
-  /* step 1 choice cards */
-  var single = document.getElementById('tsCardSingle');
-  var multi = document.getElementById('tsCardMulti');
-  if (single && multi) {
-    single.classList.toggle('selected', TS.multi === false);
-    multi.classList.toggle('selected', TS.multi === true);
-    single.classList.toggle('disabled', !TS.project);
-    multi.classList.toggle('disabled', !TS.project);
+  /* the multi-project modifier */
+  var tog = document.getElementById('tsMultiToggle');
+  if (tog) {
+    tog.classList.toggle('on', !!TS.multi);
+    tog.classList.toggle('off', !TS.project);
+    tog.title = TS.project ? '' : 'Choose a project first';
   }
+  var mnote = document.getElementById('tsMultiNote');
+  if (mnote) mnote.style.display = TS.multi ? '' : 'none';
 
-  /* step 2: the workers list is locked until there is a project, and says so */
-  var lock = document.getElementById('tsWorkerLock');
-  var box = document.getElementById('tsWorkers');
-  if (lock && box) {
-    var locked = !TS.project;
-    lock.style.display = locked ? 'block' : 'none';
-    box.classList.toggle('locked', locked);
-  }
   VDATA.workers().forEach(function (w) {
     var el = document.getElementById('tsW-' + w.id);
     if (el) el.classList.toggle('on', TS.workers.indexOf(w.id) >= 0);
@@ -554,7 +576,7 @@ function tsAddFlowRender() {
       : 'Select the crew and this will show what the shift costs.';
   }
 
-  /* step 3: reconciliation */
+  /* allocation reconciles to zero */
   tsRenderAllocs();
   tsRenderExtras();
   var pct = shift > 0 ? Math.min(100, allocated / shift * 100) : 0;
@@ -575,79 +597,48 @@ function tsAddFlowRender() {
     unw.firstChild.textContent = left < -0.01 ? 'Over-allocated ' : 'Unassigned ';
   }
 
-  /* step 4: review */
-  if (TS.step === 4) tsRenderReview(shift, rate);
+  /* the footer stands in for the old review step */
+  tsRenderSummary(shift, rate);
 
-  /* footer */
-  var blocker = tsBlockerFor(TS.step);
+  var blocker = tsBlocker();
   var bl = document.getElementById('tsBlocker');
-  var next = document.getElementById('tsNext');
   var save = document.getElementById('tsSave');
-  var prev = document.getElementById('tsPrev');
-  if (prev) prev.classList.toggle('ts-off', TS.step === 1);
-  if (next) next.style.display = TS.step === TS_STEPS.length ? 'none' : '';
-  if (save) save.style.display = TS.step === TS_STEPS.length ? '' : 'none';
-  if (next) next.classList.toggle('ts-off', !!blocker);
   if (save) save.classList.toggle('ts-off', !!blocker);
   if (bl) {
     bl.className = 'ts-blocker' + (blocker ? '' : ' ok');
     bl.innerHTML = blocker
       ? '<i class="fas fa-circle-exclamation"></i> ' + blocker
-      : (TS.step === TS_STEPS.length
-          ? '<i class="fas fa-circle-check"></i> Ready to save'
-          : '<i class="fas fa-circle-check"></i> Step complete');
+      : '<i class="fas fa-circle-check"></i> Ready to save';
   }
 }
 
-function tsRenderReview(shift, rate) {
-  var el = document.getElementById('tsReview');
+/* One line of what is about to be created, and where the cost goes. The old
+   flow spent a whole step on this; it fits in the footer. */
+function tsRenderSummary(shift, rate) {
+  var el = document.getElementById('tsSummary');
   if (!el) return;
+  if (!TS.workers.length || !TS.project) {
+    el.innerHTML = '<span class="ts-sum-empty">Nothing to save yet</span>';
+    return;
+  }
   var all = VDATA.workers();
   var names = TS.workers.map(function (id) {
     return (all.filter(function (w) { return w.id === id; })[0] || {}).nm;
   });
+  var tasks = TS.allocs.filter(function (r) { return r.hours > 0 && r.target; }).length;
   var total = shift * rate;
-  var allowTotal = TS.allow.reduce(function (a, r) { return a + r.amount; }, 0);
-
-  function row(l, v) {
-    return '<div class="ts-rev-row"><div class="ts-rev-label">' + l +
-           '</div><div class="ts-rev-val">' + v + '</div></div>';
-  }
-  var byTask = TS.allocs.filter(function (r) { return r.hours > 0 && r.target; })
-    .map(function (r) {
-      return '<div>' + r.target + ' — <b>' + tsHM(r.hours) + '</b> · ' +
-             tsMoney(r.hours * rate) + '</div>';
-    }).join('');
-
+  var allow = TS.allow.reduce(function (a, r) { return a + r.amount; }, 0);
   el.innerHTML =
-    row('Date', tsDayLabel(TS.date) + ' ' + TS.date.slice(0, 4)) +
-    row('Project', TS.project) +
-    row('Workers', names.length + ' — ' + names.join(', ')) +
-    row('Shift', tsAmPm(document.getElementById('tsIn').value) + ' – ' +
-        tsAmPm(document.getElementById('tsOut').value) + ' · ' +
-        document.getElementById('tsBreak').value + 'm break · <b>' + tsHM(shift) + '</b> each') +
-    row('Allocation', byTask || '<span style="color:#94a3b8">none</span>') +
-    (allowTotal ? row('Allowances', tsMoney(allowTotal)) : '') +
-    (TS.equip.length ? row('Equipment', TS.equip.length + ' item(s)') : '') +
-    row('Approval', 'Goes to <b>' + VDATA.approverFor(null) + '</b> as <b>Unapproved</b>') +
-    row('Labour cost', '<b>' + tsMoney(total) + '</b>') +
-    '<div class="ts-lands"><i class="fas fa-arrow-turn-down" style="margin-right:8px"></i>' +
-    'Saving this books <b>' + tsMoney(total) + '</b> of labour against ' +
-    (TS.allocs.length === 1 ? 'this task' : 'these tasks') +
-    ' and the day appears on the Daily Cost calendar and the Site Diary. ' +
-    'It lands as <b>tracked</b> cost — not actual — until ' + VDATA.approverFor(null) +
-    ' approves it.' +
-    /* Deliberately not a claim-period figure. The base apportions each line's
-       cost across the four claim periods by a fixed weight, so a line bumped
-       here raises the job's cost by the full amount but this period's share by
-       less. Quoting the period number would read as a discrepancy against the
-       overview; quoting the job number is simply true. */
-    '</div>';
+    '<b>' + (names.length > 2 ? names.length + ' workers' : names.join(', ')) + '</b>' +
+    ' · ' + tsHM(shift) + ' each · ' + tsMoney(total + allow) + ' labour' +
+    ' · ' + (tasks ? tasks + (tasks === 1 ? ' task' : ' tasks') : 'not allocated') +
+    '<em>Tracked cost until ' + VDATA.approverFor(null) + ' approves it.' +
+    ' Shows on the Daily Cost calendar and the Site Diary for ' + tsShort(TS.date) + '.</em>';
 }
 
 /* ── save: the timesheet is the source of the cost ── */
 function tsSave() {
-  if (tsBlockerFor(3) || tsBlockerFor(2) || tsBlockerFor(1)) return;
+  if (tsBlocker()) return;
   var shift = tsShiftHours();
   var all = VDATA.workers();
   var opts = VDATA.allocOptions();

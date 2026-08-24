@@ -111,7 +111,7 @@ they are not invented. Status pills use the budget's own state palette.
 The approver is the crew's foreman, except for the foreman's own time, which goes up to
 whoever is logged in. Nobody approves their own timesheet.
 
-### The add flow, rebuilt
+### The add flow, rebuilt — one page
 
 The original was one flat column — date, project, workers, times, remarks, attachments,
 then four empty tables announcing "no data" — with Save live from the first paint, a
@@ -119,24 +119,32 @@ greyed-out Workers picker with nothing saying why, a 16h 0m default nobody chose
 one thing the page exists for (putting hours against a task so the cost lands on the
 budget) at the bottom under an UNASSIGNED HOURS figure in red.
 
-Rebuilt on the budget setup flow's own components (`.card-section`, `.choice-card`,
-`.stepper`, `.wiz-bar`, `.btn-*`), so it inherits that flow's behaviour rather than
-imitating its look:
+The first rebuild made it a four-step wizard copied from the budget setup flow. **That was
+the wrong borrowing** and it got reverted: the budget flow is paginated because each of
+its steps is heavy — upload a BOQ, map its columns, review hundreds of lines. A timesheet
+is one day, one crew, one set of times. Four steps for a form that fits on one screen is
+ceremony.
 
-| Step | What it asks | Gate |
-| --- | --- | --- |
-| 1 Day & job | date, project, and single vs multi-job as choice cards | project required |
-| 2 Crew & time | crew as pickable cards, one shift for all | ≥1 worker, plausible shift |
-| 3 Allocate | hours against tasks, reconciling to zero | unassigned must clear |
-| 4 Review | what gets created and where the cost goes | — |
+What was worth taking from the budget flow is the *discipline*, not the pagination. One
+page, sections in order, each unlocking as it becomes answerable:
 
-- **Locked sections say why.** "Choose a project first" on the workers list, in the same
-  idiom the budget flow uses for its schedule cards.
-- **The default shift is 8h**, not the 16h the two default times used to imply.
-- **Allocation is its own step** with a progress bar, and *Put the rest on one task* so
-  clearing the remainder is one press rather than mental arithmetic.
-- **Save is held back** and the footer names what is blocking it — "4h 30m of the shift
-  still unallocated" — rather than sitting enabled and failing.
+| Section | Waits for |
+| --- | --- |
+| Which day, and on which job? | — always open |
+| Who worked, and for how long? | a project |
+| Where should the cost land? | a project, a crew, a valid shift |
+| Anything else? (optional, folded) | a project and a crew |
+
+- **A locked section dims, refuses input, and says what it is waiting for** — "Choose a
+  project first" — rather than greying out silently.
+- **Multi-project is a toggle on the Project field**, not a decision of its own. The first
+  cut gave it two large choice cards, which read as co-equal with "which job" when the
+  card copy itself said most days are not split.
+- **The default shift is 8h**, not the 16h the original's two default times implied.
+- **Allocation reconciles to zero** with a progress bar, plus *Put the rest on one task*.
+- **Save is held back** and the footer names the blocker — "4h 30m of the shift still
+  unallocated" — next to a one-line summary of what is about to be created. No separate
+  review step; it fits in the footer.
 
 ### Saving writes back
 
@@ -161,6 +169,14 @@ Drawers, month navigation, toasts, the diary's mode switch and drawer step flow
 all work, the base wizard still runs end to end, and the console is clean.
 
 ## Known rough edges
+
+- Two bugs from the wizard-shaped first cut, both fixed, both worth remembering:
+  `.disabled` was applied to `.choice-card` when the base only defines that state for
+  `.schedule-card`, so the cards rendered at full opacity while the handler silently
+  refused — they looked clickable and did nothing. And the form's crew container reused
+  `id="tsWorkers"`, which the list page already uses for its Workers stat tile, so
+  `getElementById` returned the tile and the crew cards were written into it.
+  See [[a-duplicate-id-fails-where-you-are-not-looking]].
 
 - A cost centre with no deliverable budget line falls back to a generic material row
   named "<cost centre> materials".

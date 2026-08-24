@@ -1171,6 +1171,43 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
 .ts-blocker.ok { color: #16a34a }
 .btn.ts-off { opacity: .45; pointer-events: none }
 
+/* ── one-page flow: locked sections ──────────────────────────────────────
+   The first cut put `.disabled` on `.choice-card` elements. The base only
+   defines that state for `.schedule-card`, so the cards rendered at full
+   opacity while the handler silently refused — they looked clickable and did
+   nothing, which is the same fault this page was rebuilt to remove. A locked
+   section now dims, stops taking input, and says what it is waiting for. */
+.ts-sec { position: relative; transition: opacity .15s }
+.ts-lock-note { display: none }
+.ts-sec.ts-locked > *:not(.ts-lock-note) { opacity: .4; pointer-events: none; user-select: none }
+.ts-sec.ts-locked .ts-lock-note {
+  display: inline-flex; align-items: center; gap: 7px; margin-bottom: 14px;
+  background: #fff7ed; color: #b45309; border: 1px solid #fed7aa;
+  padding: 7px 14px; border-radius: 16px; font-size: 13px; font-weight: 500 }
+
+/* ── the multi-project modifier ─────────────────────────────────────────── */
+.ts-toggle { display: inline-flex; align-items: center; gap: 9px; margin-top: 12px;
+  cursor: pointer; user-select: none; font-weight: 400 }
+.ts-switch { width: 38px; height: 21px; border-radius: 11px; background: #cbd5e1;
+  position: relative; flex-shrink: 0; transition: background .15s }
+.ts-knob { position: absolute; top: 3px; left: 3px; width: 15px; height: 15px;
+  border-radius: 50%; background: #fff; transition: left .15s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25) }
+.ts-toggle.on .ts-switch { background: #f5a623 }
+.ts-toggle.on .ts-knob { left: 20px }
+.ts-toggle-label { font-size: 13px; color: #1b2a4a }
+.ts-toggle.off { opacity: .45; cursor: not-allowed }
+.ts-info { color: #94a3b8; font-size: 12px }
+
+.ts-alloc-none { color: #94a3b8; padding: 18px 14px }
+
+/* ── footer: summary + blocker + save ───────────────────────────────────── */
+.ts-summary { font-size: 13px; color: #1b2a4a; line-height: 1.5 }
+.ts-summary b { font-weight: 600 }
+.ts-summary em { display: block; font-style: normal; font-size: 12px; color: #94a3b8 }
+.ts-sum-empty { color: #94a3b8 }
+.ts-footer .ts-blocker { margin-left: auto }
+
 /* ═══ merged: daily cost tracking ═══ */
 #pageDailyCost *{ margin: 0; padding: 0; box-sizing: border-box; }
 #pageDailyCost{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f3f4f6; color: #222; }
@@ -2220,17 +2257,25 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
     <!-- ════ TOP-LEVEL PAGE: Add Timesheet ════ -->
     <div class="page" id="pageAddTimesheet">
 <!-- ════ TOP-LEVEL PAGE: Add Timesheet ════
-     The original was one flat column: date, project, workers, times, remarks,
-     attachments, then four empty tables announcing "no data". Save was live
-     from the first paint, the workers picker was greyed with nothing saying
-     why, and the one thing the page exists to do — put the hours against a
-     task or cost centre so the cost lands on the budget — sat at the bottom
-     under an UNASSIGNED HOURS figure in red.
+     One page, in order, sections unlocking as they become answerable.
 
-     Rebuilt on the budget setup flow's pattern: a stepper, one decision at a
-     time, later sections locked until the earlier one is answered, the
-     allocation promoted to its own step, and Save held back until the hours
-     reconcile. -->
+     The first cut of this was a four-step wizard, borrowed from the budget
+     setup flow. Wrong borrowing: that flow is paginated because each step is
+     genuinely heavy — upload a BOQ, map its columns, review hundreds of lines.
+     A timesheet is one day, one crew, one set of times. Four steps for a form
+     that fits on one screen is ceremony.
+
+     What was worth taking from the budget flow is the discipline, not the
+     pagination: a forced order, sections that stay shut until they can be
+     answered, an allocation that has to reconcile to zero, and a footer that
+     names what is blocking Save rather than letting it fail.
+
+     What the original product form did wrong, and this fixes:
+       · Save live from the first paint          → held, with the reason shown
+       · Workers greyed with no explanation      → locked, and says why
+       · 07:00–23:30 implying a 16h day          → an 8h shift by default
+       · allocation last, under a red figure     → its own section, reconciling
+       · four empty tables up front              → optional, folded away -->
 <div class="ts-add">
 
   <div class="wiz-bar" id="tsWizBar">
@@ -2243,167 +2288,146 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
         <i class="fas fa-arrow-left"></i> Back to timesheets</button>
     </div>
   </div>
-  <div class="stepper" id="tsStepper"></div>
 
-  <!-- ── Step 1: the day and the job ────────────────────────────────── -->
-  <div class="ts-step" id="tsStep1">
-    <div class="card-section">
-      <h2 class="section-title"><i class="far fa-calendar" style="color:#f5a623;margin-right:8px"></i>Which day, and on which job?</h2>
-      <p class="section-subtitle">The job decides which tasks and cost centres the hours can go against, so it comes first.</p>
+  <!-- ── 1. the day and the job ──────────────────────────────────────── -->
+  <div class="card-section ts-sec" id="tsSec1">
+    <h2 class="section-title"><i class="far fa-calendar" style="color:#f5a623;margin-right:8px"></i>Which day, and on which job?</h2>
+    <p class="section-subtitle">The job decides which tasks and cost centres the hours can go against, so it comes first.</p>
 
-      <div class="ts-field-row">
-        <div class="ts-field">
-          <label>Date</label>
-          <input type="date" id="tsDate" onchange="tsOnDate()">
+    <div class="ts-field-row">
+      <div class="ts-field">
+        <label>Date</label>
+        <input type="date" id="tsDate" onchange="tsOnDate()">
+      </div>
+      <div class="ts-field">
+        <label>Project</label>
+        <select id="tsProject" onchange="tsOnProject()">
+          <option value="">Select project…</option>
+        </select>
+        <!-- A modifier on the field above, not a decision of its own. Most
+             days are one job, so this stays out of the way until switched. -->
+        <label class="ts-toggle" id="tsMultiToggle" onclick="tsToggleMulti(event)">
+          <span class="ts-switch"><span class="ts-knob"></span></span>
+          <span class="ts-toggle-label">Split across more than one job</span>
+          <i class="fas fa-circle-info ts-info" title="Only if the worker moved between jobs today. The hours still have to add up to the shift across every job."></i>
+        </label>
+      </div>
+    </div>
+
+    <p class="ts-warn" id="tsMultiNote" style="display:none">
+      <i class="fas fa-triangle-exclamation"></i> <strong>Splitting the day:</strong>
+      each job gets its own share, and the shares still have to add up to the shift —
+      across every job, not within each one.</p>
+  </div>
+
+  <!-- ── 2. who, and how long ────────────────────────────────────────── -->
+  <div class="card-section ts-sec ts-locked" id="tsSec2">
+    <div class="ts-lock-note"><i class="fas fa-lock"></i> <span></span></div>
+    <h2 class="section-title"><i class="fas fa-hard-hat" style="color:#f5a623;margin-right:8px"></i>Who worked, and for how long?</h2>
+    <p class="section-subtitle">Pick the crew on this shift. Everyone selected gets the same times.</p>
+
+    <!-- id is tsCrewPicker, not tsWorkers: the list page already uses that id
+         for its Workers stat tile, and getElementById was returning the tile,
+         so the crew cards were being written into it. -->
+    <div class="ts-workers" id="tsCrewPicker"></div>
+
+    <h3 class="ts-sub">Approved time</h3>
+    <div class="ts-field-row ts-time-row">
+      <div class="ts-field">
+        <label>Clock in <span class="ts-req">*</span></label>
+        <input type="time" id="tsIn" value="07:00" onchange="tsOnTime()">
+      </div>
+      <div class="ts-field">
+        <label>Clock out <span class="ts-req">*</span></label>
+        <input type="time" id="tsOut" value="15:30" onchange="tsOnTime()">
+      </div>
+      <div class="ts-field ts-field-narrow">
+        <label>Break (min)</label>
+        <input type="number" id="tsBreak" value="30" min="0" step="15" onchange="tsOnTime()">
+      </div>
+      <div class="ts-total">
+        <span>Total time</span>
+        <b id="tsTotalTime">8h 00m</b>
+        <em id="tsTotalNote">per worker</em>
+      </div>
+    </div>
+    <p class="ts-hint" id="tsShiftHint"></p>
+  </div>
+
+  <!-- ── 3. where the cost lands ─────────────────────────────────────── -->
+  <div class="card-section ts-sec ts-locked" id="tsSec3">
+    <div class="ts-lock-note"><i class="fas fa-lock"></i> <span></span></div>
+    <h2 class="section-title"><i class="fas fa-layer-group" style="color:#f5a623;margin-right:8px"></i>Where should the cost land?</h2>
+    <p class="section-subtitle">Hours with nowhere to go become unassigned cost on the budget. Allocate the shift and this closes itself.</p>
+
+    <div class="ts-alloc-head">
+      <div class="ts-alloc-bar"><div class="ts-alloc-fill" id="tsAllocFill"></div></div>
+      <div class="ts-alloc-nums">
+        <span class="ts-assigned">Assigned <b id="tsAssigned">0h 00m</b></span>
+        <span class="ts-unassigned" id="tsUnassignedWrap">Unassigned <b id="tsUnassigned">8h 00m</b></span>
+      </div>
+    </div>
+
+    <div class="table-wrapper">
+      <table class="ts-alloc-table">
+        <thead><tr>
+          <th>Task / cost centre</th>
+          <th class="ts-job-col" style="display:none">Job</th>
+          <th style="width:150px">Hours</th><th style="width:120px">Cost</th><th style="width:44px"></th>
+        </tr></thead>
+        <tbody id="tsAllocRows"></tbody>
+      </table>
+    </div>
+    <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="tsAddAlloc()">
+      <i class="fas fa-plus"></i> Add allocation</button>
+    <button class="btn btn-outline btn-sm" style="margin-top:12px;margin-left:8px" onclick="tsFillRemainder()">
+      <i class="fas fa-wand-magic-sparkles"></i> Put the rest on one task</button>
+  </div>
+
+  <!-- ── 4. optional, folded away ────────────────────────────────────── -->
+  <div class="card-section ts-sec ts-locked" id="tsSec4">
+    <div class="ts-lock-note"><i class="fas fa-lock"></i> <span></span></div>
+    <h2 class="section-title"><i class="fas fa-plus-minus" style="color:#94a3b8;margin-right:8px"></i>Anything else on this shift?</h2>
+    <p class="section-subtitle">Optional. Most timesheets have none of these.</p>
+    <div class="ts-extras">
+      <div class="ts-extra" id="tsExtraAllow">
+        <div class="ts-extra-head" onclick="tsToggleExtra('Allow')">
+          <i class="fas fa-chevron-right ts-extra-chev"></i><b>Allowance</b>
+          <span class="ts-extra-sum" id="tsAllowSum">none</span>
         </div>
-        <div class="ts-field">
-          <label>Project</label>
-          <select id="tsProject" onchange="tsOnProject()">
-            <option value="">Select project…</option>
-          </select>
+        <div class="ts-extra-body">
+          <div id="tsAllowRows"></div>
+          <button class="btn btn-outline btn-sm" onclick="tsAddAllow()"><i class="fas fa-plus"></i> Add allowance</button>
         </div>
       </div>
-
-      <h2 class="section-title" style="margin-top:26px"><i class="fas fa-diagram-project" style="color:#94a3b8;margin-right:8px"></i>Is this day split across more than one job?</h2>
-      <p class="section-subtitle">Most days are not. Splitting a day across jobs means allocating the hours twice, so it is off unless you need it.</p>
-      <div class="choice-cards" style="grid-template-columns:1fr 1fr">
-        <div class="choice-card" id="tsCardSingle" onclick="tsSetMulti(false)">
-          <div class="check-mark"><i class="fas fa-check"></i></div>
-          <span class="recommended">Recommended</span>
-          <div class="card-icon cc"><i class="fas fa-location-dot"></i></div>
-          <h3>One job</h3>
-          <p>The whole shift belongs to the job above. Allocate the hours across its tasks in the next step.</p>
+      <div class="ts-extra" id="tsExtraEquip">
+        <div class="ts-extra-head" onclick="tsToggleExtra('Equip')">
+          <i class="fas fa-chevron-right ts-extra-chev"></i><b>Equipment</b>
+          <span class="ts-extra-sum" id="tsEquipSum">none</span>
         </div>
-        <div class="choice-card" id="tsCardMulti" onclick="tsSetMulti(true)">
-          <div class="check-mark"><i class="fas fa-check"></i></div>
-          <div class="card-icon wbs"><i class="fas fa-shuffle"></i></div>
-          <h3>More than one job</h3>
-          <p>The worker moved between jobs today. Each job gets its own share of the hours.</p>
-          <p class="ts-warn"><i class="fas fa-triangle-exclamation"></i> <strong>Note:</strong> the hours have to add up to the shift across every job, not within each one.</p>
+        <div class="ts-extra-body">
+          <div id="tsEquipRows"></div>
+          <button class="btn btn-outline btn-sm" onclick="tsAddEquip()"><i class="fas fa-plus"></i> Assign equipment</button>
+        </div>
+      </div>
+      <div class="ts-extra" id="tsExtraNote">
+        <div class="ts-extra-head" onclick="tsToggleExtra('Note')">
+          <i class="fas fa-chevron-right ts-extra-chev"></i><b>Remarks and attachments</b>
+          <span class="ts-extra-sum" id="tsNoteSum">none</span>
+        </div>
+        <div class="ts-extra-body">
+          <textarea id="tsRemarks" class="ts-remarks" oninput="tsAddFlowRender()"
+            placeholder="Weather, delays, anything the approver should know…"></textarea>
+          <div class="ts-attach"><i class="fas fa-paperclip"></i> Attach a docket or photo</div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ── Step 2: who, and how long ──────────────────────────────────── -->
-  <div class="ts-step" id="tsStep2">
-    <div class="card-section">
-      <h2 class="section-title"><i class="fas fa-hard-hat" style="color:#f5a623;margin-right:8px"></i>Who worked, and for how long?</h2>
-      <p class="section-subtitle">Pick the crew on this shift. Everyone selected gets the same times — adjust an individual afterwards if they differ.</p>
-
-      <div id="tsWorkerLock" class="schedule-tooltip" style="display:none">
-        <span class="ts-lock-chip"><i class="fas fa-arrow-up"></i> Choose a project first</span>
-      </div>
-
-      <div class="ts-workers" id="tsWorkers"></div>
-
-      <h3 class="ts-sub">Approved time</h3>
-      <div class="ts-field-row ts-time-row">
-        <div class="ts-field">
-          <label>Clock in <span class="ts-req">*</span></label>
-          <input type="time" id="tsIn" value="07:00" onchange="tsOnTime()">
-        </div>
-        <div class="ts-field">
-          <label>Clock out <span class="ts-req">*</span></label>
-          <input type="time" id="tsOut" value="15:30" onchange="tsOnTime()">
-        </div>
-        <div class="ts-field ts-field-narrow">
-          <label>Break (min)</label>
-          <input type="number" id="tsBreak" value="30" min="0" step="15" onchange="tsOnTime()">
-        </div>
-        <div class="ts-total">
-          <span>Total time</span>
-          <b id="tsTotalTime">8h 00m</b>
-          <em id="tsTotalNote">per worker</em>
-        </div>
-      </div>
-      <p class="ts-hint" id="tsShiftHint"></p>
-    </div>
-  </div>
-
-  <!-- ── Step 3: where the cost lands ───────────────────────────────── -->
-  <div class="ts-step" id="tsStep3">
-    <div class="card-section">
-      <h2 class="section-title"><i class="fas fa-layer-group" style="color:#f5a623;margin-right:8px"></i>Where should the cost land?</h2>
-      <p class="section-subtitle">Hours with nowhere to go become unassigned cost on the budget. Allocate the shift and this step closes itself.</p>
-
-      <div class="ts-alloc-head">
-        <div class="ts-alloc-bar">
-          <div class="ts-alloc-fill" id="tsAllocFill"></div>
-        </div>
-        <div class="ts-alloc-nums">
-          <span class="ts-assigned">Assigned <b id="tsAssigned">0h 00m</b></span>
-          <span class="ts-unassigned" id="tsUnassignedWrap">Unassigned <b id="tsUnassigned">8h 00m</b></span>
-        </div>
-      </div>
-
-      <div class="table-wrapper">
-        <table class="ts-alloc-table">
-          <thead><tr><th>Task / cost centre</th><th style="width:150px">Hours</th><th style="width:120px">Cost</th><th style="width:44px"></th></tr></thead>
-          <tbody id="tsAllocRows"></tbody>
-        </table>
-      </div>
-      <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="tsAddAlloc()">
-        <i class="fas fa-plus"></i> Add allocation</button>
-      <button class="btn btn-outline btn-sm" style="margin-top:12px;margin-left:8px" onclick="tsFillRemainder()">
-        <i class="fas fa-wand-magic-sparkles"></i> Put the rest on one task</button>
-    </div>
-
-    <!-- Allowances and equipment: optional, and out of the way until asked
-         for. The original showed both as empty tables before anything had
-         been entered. -->
-    <div class="card-section">
-      <h2 class="section-title"><i class="fas fa-plus-minus" style="color:#94a3b8;margin-right:8px"></i>Anything else on this shift?</h2>
-      <p class="section-subtitle">Optional. Most timesheets have neither.</p>
-      <div class="ts-extras">
-        <div class="ts-extra" id="tsExtraAllow">
-          <div class="ts-extra-head" onclick="tsToggleExtra('Allow')">
-            <i class="fas fa-chevron-right ts-extra-chev"></i>
-            <b>Allowance</b>
-            <span class="ts-extra-sum" id="tsAllowSum">none</span>
-          </div>
-          <div class="ts-extra-body">
-            <div id="tsAllowRows"></div>
-            <button class="btn btn-outline btn-sm" onclick="tsAddAllow()"><i class="fas fa-plus"></i> Add allowance</button>
-          </div>
-        </div>
-        <div class="ts-extra" id="tsExtraEquip">
-          <div class="ts-extra-head" onclick="tsToggleExtra('Equip')">
-            <i class="fas fa-chevron-right ts-extra-chev"></i>
-            <b>Equipment</b>
-            <span class="ts-extra-sum" id="tsEquipSum">none</span>
-          </div>
-          <div class="ts-extra-body">
-            <div id="tsEquipRows"></div>
-            <button class="btn btn-outline btn-sm" onclick="tsAddEquip()"><i class="fas fa-plus"></i> Assign equipment</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card-section">
-      <h2 class="section-title"><i class="far fa-note-sticky" style="color:#94a3b8;margin-right:8px"></i>Remarks and attachments</h2>
-      <p class="section-subtitle">Optional. A note here shows on the diary for the same day.</p>
-      <textarea id="tsRemarks" class="ts-remarks" placeholder="Weather, delays, anything the approver should know…"></textarea>
-      <div class="ts-attach"><i class="fas fa-paperclip"></i> Attach a docket or photo</div>
-    </div>
-  </div>
-
-  <!-- ── Step 4: review ─────────────────────────────────────────────── -->
-  <div class="ts-step" id="tsStep4">
-    <div class="card-section">
-      <h2 class="section-title"><i class="fas fa-clipboard-check" style="color:#f5a623;margin-right:8px"></i>Review before saving</h2>
-      <p class="section-subtitle">This is what gets created, and where the cost shows up.</p>
-      <div id="tsReview"></div>
-    </div>
-  </div>
-
-  <!-- The footer is the only place Save lives, and it says why it cannot be
-       pressed rather than sitting there enabled and failing. -->
+  <!-- ── the footer carries the summary, the blocker and Save ────────── -->
   <div class="ts-footer">
-    <button class="btn btn-outline" id="tsPrev" onclick="tsGoStep(-1)"><i class="fas fa-chevron-left"></i> Back</button>
+    <div class="ts-summary" id="tsSummary"></div>
     <span class="ts-blocker" id="tsBlocker"></span>
-    <button class="btn btn-outline" id="tsNext" onclick="tsGoStep(1)">Next <i class="fas fa-chevron-right"></i></button>
     <button class="btn btn-primary" id="tsSave" onclick="tsSave()"><i class="fas fa-check"></i> Save timesheet</button>
   </div>
 </div>
@@ -13480,18 +13504,56 @@ function tsGoPage(n) { if (n >= 1) { TS.page = n; tsRender(); } }
 
 /* ══════════════════════════════ ADD FLOW ══════════════════════════════ */
 
-var TS_STEPS = [
-  { num: 1, label: 'Day & job' },
-  { num: 2, label: 'Crew & time' },
-  { num: 3, label: 'Allocate' },
-  { num: 4, label: 'Review' }
-];
+/* Sections unlock in order. Each entry says what the section is waiting for;
+   null means it is open. This replaces the four-step wizard — same discipline,
+   one page.
+
+   Why not a wizard: the budget setup flow is paginated because each of its
+   steps is heavy — upload a BOQ, map its columns, review hundreds of lines. A
+   timesheet is one day, one crew, one set of times. What was worth borrowing
+   from that flow is the order and the gating, not the pagination. */
+function tsSectionGate(n) {
+  var shift = tsShiftHours();
+  if (n === 1) return null;                       /* always open */
+  if (n === 2) return TS.project ? null : 'Choose a project first';
+  if (n === 3) {
+    if (!TS.project) return 'Choose a project first';
+    if (!TS.workers.length) return 'Select who worked';
+    if (shift <= 0) return 'Clock out has to be after clock in';
+    return null;
+  }
+  if (n === 4) {
+    if (!TS.project) return 'Choose a project first';
+    if (!TS.workers.length) return 'Select who worked';
+    return null;
+  }
+  return null;
+}
+
+/* What is stopping Save, in the order a person would hit it. */
+function tsBlocker() {
+  var shift = tsShiftHours();
+  if (!TS.project) return 'Choose a project';
+  if (!TS.workers.length) return 'Select at least one worker';
+  if (shift <= 0) return 'Clock out has to be after clock in';
+  if (shift > 14) return 'That is a ' + tsHM(shift) + ' shift — check the times';
+  if (TS.allocs.some(function (r) { return r.hours > 0 && !r.target; }))
+    return 'Every allocated row needs a task';
+  if (TS.multi && TS.allocs.some(function (r) { return r.hours > 0 && !r.job; }))
+    return 'Every allocated row needs a job';
+  var alloc = TS.allocs.reduce(function (a, r) { return a + r.hours; }, 0);
+  if (Math.abs(alloc - shift) > 0.01) {
+    return alloc > shift
+      ? tsHM(alloc - shift) + ' more allocated than worked'
+      : tsHM(shift - alloc) + ' of the shift still unallocated';
+  }
+  return null;
+}
 
 function tsOpenAdd() {
-  TS.step = 1;
   TS.date = TS.date || VDATA.diaryDate();
   TS.project = '';
-  TS.multi = null;
+  TS.multi = false;
   TS.workers = [];
   TS.allocs = [];
   TS.allow = [];
@@ -13505,6 +13567,12 @@ function tsOpenAdd() {
     sel.innerHTML = '<option value="">Select project…</option>' +
       '<option value="' + VDATA.projectName() + '">' + VDATA.projectName() + '</option>';
   }
+  var rm = document.getElementById('tsRemarks');
+  if (rm) rm.value = '';
+  ['Allow', 'Equip', 'Note'].forEach(function (k) {
+    var el = document.getElementById('tsExtra' + k);
+    if (el) el.classList.remove('open');
+  });
   tsBuildWorkers();
   tsAddFlowRender();
   showPage('pageAddTimesheet');
@@ -13519,21 +13587,26 @@ function tsOnDate() { TS.date = document.getElementById('tsDate').value; tsAddFl
 
 function tsOnProject() {
   TS.project = document.getElementById('tsProject').value;
-  if (TS.project && TS.multi === null) tsSetMulti(false);
   tsAddFlowRender();
 }
 
-function tsSetMulti(on) {
-  if (!TS.project) return;                      /* the gate, not a silent no-op */
-  TS.multi = on;
+/* The multi-project modifier. It sits on the Project field rather than being a
+   decision of its own: it is a rare case, and the first cut gave it two large
+   choice cards that read as a co-equal question to "which job". */
+function tsToggleMulti(ev) {
+  if (ev) ev.preventDefault();
+  if (!TS.project) return;                 /* gated, and the chip says so */
+  TS.multi = !TS.multi;
+  if (!TS.multi) TS.allocs.forEach(function (r) { delete r.job; });
   tsAddFlowRender();
 }
 
 function tsBuildWorkers() {
-  var box = document.getElementById('tsWorkers');
+  var box = document.getElementById('tsCrewPicker');
   if (!box) return;
   box.innerHTML = VDATA.workers().map(function (w) {
-    return '<div class="ts-wcard" id="tsW-' + w.id + '" onclick="tsToggleWorker(\'' + w.id + '\')">' +
+    return '<div class="ts-wcard" id="tsW-' + w.id + '" onclick="tsToggleWorker(&#39;' +
+      w.id + '&#39;)">' +
       '<div class="ts-avatar">' + tsInitials(w.nm) + '</div>' +
       '<div><div class="ts-worker-name">' + w.nm + '</div>' +
       '<div class="ts-worker-role">' + w.role + '</div></div>' +
@@ -13542,6 +13615,8 @@ function tsBuildWorkers() {
 }
 
 function tsToggleWorker(id) {
+  /* pointer-events:none stops a mouse but not a synthetic or keyboard click */
+  if (tsSectionGate(2)) return;
   var i = TS.workers.indexOf(id);
   if (i < 0) TS.workers.push(id); else TS.workers.splice(i, 1);
   tsAddFlowRender();
@@ -13559,17 +13634,16 @@ function tsShiftHours() {
 function tsOnTime() { tsAddFlowRender(); }
 
 /* ── allocation ── */
-function tsAddAlloc() {
-  TS.allocs.push({ target: '', hours: 0 });
-  tsAddFlowRender();
-}
+function tsAddAlloc() { TS.allocs.push({ target: '', hours: 0 }); tsAddFlowRender(); }
 function tsRmAlloc(i) { TS.allocs.splice(i, 1); tsAddFlowRender(); }
 function tsSetAllocTarget(i, v) { TS.allocs[i].target = v; tsAddFlowRender(); }
+function tsSetAllocJob(i, v) { TS.allocs[i].job = v; tsAddFlowRender(); }
 function tsSetAllocHours(i, v) { TS.allocs[i].hours = parseFloat(v) || 0; tsAddFlowRender(); }
 
-/* The shortcut the old page needed and did not have: one press to clear the
-   remaining hours rather than arithmetic in your head. */
+/* The shortcut the original form needed and did not have: one press to clear
+   the remainder rather than arithmetic in your head. */
 function tsFillRemainder() {
+  if (tsSectionGate(3)) return;
   var left = tsShiftHours() - TS.allocs.reduce(function (a, r) { return a + r.hours; }, 0);
   if (left <= 0) return;
   var open = TS.allocs.filter(function (r) { return !r.hours; })[0];
@@ -13586,9 +13660,12 @@ function tsRenderAllocs() {
   if (!tb) return;
   var opts = VDATA.allocOptions();
   var rate = tsCrewRate();
+  document.querySelectorAll('#pageAddTimesheet .ts-job-col').forEach(function (th) {
+    th.style.display = TS.multi ? '' : 'none';
+  });
   if (!TS.allocs.length) {
-    tb.innerHTML = '<tr><td colspan="4" style="color:#94a3b8;padding:18px 14px">' +
-      'Nothing allocated yet — add a row, or use “Put the rest on one task”.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="' + (TS.multi ? 5 : 4) + '" class="ts-alloc-none">' +
+      'Nothing allocated yet — add a row, or use the shortcut below.</td></tr>';
     return;
   }
   tb.innerHTML = TS.allocs.map(function (r, i) {
@@ -13598,7 +13675,13 @@ function tsRenderAllocs() {
         return '<option value="' + o.l + '"' + (o.l === r.target ? ' selected' : '') + '>' +
                o.c + ' · ' + o.l + '</option>';
       }).join('') + '</select>';
-    return '<tr><td>' + sel + '</td>' +
+    var jobCell = TS.multi
+      ? '<td><select onchange="tsSetAllocJob(' + i + ',this.value)">' +
+        '<option value="">Select job…</option><option value="' + VDATA.projectName() + '"' +
+        (r.job === VDATA.projectName() ? ' selected' : '') + '>' + VDATA.projectName() +
+        '</option></select></td>'
+      : '';
+    return '<tr><td>' + sel + '</td>' + jobCell +
       '<td><input type="number" step="0.25" min="0" value="' + (r.hours || '') +
         '" onchange="tsSetAllocHours(' + i + ',this.value)"></td>' +
       '<td class="ts-alloc-cost">' + tsMoney(r.hours * rate) + '</td>' +
@@ -13618,6 +13701,7 @@ function tsCrewRate() {
 
 /* ── optional extras ── */
 function tsToggleExtra(which) {
+  if (tsSectionGate(4)) return;
   TS.open[which] = !TS.open[which];
   var el = document.getElementById('tsExtra' + which);
   if (el) el.classList.toggle('open', TS.open[which]);
@@ -13625,27 +13709,37 @@ function tsToggleExtra(which) {
 function tsAddAllow() {
   TS.allow.push({ type: 'Site allowance', amount: 35 });
   TS.open.Allow = true;
+  var el = document.getElementById('tsExtraAllow');
+  if (el) el.classList.add('open');
   tsAddFlowRender();
 }
 function tsRmAllow(i) { TS.allow.splice(i, 1); tsAddFlowRender(); }
-function tsSetAllow(i, k, v) { TS.allow[i][k] = k === 'amount' ? (parseFloat(v) || 0) : v; tsAddFlowRender(); }
+function tsSetAllow(i, k, v) {
+  TS.allow[i][k] = k === 'amount' ? (parseFloat(v) || 0) : v;
+  tsAddFlowRender();
+}
 function tsAddEquip() {
   var p = VDATA.plant();
   TS.equip.push({ id: p.length ? p[0].id : '', hours: 0 });
   TS.open.Equip = true;
+  var el = document.getElementById('tsExtraEquip');
+  if (el) el.classList.add('open');
   tsAddFlowRender();
 }
 function tsRmEquip(i) { TS.equip.splice(i, 1); tsAddFlowRender(); }
-function tsSetEquip(i, k, v) { TS.equip[i][k] = k === 'hours' ? (parseFloat(v) || 0) : v; tsAddFlowRender(); }
+function tsSetEquip(i, k, v) {
+  TS.equip[i][k] = k === 'hours' ? (parseFloat(v) || 0) : v;
+  tsAddFlowRender();
+}
 
 function tsRenderExtras() {
   var a = document.getElementById('tsAllowRows');
   if (a) {
     a.innerHTML = TS.allow.map(function (r, i) {
       return '<div class="ts-xrow"><input class="ts-xgrow" value="' + r.type +
-        '" onchange="tsSetAllow(' + i + ',\'type\',this.value)">' +
+        '" onchange="tsSetAllow(' + i + ',&#39;type&#39;,this.value)">' +
         '<input type="number" style="width:110px" value="' + r.amount +
-        '" onchange="tsSetAllow(' + i + ',\'amount\',this.value)">' +
+        '" onchange="tsSetAllow(' + i + ',&#39;amount&#39;,this.value)">' +
         '<span class="ts-rm" onclick="tsRmAllow(' + i + ')"><i class="fas fa-xmark"></i></span></div>';
     }).join('');
     var tot = TS.allow.reduce(function (s, r) { return s + r.amount; }, 0);
@@ -13656,56 +13750,23 @@ function tsRenderExtras() {
   if (e) {
     var plant = VDATA.plant();
     e.innerHTML = TS.equip.map(function (r, i) {
-      return '<div class="ts-xrow"><select class="ts-xgrow" onchange="tsSetEquip(' + i + ',\'id\',this.value)">' +
+      return '<div class="ts-xrow">' +
+        '<select class="ts-xgrow" onchange="tsSetEquip(' + i + ',&#39;id&#39;,this.value)">' +
         plant.map(function (p) {
           return '<option value="' + p.id + '"' + (p.id === r.id ? ' selected' : '') + '>' +
                  p.nm + ' (' + p.id + ') · $' + p.rate + '/hr</option>';
         }).join('') + '</select>' +
         '<input type="number" step="0.25" style="width:110px" placeholder="hours" value="' +
-        (r.hours || '') + '" onchange="tsSetEquip(' + i + ',\'hours\',this.value)">' +
+        (r.hours || '') + '" onchange="tsSetEquip(' + i + ',&#39;hours&#39;,this.value)">' +
         '<span class="ts-rm" onclick="tsRmEquip(' + i + ')"><i class="fas fa-xmark"></i></span></div>';
     }).join('');
     var hrs = TS.equip.reduce(function (s, r) { return s + r.hours; }, 0);
     var es = document.getElementById('tsEquipSum');
     if (es) es.textContent = TS.equip.length ? tsHM(hrs) : 'none';
   }
-}
-
-/* ── gating: what is missing before this step is done ── */
-function tsBlockerFor(step) {
-  var shift = tsShiftHours();
-  if (step === 1) {
-    if (!TS.project) return 'Choose a project to carry on';
-    if (TS.multi === null) return 'Say whether the day is split across jobs';
-    return null;
-  }
-  if (step === 2) {
-    if (!TS.workers.length) return 'Select at least one worker';
-    if (shift <= 0) return 'Clock out has to be after clock in';
-    if (shift > 14) return 'That is a ' + tsHM(shift) + ' shift — check the times';
-    return null;
-  }
-  if (step === 3) {
-    var alloc = TS.allocs.reduce(function (a, r) { return a + r.hours; }, 0);
-    if (TS.allocs.some(function (r) { return r.hours > 0 && !r.target; }))
-      return 'Every allocated row needs a task';
-    if (Math.abs(alloc - shift) > 0.01) {
-      return alloc > shift
-        ? tsHM(alloc - shift) + ' more allocated than worked'
-        : tsHM(shift - alloc) + ' of the shift still unallocated';
-    }
-    return null;
-  }
-  return null;
-}
-
-function tsGoStep(delta) {
-  var next = TS.step + delta;
-  if (next < 1 || next > TS_STEPS.length) return;
-  if (delta > 0 && tsBlockerFor(TS.step)) return;
-  TS.step = next;
-  tsAddFlowRender();
-  window.scrollTo(0, 0);
+  var ns = document.getElementById('tsNoteSum');
+  var rm = document.getElementById('tsRemarks');
+  if (ns) ns.textContent = (rm && rm.value.trim()) ? 'note added' : 'none';
 }
 
 function tsAddFlowRender() {
@@ -13713,43 +13774,28 @@ function tsAddFlowRender() {
   var rate = tsCrewRate();
   var allocated = TS.allocs.reduce(function (a, r) { return a + r.hours; }, 0);
 
-  /* stepper, in the budget flow's own markup */
-  var st = document.getElementById('tsStepper');
-  if (st) {
-    st.innerHTML = TS_STEPS.map(function (s, i) {
-      var cls = s.num === TS.step ? 'active' : s.num < TS.step ? 'done' : '';
-      var icon = s.num < TS.step ? '<i class="fas fa-check"></i>' : s.num;
-      var h = '<div class="step ' + cls + '"><div class="step-circle">' + icon +
-              '</div><span class="step-label">' + s.label + '</span></div>';
-      if (i < TS_STEPS.length - 1) {
-        h += '<div class="step-line' + (s.num < TS.step ? ' done' : '') + '"></div>';
-      }
-      return h;
-    }).join('');
+  /* Sections dim and stop taking input until they can be answered, and each
+     says what it is waiting for. The original form greyed its Workers picker
+     with nothing to explain it. */
+  for (var n = 1; n <= 4; n++) {
+    var sec = document.getElementById('tsSec' + n);
+    if (!sec) continue;
+    var gate = tsSectionGate(n);
+    sec.classList.toggle('ts-locked', !!gate);
+    var note = sec.querySelector('.ts-lock-note span');
+    if (note) note.textContent = gate || '';
   }
 
-  document.querySelectorAll('#pageAddTimesheet .ts-step').forEach(function (el, i) {
-    el.classList.toggle('active', i + 1 === TS.step);
-  });
-
-  /* step 1 choice cards */
-  var single = document.getElementById('tsCardSingle');
-  var multi = document.getElementById('tsCardMulti');
-  if (single && multi) {
-    single.classList.toggle('selected', TS.multi === false);
-    multi.classList.toggle('selected', TS.multi === true);
-    single.classList.toggle('disabled', !TS.project);
-    multi.classList.toggle('disabled', !TS.project);
+  /* the multi-project modifier */
+  var tog = document.getElementById('tsMultiToggle');
+  if (tog) {
+    tog.classList.toggle('on', !!TS.multi);
+    tog.classList.toggle('off', !TS.project);
+    tog.title = TS.project ? '' : 'Choose a project first';
   }
+  var mnote = document.getElementById('tsMultiNote');
+  if (mnote) mnote.style.display = TS.multi ? '' : 'none';
 
-  /* step 2: the workers list is locked until there is a project, and says so */
-  var lock = document.getElementById('tsWorkerLock');
-  var box = document.getElementById('tsWorkers');
-  if (lock && box) {
-    var locked = !TS.project;
-    lock.style.display = locked ? 'block' : 'none';
-    box.classList.toggle('locked', locked);
-  }
   VDATA.workers().forEach(function (w) {
     var el = document.getElementById('tsW-' + w.id);
     if (el) el.classList.toggle('on', TS.workers.indexOf(w.id) >= 0);
@@ -13774,7 +13820,7 @@ function tsAddFlowRender() {
       : 'Select the crew and this will show what the shift costs.';
   }
 
-  /* step 3: reconciliation */
+  /* allocation reconciles to zero */
   tsRenderAllocs();
   tsRenderExtras();
   var pct = shift > 0 ? Math.min(100, allocated / shift * 100) : 0;
@@ -13795,79 +13841,48 @@ function tsAddFlowRender() {
     unw.firstChild.textContent = left < -0.01 ? 'Over-allocated ' : 'Unassigned ';
   }
 
-  /* step 4: review */
-  if (TS.step === 4) tsRenderReview(shift, rate);
+  /* the footer stands in for the old review step */
+  tsRenderSummary(shift, rate);
 
-  /* footer */
-  var blocker = tsBlockerFor(TS.step);
+  var blocker = tsBlocker();
   var bl = document.getElementById('tsBlocker');
-  var next = document.getElementById('tsNext');
   var save = document.getElementById('tsSave');
-  var prev = document.getElementById('tsPrev');
-  if (prev) prev.classList.toggle('ts-off', TS.step === 1);
-  if (next) next.style.display = TS.step === TS_STEPS.length ? 'none' : '';
-  if (save) save.style.display = TS.step === TS_STEPS.length ? '' : 'none';
-  if (next) next.classList.toggle('ts-off', !!blocker);
   if (save) save.classList.toggle('ts-off', !!blocker);
   if (bl) {
     bl.className = 'ts-blocker' + (blocker ? '' : ' ok');
     bl.innerHTML = blocker
       ? '<i class="fas fa-circle-exclamation"></i> ' + blocker
-      : (TS.step === TS_STEPS.length
-          ? '<i class="fas fa-circle-check"></i> Ready to save'
-          : '<i class="fas fa-circle-check"></i> Step complete');
+      : '<i class="fas fa-circle-check"></i> Ready to save';
   }
 }
 
-function tsRenderReview(shift, rate) {
-  var el = document.getElementById('tsReview');
+/* One line of what is about to be created, and where the cost goes. The old
+   flow spent a whole step on this; it fits in the footer. */
+function tsRenderSummary(shift, rate) {
+  var el = document.getElementById('tsSummary');
   if (!el) return;
+  if (!TS.workers.length || !TS.project) {
+    el.innerHTML = '<span class="ts-sum-empty">Nothing to save yet</span>';
+    return;
+  }
   var all = VDATA.workers();
   var names = TS.workers.map(function (id) {
     return (all.filter(function (w) { return w.id === id; })[0] || {}).nm;
   });
+  var tasks = TS.allocs.filter(function (r) { return r.hours > 0 && r.target; }).length;
   var total = shift * rate;
-  var allowTotal = TS.allow.reduce(function (a, r) { return a + r.amount; }, 0);
-
-  function row(l, v) {
-    return '<div class="ts-rev-row"><div class="ts-rev-label">' + l +
-           '</div><div class="ts-rev-val">' + v + '</div></div>';
-  }
-  var byTask = TS.allocs.filter(function (r) { return r.hours > 0 && r.target; })
-    .map(function (r) {
-      return '<div>' + r.target + ' — <b>' + tsHM(r.hours) + '</b> · ' +
-             tsMoney(r.hours * rate) + '</div>';
-    }).join('');
-
+  var allow = TS.allow.reduce(function (a, r) { return a + r.amount; }, 0);
   el.innerHTML =
-    row('Date', tsDayLabel(TS.date) + ' ' + TS.date.slice(0, 4)) +
-    row('Project', TS.project) +
-    row('Workers', names.length + ' — ' + names.join(', ')) +
-    row('Shift', tsAmPm(document.getElementById('tsIn').value) + ' – ' +
-        tsAmPm(document.getElementById('tsOut').value) + ' · ' +
-        document.getElementById('tsBreak').value + 'm break · <b>' + tsHM(shift) + '</b> each') +
-    row('Allocation', byTask || '<span style="color:#94a3b8">none</span>') +
-    (allowTotal ? row('Allowances', tsMoney(allowTotal)) : '') +
-    (TS.equip.length ? row('Equipment', TS.equip.length + ' item(s)') : '') +
-    row('Approval', 'Goes to <b>' + VDATA.approverFor(null) + '</b> as <b>Unapproved</b>') +
-    row('Labour cost', '<b>' + tsMoney(total) + '</b>') +
-    '<div class="ts-lands"><i class="fas fa-arrow-turn-down" style="margin-right:8px"></i>' +
-    'Saving this books <b>' + tsMoney(total) + '</b> of labour against ' +
-    (TS.allocs.length === 1 ? 'this task' : 'these tasks') +
-    ' and the day appears on the Daily Cost calendar and the Site Diary. ' +
-    'It lands as <b>tracked</b> cost — not actual — until ' + VDATA.approverFor(null) +
-    ' approves it.' +
-    /* Deliberately not a claim-period figure. The base apportions each line's
-       cost across the four claim periods by a fixed weight, so a line bumped
-       here raises the job's cost by the full amount but this period's share by
-       less. Quoting the period number would read as a discrepancy against the
-       overview; quoting the job number is simply true. */
-    '</div>';
+    '<b>' + (names.length > 2 ? names.length + ' workers' : names.join(', ')) + '</b>' +
+    ' · ' + tsHM(shift) + ' each · ' + tsMoney(total + allow) + ' labour' +
+    ' · ' + (tasks ? tasks + (tasks === 1 ? ' task' : ' tasks') : 'not allocated') +
+    '<em>Tracked cost until ' + VDATA.approverFor(null) + ' approves it.' +
+    ' Shows on the Daily Cost calendar and the Site Diary for ' + tsShort(TS.date) + '.</em>';
 }
 
 /* ── save: the timesheet is the source of the cost ── */
 function tsSave() {
-  if (tsBlockerFor(3) || tsBlockerFor(2) || tsBlockerFor(1)) return;
+  if (tsBlocker()) return;
   var shift = tsShiftHours();
   var all = VDATA.workers();
   var opts = VDATA.allocOptions();
