@@ -233,7 +233,7 @@ function tsRenderWorkers(body, sheets) {
       '<td>' + VDATA.approverFor(r.w) + '</td>' +
       '<td class="ts-time"><b>' + tsHM(r.hrs) + '</b><span>' +
         Object.keys(r.days).length + ' day(s)</span></td>' +
-      '<td class="ts-time"><b>' + tsMoney(r.cost) + '</b><span>$' + r.w.rate + '/hr</span></td>' +
+      '<td class="ts-time"><b>' + tsMoney(r.cost) + '</b><span>labour cost</span></td>' +
       '<td>' + r.total + ' timesheet(s)</td>' +
       '<td><span class="ts-pill ' + (r.approved === r.total ? 'approved' : 'unapproved') + '">' +
         r.approved + ' of ' + r.total + ' approved</span></td>' +
@@ -388,8 +388,10 @@ function tsRenderCrew() {
           '<span class="ts-cbox"><i class="fas fa-check"></i></span>' +
           '<span class="ts-avatar">' + tsInitials(w.nm) + '</span>' +
           '<span class="ts-crow-name">' + w.nm + '</span>' +
-          '<span class="ts-crow-role">' + w.role + '</span>' +
-          '<span class="ts-crow-rate">$' + w.rate + '/hr</span></div>';
+          /* No rate here. Whoever enters a timesheet often has no visibility of
+             pay, and the figure was ambiguous anyway — the base carries both a
+             costRate and a labourSell per person and the row named neither. */
+          '<span class="ts-crow-role">' + w.role + '</span></div>';
       }).join('')
     : '<div class="ts-crew-none">Nobody matches “' + q + '”.</div>';
 
@@ -658,9 +660,11 @@ function tsAddFlowRender() {
   }
   var hint = document.getElementById('tsShiftHint');
   if (hint) {
+    /* The total, not a rate: "at $144/hr for the crew selected" is one
+       worker's rate the moment only one is selected. */
     hint.innerHTML = TS.workers.length
-      ? 'At ' + tsMoney(rate) + '/hr for the crew selected, this shift is <b>' +
-        tsMoney(shift * rate) + '</b> of labour cost.'
+      ? 'This shift is <b>' + tsMoney(shift * rate) + '</b> of labour cost across ' +
+        TS.workers.length + (TS.workers.length === 1 ? ' worker.' : ' workers.')
       : 'Select the crew and this will show what the shift costs.';
   }
 

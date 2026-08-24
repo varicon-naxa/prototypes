@@ -179,6 +179,24 @@ ledger's plant category. An allowance is part of the worker's pay, so it rides w
 on `tsUnapproved`. Verified: 8h labour + 2h plant + a $35 allowance moved the budget by
 $563 labour and $190 plant, with the ledger still tied at a $0 gap.
 
+### No pay rates on the timesheet screens
+
+The crew picker showed `$78/hr` per person. Two problems: whoever enters a timesheet
+often has no visibility of pay, and the figure was ambiguous — the base carries both a
+`costRate` and a `labourSell` for each person and the row named neither.
+
+Removed from the crew picker, from the Workers tab (which printed `$92/hr` outright), and
+from the shift hint, which read "At $144/hr for the crew selected…" — an aggregate that is
+one person's rate the moment only one is selected.
+
+**Cost figures stay**, because cost landing on the budget is the point of the allocation
+step. Note the consequence though: a single-worker timesheet still makes the rate
+derivable, since cost ÷ hours is the rate. Hiding cost as well would need a permission
+rule, which is a product decision rather than a prototype one.
+
+Plant hire rates are still shown on the equipment picker. They are equipment charge rates,
+not somebody's pay, and they are on the hire docket the site already handles.
+
 ### The crew picker holds its size
 
 A card per worker reads well for a crew of five and becomes a wall at fifty. Search, a
