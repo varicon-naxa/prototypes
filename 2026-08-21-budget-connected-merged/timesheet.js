@@ -190,7 +190,7 @@ function tsRender() {
               tsMoney(s.cost) + '</span>' +
           '</div></div></div></td>' +
         '<td>' + VDATA.projectName() + '</td>' +
-        '<td>' + VDATA.approver().nm + '</td>' +
+        '<td>' + VDATA.approverFor(s.worker) + '</td>' +
         '<td class="ts-time">' + timeCell + '</td>' +
         '<td class="ts-time">' + (s.approved ? timeCell : '<span class="ts-dash">—</span>') + '</td>' +
         '<td>' + VDATA.ccLabel(s.cc) + '<div class="ts-worker-role">' + task + '</div></td>' +
@@ -230,7 +230,7 @@ function tsRenderWorkers(body, sheets) {
         '<div><div class="ts-worker-name">' + r.w.nm + '</div>' +
         '<div class="ts-worker-role">' + r.w.role + '</div></div></div></td>' +
       '<td>' + VDATA.projectName() + '</td>' +
-      '<td>' + VDATA.approver().nm + '</td>' +
+      '<td>' + VDATA.approverFor(r.w) + '</td>' +
       '<td class="ts-time"><b>' + tsHM(r.hrs) + '</b><span>' +
         Object.keys(r.days).length + ' day(s)</span></td>' +
       '<td class="ts-time"><b>' + tsMoney(r.cost) + '</b><span>$' + r.w.rate + '/hr</span></td>' +
@@ -629,13 +629,20 @@ function tsRenderReview(shift, rate) {
     row('Allocation', byTask || '<span style="color:#94a3b8">none</span>') +
     (allowTotal ? row('Allowances', tsMoney(allowTotal)) : '') +
     (TS.equip.length ? row('Equipment', TS.equip.length + ' item(s)') : '') +
-    row('Approval', 'Goes to <b>' + VDATA.approver().nm + '</b> as <b>Unapproved</b>') +
+    row('Approval', 'Goes to <b>' + VDATA.approverFor(null) + '</b> as <b>Unapproved</b>') +
     row('Labour cost', '<b>' + tsMoney(total) + '</b>') +
     '<div class="ts-lands"><i class="fas fa-arrow-turn-down" style="margin-right:8px"></i>' +
-    'Saving this adds <b>' + tsMoney(total) + '</b> of <b>tracked</b> cost to the budget ' +
-    'against ' + (TS.allocs.length === 1 ? 'this task' : 'these tasks') +
-    ', and the day shows up on the Daily Cost calendar and the Site Diary. ' +
-    'It is tracked, not actual, until the approver signs it off.</div>';
+    'Saving this books <b>' + tsMoney(total) + '</b> of labour against ' +
+    (TS.allocs.length === 1 ? 'this task' : 'these tasks') +
+    ' and the day appears on the Daily Cost calendar and the Site Diary. ' +
+    'It lands as <b>tracked</b> cost — not actual — until ' + VDATA.approverFor(null) +
+    ' approves it.' +
+    /* Deliberately not a claim-period figure. The base apportions each line's
+       cost across the four claim periods by a fixed weight, so a line bumped
+       here raises the job's cost by the full amount but this period's share by
+       less. Quoting the period number would read as a discrepancy against the
+       overview; quoting the job number is simply true. */
+    '</div>';
 }
 
 /* ── save: the timesheet is the source of the cost ── */
@@ -656,7 +663,11 @@ function tsSave() {
       var cost = Math.round(a.hours * w.rate);
 
       /* A timesheet not yet approved is tracked cost, and for employee labour
-         that is tsUnapproved on the budget line it was booked against. */
+         that is tsUnapproved on the budget line it was booked against.
+
+         Note this raises the line's cost for the job, not for one claim
+         period: the base spreads each line across the four periods by a fixed
+         weight, so this period picks up its share rather than the lot. */
       var line = baseItems.filter(function (l) { return l.code === opt.code; })[0];
       if (line) line.tsUnapproved = (line.tsUnapproved || 0) + cost;
 
