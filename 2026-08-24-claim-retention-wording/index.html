@@ -341,15 +341,16 @@
         </div>
         <div class="field">
           <label>Claim Period</label>
-          <div class="fake-input">&#128197; Sat 25/07/2026 - Mon 24/08/2026 &nbsp;&#9662;</div>
+          <div class="fake-input">&#128197; <span id="claimPeriod">Sat 25/07/2026 - Mon 24/08/2026</span> &nbsp;&#9662;</div>
         </div>
       </div>
 
       <div class="scenario-bar">
         <span class="sb-label">Demo state</span>
-        <button class="chip" data-sc="none">No retention set up</button>
-        <button class="chip active" data-sc="running">Holding retention</button>
-        <button class="chip" data-sc="pc">Practical completion reached</button>
+        <button class="chip" data-sc="none">No profile applied</button>
+        <button class="chip active" data-sc="running">Flat 5% &mdash; holding</button>
+        <button class="chip" data-sc="pc">Flat 5% &mdash; at practical completion</button>
+        <button class="chip" data-sc="stepped">NZS 3910 stepped &mdash; holding</button>
       </div>
 
       <div class="top-strip" id="topStrip"></div>
@@ -504,208 +505,375 @@
   </div>
 </div>
 
+<style>
+  .prof-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #f2f2f2; }
+  .prof-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; font-weight: 700; background: #1a1a2e; color: #fff; padding: 3px 9px; border-radius: 5px; letter-spacing: .5px; }
+  .prof-name { font-size: 13.5px; font-weight: 700; }
+  .prof-type { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #f7941d; background: #fff5e9; padding: 3px 9px; border-radius: 5px; }
+  .prof-where { font-size: 12px; color: #999; width: 100%; }
+
+  .prof-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 1px; background: #eee; border: 1px solid #eee; border-radius: 8px; overflow: hidden; margin-top: 14px; }
+  .prof-item { background: #fff; padding: 10px 13px; }
+  .prof-item .pi-label { font-size: 11px; color: #8a8a8a; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+  .prof-item .pi-value { font-size: 14px; font-weight: 700; margin-top: 3px; }
+  .prof-item .pi-note { font-size: 11.5px; color: #a0a0a0; margin-top: 2px; }
+  .prof-item.unset { background: #fffaf3; }
+  .prof-item.unset .pi-value { color: #c07a12; }
+
+  .question { border-left: 3px solid #f7941d; background: #fffaf3; border-radius: 0 8px 8px 0; padding: 12px 16px; font-size: 13px; line-height: 1.7; color: #5c4a30; margin-top: 14px; }
+  .question b { color: #1a1a2e; }
+  .question .q-tag { display: block; font-size: 10.5px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; color: #c07a12; margin-bottom: 5px; }
+
+  table.steps { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+  table.steps thead th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #8a8a8a; font-weight: 700; padding: 0 12px 8px; border-bottom: 1px solid #ededed; }
+  table.steps thead th.r { text-align: right; }
+  table.steps td { padding: 9px 12px; border-bottom: 1px solid #f5f5f5; }
+  table.steps td.r { text-align: right; font-variant-numeric: tabular-nums; }
+  table.steps tr:last-child td { border-bottom: none; }
+  table.steps td:first-child, table.steps th:first-child { padding-left: 0; }
+  table.steps td:last-child, table.steps th:last-child { padding-right: 0; }
+  table.steps tr.tot td { border-top: 2px solid #1a1a2e; font-weight: 800; padding-top: 11px; }
+  table.steps tr.nil td { color: #b0b0b0; }
+  .band-slice { font-size: 11.5px; color: #999; margin-top: 2px; }
+</style>
+
 <script>
 /* ------------------------------------------------------------------
-   Same figures as the live screen. Only the framing changes.
+   Retention terms are a TENANT-LEVEL PROFILE, not product constants.
+   Two profile types are modelled:
+     - Flat percentage  (existing AU behaviour, VDP-111's assumptions)
+     - Step by Value    (NZS 3910 banded schedule, VDP-2034)
+   Figures for the flat profile come from the live screenshot of Claim #2
+   on (26-015) Mt Ousley Road. Figures for the stepped profile use
+   VDP-2034's own worked example so they can be checked against the ticket.
    ------------------------------------------------------------------ */
-var BASE = {
+
+var AU = {
+  project: '(26-015) Mt Ousley Road, Mt Ousley',
   contractSum: 101392.93,
   prevClaimed:  71872.22,
   thisClaim:    28994.21,
   claimToDate: 100866.43,
-  leftToClaim:    526.50
+  leftToClaim:    526.50,
+  period: '25 Jul – 24 Aug 2026',
+  periodLong: 'Sat 25/07/2026 - Mon 24/08/2026',
+  nonClaimable: 35
 };
 
-var SCENARIOS = {
-  none: {
-    setUp: false,
-    heldBefore: 0, holdNow: 0, releaseNow: 0
-  },
-  running: {
-    setUp: true,
-    ratePct: 5,
-    cap: 5069.65,
-    heldBefore: 3593.61,
-    holdNow: 1449.71,
-    releaseNow: 0,
-    releaseWhy: 'Nothing falls due in this period',
-    trace: [
-      { label: 'Claim #1 &nbsp;&middot;&nbsp; 25 Jun &ndash; 24 Jul 2026', why: '5% of $71,872.22', amt: 3593.61 }
-    ],
-    stages: [
-      { name: 'Practical completion', trigger: 'When the superintendent issues the PC certificate', amt: 2521.66, state: 'wait', text: 'Not due yet' },
-      { name: 'End of defects liability', trigger: '12 months after practical completion', amt: 2521.66, state: 'wait', text: 'Not due yet' }
-    ]
-  },
-  pc: {
-    setUp: true,
-    ratePct: 5,
-    cap: 5069.65,
-    heldBefore: 3593.61,
-    holdNow: 1449.71,
-    releaseNow: 2521.66,
-    releaseWhy: 'PC certificate issued 12 Aug 2026 &mdash; half the balance falls due',
-    trace: [
-      { label: 'Claim #1 &nbsp;&middot;&nbsp; 25 Jun &ndash; 24 Jul 2026', why: '5% of $71,872.22', amt: 3593.61 }
-    ],
-    stages: [
-      { name: 'Practical completion', trigger: 'PC certificate issued 12 Aug 2026', amt: 2521.66, state: 'now', text: 'Releasing on this claim' },
-      { name: 'End of defects liability', trigger: 'Falls due 12 Aug 2027', amt: 2521.66, state: 'wait', text: 'Not due yet' }
-    ]
-  }
+var NZ = {
+  project: '(NZ-041) Waikato Expressway Stage 2',
+  contractSum: 1500000,
+  prevClaimed:  250000,
+  thisClaim:    300000,
+  claimToDate:  550000,
+  leftToClaim:  950000,
+  period: '1 – 31 Aug 2026',
+  periodLong: 'Sat 01/08/2026 - Mon 31/08/2026',
+  nonClaimable: 0
 };
+
+var FLAT_PROFILE = {
+  code: 'STD-AU',
+  name: 'Standard 5% flat',
+  type: 'Flat percentage',
+  ratePct: 5,
+  cap: 5069.65,
+  capBasis: '5% of the contract sum',
+  pcReleasePct: 50,
+  postPcRatePct: 2.5,
+  postPcCap: null,          /* deliberately unset — see VDP-111 */
+  dlpMonths: 12
+};
+
+var NZS3910_PROFILE = {
+  code: 'STD',
+  name: 'NZS 3910 default retentions',
+  type: 'Step by Value',
+  steps: [
+    { cut:   200000, pct: 10.000 },
+    { cut:  1000000, pct:  5.000 },
+    { cut: 20000000, pct:  1.750 },
+    { cut:        0, pct:  0.000 }   /* residual band — nil */
+  ],
+  cap: null,
+  pcReleasePct: 50,
+  dlpMonths: 12
+};
+
+/* Marginal banding: each rate applies only to the slice of value inside
+   its band. VDP-2034's decisive design question — a flat read of the
+   final band would understate a $1.5m contract by $42,500. */
+function bandBreakdown(steps, value) {
+  var rows = [], lower = 0, total = 0;
+  for (var i = 0; i < steps.length; i++) {
+    var upper = steps[i].cut > 0 ? steps[i].cut : Infinity;
+    var slice = Math.max(0, Math.min(value, upper) - lower);
+    var amt = slice * steps[i].pct / 100;
+    rows.push({ lower: lower, upper: upper, pct: steps[i].pct, slice: slice, amt: amt });
+    total += amt;
+    lower = upper;
+    if (!isFinite(upper)) break;
+  }
+  return { rows: rows, total: total };
+}
+
+var SCENARIOS = {
+  none:    { base: AU, profile: null,          heldBefore: 0,       holdNow: 0,       releaseNow: 0 },
+  running: { base: AU, profile: FLAT_PROFILE,  heldBefore: 3593.61, holdNow: 1449.71, releaseNow: 0,
+             releaseWhy: 'Nothing falls due in this period',
+             trace: [{ label: 'Claim #1 &nbsp;&middot;&nbsp; 25 Jun &ndash; 24 Jul 2026', why: '5% of $71,872.22', amt: 3593.61 }] },
+  pc:      { base: AU, profile: FLAT_PROFILE,  heldBefore: 3593.61, holdNow: 1449.71, releaseNow: 2521.66,
+             pcDate: '12 Aug 2026',
+             releaseWhy: 'PC certificate issued 12 Aug 2026 &mdash; half the balance falls due',
+             trace: [{ label: 'Claim #1 &nbsp;&middot;&nbsp; 25 Jun &ndash; 24 Jul 2026', why: '5% of $71,872.22', amt: 3593.61 }] },
+  stepped: { base: NZ, profile: NZS3910_PROFILE, releaseNow: 0,
+             releaseWhy: 'Nothing falls due in this period',
+             trace: [{ label: 'Claim #1 &nbsp;&middot;&nbsp; 1 &ndash; 31 Jul 2026', why: 'Banded on $250,000 claimed to date', amt: 22500 }] }
+};
+
+/* Stepped scenario derives its own figures from the schedule. */
+(function () {
+  var s = SCENARIOS.stepped;
+  s.heldBefore = bandBreakdown(s.profile.steps, s.base.prevClaimed).total;
+  s.holdNow    = bandBreakdown(s.profile.steps, s.base.claimToDate).total - s.heldBefore;
+  s.schedTotal = bandBreakdown(s.profile.steps, s.base.contractSum).total;
+})();
 
 function money(n) {
   return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-function signed(n, dir) {
-  if (n === 0) return money(0);
-  return (dir === 'minus' ? '−' : '+') + money(n);
+function pct(n, dp) { return n.toFixed(dp === undefined ? 3 : dp) + '%'; }
+function bandLabel(r) {
+  if (r.lower === 0) return 'First ' + money(r.upper).replace('.00', '');
+  if (!isFinite(r.upper)) return 'Above ' + money(r.lower).replace('.00', '');
+  return money(r.lower).replace('.00', '') + ' &ndash; ' + money(r.upper).replace('.00', '');
 }
 
 function render(key) {
   var s = SCENARIOS[key];
+  var b = s.base;
+  var p = s.profile;
   var balance = s.heldBefore + s.holdNow - s.releaseNow;
-  var payable = BASE.thisClaim - s.holdNow + s.releaseNow;
+  var payable = b.thisClaim - s.holdNow + s.releaseNow;
+  var ceiling = p ? (p.type === 'Step by Value' ? s.schedTotal : p.cap) : null;
 
   /* ---------- top strip ---------- */
-  var retentionTile = s.setUp
+  var retentionTile = p
     ? '<div class="tile">' +
         '<div class="t-label">Retention held back</div>' +
         '<div class="t-value">' + money(balance) + '</div>' +
-        '<div class="t-sub">' + Math.round(balance / s.cap * 100) + '% of the ' + money(s.cap) + ' cap</div>' +
+        '<div class="t-sub">' + Math.round(balance / ceiling * 100) + '% of the ' + money(ceiling) +
+        (p.type === 'Step by Value' ? ' the schedule will hold' : ' cap') + '</div>' +
       '</div>'
     : '<div class="tile">' +
         '<div class="t-label">Retention held back</div>' +
         '<div class="t-value" style="color:#a5a5a5">None</div>' +
-        '<div class="t-sub">No retention set up on this contract</div>' +
+        '<div class="t-sub">No retention profile applied to this contract</div>' +
       '</div>';
 
   document.getElementById('topStrip').innerHTML =
     '<div class="tile">' +
       '<div class="t-label">Contract sum</div>' +
-      '<div class="t-value">' + money(BASE.contractSum) + '</div>' +
+      '<div class="t-value">' + money(b.contractSum) + '</div>' +
       '<div class="t-sub">Original contract plus approved variations</div>' +
     '</div>' +
     '<div class="tile">' +
       '<div class="t-label">Claimed to date</div>' +
-      '<div class="t-value">' + money(BASE.claimToDate) + '</div>' +
-      '<div class="t-sub">' + money(BASE.prevClaimed) + ' earlier &nbsp;+&nbsp; ' + money(BASE.thisClaim) + ' this claim<br>Before retention</div>' +
+      '<div class="t-value">' + money(b.claimToDate) + '</div>' +
+      '<div class="t-sub">' + money(b.prevClaimed) + ' earlier &nbsp;+&nbsp; ' + money(b.thisClaim) + ' this claim<br>Before retention</div>' +
     '</div>' +
     '<div class="tile">' +
       '<div class="t-label">Left to claim</div>' +
-      '<div class="t-value">' + money(BASE.leftToClaim) + '</div>' +
-      '<div class="t-sub">0.5% of the contract sum still unclaimed</div>' +
+      '<div class="t-value">' + money(b.leftToClaim) + '</div>' +
+      '<div class="t-sub">' + (b.leftToClaim / b.contractSum * 100).toFixed(1) + '% of the contract sum still unclaimed</div>' +
     '</div>' +
     retentionTile +
     '<div class="tile payable">' +
       '<div class="t-label">This invoice</div>' +
       '<div class="t-value">' + money(payable) + '</div>' +
-      '<div class="t-sub">' + (s.setUp && (s.holdNow || s.releaseNow)
-          ? money(BASE.thisClaim) + ' claimed, after retention'
+      '<div class="t-sub">' + (p && (s.holdNow || s.releaseNow)
+          ? money(b.thisClaim) + ' claimed, after retention'
           : 'Nothing held back, so the full claim is payable') + '</div>' +
     '</div>';
 
-  /* ---------- retention body ---------- */
+  /* ---------- body ---------- */
   var html = '';
 
-  if (!s.setUp) {
+  if (!p) {
     html +=
       '<div class="panel"><div class="panel-body"><div class="empty">' +
         '<div class="e-icon">&#128274;</div>' +
-        '<h5>No retention on this contract</h5>' +
-        '<p>Nothing is held back from this claim, so the full <b>' + money(BASE.thisClaim) + '</b> is payable. ' +
-        'If this contract does hold retention, set the terms up once and Varicon will apply them from Claim&nbsp;#2 onward &mdash; ' +
-        'earlier claims are left alone.</p>' +
-        '<button class="btn-outline">Set up retention terms</button>' +
+        '<h5>No retention profile applied to this contract</h5>' +
+        '<p>Nothing is held back from this claim, so the full <b>' + money(b.thisClaim) + '</b> is payable. ' +
+        'Retention profiles are set up once for the whole tenant in <b>Settings &rarr; Retention profiles</b> ' +
+        'and applied per contract &mdash; so if this contract does hold retention, pick the profile it runs on ' +
+        'and Varicon will apply it from Claim&nbsp;#2 onward. Earlier claims are left alone.</p>' +
+        '<button class="btn-outline">Apply a retention profile</button>' +
       '</div></div></div>';
   } else {
-    /* terms */
+    /* --- terms --- */
     html +=
       '<div class="panel">' +
         '<div class="panel-head">' +
-          '<div><h4>Retention terms</h4><div class="ph-sub">Set once on the contract, applied to every claim</div></div>' +
-          '<button class="link-btn">Edit terms</button>' +
+          '<div><h4>Retention terms</h4><div class="ph-sub">The profile this contract runs on</div></div>' +
+          '<button class="link-btn">Edit profile</button>' +
         '</div>' +
-        '<div class="panel-body"><div class="rule-line">' +
-          '<b>' + s.ratePct + '%</b> of everything claimed is held back, up to a cap of <b>' + money(s.cap) + '</b> ' +
-          '(' + s.ratePct + '% of the ' + money(BASE.contractSum) + ' contract sum).<br>' +
-          '<b>Half</b> is released at practical completion. The <b>rest</b> is released 12 months later, at the end of the defects liability period.' +
-        '</div></div>' +
-      '</div>';
+        '<div class="panel-body">' +
+          '<div class="prof-head">' +
+            '<span class="prof-code">' + p.code + '</span>' +
+            '<span class="prof-name">' + p.name + '</span>' +
+            '<span class="prof-type">' + p.type + '</span>' +
+            '<span class="prof-where">Defined once in <b>Settings &rarr; Retention profiles</b> and shared across every contract on this tenant. ' +
+            'Editing it here edits it everywhere &mdash; contracts already running on it keep the terms they were claimed under.</span>' +
+          '</div>';
 
-    /* ledger */
+    if (p.type === 'Step by Value') {
+      var sched = bandBreakdown(p.steps, b.contractSum);
+      var stepRows = sched.rows.map(function (r) {
+        return '<tr' + (r.pct === 0 ? ' class="nil"' : '') + '>' +
+          '<td>' + bandLabel(r) + '</td>' +
+          '<td class="r">' + pct(r.pct) + '</td>' +
+          '<td class="r">' + money(r.slice) + '</td>' +
+          '<td class="r">' + money(r.amt) + '</td></tr>';
+      }).join('');
+
+      html +=
+        '<div class="rule-line">Retention steps down as contract value rises. <b>Each rate applies only to the slice of value inside its own band</b>, ' +
+        'not to the whole contract &mdash; so this ' + money(b.contractSum) + ' contract retains ' + money(sched.total) + ' in total, ' +
+        'an effective <b>' + pct(sched.total / b.contractSum * 100, 3) + '</b>.</div>' +
+        '<table class="steps">' +
+          '<thead><tr><th>Band of contract value</th><th class="r">Rate</th><th class="r">Value in band</th><th class="r">Retention</th></tr></thead>' +
+          '<tbody>' + stepRows +
+          '<tr class="tot"><td>Total retention over the life of this contract</td><td class="r"></td><td class="r">' +
+          money(b.contractSum) + '</td><td class="r">' + money(sched.total) + '</td></tr></tbody>' +
+        '</table>' +
+        '<div class="question"><span class="q-tag">Open &mdash; VDP-2034 scope bullet</span>' +
+          'A stepped schedule <b>self-limits</b>: it can never hold more than ' + money(sched.total) + '. ' +
+          'A separate <b>Maximum Retention</b> cap on top of it is therefore either redundant or contradictory. ' +
+          'This prototype shows no separate cap and uses the schedule total as the ceiling. Needs confirming before build.</div>';
+    } else {
+      html +=
+        '<div class="rule-line">' +
+          '<b>' + p.ratePct + '%</b> of everything claimed is held back, up to a cap of <b>' + money(p.cap) + '</b> (' + p.capBasis + ').<br>' +
+          '<b>' + p.pcReleasePct + '%</b> is released at practical completion. The rest is released ' + p.dlpMonths +
+          ' months later, at the end of the defects liability period.' +
+        '</div>' +
+        '<div class="prof-grid">' +
+          '<div class="prof-item"><div class="pi-label">Rate</div><div class="pi-value">' + pct(p.ratePct, 3) + '</div><div class="pi-note">of everything claimed</div></div>' +
+          '<div class="prof-item"><div class="pi-label">Maximum retention</div><div class="pi-value">' + money(p.cap) + '</div><div class="pi-note">' + p.capBasis + '</div></div>' +
+          '<div class="prof-item"><div class="pi-label">Released at PC</div><div class="pi-value">' + pct(p.pcReleasePct, 0) + '</div><div class="pi-note">of the balance held</div></div>' +
+          '<div class="prof-item"><div class="pi-label">Rate after PC</div><div class="pi-value">' + pct(p.postPcRatePct, 3) + '</div><div class="pi-note">halved on later claims</div></div>' +
+          '<div class="prof-item unset"><div class="pi-label">Max retention after PC</div><div class="pi-value">&#9888; Not set</div><div class="pi-note">no setting exists for this</div></div>' +
+          '<div class="prof-item"><div class="pi-label">Defects liability period</div><div class="pi-value">' + p.dlpMonths + ' months</div><div class="pi-note">from practical completion</div></div>' +
+        '</div>' +
+        '<div class="question"><span class="q-tag">Open &mdash; VDP-111 / VDP-115</span>' +
+          'VDP-111 halves the <i>rate</i> at practical completion but says nothing about the <i>cap</i>. ' +
+          'On this contract that is the difference between later claims re-accreting retention toward ' + money(p.cap) +
+          ' and the balance sitting flat at ' + money(p.cap / 2) + ' through the defects period. ' +
+          '<b>This is a profile field, not a product decision</b> &mdash; contracts genuinely differ, so it needs a setting, ' +
+          'and the setting needs to be visible here.</div>';
+    }
+    html += '</div></div>';
+
+    /* --- band working (stepped only) --- */
+    if (p.type === 'Step by Value') {
+      var toDate = bandBreakdown(p.steps, b.claimToDate);
+      var workRows = toDate.rows.filter(function (r) { return r.slice > 0 || r.pct > 0; }).map(function (r) {
+        return '<tr' + (r.slice === 0 ? ' class="nil"' : '') + '>' +
+          '<td>' + bandLabel(r) + '<div class="band-slice">' + (r.slice > 0
+              ? money(r.slice) + ' of the ' + money(b.claimToDate) + ' claimed falls in this band'
+              : 'nothing claimed in this band yet') + '</div></td>' +
+          '<td class="r">' + pct(r.pct) + '</td>' +
+          '<td class="r">' + money(r.amt) + '</td></tr>';
+      }).join('');
+
+      html +=
+        '<div class="panel">' +
+          '<div class="panel-head"><div><h4>How this claim&rsquo;s retention was worked out</h4>' +
+          '<div class="ph-sub">Which bands applied, at what rate, for what amount</div></div></div>' +
+          '<div class="panel-body"><table class="steps">' +
+            '<thead><tr><th>Band</th><th class="r">Rate</th><th class="r">Retention</th></tr></thead>' +
+            '<tbody>' + workRows +
+            '<tr class="tot"><td>Retention due on ' + money(b.claimToDate) + ' claimed to date</td><td class="r"></td><td class="r">' + money(toDate.total) + '</td></tr>' +
+            '<tr><td>Less retention already held on earlier claims</td><td class="r"></td><td class="r">&minus;' + money(s.heldBefore) + '</td></tr>' +
+            '<tr class="tot"><td>Held back from this claim</td><td class="r"></td><td class="r">' + money(s.holdNow) + '</td></tr>' +
+            '</tbody></table>' +
+          '<div class="question"><span class="q-tag">Open &mdash; not covered by VDP-2034</span>' +
+            'This models retention as <b>accruing through the bands on claimed-to-date</b>, so early claims retain at 10% and later ones at 1.75%. ' +
+            'The alternative is a flat effective rate (' + pct(s.schedTotal / b.contractSum * 100, 3) + ') applied evenly to every claim. ' +
+            'Both reach ' + money(s.schedTotal) + ' at completion &mdash; but on this claim they differ by ' +
+            money(Math.abs(s.holdNow - b.thisClaim * s.schedTotal / b.contractSum)) + ', and on Claim&nbsp;#1 they differed by ' +
+            money(Math.abs(s.heldBefore - b.prevClaimed * s.schedTotal / b.contractSum)) + '. ' +
+            'Same total, different cash flow. VDP-2034 does not say which, and it needs to.</div>' +
+          '</div>' +
+        '</div>';
+    }
+
+    /* --- ledger --- */
     var traceRows = s.trace.map(function (t) {
       return '<div class="tr-row"><span>' + t.label + '<br><span style="color:#aaa">' + t.why + '</span></span><span>' + money(t.amt) + '</span></div>';
     }).join('');
+
+    var holdWhy = p.type === 'Step by Value'
+      ? 'Banded on ' + money(b.claimToDate) + ' claimed to date, less what was already held &mdash; see the working above'
+      : p.ratePct + '% of the ' + money(b.thisClaim) + ' claimed for ' + b.period;
 
     html +=
       '<div class="panel">' +
         '<div class="panel-head"><div><h4>Retention on this claim</h4>' +
         '<div class="ph-sub">What was already held back, what this claim adds, what it gives back</div></div></div>' +
         '<div class="panel-body"><div class="ledger">' +
-
-          '<div class="lg-row">' +
-            '<div class="op"></div>' +
+          '<div class="lg-row"><div class="op"></div>' +
             '<div><div class="lg-name">Held back before this claim</div>' +
-              '<div class="lg-why">Everything retained on Claim #1</div>' +
+              '<div class="lg-why">Everything retained on earlier claims</div>' +
               '<span class="disclose" onclick="document.getElementById(\'trace\').classList.toggle(\'open\')">Show the claims behind this &#9662;</span>' +
-              '<div class="trace" id="trace">' + traceRows + '</div>' +
-            '</div>' +
-            '<div class="lg-amt">' + money(s.heldBefore) + '</div>' +
-          '</div>' +
-
-          '<div class="lg-row">' +
-            '<div class="op">+</div>' +
-            '<div><div class="lg-name">Held back from this claim</div>' +
-              '<div class="lg-why">' + s.ratePct + '% of the ' + money(BASE.thisClaim) + ' claimed for 25 Jul &ndash; 24 Aug 2026</div></div>' +
-            '<div class="lg-amt amt-hold">' + signed(s.holdNow, 'plus') + '</div>' +
-          '</div>' +
-
-          '<div class="lg-row">' +
-            '<div class="op">&minus;</div>' +
-            '<div><div class="lg-name">Released back on this claim</div>' +
-              '<div class="lg-why">' + s.releaseWhy + '</div></div>' +
-            '<div class="lg-amt ' + (s.releaseNow ? 'amt-rel' : 'amt-zero') + '">' + (s.releaseNow ? signed(s.releaseNow, 'minus') : money(0)) + '</div>' +
-          '</div>' +
-
-          '<div class="lg-row total">' +
-            '<div class="op">=</div>' +
+              '<div class="trace" id="trace">' + traceRows + '</div></div>' +
+            '<div class="lg-amt">' + money(s.heldBefore) + '</div></div>' +
+          '<div class="lg-row"><div class="op">+</div>' +
+            '<div><div class="lg-name">Held back from this claim</div><div class="lg-why">' + holdWhy + '</div></div>' +
+            '<div class="lg-amt amt-hold">+' + money(s.holdNow) + '</div></div>' +
+          '<div class="lg-row"><div class="op">&minus;</div>' +
+            '<div><div class="lg-name">Released back on this claim</div><div class="lg-why">' + s.releaseWhy + '</div></div>' +
+            '<div class="lg-amt ' + (s.releaseNow ? 'amt-rel' : 'amt-zero') + '">' + (s.releaseNow ? '&minus;' + money(s.releaseNow) : money(0)) + '</div></div>' +
+          '<div class="lg-row total"><div class="op">=</div>' +
             '<div><div class="lg-name">Total held back after this claim</div>' +
               '<div class="lg-why">Still owed to you, released on the schedule below</div></div>' +
-            '<div class="lg-amt">' + money(balance) + '</div>' +
-          '</div>' +
-
+            '<div class="lg-amt">' + money(balance) + '</div></div>' +
           '<div class="capbar-wrap">' +
-            '<div class="cap-legend"><span>Against the ' + money(s.cap) + ' cap</span>' +
-            '<span><b>' + (balance / s.cap * 100).toFixed(1) + '%</b> used</span></div>' +
-            '<div class="capbar"><div class="cb-fill' + (balance / s.cap > 0.9 ? ' warn' : '') + '" style="width:' + (balance / s.cap * 100).toFixed(1) + '%"></div></div>' +
-            '<div class="cap-legend"><span>' + money(s.cap - balance) + ' of headroom left &mdash; once the cap is reached, later claims have nothing held back</span></div>' +
+            '<div class="cap-legend"><span>Against the ' + money(ceiling) +
+              (p.type === 'Step by Value' ? ' this schedule will hold in total' : ' cap') + '</span>' +
+              '<span><b>' + (balance / ceiling * 100).toFixed(1) + '%</b> used</span></div>' +
+            '<div class="capbar"><div class="cb-fill' + (balance / ceiling > 0.9 ? ' warn' : '') + '" style="width:' + (balance / ceiling * 100).toFixed(1) + '%"></div></div>' +
+            '<div class="cap-legend"><span>' + money(ceiling - balance) + ' still to be held over the remaining claims</span></div>' +
           '</div>' +
-
         '</div></div>' +
       '</div>';
 
-    /* release schedule */
-    var stageRows = s.stages.map(function (st) {
-      var cls = st.state === 'now' ? 'pill-now' : (st.state === 'done' ? 'pill-done' : 'pill-wait');
-      return '<tr><td><div class="stage-name">' + st.name + '</div><div class="stage-trigger">' + st.trigger + '</div></td>' +
-             '<td class="r">' + money(st.amt) + '</td>' +
-             '<td style="text-align:right"><span class="pill ' + cls + '">' + st.text + '</span></td></tr>';
-    }).join('');
+    /* --- release schedule --- */
+    var half = (balance + s.releaseNow) * p.pcReleasePct / 100;
+    var stages = s.pcDate
+      ? [{ n: 'Practical completion', t: 'PC certificate issued ' + s.pcDate, a: s.releaseNow, c: 'pill-now', x: 'Releasing on this claim' },
+         { n: 'End of defects liability', t: 'Falls due 12 Aug 2027', a: balance, c: 'pill-wait', x: 'Not due yet' }]
+      : [{ n: 'Practical completion', t: 'When the superintendent issues the PC certificate', a: half, c: 'pill-wait', x: 'Not due yet' },
+         { n: 'End of defects liability', t: p.dlpMonths + ' months after practical completion', a: half, c: 'pill-wait', x: 'Not due yet' }];
 
     html +=
       '<div class="panel">' +
         '<div class="panel-head"><div><h4>Release schedule</h4>' +
-        '<div class="ph-sub">When the ' + money(balance + s.releaseNow) + ' of retention comes back to you</div></div></div>' +
+        '<div class="ph-sub">When the ' + money(balance + s.releaseNow) + ' of retention comes back to you &mdash; ' +
+        p.pcReleasePct + '/' + (100 - p.pcReleasePct) + ' split, ' + p.dlpMonths + '-month defects period, both set on the profile</div></div></div>' +
         '<div class="panel-body"><table class="pt">' +
-          '<thead><tr><th>Stage</th><th class="r">Amount</th><th style="text-align:right">Status</th></tr></thead>' +
-          '<tbody>' + stageRows + '</tbody>' +
-        '</table></div>' +
+          '<thead><tr><th>Stage</th><th class="r">Amount</th><th style="text-align:right">Status</th></tr></thead><tbody>' +
+          stages.map(function (st) {
+            return '<tr><td><div class="stage-name">' + st.n + '</div><div class="stage-trigger">' + st.t + '</div></td>' +
+                   '<td class="r">' + money(st.a) + '</td>' +
+                   '<td style="text-align:right"><span class="pill ' + st.c + '">' + st.x + '</span></td></tr>';
+          }).join('') +
+          '</tbody></table></div>' +
       '</div>';
   }
 
-  /* invoice */
+  /* --- invoice --- */
   html +=
     '<div class="panel">' +
       '<div class="panel-head"><div><h4>What this invoice comes to</h4>' +
@@ -713,43 +881,48 @@ function render(key) {
       '<div class="panel-body"><div class="ledger">' +
         '<div class="lg-row"><div class="op"></div>' +
           '<div><div class="lg-name">Claimed this period, before retention</div></div>' +
-          '<div class="lg-amt">' + money(BASE.thisClaim) + '</div></div>' +
+          '<div class="lg-amt">' + money(b.thisClaim) + '</div></div>' +
         '<div class="lg-row"><div class="op">&minus;</div>' +
           '<div><div class="lg-name">Retention held back</div></div>' +
-          '<div class="lg-amt ' + (s.holdNow ? 'amt-hold' : 'amt-zero') + '">' + (s.holdNow ? signed(s.holdNow, 'minus') : money(0)) + '</div></div>' +
+          '<div class="lg-amt ' + (s.holdNow ? 'amt-hold' : 'amt-zero') + '">' + (s.holdNow ? '&minus;' + money(s.holdNow) : money(0)) + '</div></div>' +
         '<div class="lg-row"><div class="op">+</div>' +
           '<div><div class="lg-name">Retention released</div></div>' +
-          '<div class="lg-amt ' + (s.releaseNow ? 'amt-rel' : 'amt-zero') + '">' + (s.releaseNow ? signed(s.releaseNow, 'plus') : money(0)) + '</div></div>' +
+          '<div class="lg-amt ' + (s.releaseNow ? 'amt-rel' : 'amt-zero') + '">' + (s.releaseNow ? '+' + money(s.releaseNow) : money(0)) + '</div></div>' +
         '<div class="lg-row total"><div class="op">=</div>' +
           '<div><div class="lg-name">Amount payable on this invoice</div></div>' +
           '<div class="lg-amt">' + money(payable) + '</div></div>' +
       '</div>' +
-
-      '<div class="plain">' + plainEnglish(s, balance, payable) + '</div>' +
-
-      '</div>' +
-    '</div>' +
-
-    '<div class="panel"><div class="panel-body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
-      '<span style="font-size:13.5px">&#9888;&#65039; <b>35 items</b> in this claim are marked non-claimable, so they are not in the ' + money(BASE.thisClaim) + ' above.</span>' +
-      '<button class="link-btn">Review the 35 items</button>' +
+      '<div class="plain">' + plainEnglish(s, b, p, balance, payable) + '</div>' +
     '</div></div>';
+
+  if (b.nonClaimable) {
+    html +=
+      '<div class="panel"><div class="panel-body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+        '<span style="font-size:13.5px">&#9888;&#65039; <b>' + b.nonClaimable + ' items</b> in this claim are marked non-claimable, ' +
+        'so they are not in the ' + money(b.thisClaim) + ' above.</span>' +
+        '<button class="link-btn">Review the ' + b.nonClaimable + ' items</button>' +
+      '</div></div>';
+  }
 
   document.getElementById('retentionBody').innerHTML = html;
 }
 
-function plainEnglish(s, balance, payable) {
-  if (!s.setUp) {
-    return 'This contract holds no retention, so the invoice is the claim: <b>' + money(payable) + '</b>.';
-  }
+function plainEnglish(s, b, p, balance, payable) {
+  if (!p) return 'No retention profile is applied to this contract, so the invoice is the claim: <b>' + money(payable) + '</b>.';
   if (s.releaseNow) {
     return 'You are owed <b>' + money(balance + s.releaseNow) + '</b> in retention. Practical completion releases <b>' +
       money(s.releaseNow) + '</b> of it on this claim, while <b>' + money(s.holdNow) +
       '</b> is held back from the new work &mdash; so the invoice goes out at <b>' + money(payable) +
-      '</b> rather than ' + money(BASE.thisClaim) + '. <b>' + money(balance) + '</b> stays held until the defects period ends.';
+      '</b> rather than ' + money(b.thisClaim) + '. <b>' + money(balance) + '</b> stays held until the defects period ends.';
+  }
+  if (p.type === 'Step by Value') {
+    return '<b>' + money(s.holdNow) + '</b> is held back from this claim under the ' + p.name +
+      ' schedule &mdash; an effective <b>' + pct(s.holdNow / b.thisClaim * 100, 2) + '</b> on this claim, because ' +
+      money(b.claimToDate) + ' claimed to date still sits inside the 10% and 5% bands. The rate falls as the contract fills up. ' +
+      'The invoice goes out at <b>' + money(payable) + '</b> rather than ' + money(b.thisClaim) + '.';
   }
   return '<b>' + money(s.holdNow) + '</b> is held back from this claim, so the invoice goes out at <b>' +
-    money(payable) + '</b> rather than ' + money(BASE.thisClaim) + '. That takes the total held to <b>' +
+    money(payable) + '</b> rather than ' + money(b.thisClaim) + '. That takes the total held to <b>' +
     money(balance) + '</b>, which comes back to you in two releases &mdash; nothing is lost, it is deferred.';
 }
 
@@ -769,6 +942,9 @@ document.querySelectorAll('.chip').forEach(function (chip) {
     document.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('active'); });
     chip.classList.add('active');
     render(chip.dataset.sc);
+    var nb = SCENARIOS[chip.dataset.sc].base;
+    document.querySelector('.proj-header h2').textContent = nb.project;
+    document.getElementById('claimPeriod').textContent = nb.periodLong;
   };
 });
 
