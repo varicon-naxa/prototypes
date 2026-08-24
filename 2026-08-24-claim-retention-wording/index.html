@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Claim Retention, clearer wording</title>
+<!--
+  Problem: the Retention tab on a progress claim uses labels nobody can read.
+  "Released Retention" is the heading over a row called Withheld. "Total Previous
+  Held" sits next to "Retention Held". "When Complete" is a column, not a state.
+  A release of $4,782.52 is shown against $0.00 withheld with no way to trace it.
+  And the only figures that answer "what do we invoice" are cut off bottom-right.
+
+  This prototype keeps the same data and rewrites the screen around one question:
+  how much of the client's money are we holding, and what does that make the invoice?
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar { width: 40px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .sidebar .s-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: pointer; border-radius: 6px; color: #888; }
+  .sidebar .s-icon:hover { background: rgba(255,255,255,.1); }
+  .sidebar .s-icon.active { background: #f7941d; color: #fff; }
+  .sidebar .s-logo { width: 28px; height: 28px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 14px; margin-bottom: 8px; }
+
+  .main { flex: 1; overflow-x: hidden; }
+
+  /* View switcher */
+  .viewbar { background: #1a1a2e; color: #fff; padding: 10px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .viewbar .vb-title { font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: rgba(255,255,255,.45); }
+  .viewbar .vb-tabs { display: flex; gap: 4px; background: rgba(255,255,255,.08); border-radius: 8px; padding: 3px; }
+  .viewbar .vb-tab { padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; color: rgba(255,255,255,.6); }
+  .viewbar .vb-tab:hover { color: #fff; }
+  .viewbar .vb-tab.active { background: #f7941d; color: #fff; }
+  .viewbar .vb-note { font-size: 11px; color: rgba(255,255,255,.4); margin-left: auto; }
+
+  .proj-header { padding: 10px 24px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 10px; }
+  .proj-header a { color: #666; text-decoration: none; font-size: 15px; }
+  .proj-header h2 { font-size: 15px; font-weight: 600; }
+  .proj-header .caret { color: #999; font-size: 11px; }
+
+  .proj-tabs { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; padding: 0 24px; overflow-x: auto; }
+  .proj-tab { padding: 11px 14px; font-size: 12px; font-weight: 500; color: #888; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+  .proj-tab:hover { color: #333; }
+  .proj-tab.active { color: #fff; background: #1a1a2e; }
+
+  .claim-header { padding: 10px 24px; background: #fff; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 12px; }
+  .claim-header .back { color: #666; text-decoration: none; }
+  .claim-header h3 { font-size: 14px; font-weight: 700; }
+  .badge-draft { font-size: 10px; font-weight: 700; color: #f7941d; letter-spacing: 1px; }
+
+  .content { padding: 18px 24px 60px; }
+
+  .field-row { display: flex; gap: 32px; margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; color: #666; margin-bottom: 5px; }
+  .field input, .field .fake-input { width: 240px; padding: 8px 10px; border: 1px solid #d5d5d5; border-radius: 4px; font-size: 13px; background: #fff; color: #333; }
+  .field .fake-input { display: flex; align-items: center; gap: 8px; }
+
+  .progress-bar { height: 4px; background: #eee; border-radius: 2px; overflow: hidden; display: flex; margin: 14px 0 16px; }
+  .progress-bar .seg-prev { background: #2e9e5b; }
+  .progress-bar .seg-curr { background: #f7941d; }
+
+  /* ===== Legacy (current screen) styles ===== */
+  .legacy-strip { display: flex; gap: 40px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
+  .legacy-stat .ls-label { font-size: 12px; color: #555; display: flex; align-items: center; gap: 7px; }
+  .legacy-stat .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .legacy-stat .ls-value { font-size: 17px; font-weight: 600; margin-top: 4px; }
+  .warn-pill { background: #fdf2e2; border-radius: 4px; padding: 7px 12px; font-size: 12px; color: #7a5518; display: flex; align-items: center; gap: 8px; }
+
+  .sub-tabs { display: flex; gap: 26px; border-bottom: 1px solid #e5e5e5; margin-bottom: 18px; }
+  .sub-tab { padding: 10px 2px; font-size: 12px; font-weight: 600; letter-spacing: .8px; color: #888; cursor: pointer; border-bottom: 2px solid transparent; }
+  .sub-tab.active { color: #f7941d; border-bottom-color: #f7941d; }
+
+  .legacy-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-bottom: 26px; }
+  table.lg { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.lg thead th { background: #cfd8de; color: #2b3a45; padding: 9px 12px; text-align: left; font-weight: 600; font-size: 12px; }
+  table.lg thead th.r, table.lg td.r { text-align: right; }
+  table.lg td { padding: 11px 12px; border-bottom: 1px solid #eee; }
+  table.lg tr:last-child td { font-weight: 700; }
+  .legacy-h4 { font-size: 13px; font-weight: 700; color: #2b4a63; margin-bottom: 10px; }
+  .mini-bar { display: inline-block; width: 130px; height: 4px; background: #dfe4e8; border-radius: 2px; vertical-align: middle; margin-right: 8px; }
+  .legacy-footer { text-align: right; font-size: 12px; color: #444; line-height: 2; margin-top: 22px; padding-right: 4px; }
+  .legacy-footer span { display: inline-block; min-width: 130px; text-align: left; color: #666; }
+
+  .callout { margin-top: 26px; border-left: 3px solid #e53935; background: #fff; padding: 14px 18px; font-size: 13px; line-height: 1.65; border-radius: 0 8px 8px 0; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .callout h4 { font-size: 13px; margin-bottom: 8px; color: #c62828; }
+  .callout ol { margin: 0 0 0 18px; }
+  .callout li { margin-bottom: 5px; }
+  .callout code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+  /* ===== Proposed styles ===== */
+  .scenario-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+  .scenario-bar .sb-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #999; }
+  .chip { padding: 6px 13px; border: 1px solid #d8d8d8; background: #fff; border-radius: 20px; font-size: 12px; font-weight: 600; color: #666; cursor: pointer; }
+  .chip:hover { border-color: #f7941d; color: #f7941d; }
+  .chip.active { background: #1a1a2e; border-color: #1a1a2e; color: #fff; }
+
+  .top-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .tile { background: #fff; border: 1px solid #e4e4e4; border-radius: 10px; padding: 13px 16px; }
+  .tile .t-label { font-size: 11px; color: #7a7a7a; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+  .tile .t-value { font-size: 20px; font-weight: 700; margin-top: 5px; letter-spacing: -.4px; }
+  .tile .t-sub { font-size: 11.5px; color: #999; margin-top: 4px; line-height: 1.5; }
+  .tile.payable { background: #1a1a2e; border-color: #1a1a2e; }
+  .tile.payable .t-label { color: rgba(255,255,255,.55); }
+  .tile.payable .t-value { color: #fff; }
+  .tile.payable .t-sub { color: rgba(255,255,255,.5); }
+
+  .panel { background: #fff; border: 1px solid #e4e4e4; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+  .panel-head { padding: 14px 18px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .panel-head h4 { font-size: 14px; font-weight: 700; }
+  .panel-head .ph-sub { font-size: 12px; color: #8a8a8a; margin-top: 3px; }
+  .panel-body { padding: 16px 18px; }
+  .link-btn { background: none; border: none; color: #f7941d; font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 0; }
+  .link-btn:hover { color: #d97b0a; }
+
+  .rule-line { font-size: 13.5px; line-height: 1.75; color: #3a3a3a; }
+  .rule-line b { font-weight: 700; color: #1a1a2e; }
+
+  /* Ledger */
+  .ledger { font-size: 13.5px; }
+  .ledger .lg-row { display: grid; grid-template-columns: 20px 1fr auto; align-items: baseline; gap: 12px; padding: 9px 0; border-bottom: 1px dashed #eee; }
+  .ledger .lg-row:last-child { border-bottom: none; }
+  .ledger .op { font-size: 15px; font-weight: 700; color: #b8b8b8; text-align: center; }
+  .ledger .lg-name { font-weight: 600; }
+  .ledger .lg-why { font-size: 12px; color: #8f8f8f; font-weight: 400; margin-top: 2px; }
+  .ledger .lg-amt { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+  .ledger .lg-row.total { border-top: 2px solid #1a1a2e; border-bottom: none; margin-top: 6px; padding-top: 12px; }
+  .ledger .lg-row.total .lg-name, .ledger .lg-row.total .lg-amt { font-size: 15.5px; font-weight: 800; }
+  .amt-hold { color: #c0392b; }
+  .amt-rel { color: #1e7e46; }
+  .amt-zero { color: #a5a5a5; }
+
+  .trace { margin-top: 8px; border-left: 2px solid #eee; padding: 2px 0 2px 14px; font-size: 12px; color: #777; display: none; }
+  .trace.open { display: block; }
+  .trace .tr-row { display: flex; justify-content: space-between; padding: 4px 0; gap: 20px; }
+  .disclose { font-size: 11.5px; color: #f7941d; cursor: pointer; font-weight: 600; margin-top: 4px; display: inline-block; }
+
+  .capbar-wrap { margin-top: 16px; padding-top: 14px; border-top: 1px solid #f0f0f0; }
+  .capbar { height: 8px; background: #eef0f2; border-radius: 4px; overflow: hidden; display: flex; margin: 8px 0 6px; }
+  .capbar .cb-fill { background: #1a1a2e; }
+  .capbar .cb-fill.warn { background: #f7941d; }
+  .cap-legend { display: flex; justify-content: space-between; font-size: 11.5px; color: #888; }
+
+  table.pt { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.pt thead th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #8a8a8a; font-weight: 700; padding: 0 12px 9px; border-bottom: 1px solid #ededed; }
+  table.pt thead th.r { text-align: right; }
+  table.pt td { padding: 11px 12px; border-bottom: 1px solid #f5f5f5; vertical-align: top; }
+  table.pt td.r { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  table.pt tr:last-child td { border-bottom: none; }
+  table.pt td:first-child, table.pt th:first-child { padding-left: 0; }
+  table.pt td:last-child, table.pt th:last-child { padding-right: 0; }
+  .stage-name { font-weight: 600; }
+  .stage-trigger { font-size: 12px; color: #8f8f8f; margin-top: 3px; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 12px; white-space: nowrap; }
+  .pill-wait { background: #f0f1f3; color: #6d7580; }
+  .pill-now { background: #e4f4ea; color: #1e7e46; }
+  .pill-done { background: #eef2f7; color: #4a5a6a; }
+
+  .empty { text-align: center; padding: 30px 20px; }
+  .empty .e-icon { font-size: 30px; margin-bottom: 10px; }
+  .empty h5 { font-size: 15px; font-weight: 700; margin-bottom: 7px; }
+  .empty p { font-size: 13px; color: #7a7a7a; line-height: 1.7; max-width: 540px; margin: 0 auto 14px; }
+  .btn-outline { display: inline-block; padding: 9px 20px; border: 1.5px solid #f7941d; color: #f7941d; background: #fff; border-radius: 7px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .btn-outline:hover { background: #fff8f0; }
+
+  .plain { background: #f8f9fb; border: 1px solid #e9ecef; border-radius: 8px; padding: 13px 16px; font-size: 13.5px; line-height: 1.75; color: #3f4a55; margin-top: 16px; }
+  .plain b { color: #1a1a2e; }
+
+  /* Changes view */
+  .changes { max-width: 1040px; }
+  .changes h3 { font-size: 18px; margin-bottom: 6px; }
+  .changes .lead { font-size: 13.5px; color: #6a6a6a; line-height: 1.7; margin-bottom: 22px; max-width: 740px; }
+  table.ch { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; border: 1px solid #e4e4e4; border-radius: 10px; overflow: hidden; margin-bottom: 26px; }
+  table.ch thead th { background: #fafafa; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #7a7a7a; padding: 10px 14px; border-bottom: 1px solid #e8e8e8; }
+  table.ch td { padding: 12px 14px; border-bottom: 1px solid #f2f2f2; vertical-align: top; line-height: 1.6; }
+  table.ch tr:last-child td { border-bottom: none; }
+  .was { color: #b0392b; text-decoration: line-through; text-decoration-color: rgba(176,57,43,.4); font-weight: 600; }
+  .now { color: #1a1a2e; font-weight: 700; }
+  .why { color: #6f6f6f; font-size: 12.5px; }
+  .grp td { background: #f7f8fa; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: #8a8a8a; }
+  .principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; margin-bottom: 26px; }
+  .principle { background: #fff; border: 1px solid #e4e4e4; border-left: 3px solid #f7941d; border-radius: 0 10px 10px 0; padding: 14px 16px; }
+  .principle h5 { font-size: 13px; margin-bottom: 6px; }
+  .principle p { font-size: 12.5px; color: #757575; line-height: 1.65; }
+
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="s-logo">V</div>
+    <div class="s-icon">&#9638;</div><div class="s-icon">&#9636;</div><div class="s-icon active">&#9639;</div>
+    <div class="s-icon">&#9684;</div><div class="s-icon">&#9741;</div><div class="s-icon">&#9776;</div>
+  </div>
+
+  <div class="main">
+    <div class="viewbar">
+      <div class="vb-title">Prototype</div>
+      <div class="vb-tabs">
+        <div class="vb-tab active" data-view="proposed">Proposed</div>
+        <div class="vb-tab" data-view="current">Screen today</div>
+        <div class="vb-tab" data-view="changes">Wording changes</div>
+      </div>
+      <div class="vb-note">Same data as the live screen &mdash; the words and the order are what change</div>
+    </div>
+
+    <div class="proj-header">
+      <a href="#">&larr;</a>
+      <h2>(26-015) Mt Ousley Road, Mt Ousley</h2>
+      <span class="caret">&#9662;</span>
+    </div>
+
+    <div class="proj-tabs">
+      <div class="proj-tab">Dashboard</div>
+      <div class="proj-tab">Budget Overview</div>
+      <div class="proj-tab">Daily Cost Tracking</div>
+      <div class="proj-tab active">Claim</div>
+      <div class="proj-tab">Variation Register</div>
+      <div class="proj-tab">Report</div>
+      <div class="proj-tab">File Manager</div>
+      <div class="proj-tab">Site Diary</div>
+      <div class="proj-tab">Forms</div>
+    </div>
+
+    <div class="claim-header">
+      <a class="back" href="#">&larr;</a>
+      <h3>Claim # 2</h3>
+      <span class="badge-draft">DRAFT</span>
+    </div>
+
+    <!-- ============================ SCREEN TODAY ============================ -->
+    <div class="content view hide" id="view-current">
+
+      <div class="field-row">
+        <div class="field">
+          <label>Invoice Ref</label>
+          <input type="text" placeholder="Invoice Ref">
+        </div>
+        <div class="field">
+          <label>Claim Period</label>
+          <div class="fake-input">&#128197; Sat 25/07/2026 - Mon 24/08/2026 &nbsp;&#9662;</div>
+        </div>
+      </div>
+
+      <div class="progress-bar">
+        <div class="seg-prev" style="width:71%"></div>
+        <div class="seg-curr" style="width:29%"></div>
+      </div>
+
+      <div class="legacy-strip">
+        <div class="legacy-stat">
+          <div class="ls-label"><span class="dot" style="background:#2e9e5b"></span> Previously Claimed</div>
+          <div class="ls-value">$ 71,872.22</div>
+        </div>
+        <div class="legacy-stat">
+          <div class="ls-label"><span class="dot" style="background:#f7941d"></span> Current Claim</div>
+          <div class="ls-value">$ 28,994.21</div>
+        </div>
+        <div class="legacy-stat">
+          <div class="ls-label"><span class="dot" style="background:#1a1a2e"></span> Claim to Date</div>
+          <div class="ls-value">$ 100,866.43</div>
+        </div>
+        <div class="legacy-stat">
+          <div class="ls-label"><span class="dot" style="background:#c9ccd0"></span> Remaining</div>
+          <div class="ls-value">$ 526.50</div>
+        </div>
+        <div class="warn-pill">&#9888; 35 Items are saved as Non-Claimable</div>
+      </div>
+
+      <div class="sub-tabs">
+        <div class="sub-tab">CONTRACT</div>
+        <div class="sub-tab">VARIATION</div>
+        <div class="sub-tab active">RETENTION</div>
+      </div>
+
+      <div class="legacy-tables">
+        <table class="lg">
+          <thead>
+            <tr><th>This Claim</th><th class="r">Claim Amount</th><th class="r">Total Previous Held</th><th class="r">Retention Held</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Contract and Variation Works</td><td class="r">$ 28,994.21</td><td class="r">$ 0.00</td><td class="r">-</td></tr>
+            <tr><td>Total</td><td class="r">$ 28,994.21</td><td class="r">$ 0.00</td><td class="r">-</td></tr>
+          </tbody>
+        </table>
+
+        <table class="lg">
+          <thead>
+            <tr><th>Contract Details</th><th class="r">Contract Sum</th><th class="r">Max Retention</th><th class="r">Retention Rate</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Contract and Variation Works</td><td class="r">$ 101,392.93</td><td class="r">-</td><td class="r">-</td></tr>
+            <tr><td>Total</td><td class="r">$ 101,392.93</td><td class="r">&nbsp;</td><td class="r">&nbsp;</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="legacy-h4">Released Retention</div>
+      <table class="lg" style="max-width:900px">
+        <thead>
+          <tr><th></th><th class="r">When Complete</th><th class="r">Previous Claim</th><th>Progress</th><th class="r">Current Claim</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Withheld</td><td class="r">$ 0.00</td><td class="r">$ 0.00</td><td><span class="mini-bar"></span>0 %</td><td class="r">&nbsp;</td></tr>
+          <tr><td>Release</td><td class="r">$ 4,782.52</td><td class="r">$ 0.00</td><td><span class="mini-bar"></span>0.00 %</td><td class="r">$ &nbsp;</td></tr>
+          <tr><td>Net Retention</td><td class="r">&nbsp;</td><td class="r">$ 0.00</td><td>&nbsp;</td><td class="r">&nbsp;</td></tr>
+        </tbody>
+      </table>
+
+      <div class="legacy-footer">
+        <div><span>Claim Total:</span> $ 28,994.21</div>
+        <div><span>Retention Withheld:</span> $ 0.00</div>
+        <div><span>Retention Released:</span> $ 0.00</div>
+        <div><span>Revised Total:</span> $ 28,994.21</div>
+      </div>
+
+      <div class="callout">
+        <h4>Seven things this screen cannot tell you</h4>
+        <ol>
+          <li><b>&ldquo;Released Retention&rdquo;</b> is the heading over a row called <b>Withheld</b>. The section covers both directions but is named after one of them.</li>
+          <li><b>&ldquo;Total Previous Held&rdquo;</b> and <b>&ldquo;Retention Held&rdquo;</b> sit side by side in a table called <i>This Claim</i>. Nothing says one is history and the other is this claim.</li>
+          <li><b>&ldquo;When Complete&rdquo;</b> is a column header that reads like a status. It means <i>the amount that falls due at practical completion</i>.</li>
+          <li><b>&ldquo;Previous Claim&rdquo;</b> is singular. Is that the last claim, or every claim before this one?</li>
+          <li>A release of <b>$4,782.52</b> is shown against <b>$0.00</b> withheld, with no link to the claim it came from. The figure cannot be traced or checked.</li>
+          <li><b>Max Retention</b> and <b>Retention Rate</b> both show <code>-</code>. A dash reads as zero, as loading, and as not-applicable. It is actually <i>never set up</i>, and nothing invites you to set it up.</li>
+          <li>The only four numbers that answer <i>what do we invoice</i> are unlabelled, right-aligned in the bottom corner, and cut off the edge of the screen. <b>Revised Total</b> &mdash; revised from what?</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- ============================ PROPOSED ============================ -->
+    <div class="content view" id="view-proposed">
+
+      <div class="field-row">
+        <div class="field">
+          <label>Invoice Ref</label>
+          <input type="text" placeholder="Invoice Ref">
+        </div>
+        <div class="field">
+          <label>Claim Period</label>
+          <div class="fake-input">&#128197; Sat 25/07/2026 - Mon 24/08/2026 &nbsp;&#9662;</div>
+        </div>
+      </div>
+
+      <div class="scenario-bar">
+        <span class="sb-label">Demo state</span>
+        <button class="chip" data-sc="none">No retention set up</button>
+        <button class="chip active" data-sc="running">Holding retention</button>
+        <button class="chip" data-sc="pc">Practical completion reached</button>
+      </div>
+
+      <div class="top-strip" id="topStrip"></div>
+
+      <div class="sub-tabs">
+        <div class="sub-tab">CONTRACT</div>
+        <div class="sub-tab">VARIATION</div>
+        <div class="sub-tab active">RETENTION</div>
+      </div>
+
+      <div id="retentionBody"></div>
+    </div>
+
+    <!-- ============================ WORDING CHANGES ============================ -->
+    <div class="content view hide" id="view-changes">
+      <div class="changes">
+        <h3>What changed, and why</h3>
+        <p class="lead">
+          No calculation changes. Every figure on the live screen is still here. What changes is that
+          each label now says <i>which money</i>, <i>whose money</i> and <i>when</i> &mdash; and the four
+          numbers that decide the invoice have moved out of the bottom-right corner and become the
+          loudest thing on the page.
+        </p>
+
+        <div class="principles">
+          <div class="principle">
+            <h5>One direction, top to bottom</h5>
+            <p>The terms, then the running balance, then this claim&rsquo;s movement, then the invoice. Today the screen reads left-to-right across two unrelated tables and finishes in a corner.</p>
+          </div>
+          <div class="principle">
+            <h5>Every label names its period</h5>
+            <p>&ldquo;Before this claim&rdquo;, &ldquo;on this claim&rdquo;, &ldquo;after this claim&rdquo;. Never a bare &ldquo;Total&rdquo; or &ldquo;Previous&rdquo; that could mean either.</p>
+          </div>
+          <div class="principle">
+            <h5>A dash is not a value</h5>
+            <p>Unconfigured retention says so in words and offers the setup, instead of printing <code>-</code> in three columns.</p>
+          </div>
+          <div class="principle">
+            <h5>Every amount is traceable</h5>
+            <p>The balance opens up into the claims that built it. A release of $4,782.52 against $0.00 withheld should be one click from its own explanation.</p>
+          </div>
+        </div>
+
+        <table class="ch">
+          <thead><tr><th style="width:26%">Today</th><th style="width:28%">Proposed</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr class="grp"><td colspan="3">Section headings</td></tr>
+            <tr>
+              <td><span class="was">Released Retention</span></td>
+              <td><span class="now">Retention on this claim</span></td>
+              <td class="why">The section covers money held <i>and</i> money released. Naming it after one half is why the first row underneath it is &ldquo;Withheld&rdquo;.</td>
+            </tr>
+            <tr>
+              <td><span class="was">Contract Details</span></td>
+              <td><span class="now">Retention terms</span></td>
+              <td class="why">It is not contract details, it is the retention rule. Written as a sentence, not three columns of numbers.</td>
+            </tr>
+            <tr>
+              <td><span class="was">This Claim</span> (table)</td>
+              <td><span class="now">Folded into the balance ledger</span></td>
+              <td class="why">Two side-by-side tables with the same single row, &ldquo;Contract and Variation Works&rdquo;, repeated in both. One line item does not need a table.</td>
+            </tr>
+            <tr>
+              <td><span class="was">(no heading &mdash; bottom-right corner)</span></td>
+              <td><span class="now">What this invoice comes to</span></td>
+              <td class="why">The four figures that decide what gets sent to the client were unlabelled and cut off the right edge.</td>
+            </tr>
+
+            <tr class="grp"><td colspan="3">Column and row labels</td></tr>
+            <tr>
+              <td><span class="was">Total Previous Held</span></td>
+              <td><span class="now">Held back before this claim</span></td>
+              <td class="why">&ldquo;Total&rdquo; does not say <i>total up to when</i>. Expands to show the claims that make it up.</td>
+            </tr>
+            <tr>
+              <td><span class="was">Retention Held</span></td>
+              <td><span class="now">Held back from this claim</span></td>
+              <td class="why">Sat next to &ldquo;Total Previous Held&rdquo; with nothing to distinguish history from the current period.</td>
+            </tr>
+            <tr>
+              <td><span class="was">Withheld</span> / <span class="was">Release</span></td>
+              <td><span class="now">Held back</span> / <span class="now">Released</span></td>
+              <td class="why">One is a past participle, the other an imperative. Same tense, same voice, so they read as a pair.</td>
+            </tr>
+            <tr>
+              <td><span class="was">Net Retention</span></td>
+              <td><span class="now">Total held back after this claim</span></td>
+              <td class="why">It is a balance, not a net. Net of what was never stated, and the row was blank in every column but one.</td>
+            </tr>
+            <tr>
+              <td><span class="was">When Complete</span></td>
+              <td><span class="now">Falls due</span> + the trigger in words</td>
+              <td class="why">Reads as a status, not a column of amounts. Replaced with the event that actually releases the money.</td>
+            </tr>
+            <tr>
+              <td><span class="was">Previous Claim</span></td>
+              <td><span class="now">Released in earlier claims</span></td>
+              <td class="why">Singular &ldquo;Previous Claim&rdquo; reads as the last one only. It is cumulative.</td>
+            </tr>
+            <tr>
+              <td><span class="was">Progress</span></td>
+              <td><span class="now">% of the cap used</span></td>
+              <td class="why">Progress of what, toward what. The only progress that matters here is how close the balance is to the retention cap.</td>
+            </tr>
+            <tr>
+              <td><span class="was">Max Retention</span></td>
+              <td><span class="now">Capped at</span></td>
+              <td class="why">Plain word for a ceiling, stated in the rule sentence with its dollar value.</td>
+            </tr>
+            <tr>
+              <td><span class="was">Revised Total</span></td>
+              <td><span class="now">Amount payable on this invoice</span></td>
+              <td class="why">Revised from what, by whom. This is the number that goes on the invoice and it should say so.</td>
+            </tr>
+            <tr>
+              <td><span class="was">Claim Total</span></td>
+              <td><span class="now">Claimed this period, before retention</span></td>
+              <td class="why">Anchors the arithmetic underneath it and warns that the headline figure is not the invoice.</td>
+            </tr>
+
+            <tr class="grp"><td colspan="3">Values and states</td></tr>
+            <tr>
+              <td><span class="was">-</span> in Max Retention and Retention Rate</td>
+              <td><span class="now">&ldquo;No retention on this contract&rdquo;</span> + Set up retention</td>
+              <td class="why">A dash means zero, loading, and not-applicable all at once. The real state is <i>never configured</i>, and there is nowhere to go and fix it.</td>
+            </tr>
+            <tr>
+              <td><span class="was">Release $4,782.52 against Withheld $0.00</span></td>
+              <td><span class="now">Balance expands into the claims behind it</span></td>
+              <td class="why">A release larger than everything ever held, with no trace, is unauditable. Every figure now opens.</td>
+            </tr>
+            <tr>
+              <td><span class="was">Remaining</span></td>
+              <td><span class="now">Left to claim</span></td>
+              <td class="why">Remaining budget, remaining retention, remaining time. Say which.</td>
+            </tr>
+            <tr>
+              <td><span class="was">Current Claim $28,994.21</span> in the top strip</td>
+              <td><span class="now">Same figure, plus the payable figure beside it</span></td>
+              <td class="why">The headline number is gross of retention, so it never matches the invoice. Showing both, side by side, is the whole fix.</td>
+            </tr>
+            <tr>
+              <td><span class="was">35 Items are saved as Non-Claimable</span></td>
+              <td><span class="now">35 items in this claim are marked non-claimable</span> &mdash; Review</td>
+              <td class="why">&ldquo;Saved as&rdquo; describes what the database did. The user needs to know what it costs them and where to look.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ------------------------------------------------------------------
+   Same figures as the live screen. Only the framing changes.
+   ------------------------------------------------------------------ */
+var BASE = {
+  contractSum: 101392.93,
+  prevClaimed:  71872.22,
+  thisClaim:    28994.21,
+  claimToDate: 100866.43,
+  leftToClaim:    526.50
+};
+
+var SCENARIOS = {
+  none: {
+    setUp: false,
+    heldBefore: 0, holdNow: 0, releaseNow: 0
+  },
+  running: {
+    setUp: true,
+    ratePct: 5,
+    cap: 5069.65,
+    heldBefore: 3593.61,
+    holdNow: 1449.71,
+    releaseNow: 0,
+    releaseWhy: 'Nothing falls due in this period',
+    trace: [
+      { label: 'Claim #1 &nbsp;&middot;&nbsp; 25 Jun &ndash; 24 Jul 2026', why: '5% of $71,872.22', amt: 3593.61 }
+    ],
+    stages: [
+      { name: 'Practical completion', trigger: 'When the superintendent issues the PC certificate', amt: 2521.66, state: 'wait', text: 'Not due yet' },
+      { name: 'End of defects liability', trigger: '12 months after practical completion', amt: 2521.66, state: 'wait', text: 'Not due yet' }
+    ]
+  },
+  pc: {
+    setUp: true,
+    ratePct: 5,
+    cap: 5069.65,
+    heldBefore: 3593.61,
+    holdNow: 1449.71,
+    releaseNow: 2521.66,
+    releaseWhy: 'PC certificate issued 12 Aug 2026 &mdash; half the balance falls due',
+    trace: [
+      { label: 'Claim #1 &nbsp;&middot;&nbsp; 25 Jun &ndash; 24 Jul 2026', why: '5% of $71,872.22', amt: 3593.61 }
+    ],
+    stages: [
+      { name: 'Practical completion', trigger: 'PC certificate issued 12 Aug 2026', amt: 2521.66, state: 'now', text: 'Releasing on this claim' },
+      { name: 'End of defects liability', trigger: 'Falls due 12 Aug 2027', amt: 2521.66, state: 'wait', text: 'Not due yet' }
+    ]
+  }
+};
+
+function money(n) {
+  return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function signed(n, dir) {
+  if (n === 0) return money(0);
+  return (dir === 'minus' ? '−' : '+') + money(n);
+}
+
+function render(key) {
+  var s = SCENARIOS[key];
+  var balance = s.heldBefore + s.holdNow - s.releaseNow;
+  var payable = BASE.thisClaim - s.holdNow + s.releaseNow;
+
+  /* ---------- top strip ---------- */
+  var retentionTile = s.setUp
+    ? '<div class="tile">' +
+        '<div class="t-label">Retention held back</div>' +
+        '<div class="t-value">' + money(balance) + '</div>' +
+        '<div class="t-sub">' + Math.round(balance / s.cap * 100) + '% of the ' + money(s.cap) + ' cap</div>' +
+      '</div>'
+    : '<div class="tile">' +
+        '<div class="t-label">Retention held back</div>' +
+        '<div class="t-value" style="color:#a5a5a5">None</div>' +
+        '<div class="t-sub">No retention set up on this contract</div>' +
+      '</div>';
+
+  document.getElementById('topStrip').innerHTML =
+    '<div class="tile">' +
+      '<div class="t-label">Contract sum</div>' +
+      '<div class="t-value">' + money(BASE.contractSum) + '</div>' +
+      '<div class="t-sub">Original contract plus approved variations</div>' +
+    '</div>' +
+    '<div class="tile">' +
+      '<div class="t-label">Claimed to date</div>' +
+      '<div class="t-value">' + money(BASE.claimToDate) + '</div>' +
+      '<div class="t-sub">' + money(BASE.prevClaimed) + ' earlier &nbsp;+&nbsp; ' + money(BASE.thisClaim) + ' this claim<br>Before retention</div>' +
+    '</div>' +
+    '<div class="tile">' +
+      '<div class="t-label">Left to claim</div>' +
+      '<div class="t-value">' + money(BASE.leftToClaim) + '</div>' +
+      '<div class="t-sub">0.5% of the contract sum still unclaimed</div>' +
+    '</div>' +
+    retentionTile +
+    '<div class="tile payable">' +
+      '<div class="t-label">This invoice</div>' +
+      '<div class="t-value">' + money(payable) + '</div>' +
+      '<div class="t-sub">' + (s.setUp && (s.holdNow || s.releaseNow)
+          ? money(BASE.thisClaim) + ' claimed, after retention'
+          : 'Nothing held back, so the full claim is payable') + '</div>' +
+    '</div>';
+
+  /* ---------- retention body ---------- */
+  var html = '';
+
+  if (!s.setUp) {
+    html +=
+      '<div class="panel"><div class="panel-body"><div class="empty">' +
+        '<div class="e-icon">&#128274;</div>' +
+        '<h5>No retention on this contract</h5>' +
+        '<p>Nothing is held back from this claim, so the full <b>' + money(BASE.thisClaim) + '</b> is payable. ' +
+        'If this contract does hold retention, set the terms up once and Varicon will apply them from Claim&nbsp;#2 onward &mdash; ' +
+        'earlier claims are left alone.</p>' +
+        '<button class="btn-outline">Set up retention terms</button>' +
+      '</div></div></div>';
+  } else {
+    /* terms */
+    html +=
+      '<div class="panel">' +
+        '<div class="panel-head">' +
+          '<div><h4>Retention terms</h4><div class="ph-sub">Set once on the contract, applied to every claim</div></div>' +
+          '<button class="link-btn">Edit terms</button>' +
+        '</div>' +
+        '<div class="panel-body"><div class="rule-line">' +
+          '<b>' + s.ratePct + '%</b> of everything claimed is held back, up to a cap of <b>' + money(s.cap) + '</b> ' +
+          '(' + s.ratePct + '% of the ' + money(BASE.contractSum) + ' contract sum).<br>' +
+          '<b>Half</b> is released at practical completion. The <b>rest</b> is released 12 months later, at the end of the defects liability period.' +
+        '</div></div>' +
+      '</div>';
+
+    /* ledger */
+    var traceRows = s.trace.map(function (t) {
+      return '<div class="tr-row"><span>' + t.label + '<br><span style="color:#aaa">' + t.why + '</span></span><span>' + money(t.amt) + '</span></div>';
+    }).join('');
+
+    html +=
+      '<div class="panel">' +
+        '<div class="panel-head"><div><h4>Retention on this claim</h4>' +
+        '<div class="ph-sub">What was already held back, what this claim adds, what it gives back</div></div></div>' +
+        '<div class="panel-body"><div class="ledger">' +
+
+          '<div class="lg-row">' +
+            '<div class="op"></div>' +
+            '<div><div class="lg-name">Held back before this claim</div>' +
+              '<div class="lg-why">Everything retained on Claim #1</div>' +
+              '<span class="disclose" onclick="document.getElementById(\'trace\').classList.toggle(\'open\')">Show the claims behind this &#9662;</span>' +
+              '<div class="trace" id="trace">' + traceRows + '</div>' +
+            '</div>' +
+            '<div class="lg-amt">' + money(s.heldBefore) + '</div>' +
+          '</div>' +
+
+          '<div class="lg-row">' +
+            '<div class="op">+</div>' +
+            '<div><div class="lg-name">Held back from this claim</div>' +
+              '<div class="lg-why">' + s.ratePct + '% of the ' + money(BASE.thisClaim) + ' claimed for 25 Jul &ndash; 24 Aug 2026</div></div>' +
+            '<div class="lg-amt amt-hold">' + signed(s.holdNow, 'plus') + '</div>' +
+          '</div>' +
+
+          '<div class="lg-row">' +
+            '<div class="op">&minus;</div>' +
+            '<div><div class="lg-name">Released back on this claim</div>' +
+              '<div class="lg-why">' + s.releaseWhy + '</div></div>' +
+            '<div class="lg-amt ' + (s.releaseNow ? 'amt-rel' : 'amt-zero') + '">' + (s.releaseNow ? signed(s.releaseNow, 'minus') : money(0)) + '</div>' +
+          '</div>' +
+
+          '<div class="lg-row total">' +
+            '<div class="op">=</div>' +
+            '<div><div class="lg-name">Total held back after this claim</div>' +
+              '<div class="lg-why">Still owed to you, released on the schedule below</div></div>' +
+            '<div class="lg-amt">' + money(balance) + '</div>' +
+          '</div>' +
+
+          '<div class="capbar-wrap">' +
+            '<div class="cap-legend"><span>Against the ' + money(s.cap) + ' cap</span>' +
+            '<span><b>' + (balance / s.cap * 100).toFixed(1) + '%</b> used</span></div>' +
+            '<div class="capbar"><div class="cb-fill' + (balance / s.cap > 0.9 ? ' warn' : '') + '" style="width:' + (balance / s.cap * 100).toFixed(1) + '%"></div></div>' +
+            '<div class="cap-legend"><span>' + money(s.cap - balance) + ' of headroom left &mdash; once the cap is reached, later claims have nothing held back</span></div>' +
+          '</div>' +
+
+        '</div></div>' +
+      '</div>';
+
+    /* release schedule */
+    var stageRows = s.stages.map(function (st) {
+      var cls = st.state === 'now' ? 'pill-now' : (st.state === 'done' ? 'pill-done' : 'pill-wait');
+      return '<tr><td><div class="stage-name">' + st.name + '</div><div class="stage-trigger">' + st.trigger + '</div></td>' +
+             '<td class="r">' + money(st.amt) + '</td>' +
+             '<td style="text-align:right"><span class="pill ' + cls + '">' + st.text + '</span></td></tr>';
+    }).join('');
+
+    html +=
+      '<div class="panel">' +
+        '<div class="panel-head"><div><h4>Release schedule</h4>' +
+        '<div class="ph-sub">When the ' + money(balance + s.releaseNow) + ' of retention comes back to you</div></div></div>' +
+        '<div class="panel-body"><table class="pt">' +
+          '<thead><tr><th>Stage</th><th class="r">Amount</th><th style="text-align:right">Status</th></tr></thead>' +
+          '<tbody>' + stageRows + '</tbody>' +
+        '</table></div>' +
+      '</div>';
+  }
+
+  /* invoice */
+  html +=
+    '<div class="panel">' +
+      '<div class="panel-head"><div><h4>What this invoice comes to</h4>' +
+      '<div class="ph-sub">The figure that goes to the client</div></div></div>' +
+      '<div class="panel-body"><div class="ledger">' +
+        '<div class="lg-row"><div class="op"></div>' +
+          '<div><div class="lg-name">Claimed this period, before retention</div></div>' +
+          '<div class="lg-amt">' + money(BASE.thisClaim) + '</div></div>' +
+        '<div class="lg-row"><div class="op">&minus;</div>' +
+          '<div><div class="lg-name">Retention held back</div></div>' +
+          '<div class="lg-amt ' + (s.holdNow ? 'amt-hold' : 'amt-zero') + '">' + (s.holdNow ? signed(s.holdNow, 'minus') : money(0)) + '</div></div>' +
+        '<div class="lg-row"><div class="op">+</div>' +
+          '<div><div class="lg-name">Retention released</div></div>' +
+          '<div class="lg-amt ' + (s.releaseNow ? 'amt-rel' : 'amt-zero') + '">' + (s.releaseNow ? signed(s.releaseNow, 'plus') : money(0)) + '</div></div>' +
+        '<div class="lg-row total"><div class="op">=</div>' +
+          '<div><div class="lg-name">Amount payable on this invoice</div></div>' +
+          '<div class="lg-amt">' + money(payable) + '</div></div>' +
+      '</div>' +
+
+      '<div class="plain">' + plainEnglish(s, balance, payable) + '</div>' +
+
+      '</div>' +
+    '</div>' +
+
+    '<div class="panel"><div class="panel-body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+      '<span style="font-size:13.5px">&#9888;&#65039; <b>35 items</b> in this claim are marked non-claimable, so they are not in the ' + money(BASE.thisClaim) + ' above.</span>' +
+      '<button class="link-btn">Review the 35 items</button>' +
+    '</div></div>';
+
+  document.getElementById('retentionBody').innerHTML = html;
+}
+
+function plainEnglish(s, balance, payable) {
+  if (!s.setUp) {
+    return 'This contract holds no retention, so the invoice is the claim: <b>' + money(payable) + '</b>.';
+  }
+  if (s.releaseNow) {
+    return 'You are owed <b>' + money(balance + s.releaseNow) + '</b> in retention. Practical completion releases <b>' +
+      money(s.releaseNow) + '</b> of it on this claim, while <b>' + money(s.holdNow) +
+      '</b> is held back from the new work &mdash; so the invoice goes out at <b>' + money(payable) +
+      '</b> rather than ' + money(BASE.thisClaim) + '. <b>' + money(balance) + '</b> stays held until the defects period ends.';
+  }
+  return '<b>' + money(s.holdNow) + '</b> is held back from this claim, so the invoice goes out at <b>' +
+    money(payable) + '</b> rather than ' + money(BASE.thisClaim) + '. That takes the total held to <b>' +
+    money(balance) + '</b>, which comes back to you in two releases &mdash; nothing is lost, it is deferred.';
+}
+
+/* ---------- wiring ---------- */
+document.querySelectorAll('.vb-tab').forEach(function (tab) {
+  tab.onclick = function () {
+    document.querySelectorAll('.vb-tab').forEach(function (t) { t.classList.remove('active'); });
+    tab.classList.add('active');
+    document.querySelectorAll('.view').forEach(function (v) { v.classList.add('hide'); });
+    document.getElementById('view-' + tab.dataset.view).classList.remove('hide');
+    window.scrollTo(0, 0);
+  };
+});
+
+document.querySelectorAll('.chip').forEach(function (chip) {
+  chip.onclick = function () {
+    document.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('active'); });
+    chip.classList.add('active');
+    render(chip.dataset.sc);
+  };
+});
+
+render('running');
+</script>
+</body>
+</html>
