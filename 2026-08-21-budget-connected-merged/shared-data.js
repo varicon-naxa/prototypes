@@ -45,7 +45,8 @@ var VDATA = (function () {
       COST_STREAMS.forEach(function (k) { t += (l[k] || 0); });
       t += (l.contract || 0) + (l.budget || 0);
     });
-    return n + ':' + Math.round(t) + ':' + costCentres().join(',');
+    return n + ':' + Math.round(t) + ':' + costCentres().join(',') +
+           ':' + structure();
   }
   function refreshIfChanged() {
     var f;
@@ -165,6 +166,36 @@ var VDATA = (function () {
     return out;
   }
 
+  /* ── how this project tracks ────────────────────────────────────────────
+     The base's own switch: a cost-centre project codes cost to the cost
+     centre and never to a line item; a WBS project budgets every line
+     individually, so time goes against a task. Both flows exist and the
+     project decides which one you get. */
+  function structure() {
+    try {
+      if (typeof projectType === 'undefined') return 'cc';
+      return projectType === 'wbs' ? 'wbs' : 'cc';   /* dayworks codes to a cc */
+    } catch (e) { return 'cc'; }
+  }
+  function structureLabel() {
+    return structure() === 'wbs' ? 'Task' : 'Cost centre';
+  }
+  function structureNote() {
+    try { return PROJECT_TYPES[projectType].note; } catch (e) { return ''; }
+  }
+
+  /* What time can be booked against, in this project's terms. */
+  function allocTargets() {
+    if (structure() === 'wbs') {
+      return allocOptions().map(function (o) {
+        return { value: o.l, label: o.l, sub: o.c, cc: o.cc, code: o.code };
+      });
+    }
+    return costCentres().map(function (cc) {
+      return { value: cc, label: ccLabel(cc), sub: '', cc: cc, code: null };
+    });
+  }
+
   /* The crew, from the base's people. */
   function workers() {
     return DAYWORK_PEOPLE.map(function (p) {
@@ -229,6 +260,9 @@ var VDATA = (function () {
   }
 
   function allocFor(cc, key, i) {
+    /* On a cost-centre project the allocation IS the cost centre; showing a
+       WBS path there would name a level the project does not track. */
+    if (structure() !== 'wbs') return [{ l: ccLabel(cc), c: ccLabel(cc), p: 100 }];
     var opts = allocOptions().filter(function (o) { return o.cc === cc; });
     var o = opts.length ? opts[(seed(key) + i) % opts.length] : null;
     return [{ l: o ? o.l : cc, c: ccLabel(cc), p: 100 }];
@@ -605,6 +639,8 @@ var VDATA = (function () {
     supplyLines: supplyLines, supplierFor: supplierFor,
     stateColour: stateColour, stateTitle: stateTitle, catColour: catColour,
     labourShift: labourShift, allocFor: allocFor, approver: approver,
+    structure: structure, structureLabel: structureLabel,
+    structureNote: structureNote, allocTargets: allocTargets,
     mondayOf: mondayOf, addDays: addDays, weekDays: weekDays,
     weeksWithLabour: weeksWithLabour, defaultWeek: defaultWeek,
     timesheetsForWeek: timesheetsForWeek, iso: iso,

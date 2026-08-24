@@ -294,9 +294,14 @@ function tsBlocker() {
   if (shift <= 0) return 'Clock out has to be after clock in';
   if (shift > 14) return 'That is a ' + tsHM(shift) + ' shift — check the times';
   if (TS.allocs.some(function (r) { return r.hours > 0 && !r.target; }))
-    return 'Every allocated row needs a task';
+    return 'Every allocated row needs a ' + VDATA.structureLabel().toLowerCase();
   if (TS.multi && TS.allocs.some(function (r) { return r.hours > 0 && !r.job; }))
     return 'Every allocated row needs a job';
+  var lbl = VDATA.structureLabel().toLowerCase();
+  if (TS.equip.some(function (r) { return r.hours > 0 && !r.target; }))
+    return 'Equipment hours need a ' + lbl;
+  if (TS.allow.some(function (r) { return r.amount > 0 && !r.target; }))
+    return 'Allowances need a ' + lbl;
   var alloc = TS.allocs.reduce(function (a, r) { return a + r.hours; }, 0);
   if (Math.abs(alloc - shift) > 0.01) {
     return alloc > shift
@@ -325,11 +330,12 @@ function tsOpenAdd() {
   }
   var rm = document.getElementById('tsRemarks');
   if (rm) rm.value = '';
+  var cq = document.getElementById('tsCrewSearch');
+  if (cq) cq.value = '';
   ['Allow', 'Equip', 'Note'].forEach(function (k) {
     var el = document.getElementById('tsExtra' + k);
     if (el) el.classList.remove('open');
   });
-  tsBuildWorkers();
   tsAddFlowRender();
   showPage('pageAddTimesheet');
 }
@@ -357,17 +363,64 @@ function tsToggleMulti(ev) {
   tsAddFlowRender();
 }
 
-function tsBuildWorkers() {
+/* The crew picker.
+
+   A card per worker is fine for five and a wall at fifty. This stays one size
+   whatever the roster: a search box, a list capped at a few rows with its own
+   scroll, and a chip per person picked so the selection is readable without
+   scrolling back through the list. */
+function tsRenderCrew() {
   var box = document.getElementById('tsCrewPicker');
   if (!box) return;
-  box.innerHTML = VDATA.workers().map(function (w) {
-    return '<div class="ts-wcard" id="tsW-' + w.id + '" onclick="tsToggleWorker(&#39;' +
-      w.id + '&#39;)">' +
-      '<div class="ts-avatar">' + tsInitials(w.nm) + '</div>' +
-      '<div><div class="ts-worker-name">' + w.nm + '</div>' +
-      '<div class="ts-worker-role">' + w.role + '</div></div>' +
-      '<span class="ts-wrate">$' + w.rate + '/hr</span></div>';
-  }).join('');
+  var crew = VDATA.workers();
+  var q = ((document.getElementById('tsCrewSearch') || {}).value || '').trim().toLowerCase();
+  var shown = q
+    ? crew.filter(function (w) {
+        return (w.nm + ' ' + w.role).toLowerCase().indexOf(q) >= 0;
+      })
+    : crew;
+
+  box.innerHTML = shown.length
+    ? shown.map(function (w) {
+        var on = TS.workers.indexOf(w.id) >= 0;
+        return '<div class="ts-crow' + (on ? ' on' : '') + '" id="tsW-' + w.id +
+          '" onclick="tsToggleWorker(&#39;' + w.id + '&#39;)">' +
+          '<span class="ts-cbox"><i class="fas fa-check"></i></span>' +
+          '<span class="ts-avatar">' + tsInitials(w.nm) + '</span>' +
+          '<span class="ts-crow-name">' + w.nm + '</span>' +
+          '<span class="ts-crow-role">' + w.role + '</span>' +
+          '<span class="ts-crow-rate">$' + w.rate + '/hr</span></div>';
+      }).join('')
+    : '<div class="ts-crew-none">Nobody matches “' + q + '”.</div>';
+
+  var chips = document.getElementById('tsCrewChips');
+  if (chips) {
+    chips.innerHTML = TS.workers.map(function (id) {
+      var w = crew.filter(function (x) { return x.id === id; })[0];
+      if (!w) return '';
+      return '<span class="ts-chip">' + w.nm +
+        '<i class="fas fa-xmark" onclick="tsToggleWorker(&#39;' + w.id + '&#39;)"></i></span>';
+    }).join('');
+    chips.style.display = TS.workers.length ? '' : 'none';
+  }
+
+  var count = document.getElementById('tsCrewCount');
+  if (count) {
+    count.textContent = TS.workers.length
+      ? TS.workers.length + ' of ' + crew.length + ' selected'
+      : crew.length + ' on the roster';
+  }
+}
+
+function tsCrewAll() {
+  if (tsSectionGate(2)) return;
+  TS.workers = VDATA.workers().map(function (w) { return w.id; });
+  tsAddFlowRender();
+}
+function tsCrewNone() {
+  if (tsSectionGate(2)) return;
+  TS.workers = [];
+  tsAddFlowRender();
 }
 
 function tsToggleWorker(id) {
@@ -405,8 +458,8 @@ function tsFillRemainder() {
   var open = TS.allocs.filter(function (r) { return !r.hours; })[0];
   if (open) { open.hours = Math.round(left * 100) / 100; }
   else {
-    var opts = VDATA.allocOptions();
-    TS.allocs.push({ target: opts.length ? opts[0].l : '', hours: Math.round(left * 100) / 100 });
+    var opts = VDATA.allocTargets();
+    TS.allocs.push({ target: opts.length ? opts[0].value : '', hours: Math.round(left * 100) / 100 });
   }
   tsAddFlowRender();
 }
@@ -414,7 +467,7 @@ function tsFillRemainder() {
 function tsRenderAllocs() {
   var tb = document.getElementById('tsAllocRows');
   if (!tb) return;
-  var opts = VDATA.allocOptions();
+  var opts = VDATA.allocTargets();
   var rate = tsCrewRate();
   document.querySelectorAll('#pageAddTimesheet .ts-job-col').forEach(function (th) {
     th.style.display = TS.multi ? '' : 'none';
@@ -426,10 +479,10 @@ function tsRenderAllocs() {
   }
   tb.innerHTML = TS.allocs.map(function (r, i) {
     var sel = '<select onchange="tsSetAllocTarget(' + i + ',this.value)">' +
-      '<option value="">Select task or cost centre…</option>' +
+      '<option value="">Select ' + VDATA.structureLabel().toLowerCase() + '…</option>' +
       opts.map(function (o) {
-        return '<option value="' + o.l + '"' + (o.l === r.target ? ' selected' : '') + '>' +
-               o.c + ' · ' + o.l + '</option>';
+        return '<option value="' + o.value + '"' + (o.value === r.target ? ' selected' : '') + '>' +
+               o.label + (o.sub ? ' · ' + o.sub : '') + '</option>';
       }).join('') + '</select>';
     var jobCell = TS.multi
       ? '<td><select onchange="tsSetAllocJob(' + i + ',this.value)">' +
@@ -463,7 +516,7 @@ function tsToggleExtra(which) {
   if (el) el.classList.toggle('open', TS.open[which]);
 }
 function tsAddAllow() {
-  TS.allow.push({ type: 'Site allowance', amount: 35 });
+  TS.allow.push({ type: 'Site allowance', amount: 35, target: '' });
   TS.open.Allow = true;
   var el = document.getElementById('tsExtraAllow');
   if (el) el.classList.add('open');
@@ -476,7 +529,7 @@ function tsSetAllow(i, k, v) {
 }
 function tsAddEquip() {
   var p = VDATA.plant();
-  TS.equip.push({ id: p.length ? p[0].id : '', hours: 0 });
+  TS.equip.push({ id: p.length ? p[0].id : '', hours: 0, target: '' });
   TS.open.Equip = true;
   var el = document.getElementById('tsExtraEquip');
   if (el) el.classList.add('open');
@@ -488,13 +541,35 @@ function tsSetEquip(i, k, v) {
   tsAddFlowRender();
 }
 
+/* A shared allocation picker: equipment and allowances both carry cost, so
+   both need somewhere for it to land, in whatever terms this project tracks. */
+function tsTargetSelect(onchange, current) {
+  var opts = VDATA.allocTargets();
+  return '<select class="ts-xtarget" onchange="' + onchange + '">' +
+    '<option value="">Allocate to ' + VDATA.structureLabel().toLowerCase() + '…</option>' +
+    opts.map(function (o) {
+      return '<option value="' + o.value + '"' + (o.value === current ? ' selected' : '') + '>' +
+             o.label + (o.sub ? ' · ' + o.sub : '') + '</option>';
+    }).join('') + '</select>';
+}
+
+function tsPlantById(id) {
+  return VDATA.plant().filter(function (p) { return p.id === id; })[0] || null;
+}
+function tsEquipCost(r) {
+  var p = tsPlantById(r.id);
+  return p ? Math.round(p.rate * (r.hours || 0)) : 0;
+}
+
 function tsRenderExtras() {
   var a = document.getElementById('tsAllowRows');
   if (a) {
     a.innerHTML = TS.allow.map(function (r, i) {
-      return '<div class="ts-xrow"><input class="ts-xgrow" value="' + r.type +
+      return '<div class="ts-xrow">' +
+        '<input class="ts-xgrow" value="' + r.type +
         '" onchange="tsSetAllow(' + i + ',&#39;type&#39;,this.value)">' +
-        '<input type="number" style="width:110px" value="' + r.amount +
+        tsTargetSelect('tsSetAllow(' + i + ',&#39;target&#39;,this.value)', r.target) +
+        '<input type="number" class="ts-xnum" value="' + r.amount +
         '" onchange="tsSetAllow(' + i + ',&#39;amount&#39;,this.value)">' +
         '<span class="ts-rm" onclick="tsRmAllow(' + i + ')"><i class="fas fa-xmark"></i></span></div>';
     }).join('');
@@ -502,6 +577,7 @@ function tsRenderExtras() {
     var sum = document.getElementById('tsAllowSum');
     if (sum) sum.textContent = TS.allow.length ? tsMoney(tot) : 'none';
   }
+
   var e = document.getElementById('tsEquipRows');
   if (e) {
     var plant = VDATA.plant();
@@ -512,14 +588,18 @@ function tsRenderExtras() {
           return '<option value="' + p.id + '"' + (p.id === r.id ? ' selected' : '') + '>' +
                  p.nm + ' (' + p.id + ') · $' + p.rate + '/hr</option>';
         }).join('') + '</select>' +
-        '<input type="number" step="0.25" style="width:110px" placeholder="hours" value="' +
+        tsTargetSelect('tsSetEquip(' + i + ',&#39;target&#39;,this.value)', r.target) +
+        '<input type="number" step="0.25" class="ts-xnum" placeholder="hours" value="' +
         (r.hours || '') + '" onchange="tsSetEquip(' + i + ',&#39;hours&#39;,this.value)">' +
+        '<span class="ts-xcost">' + tsMoney(tsEquipCost(r)) + '</span>' +
         '<span class="ts-rm" onclick="tsRmEquip(' + i + ')"><i class="fas fa-xmark"></i></span></div>';
     }).join('');
-    var hrs = TS.equip.reduce(function (s, r) { return s + r.hours; }, 0);
+    var hrs = TS.equip.reduce(function (s, r) { return s + (r.hours || 0); }, 0);
+    var cost = TS.equip.reduce(function (s, r) { return s + tsEquipCost(r); }, 0);
     var es = document.getElementById('tsEquipSum');
-    if (es) es.textContent = TS.equip.length ? tsHM(hrs) : 'none';
+    if (es) es.textContent = TS.equip.length ? tsHM(hrs) + ' · ' + tsMoney(cost) : 'none';
   }
+
   var ns = document.getElementById('tsNoteSum');
   var rm = document.getElementById('tsRemarks');
   if (ns) ns.textContent = (rm && rm.value.trim()) ? 'note added' : 'none';
@@ -542,6 +622,17 @@ function tsAddFlowRender() {
     if (note) note.textContent = gate || '';
   }
 
+  /* The allocation column, and the note explaining why the options look the
+     way they do. Both come from the project's budget structure. */
+  var ah = document.getElementById('tsAllocHead');
+  if (ah) ah.textContent = VDATA.structureLabel();
+  var sn = document.getElementById('tsStructNote');
+  if (sn) {
+    sn.innerHTML = '<i class="fas fa-circle-info"></i> This project tracks by <b>' +
+      (VDATA.structure() === 'wbs' ? 'WBS' : 'cost centre') + '</b>, so time is booked ' +
+      'against a ' + VDATA.structureLabel().toLowerCase() + '. ' + VDATA.structureNote();
+  }
+
   /* the multi-project modifier */
   var tog = document.getElementById('tsMultiToggle');
   if (tog) {
@@ -552,10 +643,7 @@ function tsAddFlowRender() {
   var mnote = document.getElementById('tsMultiNote');
   if (mnote) mnote.style.display = TS.multi ? '' : 'none';
 
-  VDATA.workers().forEach(function (w) {
-    var el = document.getElementById('tsW-' + w.id);
-    if (el) el.classList.toggle('on', TS.workers.indexOf(w.id) >= 0);
-  });
+  tsRenderCrew();
 
   var tt = document.getElementById('tsTotalTime');
   if (tt) {
@@ -628,20 +716,29 @@ function tsRenderSummary(shift, rate) {
   var tasks = TS.allocs.filter(function (r) { return r.hours > 0 && r.target; }).length;
   var total = shift * rate;
   var allow = TS.allow.reduce(function (a, r) { return a + r.amount; }, 0);
+  var plantCost = TS.equip.reduce(function (a, r) { return a + tsEquipCost(r); }, 0);
   el.innerHTML =
     '<b>' + (names.length > 2 ? names.length + ' workers' : names.join(', ')) + '</b>' +
     ' · ' + tsHM(shift) + ' each · ' + tsMoney(total + allow) + ' labour' +
-    ' · ' + (tasks ? tasks + (tasks === 1 ? ' task' : ' tasks') : 'not allocated') +
+    (plantCost ? ' + ' + tsMoney(plantCost) + ' plant' : '') +
+    ' · ' + (tasks ? tasks + (tasks === 1 ? ' target' : ' targets') : 'not allocated') +
     '<em>Tracked cost until ' + VDATA.approverFor(null) + ' approves it.' +
     ' Shows on the Daily Cost calendar and the Site Diary for ' + tsShort(TS.date) + '.</em>';
 }
 
 /* ── save: the timesheet is the source of the cost ── */
+/* The first worker on the shift, for "operated by" on a plant row. */
+function names0() {
+  var all = VDATA.workers();
+  var w = all.filter(function (x) { return x.id === TS.workers[0]; })[0];
+  return w ? w.nm : '';
+}
+
 function tsSave() {
   if (tsBlocker()) return;
   var shift = tsShiftHours();
   var all = VDATA.workers();
-  var opts = VDATA.allocOptions();
+  var opts = VDATA.allocTargets();
   var count = 0, added = 0;
 
   TS.workers.forEach(function (id, wi) {
@@ -649,7 +746,7 @@ function tsSave() {
     if (!w) return;
     TS.allocs.forEach(function (a, ai) {
       if (!(a.hours > 0) || !a.target) return;
-      var opt = opts.filter(function (o) { return o.l === a.target; })[0];
+      var opt = opts.filter(function (o) { return o.value === a.target; })[0];
       if (!opt) return;
       var cost = Math.round(a.hours * w.rate);
 
@@ -659,7 +756,13 @@ function tsSave() {
          Note this raises the line's cost for the job, not for one claim
          period: the base spreads each line across the four periods by a fixed
          weight, so this period picks up its share rather than the lot. */
-      var line = baseItems.filter(function (l) { return l.code === opt.code; })[0];
+      /* On a WBS project the cost lands on the line that was picked. On a
+         cost-centre project there is no line to pick — cost exists at cost
+         centre level only — so it goes on that cost centre's first line, whose
+         aggregate is what the cost centre reports. */
+      var line = opt.code
+        ? baseItems.filter(function (l) { return l.code === opt.code; })[0]
+        : baseItems.filter(function (l) { return l.cc === opt.cc; })[0];
       if (line) line.tsUnapproved = (line.tsUnapproved || 0) + cost;
 
       /* Held explicitly so it lands on the day and worker entered, and carved
@@ -675,6 +778,57 @@ function tsSave() {
       });
       count++; added += cost;
     });
+  });
+
+  /* Equipment is owned plant charged to the job internally — no PO, no
+     supplier bill — so it lands on plantTracked, and on the plant category of
+     the ledger rather than labour. */
+  TS.equip.forEach(function (r, ei) {
+    if (!(r.hours > 0) || !r.target) return;
+    var opt = opts.filter(function (o) { return o.value === r.target; })[0];
+    var p = tsPlantById(r.id);
+    if (!opt || !p) return;
+    var cost = tsEquipCost(r);
+    var line = opt.code
+      ? baseItems.filter(function (l) { return l.code === opt.code; })[0]
+      : baseItems.filter(function (l) { return l.cc === opt.cc; })[0];
+    if (line) line.plantTracked = (line.plantTracked || 0) + cost;
+    VDATA.addTimesheet({
+      iso: TS.date, cc: opt.cc, cat: 'plant', state: 'tracked', cost: cost,
+      row: {
+        cat: 'plant', cc: opt.cc, cost: cost, state: 'tracked', iso: TS.date,
+        resource: p.nm + ' (' + p.id + ')',
+        meta: (Math.round(r.hours * 10) / 10) + ' hrs @ $' + p.rate +
+              '/hr · entered on a timesheet',
+        detail: { kind: 'plant', plant: p, hrs: r.hours, rate: p.rate,
+                  by: names0(), entered: true }
+      }
+    });
+    added += cost;
+  });
+
+  /* An allowance is part of the worker's pay, so it rides with labour. */
+  TS.allow.forEach(function (r) {
+    if (!(r.amount > 0) || !r.target) return;
+    var opt = opts.filter(function (o) { return o.value === r.target; })[0];
+    if (!opt) return;
+    var line = opt.code
+      ? baseItems.filter(function (l) { return l.code === opt.code; })[0]
+      : baseItems.filter(function (l) { return l.cc === opt.cc; })[0];
+    if (line) line.tsUnapproved = (line.tsUnapproved || 0) + Math.round(r.amount);
+    VDATA.addTimesheet({
+      iso: TS.date, cc: opt.cc, cat: 'labour', state: 'tracked',
+      cost: Math.round(r.amount),
+      row: {
+        cat: 'labour', cc: opt.cc, cost: Math.round(r.amount), state: 'tracked',
+        iso: TS.date, resource: r.type,
+        meta: 'allowance · entered on a timesheet',
+        detail: { kind: 'misc', nm: r.type, sup: 'Payroll', unit: 'ea',
+                  rate: Math.round(r.amount), qty: 1, src: 'TS-ALLOW',
+                  srcType: 'Manual', entered: true }
+      }
+    });
+    added += Math.round(r.amount);
   });
 
   render();                       /* the budget moved, so redraw it */

@@ -146,6 +146,45 @@ page, sections in order, each unlocking as it becomes answerable:
   unallocated" — next to a one-line summary of what is about to be created. No separate
   review step; it fits in the footer.
 
+### Allocation follows the project's budget structure
+
+The base already draws the distinction and states it plainly: *"In a cost centre project,
+a PO, docket, timesheet or bill is coded to a cost centre, never to a line item."* Both
+flows are live, and `projectType` on the overview decides which one the form gives you:
+
+| Project tracks by | Time is booked against | Options |
+| --- | --- | --- |
+| Cost centre | a cost centre | the 7 cost centres |
+| WBS | a task | the 20 WBS leaves, cost centre shown alongside |
+
+The column header, the picker, the placeholder and the blocker text all follow, and a note
+under the section says which structure this project uses and why the options look that way.
+Switching the type on the overview changes the form — the fingerprint includes the
+structure, so the ledger's allocation labels move with it too.
+
+The first cut mashed both together — `CC-100 Overheads / Prelims · Establishment › Site
+Supervision & Management` — which shows a WBS path on a cost-centre job and a level the
+project does not track.
+
+### Equipment and allowances allocate too
+
+Both carry cost, so both need somewhere for it to land; the original product form has a
+Task/Cost Centre column on each and the first rebuild dropped it, leaving equipment hours
+as cost with nowhere to go. Each row now has its own allocation picker, and an unallocated
+one blocks Save the same way unallocated hours do.
+
+Where the cost lands differs by kind, following the base's model: equipment is owned plant
+charged internally — no PO, no supplier bill — so it goes to `plantTracked` and onto the
+ledger's plant category. An allowance is part of the worker's pay, so it rides with labour
+on `tsUnapproved`. Verified: 8h labour + 2h plant + a $35 allowance moved the budget by
+$563 labour and $190 plant, with the ledger still tied at a $0 gap.
+
+### The crew picker holds its size
+
+A card per worker reads well for a crew of five and becomes a wall at fifty. Search, a
+list capped at 210px with its own scroll, and a chip per person picked: the section is
+**562px tall for both 5 and 50 workers**, measured.
+
 ### Saving writes back
 
 A timesheet is the source of labour cost, so saving one adds it to the budget line it was

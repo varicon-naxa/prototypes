@@ -46,15 +46,18 @@
         <select id="tsProject" onchange="tsOnProject()">
           <option value="">Select project…</option>
         </select>
-        <!-- A modifier on the field above, not a decision of its own. Most
-             days are one job, so this stays out of the way until switched. -->
-        <label class="ts-toggle" id="tsMultiToggle" onclick="tsToggleMulti(event)">
-          <span class="ts-switch"><span class="ts-knob"></span></span>
-          <span class="ts-toggle-label">Split across more than one job</span>
-          <i class="fas fa-circle-info ts-info" title="Only if the worker moved between jobs today. The hours still have to add up to the shift across every job."></i>
-        </label>
       </div>
     </div>
+
+    <!-- A modifier on the Project field, not a decision of its own — most days
+         are one job. It sits outside .ts-field deliberately: `.ts-field label`
+         is a more specific selector than `.ts-toggle`, so nesting it there won
+         the `display` declaration and collapsed the switch to zero width. -->
+    <label class="ts-toggle" id="tsMultiToggle" onclick="tsToggleMulti(event)">
+      <span class="ts-switch"><span class="ts-knob"></span></span>
+      <span class="ts-toggle-label">Split this day across more than one job</span>
+      <i class="fas fa-circle-info ts-info" title="Only if the worker moved between jobs today. The hours still have to add up to the shift across every job."></i>
+    </label>
 
     <p class="ts-warn" id="tsMultiNote" style="display:none">
       <i class="fas fa-triangle-exclamation"></i> <strong>Splitting the day:</strong>
@@ -68,10 +71,26 @@
     <h2 class="section-title"><i class="fas fa-hard-hat" style="color:#f5a623;margin-right:8px"></i>Who worked, and for how long?</h2>
     <p class="section-subtitle">Pick the crew on this shift. Everyone selected gets the same times.</p>
 
-    <!-- id is tsCrewPicker, not tsWorkers: the list page already uses that id
+    <!-- A card per worker reads well for a crew of five and becomes a wall at
+         fifty. Search, a fixed-height scrolling list and chips for who is
+         picked keep this the same size whatever the roster.
+
+         id is tsCrewPicker, not tsWorkers: the list page already uses that id
          for its Workers stat tile, and getElementById was returning the tile,
-         so the crew cards were being written into it. -->
-    <div class="ts-workers" id="tsCrewPicker"></div>
+         so the crew rows were being written into it. -->
+    <div class="ts-crew">
+      <div class="ts-crew-bar">
+        <div class="ts-crew-search">
+          <i class="fas fa-magnifying-glass"></i>
+          <input id="tsCrewSearch" placeholder="Search crew by name or role…" oninput="tsRenderCrew()">
+        </div>
+        <span class="ts-crew-count" id="tsCrewCount"></span>
+        <span class="ts-crew-act" onclick="tsCrewAll()">Select all</span>
+        <span class="ts-crew-act" onclick="tsCrewNone()">Clear</span>
+      </div>
+      <div class="ts-chips" id="tsCrewChips"></div>
+      <div class="ts-crew-list" id="tsCrewPicker"></div>
+    </div>
 
     <h3 class="ts-sub">Approved time</h3>
     <div class="ts-field-row ts-time-row">
@@ -101,6 +120,7 @@
     <div class="ts-lock-note"><i class="fas fa-lock"></i> <span></span></div>
     <h2 class="section-title"><i class="fas fa-layer-group" style="color:#f5a623;margin-right:8px"></i>Where should the cost land?</h2>
     <p class="section-subtitle">Hours with nowhere to go become unassigned cost on the budget. Allocate the shift and this closes itself.</p>
+    <p class="ts-struct-note" id="tsStructNote"></p>
 
     <div class="ts-alloc-head">
       <div class="ts-alloc-bar"><div class="ts-alloc-fill" id="tsAllocFill"></div></div>
@@ -113,7 +133,7 @@
     <div class="table-wrapper">
       <table class="ts-alloc-table">
         <thead><tr>
-          <th>Task / cost centre</th>
+          <th id="tsAllocHead">Cost centre</th>
           <th class="ts-job-col" style="display:none">Job</th>
           <th style="width:150px">Hours</th><th style="width:120px">Cost</th><th style="width:44px"></th>
         </tr></thead>
