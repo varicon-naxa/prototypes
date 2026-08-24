@@ -1,0 +1,273 @@
+
+<script>
+/* ------------------------------------------------------------------
+   Same figures as the live screen. Only the framing changes.
+   ------------------------------------------------------------------ */
+var BASE = {
+  contractSum: 101392.93,
+  prevClaimed:  71872.22,
+  thisClaim:    28994.21,
+  claimToDate: 100866.43,
+  leftToClaim:    526.50
+};
+
+var SCENARIOS = {
+  none: {
+    setUp: false,
+    heldBefore: 0, holdNow: 0, releaseNow: 0
+  },
+  running: {
+    setUp: true,
+    ratePct: 5,
+    cap: 5069.65,
+    heldBefore: 3593.61,
+    holdNow: 1449.71,
+    releaseNow: 0,
+    releaseWhy: 'Nothing falls due in this period',
+    trace: [
+      { label: 'Claim #1 &nbsp;&middot;&nbsp; 25 Jun &ndash; 24 Jul 2026', why: '5% of $71,872.22', amt: 3593.61 }
+    ],
+    stages: [
+      { name: 'Practical completion', trigger: 'When the superintendent issues the PC certificate', amt: 2521.66, state: 'wait', text: 'Not due yet' },
+      { name: 'End of defects liability', trigger: '12 months after practical completion', amt: 2521.66, state: 'wait', text: 'Not due yet' }
+    ]
+  },
+  pc: {
+    setUp: true,
+    ratePct: 5,
+    cap: 5069.65,
+    heldBefore: 3593.61,
+    holdNow: 1449.71,
+    releaseNow: 2521.66,
+    releaseWhy: 'PC certificate issued 12 Aug 2026 &mdash; half the balance falls due',
+    trace: [
+      { label: 'Claim #1 &nbsp;&middot;&nbsp; 25 Jun &ndash; 24 Jul 2026', why: '5% of $71,872.22', amt: 3593.61 }
+    ],
+    stages: [
+      { name: 'Practical completion', trigger: 'PC certificate issued 12 Aug 2026', amt: 2521.66, state: 'now', text: 'Releasing on this claim' },
+      { name: 'End of defects liability', trigger: 'Falls due 12 Aug 2027', amt: 2521.66, state: 'wait', text: 'Not due yet' }
+    ]
+  }
+};
+
+function money(n) {
+  return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function signed(n, dir) {
+  if (n === 0) return money(0);
+  return (dir === 'minus' ? '−' : '+') + money(n);
+}
+
+function render(key) {
+  var s = SCENARIOS[key];
+  var balance = s.heldBefore + s.holdNow - s.releaseNow;
+  var payable = BASE.thisClaim - s.holdNow + s.releaseNow;
+
+  /* ---------- top strip ---------- */
+  var retentionTile = s.setUp
+    ? '<div class="tile">' +
+        '<div class="t-label">Retention held back</div>' +
+        '<div class="t-value">' + money(balance) + '</div>' +
+        '<div class="t-sub">' + Math.round(balance / s.cap * 100) + '% of the ' + money(s.cap) + ' cap</div>' +
+      '</div>'
+    : '<div class="tile">' +
+        '<div class="t-label">Retention held back</div>' +
+        '<div class="t-value" style="color:#a5a5a5">None</div>' +
+        '<div class="t-sub">No retention set up on this contract</div>' +
+      '</div>';
+
+  document.getElementById('topStrip').innerHTML =
+    '<div class="tile">' +
+      '<div class="t-label">Contract sum</div>' +
+      '<div class="t-value">' + money(BASE.contractSum) + '</div>' +
+      '<div class="t-sub">Original contract plus approved variations</div>' +
+    '</div>' +
+    '<div class="tile">' +
+      '<div class="t-label">Claimed to date</div>' +
+      '<div class="t-value">' + money(BASE.claimToDate) + '</div>' +
+      '<div class="t-sub">' + money(BASE.prevClaimed) + ' earlier &nbsp;+&nbsp; ' + money(BASE.thisClaim) + ' this claim<br>Before retention</div>' +
+    '</div>' +
+    '<div class="tile">' +
+      '<div class="t-label">Left to claim</div>' +
+      '<div class="t-value">' + money(BASE.leftToClaim) + '</div>' +
+      '<div class="t-sub">0.5% of the contract sum still unclaimed</div>' +
+    '</div>' +
+    retentionTile +
+    '<div class="tile payable">' +
+      '<div class="t-label">This invoice</div>' +
+      '<div class="t-value">' + money(payable) + '</div>' +
+      '<div class="t-sub">' + (s.setUp && (s.holdNow || s.releaseNow)
+          ? money(BASE.thisClaim) + ' claimed, after retention'
+          : 'Nothing held back, so the full claim is payable') + '</div>' +
+    '</div>';
+
+  /* ---------- retention body ---------- */
+  var html = '';
+
+  if (!s.setUp) {
+    html +=
+      '<div class="panel"><div class="panel-body"><div class="empty">' +
+        '<div class="e-icon">&#128274;</div>' +
+        '<h5>No retention on this contract</h5>' +
+        '<p>Nothing is held back from this claim, so the full <b>' + money(BASE.thisClaim) + '</b> is payable. ' +
+        'If this contract does hold retention, set the terms up once and Varicon will apply them from Claim&nbsp;#2 onward &mdash; ' +
+        'earlier claims are left alone.</p>' +
+        '<button class="btn-outline">Set up retention terms</button>' +
+      '</div></div></div>';
+  } else {
+    /* terms */
+    html +=
+      '<div class="panel">' +
+        '<div class="panel-head">' +
+          '<div><h4>Retention terms</h4><div class="ph-sub">Set once on the contract, applied to every claim</div></div>' +
+          '<button class="link-btn">Edit terms</button>' +
+        '</div>' +
+        '<div class="panel-body"><div class="rule-line">' +
+          '<b>' + s.ratePct + '%</b> of everything claimed is held back, up to a cap of <b>' + money(s.cap) + '</b> ' +
+          '(' + s.ratePct + '% of the ' + money(BASE.contractSum) + ' contract sum).<br>' +
+          '<b>Half</b> is released at practical completion. The <b>rest</b> is released 12 months later, at the end of the defects liability period.' +
+        '</div></div>' +
+      '</div>';
+
+    /* ledger */
+    var traceRows = s.trace.map(function (t) {
+      return '<div class="tr-row"><span>' + t.label + '<br><span style="color:#aaa">' + t.why + '</span></span><span>' + money(t.amt) + '</span></div>';
+    }).join('');
+
+    html +=
+      '<div class="panel">' +
+        '<div class="panel-head"><div><h4>Retention on this claim</h4>' +
+        '<div class="ph-sub">What was already held back, what this claim adds, what it gives back</div></div></div>' +
+        '<div class="panel-body"><div class="ledger">' +
+
+          '<div class="lg-row">' +
+            '<div class="op"></div>' +
+            '<div><div class="lg-name">Held back before this claim</div>' +
+              '<div class="lg-why">Everything retained on Claim #1</div>' +
+              '<span class="disclose" onclick="document.getElementById(\'trace\').classList.toggle(\'open\')">Show the claims behind this &#9662;</span>' +
+              '<div class="trace" id="trace">' + traceRows + '</div>' +
+            '</div>' +
+            '<div class="lg-amt">' + money(s.heldBefore) + '</div>' +
+          '</div>' +
+
+          '<div class="lg-row">' +
+            '<div class="op">+</div>' +
+            '<div><div class="lg-name">Held back from this claim</div>' +
+              '<div class="lg-why">' + s.ratePct + '% of the ' + money(BASE.thisClaim) + ' claimed for 25 Jul &ndash; 24 Aug 2026</div></div>' +
+            '<div class="lg-amt amt-hold">' + signed(s.holdNow, 'plus') + '</div>' +
+          '</div>' +
+
+          '<div class="lg-row">' +
+            '<div class="op">&minus;</div>' +
+            '<div><div class="lg-name">Released back on this claim</div>' +
+              '<div class="lg-why">' + s.releaseWhy + '</div></div>' +
+            '<div class="lg-amt ' + (s.releaseNow ? 'amt-rel' : 'amt-zero') + '">' + (s.releaseNow ? signed(s.releaseNow, 'minus') : money(0)) + '</div>' +
+          '</div>' +
+
+          '<div class="lg-row total">' +
+            '<div class="op">=</div>' +
+            '<div><div class="lg-name">Total held back after this claim</div>' +
+              '<div class="lg-why">Still owed to you, released on the schedule below</div></div>' +
+            '<div class="lg-amt">' + money(balance) + '</div>' +
+          '</div>' +
+
+          '<div class="capbar-wrap">' +
+            '<div class="cap-legend"><span>Against the ' + money(s.cap) + ' cap</span>' +
+            '<span><b>' + (balance / s.cap * 100).toFixed(1) + '%</b> used</span></div>' +
+            '<div class="capbar"><div class="cb-fill' + (balance / s.cap > 0.9 ? ' warn' : '') + '" style="width:' + (balance / s.cap * 100).toFixed(1) + '%"></div></div>' +
+            '<div class="cap-legend"><span>' + money(s.cap - balance) + ' of headroom left &mdash; once the cap is reached, later claims have nothing held back</span></div>' +
+          '</div>' +
+
+        '</div></div>' +
+      '</div>';
+
+    /* release schedule */
+    var stageRows = s.stages.map(function (st) {
+      var cls = st.state === 'now' ? 'pill-now' : (st.state === 'done' ? 'pill-done' : 'pill-wait');
+      return '<tr><td><div class="stage-name">' + st.name + '</div><div class="stage-trigger">' + st.trigger + '</div></td>' +
+             '<td class="r">' + money(st.amt) + '</td>' +
+             '<td style="text-align:right"><span class="pill ' + cls + '">' + st.text + '</span></td></tr>';
+    }).join('');
+
+    html +=
+      '<div class="panel">' +
+        '<div class="panel-head"><div><h4>Release schedule</h4>' +
+        '<div class="ph-sub">When the ' + money(balance + s.releaseNow) + ' held at the start of this claim comes back</div></div></div>' +
+        '<div class="panel-body"><table class="pt">' +
+          '<thead><tr><th>Stage</th><th class="r">Amount</th><th style="text-align:right">Status</th></tr></thead>' +
+          '<tbody>' + stageRows + '</tbody>' +
+        '</table></div>' +
+      '</div>';
+  }
+
+  /* invoice */
+  html +=
+    '<div class="panel">' +
+      '<div class="panel-head"><div><h4>What this invoice comes to</h4>' +
+      '<div class="ph-sub">The figure that goes to the client</div></div></div>' +
+      '<div class="panel-body"><div class="ledger">' +
+        '<div class="lg-row"><div class="op"></div>' +
+          '<div><div class="lg-name">Claimed this period, before retention</div></div>' +
+          '<div class="lg-amt">' + money(BASE.thisClaim) + '</div></div>' +
+        '<div class="lg-row"><div class="op">&minus;</div>' +
+          '<div><div class="lg-name">Retention held back</div></div>' +
+          '<div class="lg-amt ' + (s.holdNow ? 'amt-hold' : 'amt-zero') + '">' + (s.holdNow ? signed(s.holdNow, 'minus') : money(0)) + '</div></div>' +
+        '<div class="lg-row"><div class="op">+</div>' +
+          '<div><div class="lg-name">Retention released</div></div>' +
+          '<div class="lg-amt ' + (s.releaseNow ? 'amt-rel' : 'amt-zero') + '">' + (s.releaseNow ? signed(s.releaseNow, 'plus') : money(0)) + '</div></div>' +
+        '<div class="lg-row total"><div class="op">=</div>' +
+          '<div><div class="lg-name">Amount payable on this invoice</div></div>' +
+          '<div class="lg-amt">' + money(payable) + '</div></div>' +
+      '</div>' +
+
+      '<div class="plain">' + plainEnglish(s, balance, payable) + '</div>' +
+
+      '</div>' +
+    '</div>' +
+
+    '<div class="panel"><div class="panel-body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">' +
+      '<span style="font-size:13.5px">&#9888;&#65039; <b>35 items</b> in this claim are marked non-claimable, so they are not in the ' + money(BASE.thisClaim) + ' above.</span>' +
+      '<button class="link-btn">Review the 35 items</button>' +
+    '</div></div>';
+
+  document.getElementById('retentionBody').innerHTML = html;
+}
+
+function plainEnglish(s, balance, payable) {
+  if (!s.setUp) {
+    return 'This contract holds no retention, so the invoice is the claim: <b>' + money(payable) + '</b>.';
+  }
+  if (s.releaseNow) {
+    return 'You are owed <b>' + money(balance + s.releaseNow) + '</b> in retention. Practical completion releases <b>' +
+      money(s.releaseNow) + '</b> of it on this claim, while <b>' + money(s.holdNow) +
+      '</b> is held back from the new work &mdash; so the invoice goes out at <b>' + money(payable) +
+      '</b> rather than ' + money(BASE.thisClaim) + '. <b>' + money(balance) + '</b> stays held until the defects period ends.';
+  }
+  return '<b>' + money(s.holdNow) + '</b> is held back from this claim, so the invoice goes out at <b>' +
+    money(payable) + '</b> rather than ' + money(BASE.thisClaim) + '. That takes the total held to <b>' +
+    money(balance) + '</b>, which comes back to you in two releases &mdash; nothing is lost, it is deferred.';
+}
+
+/* ---------- wiring ---------- */
+document.querySelectorAll('.vb-tab').forEach(function (tab) {
+  tab.onclick = function () {
+    document.querySelectorAll('.vb-tab').forEach(function (t) { t.classList.remove('active'); });
+    tab.classList.add('active');
+    document.querySelectorAll('.view').forEach(function (v) { v.classList.add('hide'); });
+    document.getElementById('view-' + tab.dataset.view).classList.remove('hide');
+    window.scrollTo(0, 0);
+  };
+});
+
+document.querySelectorAll('.chip').forEach(function (chip) {
+  chip.onclick = function () {
+    document.querySelectorAll('.chip').forEach(function (c) { c.classList.remove('active'); });
+    chip.classList.add('active');
+    render(chip.dataset.sc);
+  };
+});
+
+render('running');
+</script>
+</body>
+</html>
