@@ -574,14 +574,6 @@ def main():
     old_bar_end = find_element_end(base, base.find("<div", old_bar_start))
     base = base[:old_bar_start] + TAB_BAR_NEW + base[old_bar_end:]
 
-    # 1b. the list's Add Timesheet button opens the add flow
-    if 'class="btn btn-primary btn-sm"><i class="fas fa-circle-plus"></i> Add Timesheet' not in base:
-        raise SystemExit("FAIL: Add Timesheet button not found")
-    base = base.replace(
-        '<button class="btn btn-primary btn-sm"><i class="fas fa-circle-plus"></i> Add Timesheet</button>',
-        '<button class="btn btn-primary btn-sm" onclick="tsOpenAdd()">'
-        '<i class="fas fa-circle-plus"></i> Add Timesheet</button>', 1)
-
     # 2. child CSS before </head>
     style_block = ("\n<style>\n/* ═══ timesheet ═══ */\n" + read(TS_CSS) +
                    "\n/* ═══ merged: daily cost tracking ═══ */\n" + dc_css +

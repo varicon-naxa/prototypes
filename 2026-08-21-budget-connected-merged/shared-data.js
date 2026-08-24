@@ -203,6 +203,151 @@ var VDATA = (function () {
     return (l && l.suppliers[kind]) || 'Supplier';
   }
 
+
+  /* ── one labour row, as a shift ──────────────────────────────────────────
+     A worker's day is a timesheet. The diary shows it as a labour row, the
+     calendar shows it as a cost entry, and the Timesheet page shows it as a
+     submitted timesheet — all three are this same row, so the clock times and
+     the allocation are derived here once rather than per surface. */
+  function labourShift(row, i) {
+    var dt = row.detail, hrs = dt.hrs;
+    var start = 7 + (seed(row.iso + dt.worker.id + i) % 2);   /* 07:00 or 08:00 */
+    function hm(v) {
+      var h = Math.floor(v), m = Math.round((v - h) * 60);
+      return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    }
+    return {
+      worker: dt.worker, rate: dt.rate, cost: row.cost, cc: row.cc,
+      iso: row.iso, state: row.state,
+      /* approved timesheet = actual cost, unapproved = tracked */
+      approved: row.state === 'actual',
+      inAt: hm(start), outAt: hm(start + hrs + 0.5), brk: 30,
+      hoursDec: hrs,
+      hours: Math.floor(hrs) + 'h ' + String(Math.round((hrs % 1) * 60)).padStart(2, '0') + 'm',
+      alloc: allocFor(row.cc, row.iso + 'l' + i, i)
+    };
+  }
+
+  function allocFor(cc, key, i) {
+    var opts = allocOptions().filter(function (o) { return o.cc === cc; });
+    var o = opts.length ? opts[(seed(key) + i) % opts.length] : null;
+    return [{ l: o ? o.l : cc, c: ccLabel(cc), p: 100 }];
+  }
+
+  /* Whoever signs the crew's time off. The base has a site foreman; that is
+     the approver rather than a name invented for this page. */
+  function approver() {
+    var crew = workers();
+    var foreman = crew.filter(function (w) { return /foreman|supervisor/i.test(w.role); })[0];
+    return foreman || crew[crew.length - 1];
+  }
+
+  /* ── weeks ──────────────────────────────────────────────────────────────
+     The Timesheet page is a week at a time, Monday to Sunday. */
+  function mondayOf(isoDate) {
+    var d = new Date(isoDate + 'T00:00:00');
+    var dow = d.getDay();                       /* 0 Sun .. 6 Sat */
+    d.setDate(d.getDate() - ((dow + 6) % 7));
+    return iso(d);
+  }
+  function addDays(isoDate, n) {
+    var d = new Date(isoDate + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return iso(d);
+  }
+  function weekDays(mon) {
+    var out = [];
+    for (var i = 0; i < 7; i++) out.push(addDays(mon, i));
+    return out;
+  }
+  /* Every Monday that has labour in the open period, so the page can only ever
+     land on a week with timesheets on it. */
+  function weeksWithLabour() {
+    var l = ledger(), seen = {}, out = [];
+    l.days.forEach(function (d) {
+      var hasLabour = l.byDate[d].some(function (r) {
+        return !r.uncoded && r.detail.kind === 'labour';
+      });
+      if (!hasLabour) return;
+      var m = mondayOf(d);
+      if (!seen[m]) { seen[m] = 1; out.push(m); }
+    });
+    return out.sort();
+  }
+  /* The landing week: the last full week of the claim period that has time on
+     it, so the page opens on something rather than on an empty grid. */
+  function defaultWeek() {
+    var w = weeksWithLabour();
+    if (!w.length) return mondayOf(period().start);
+    var p = period();
+    var full = w.filter(function (m) { return addDays(m, 6) <= p.end; });
+    return (full.length ? full : w)[(full.length ? full : w).length - 1];
+  }
+
+  /* Every timesheet in a week, one per worker-day. */
+  function timesheetsForWeek(mon) {
+    var days = weekDays(mon), out = [];
+    days.forEach(function (d) {
+      var rows = (ledger().byDate[d] || []).filter(function (r) {
+        return !r.uncoded && r.detail.kind === 'labour';
+      });
+      rows.forEach(function (r, i) {
+        r.iso = d;
+        out.push(labourShift(r, i));
+      });
+    });
+    return out;
+  }
+
+
+  /* ── timesheets entered on the Add Timesheet page ───────────────────────
+     A timesheet the user enters is the source of labour cost, so saving one
+     adds its cost to the budget line it was allocated against — that is the
+     whole point of the merged prototype. But the ledger also spreads the
+     budget's cost deterministically over the month, which would then count
+     that money twice: once in the spread, once as the row the user entered.
+
+     So an entered row is held explicitly and carved back out of the pool the
+     spread draws from. Total cost still equals the budget's cost for the
+     period, and the row lands on the day and worker it was entered against
+     rather than wherever the spread would have put it. */
+  var _entered = [];
+
+  function enteredFor(cc, cat, state) {
+    return _entered.reduce(function (a, e) {
+      return a + ((e.cc === cc && e.cat === cat && e.state === state) ? e.cost : 0);
+    }, 0);
+  }
+
+  function addTimesheet(entry) {
+    _entered.push(entry);
+    invalidate();
+  }
+  function enteredRows() { return _entered.slice(); }
+  function clearEntered() { _entered = []; invalidate(); }
+
+  /* The project. The base names it in the topbar rather than in a constant, so
+     it is read once at load — the Timesheet page retitles that same heading,
+     and reading it later would report the project as "Timesheet". */
+  var _projectName = (function () {
+    var h = document.querySelector('.topbar-left h1');
+    var t = h ? h.textContent : '';
+    var m = t.split('—');
+    return (m.length > 1 ? m[m.length - 1] : t).trim() || 'Project';
+  })();
+  function projectName() { return _projectName; }
+
+  /* Who signs a timesheet off. The crew's foreman, except for the foreman's
+     own time — nobody approves their own timesheet — which goes up to whoever
+     is logged in. */
+  function approverFor(worker) {
+    var crew = workers();
+    var foreman = crew.filter(function (w) { return /foreman|supervisor/i.test(w.role); })[0];
+    if (foreman && (!worker || worker.id !== foreman.id)) return foreman.nm;
+    var me = document.querySelector('.user-name');
+    return (me && me.textContent.trim()) || 'Project manager';
+  }
+
   /* ── the ledger ─────────────────────────────────────────────────────── */
 
   /* Cost for one cost centre in one period, split the way the budget splits
@@ -223,7 +368,11 @@ var VDATA = (function () {
        are in, in the same colours the overview uses. */
     var out = {};
     resourceBreakdown(node, cc).forEach(function (r) {
-      out[r.cat.key] = { tracked: Math.round(r.tracked || 0), actual: Math.round(r.actual || 0) };
+      var tr = Math.round(r.tracked || 0), ac = Math.round(r.actual || 0);
+      /* what the user entered by hand is not also spread */
+      tr = Math.max(0, tr - enteredFor(cc, r.cat.key, 'tracked'));
+      ac = Math.max(0, ac - enteredFor(cc, r.cat.key, 'actual'));
+      out[r.cat.key] = { tracked: tr, actual: ac };
     });
     return out;
   }
@@ -421,6 +570,11 @@ var VDATA = (function () {
     var un = uncodedLines();
     if (un.length) spread(UNCODED, poolsFor(UNCODED, p, un), true);
 
+    _entered.forEach(function (e) {
+      if (!byDate[e.iso]) byDate[e.iso] = [];
+      byDate[e.iso].push(e.row);
+    });
+
     _cache.ledger = { period: p, days: days, byDate: byDate };
     return _cache.ledger;
   }
@@ -450,6 +604,13 @@ var VDATA = (function () {
     wbsTree: wbsTree, allocOptions: allocOptions, workers: workers, plant: plant,
     supplyLines: supplyLines, supplierFor: supplierFor,
     stateColour: stateColour, stateTitle: stateTitle, catColour: catColour,
+    labourShift: labourShift, allocFor: allocFor, approver: approver,
+    mondayOf: mondayOf, addDays: addDays, weekDays: weekDays,
+    weeksWithLabour: weeksWithLabour, defaultWeek: defaultWeek,
+    timesheetsForWeek: timesheetsForWeek, iso: iso,
+    addTimesheet: addTimesheet, enteredRows: enteredRows,
+    clearEntered: clearEntered, projectName: projectName,
+    approverFor: approverFor,
     uncodedLines: uncodedLines, isCoded: isCoded, UNCODED: UNCODED,
     uncodedCount: function () {
       var l = ledger(), n = 0;
@@ -494,32 +655,19 @@ function vdataDiaryRows() {
   var out = { labour: [], plant: [], materials: [], misc: [], miscEntries: [], deliveries: [], dockets: [] };
   var alloc = VDATA.allocOptions();
 
-  function allocFor(cc, key, i) {
-    var opts = alloc.filter(function (o) { return o.cc === cc; });
-    var o = opts.length ? opts[(VDATA.seed(key) + i) % opts.length] : null;
-    return [{ l: o ? o.l : cc, c: VDATA.ccLabel(cc), p: 100 }];
-  }
-  function clock(hrs, key) {
-    var start = 7 + (VDATA.seed(key) % 2);                 /* 07:00 or 08:00 */
-    var end = start + hrs + 0.5;                           /* + unpaid break */
-    function hm(v) {
-      var h = Math.floor(v), m = Math.round((v - h) * 60);
-      return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-    }
-    return { in: hm(start), out: hm(end), brk: '30',
-             hrs: Math.floor(hrs) + 'h ' + String(Math.round((hrs % 1) * 60)).padStart(2, '0') + 'm' };
-  }
+  var allocFor = VDATA.allocFor;
 
   rows.forEach(function (r, i) {
     var dt = r.detail;
     if (dt.kind === 'labour') {
-      var t = clock(dt.hrs, d + i);
+      /* the same shift the Timesheet page shows for this worker-day */
+      r.iso = d;
+      var t = VDATA.labourShift(r, i);
       out.labour.push({
         who: dt.worker.nm, role: dt.worker.role, rate: dt.rate, allow: 0,
-        in: t.in, out: t.out, brk: t.brk, hrs: t.hrs,
-        alloc: allocFor(r.cc, d + 'l' + i, i),
-        /* approved timesheet = actual, unapproved = tracked */
-        status: r.state === 'actual' ? 'app' : 'pend',
+        in: t.inAt, out: t.outAt, brk: String(t.brk), hrs: t.hours,
+        alloc: t.alloc,
+        status: t.approved ? 'app' : 'pend',
         cost: r.cost
       });
     } else if (dt.kind === 'plant') {

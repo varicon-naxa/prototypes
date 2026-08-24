@@ -90,6 +90,68 @@ what picks the document, so a row's colour and its source document cannot disagr
 
 Committed carries no daily-cost rows, which is correct: committed is not cost yet.
 
+## Timesheet — 2026-08-24
+
+Two pages off the **sidebar**, not the project tab bar: the landing page carries a
+Project filter and no project name in its title, so it spans projects. Opening either
+takes the project tab bar and budget wizard chrome down and retitles the topbar; leaving
+puts them back.
+
+### The list
+
+A week at a time, Mon–Sun, grouped by day with a CLOCK IN group, paginated, searchable,
+plus a WORKERS tab that rolls the week up per person. Every row is a labour row from the
+shared ledger, so a timesheet here, a labour row on the Site Diary and a cost entry on
+the Daily Cost calendar are one record shown three ways.
+
+Tiles read from the ledger. Approved is actual cost, unapproved is tracked. **Payroll
+locked, rejected and resubmitted read zero** because the budget model has no equivalent —
+they are not invented. Status pills use the budget's own state palette.
+
+The approver is the crew's foreman, except for the foreman's own time, which goes up to
+whoever is logged in. Nobody approves their own timesheet.
+
+### The add flow, rebuilt
+
+The original was one flat column — date, project, workers, times, remarks, attachments,
+then four empty tables announcing "no data" — with Save live from the first paint, a
+greyed-out Workers picker with nothing saying why, a 16h 0m default nobody chose, and the
+one thing the page exists for (putting hours against a task so the cost lands on the
+budget) at the bottom under an UNASSIGNED HOURS figure in red.
+
+Rebuilt on the budget setup flow's own components (`.card-section`, `.choice-card`,
+`.stepper`, `.wiz-bar`, `.btn-*`), so it inherits that flow's behaviour rather than
+imitating its look:
+
+| Step | What it asks | Gate |
+| --- | --- | --- |
+| 1 Day & job | date, project, and single vs multi-job as choice cards | project required |
+| 2 Crew & time | crew as pickable cards, one shift for all | ≥1 worker, plausible shift |
+| 3 Allocate | hours against tasks, reconciling to zero | unassigned must clear |
+| 4 Review | what gets created and where the cost goes | — |
+
+- **Locked sections say why.** "Choose a project first" on the workers list, in the same
+  idiom the budget flow uses for its schedule cards.
+- **The default shift is 8h**, not the 16h the two default times used to imply.
+- **Allocation is its own step** with a progress bar, and *Put the rest on one task* so
+  clearing the remainder is one press rather than mental arithmetic.
+- **Save is held back** and the footer names what is blocking it — "4h 30m of the shift
+  still unallocated" — rather than sitting enabled and failing.
+
+### Saving writes back
+
+A timesheet is the source of labour cost, so saving one adds it to the budget line it was
+allocated against as `tsUnapproved` — tracked, not actual, until approved. The row is held
+explicitly so it lands on the day and worker entered, and carved back out of the derived
+spread so the money is not counted twice. Verified: the ledger still ties to the budget at
+a **$0 gap** after saving, and the new entry shows on the list, the calendar (labelled
+"entered on a timesheet") and the diary.
+
+One honest limit: the base apportions each line's cost across the four claim periods by a
+fixed weight, so a saved timesheet raises the **job's** cost by its full amount while this
+period picks up its share. The review quotes the job figure for that reason — quoting a
+period figure would read as a discrepancy against the overview.
+
 ## Verified
 
 Computed styles, visible-text length and element counts on both guest tabs were
