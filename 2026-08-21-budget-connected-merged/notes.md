@@ -243,8 +243,13 @@ arrives for plant, which account does it post to?
 - What a supplier supplies is **derived**: a supplier appearing against a cost centre gets
   that cost centre's dominant category from the budget's own build-up mix, so the hire
   firms come out as plant and the concrete suppliers as material with no hand mapping.
-- Uncoded categories **flag rather than block**, on the row and in the drawer footer: the
-  record is valid, it is the bill that cannot post.
+- Uncoded categories **flag rather than block** in the drawer footer: the record is valid,
+  it is the bill that cannot post.
+
+**The codes are set here and shown nowhere else.** They surface where they are used —
+creating a purchase order, and coding a bill — so the supplier list stays a contact record.
+An earlier cut put category chips and an uncoded-category warning on the rows; both came
+off, which also returns the list to the columns the real screen has.
 
 The chart of accounts is the one thing here that is **not** derived — the budget has no
 concept of one, so `ACCOUNT_CODES` is new data.

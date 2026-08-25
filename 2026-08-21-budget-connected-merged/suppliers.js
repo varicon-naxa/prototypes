@@ -39,26 +39,12 @@ function spRender() {
   var dash = '<span class="sp-dash">-</span>';
   body.innerHTML = rows.length
     ? rows.slice(from, to).map(function (s) {
-        var unmapped = VDATA.unmappedCats(s).length;
-        var warn = unmapped
-          ? ' <i class="fas fa-triangle-exclamation sp-warn" title="' + unmapped +
-            ' resource categor' + (unmapped === 1 ? 'y has' : 'ies have') +
-            ' no accounting code — bills in ' + (unmapped === 1 ? 'it' : 'them') +
-            ' cannot post"></i>'
-          : '';
-        var cats = (s.cats || []).map(function (c) {
-          var m = VDATA.resourceCategories().filter(function (x) { return x.key === c; })[0];
-          if (!m) return '';
-          var n = ((s.codes || {})[c] || []).length;
-          return '<span class="sp-catchip' + (n ? '' : ' unset') + '" style="background:' +
-            m.colour + '1a;color:' + m.colour + '" title="' +
-            (n ? n + ' account' + (n === 1 ? '' : 's') : 'no accounting code') + '">' +
-            m.name + (n > 1 ? ' ×' + n : '') + '</span>';
-        }).join('');
+        /* No accounting state on this list. The codes are set on the supplier
+           but they only surface where they are used — creating a PO, and
+           coding a bill — so the row stays a contact record. */
         return '<tr>' +
           '<td class="sp-check"><input type="checkbox"></td>' +
-          '<td><div class="sp-name">' + s.name + warn + '</div>' +
-            (cats ? '<div class="sp-catrow">' + cats + '</div>' : '') + '</td>' +
+          '<td class="sp-name">' + s.name + '</td>' +
           '<td>' + (s.abn || dash) + '</td>' +
           '<td class="sp-addr">' + (s.address || dash) + '</td>' +
           '<td class="sp-email">' + (s.email || dash) + '</td>' +
