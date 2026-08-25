@@ -4325,8 +4325,9 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
           </div>
           <div class="card">
             <h3><i class="fas fa-user-gear" style="color:#0d9488;margin-right:8px"></i>Wet hire — plant and operator</h3>
-            <p class="card-sub">One charge-out rate covering the machine <em>and</em> the person running it. Cost is the two
-              internal rates added together; the sell is this single wet hire rate, so labour is never charged out on top.</p>
+            <p class="card-sub">One charge-out rate covering the machine <em>and</em> the person running it. This is how
+              <em>plant</em> charges out — a timesheet charges the person at their own labour rate, and the machine takes
+              the remainder, so the two together come back to this figure.</p>
             <table class="mini-table">
               <thead><tr><th>Machine</th><th style="width:34%">Wet hire rate</th>
                 <th class="right" style="width:110px">Sell ($/hr)</th><th class="right" style="width:130px">Cost ($/hr)</th></tr></thead>
@@ -4959,10 +4960,12 @@ const dayworksRecords = [
    says who worked, for how long, and on what machine. From that:
 
      cost  = the person's cost rate + the machine's internal cost rate
-     sell  = the WET HIRE rate for that machine, which covers the operator
-             as well — so labour is never charged out separately when
-             someone is on plant. A person working without a machine is
-             charged at their labour sell rate.
+     sell  = the person at their labour sell rate, plus the machine at its
+             dry rate. Wet hire is a PLANT charge-out — machine and operator
+             on one rate — so it belongs to the machine, not to a line about
+             a person's time. The dry rate is the wet rate less the operator
+             this line is already charging, which is why the two together
+             still come to the wet rate.
 
    Cost plus covers materials only: a supplier invoice is scanned in and a
    percentage is added on top. The claim shows the invoice and the marked-up
@@ -5020,13 +5023,28 @@ function timesheetLine(t){
     : 0;
   const labourCost = person.costRate * t.hours;
   const plantCost  = plantHourly * t.hours;
-  // Wet hire covers the operator, so labour is not charged out on top.
-  const sell = wet ? wet.rate * t.hours : person.labourSell * t.hours;
+
+  // The person is charged at their own labour sell rate, always. Wet hire is
+  // how the machine charges out, so it does not decide what a person's hour
+  // is worth.
+  const labourSell = person.labourSell * t.hours;
+
+  // The machine's own charge-out. A wet rate covers machine and operator
+  // together, and the operator is already on this line, so the machine's
+  // share is the wet rate less that operator's sell. Labour + plant therefore
+  // still totals the wet rate — the money has not moved, it is just against
+  // the thing that earned it.
+  const dryHourly = wet ? Math.max(0, wet.rate - person.labourSell) : 0;
+  const plantSell = dryHourly * t.hours;
+
   return Object.assign({}, t, {
     person, plant, wet,
     labourCost:Math.round(labourCost), plantCost:Math.round(plantCost),
-    cost:Math.round(labourCost + plantCost), sell:Math.round(sell),
-    sellBasis: wet ? 'wet hire' : 'labour'
+    cost:Math.round(labourCost + plantCost),
+    labourSell:Math.round(labourSell), plantSell:Math.round(plantSell),
+    dryHourly:Math.round(dryHourly),
+    sell:Math.round(labourSell + plantSell),
+    sellBasis: plant ? 'labour + plant' : 'labour'
   });
 }
 function dayworkTimesheetLines(){ return DAYWORK_TIMESHEETS.map(timesheetLine); }
@@ -6754,7 +6772,8 @@ function renderClaimView(){
         '<td class="cell-desc" style="font-weight:400">' + l.person.name + ' — ' +
           (l.plant ? l.plant.id + ' ' + l.plant.name : 'no machine') +
           '<div style="font-size:11px;color:#94a3b8;margin-top:2px">' + l.hours + ' hrs @ ' +
-          (l.wet ? '$' + l.wet.rate + '/hr wet hire' : '$' + l.person.labourSell + '/hr labour') + '</div></td>' +
+          '$' + l.person.labourSell + '/hr labour' +
+          (l.plantSell ? ' + $' + l.dryHourly + '/hr plant' : '') + '</div></td>' +
         '<td class="right sep">' + money(l.cost) + '</td>' +
         '<td class="right">' + money(l.sell) + '</td>' +
         '<td class="right money-muted">—</td><td class="right money-muted sep">—</td></tr>';
@@ -6894,10 +6913,10 @@ function renderPeopleView(){
         '<td></td><td class="cell-code">' + l.date + '</td>' +
         '<td class="cell-desc" style="font-weight:400">' +
           (l.plant ? l.plant.id + ' — ' + l.plant.name : 'No machine') +
-          ' <span class="chip ' + (l.wet ? 'live' : 'idle') + '">' + l.sellBasis + '</span>' +
+          ' <span class="chip ' + (l.plantSell ? 'live' : 'idle') + '">' + l.sellBasis + '</span>' +
           '<div style="font-size:11px;color:#94a3b8;margin-top:2px">' + l.docket + ' · ' + l.cc +
-          (l.wet ? ' · charged at $' + l.wet.rate + '/hr wet — covers the operator' :
-                   ' · charged at $' + l.person.labourSell + '/hr') + '</div></td>' +
+          ' · ' + l.person.name + ' at $' + l.person.labourSell + '/hr' +
+          (l.plantSell ? ', machine at $' + l.dryHourly + '/hr dry' : '') + '</div></td>' +
         '<td class="right">' + l.hours + '</td>' +
         '<td class="right sep">' + money(l.labourCost) + '</td>' +
         '<td class="right ' + (l.plantCost ? '' : 'money-muted') + '">' + (l.plantCost ? money(l.plantCost) : '—') + '</td>' +
