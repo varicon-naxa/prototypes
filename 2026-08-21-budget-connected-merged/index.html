@@ -1422,6 +1422,12 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
 .sp-blocker.bad { color: #dc2626 }
 .btn.sp-off { opacity: .45; pointer-events: none }
 
+/* An empty mapping is a normal starting state, so the note that says so is a
+   quiet aside rather than a warning. */
+.sp-later { font-size: 12px; color: #64748b; background: #f8fafc;
+  border-left: 3px solid #cbd5e1; padding: 9px 12px; border-radius: 0 6px 6px 0;
+  margin: -6px 0 14px }
+
 /* ═══ merged: daily cost tracking ═══ */
 #pageDailyCost *{ margin: 0; padding: 0; box-sizing: border-box; }
 #pageDailyCost{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f3f4f6; color: #222; }
@@ -2771,9 +2777,11 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
     <!-- ── what they supply, and where it posts ────────────────────────── -->
     <div class="sp-sec">
       <h3>What does this supplier provide?</h3>
-      <p class="sp-sec-sub">Pick every category you buy from them. Each one gets its own
-        accounting code, because a bill for plant and a bill for materials from the same
-        supplier do not post to the same account.</p>
+      <p class="sp-sec-sub">Pick every category you buy from them, and the accounts each
+        one posts to. A bill for plant and a bill for materials from the same supplier do
+        not post to the same account, so each category is coded separately.</p>
+      <p class="sp-sec-sub sp-later">You can leave this until later — a bill will ask for
+        anything missing when one arrives in a category that has not been set up.</p>
 
       <div class="sp-cats" id="spCats"></div>
 
@@ -12352,11 +12360,12 @@ var VDATA = (function () {
     var byName = {};
     function note(name, cc) {
       if (!name || name === 'various' || name === 'Payroll journal') return;
-      var e = byName[name] || (byName[name] = { name: name, ccs: {}, cats: {} });
-      if (cc) {
-        e.ccs[cc] = 1;
-        e.cats[dominantCategory(cc)] = 1;
-      }
+      var e = byName[name] || (byName[name] = { name: name, ccs: {} });
+      /* The cost centres a supplier appears against are recorded, but no
+         category is inferred from them. What a supplier supplies is the
+         client's to state, not ours to guess — and guessing it put a traffic
+         management firm under plant and material. */
+      if (cc) e.ccs[cc] = 1;
     }
     liveLines().forEach(function (l) {
       if (!l.suppliers) return;
@@ -12380,26 +12389,6 @@ var VDATA = (function () {
     var streets = ['Wilde Rd', 'Korsman Dr', 'Bell Street', 'Pring St', 'Kessels Rd'];
     var towns = ['HOLYOAKE', 'BRISBANE, QLD', 'TOOWOOMBA, QLD', 'SOUTHBANK, VIC', 'GATTON, QLD'];
     var firsts = ['J. Hendricks', 'M. Falzon', 'R. Ngata', 'A. Kaur', 'D. Moreau'];
-    var cats = Object.keys(e.cats);
-    if (!cats.length) cats = ['material'];
-
-    /* A couple of suppliers are deliberately left without a code on one of
-       their categories, so the unmapped state is visible on the list. */
-    var codes = {};
-    cats.forEach(function (c, i) {
-      var opts = accountCodesFor(c);
-      if (!opts.length) return;
-      if ((h + i) % 7 === 0) return;          /* left unmapped on purpose */
-      /* A category can post to more than one account — a supplier's materials
-         might be aggregates on one bill and concrete on the next — so this is
-         a list, and some suppliers get two. */
-      var picked = [opts[(h + i) % opts.length].code];
-      if (opts.length > 1 && (h + i) % 3 === 0) {
-        var second = opts[(h + i + 1) % opts.length].code;
-        if (second !== picked[0]) picked.push(second);
-      }
-      codes[c] = picked;
-    });
 
     return {
       name: e.name,
@@ -12419,8 +12408,9 @@ var VDATA = (function () {
                String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
       })(),
       source: fromXero ? 'xero' : 'varicon',
-      cats: cats,
-      codes: codes,
+      /* Empty until the client fills them in. */
+      cats: [],
+      codes: {},
       ccs: Object.keys(e.ccs)
     };
   }
@@ -12444,8 +12434,23 @@ var VDATA = (function () {
     invalidate();
   }
 
+  /* What a bill needs to know before it can be coded: does this supplier have
+     an account for the category being billed? Asked at the bill, not before —
+     an incomplete supplier record is normal until someone buys something in a
+     category they have not set up yet. */
+  function supplierByName(name) {
+    return suppliers().filter(function (s) { return s.name === name; })[0] || null;
+  }
+  function billCodingGap(name, cat) {
+    var s = supplierByName(name);
+    if (!s) return { missing: 'supplier', supplier: null };
+    if ((s.cats || []).indexOf(cat) < 0) return { missing: 'category', supplier: s };
+    if (!((s.codes || {})[cat] || []).length) return { missing: 'code', supplier: s };
+    return { missing: null, supplier: s, codes: s.codes[cat] };
+  }
+
   /* A supplier with a resource type but no account code for it cannot have a
-     bill in that category coded, which is worth flagging on the list. */
+     bill in that category coded. */
   function unmappedCats(s) {
     return (s.cats || []).filter(function (c) {
       var v = (s.codes || {})[c];
@@ -12727,6 +12732,7 @@ var VDATA = (function () {
     accountCodes: accountCodes, accountCodesFor: accountCodesFor,
     accountName: accountName, resourceCategories: resourceCategories,
     unmappedCats: unmappedCats, codeCount: codeCount,
+    supplierByName: supplierByName, billCodingGap: billCodingGap,
     dominantCategory: dominantCategory,
     approverFor: approverFor,
     uncodedLines: uncodedLines, isCoded: isCoded, UNCODED: UNCODED,
@@ -14985,7 +14991,9 @@ function spDrRender() {
           (missing.length === 1 ? 'it' : 'them') + ' cannot post'
         : SPD.cats.length
           ? '<i class="fas fa-circle-check"></i> All categories coded'
-          : '<i class="fas fa-circle-check"></i> Ready';
+          /* An empty mapping is a normal starting state, not a fault. It gets
+             asked for at the bill, so there is nothing to warn about here. */
+          : '<i class="fas fa-circle-check"></i> Ready — categories can be added later';
   }
 }
 

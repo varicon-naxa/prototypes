@@ -240,9 +240,11 @@ arrives for plant, which account does it post to?
 - Each category can carry **several accounting codes**. A supplier's materials might be
   aggregates on one bill and concrete on the next, so the mapping constrains which accounts
   a bill line may use rather than fixing one. `codes[category]` is a list.
-- What a supplier supplies is **derived**: a supplier appearing against a cost centre gets
-  that cost centre's dominant category from the budget's own build-up mix, so the hire
-  firms come out as plant and the concrete suppliers as material with no hand mapping.
+- **Nothing is filled in for the client.** Every supplier starts with no categories and no
+  codes. An earlier cut inferred the categories from the dominant category of the cost
+  centres a supplier appeared against and seeded one or two accounts each — both were us
+  deciding on the client's behalf, and the inference was wrong often enough to notice
+  (a traffic management firm came out as plant and material).
 - Uncoded categories **flag rather than block** in the drawer footer: the record is valid,
   it is the bill that cannot post.
 
@@ -254,12 +256,24 @@ off, which also returns the list to the columns the real screen has.
 The chart of accounts is the one thing here that is **not** derived — the budget has no
 concept of one, so `ACCOUNT_CODES` is new data.
 
-### Known rough edge
+### The bill is where a gap gets flagged
 
-The dominant-category heuristic is only as good as the cost centre's mix. Altus Traffic
-comes out as plant and material because of the cost centres it appears on, where a traffic
-management firm is really subcontract. Fixable by hand on the supplier, or by coding
-suppliers on the budget line rather than inferring them.
+An incomplete supplier record is a normal state, not a fault — nobody sets up a category
+before they have bought anything in it. So the drawer does not nag, and the check belongs
+at the point of use.
+
+`VDATA.billCodingGap(supplierName, category)` is that check, and it separates the three
+things that can be missing:
+
+| Returns | Meaning |
+| --- | --- |
+| `supplier` | the supplier is not on file at all |
+| `category` | this supplier has no such category set up |
+| `code` | the category exists but has no account behind it |
+| `null` | ready, and the allowed accounts come back with it |
+
+**Not yet surfaced.** The prototype has no bill entry screen to flag it on, so the check
+exists and nothing calls it.
 
 ## Verified
 

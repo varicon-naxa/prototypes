@@ -284,7 +284,9 @@ function spDrRender() {
           (missing.length === 1 ? 'it' : 'them') + ' cannot post'
         : SPD.cats.length
           ? '<i class="fas fa-circle-check"></i> All categories coded'
-          : '<i class="fas fa-circle-check"></i> Ready';
+          /* An empty mapping is a normal starting state, not a fault. It gets
+             asked for at the bill, so there is nothing to warn about here. */
+          : '<i class="fas fa-circle-check"></i> Ready — categories can be added later';
   }
 }
 

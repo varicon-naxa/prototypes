@@ -446,11 +446,12 @@ var VDATA = (function () {
     var byName = {};
     function note(name, cc) {
       if (!name || name === 'various' || name === 'Payroll journal') return;
-      var e = byName[name] || (byName[name] = { name: name, ccs: {}, cats: {} });
-      if (cc) {
-        e.ccs[cc] = 1;
-        e.cats[dominantCategory(cc)] = 1;
-      }
+      var e = byName[name] || (byName[name] = { name: name, ccs: {} });
+      /* The cost centres a supplier appears against are recorded, but no
+         category is inferred from them. What a supplier supplies is the
+         client's to state, not ours to guess — and guessing it put a traffic
+         management firm under plant and material. */
+      if (cc) e.ccs[cc] = 1;
     }
     liveLines().forEach(function (l) {
       if (!l.suppliers) return;
@@ -474,26 +475,6 @@ var VDATA = (function () {
     var streets = ['Wilde Rd', 'Korsman Dr', 'Bell Street', 'Pring St', 'Kessels Rd'];
     var towns = ['HOLYOAKE', 'BRISBANE, QLD', 'TOOWOOMBA, QLD', 'SOUTHBANK, VIC', 'GATTON, QLD'];
     var firsts = ['J. Hendricks', 'M. Falzon', 'R. Ngata', 'A. Kaur', 'D. Moreau'];
-    var cats = Object.keys(e.cats);
-    if (!cats.length) cats = ['material'];
-
-    /* A couple of suppliers are deliberately left without a code on one of
-       their categories, so the unmapped state is visible on the list. */
-    var codes = {};
-    cats.forEach(function (c, i) {
-      var opts = accountCodesFor(c);
-      if (!opts.length) return;
-      if ((h + i) % 7 === 0) return;          /* left unmapped on purpose */
-      /* A category can post to more than one account — a supplier's materials
-         might be aggregates on one bill and concrete on the next — so this is
-         a list, and some suppliers get two. */
-      var picked = [opts[(h + i) % opts.length].code];
-      if (opts.length > 1 && (h + i) % 3 === 0) {
-        var second = opts[(h + i + 1) % opts.length].code;
-        if (second !== picked[0]) picked.push(second);
-      }
-      codes[c] = picked;
-    });
 
     return {
       name: e.name,
@@ -513,8 +494,9 @@ var VDATA = (function () {
                String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
       })(),
       source: fromXero ? 'xero' : 'varicon',
-      cats: cats,
-      codes: codes,
+      /* Empty until the client fills them in. */
+      cats: [],
+      codes: {},
       ccs: Object.keys(e.ccs)
     };
   }
@@ -538,8 +520,23 @@ var VDATA = (function () {
     invalidate();
   }
 
+  /* What a bill needs to know before it can be coded: does this supplier have
+     an account for the category being billed? Asked at the bill, not before —
+     an incomplete supplier record is normal until someone buys something in a
+     category they have not set up yet. */
+  function supplierByName(name) {
+    return suppliers().filter(function (s) { return s.name === name; })[0] || null;
+  }
+  function billCodingGap(name, cat) {
+    var s = supplierByName(name);
+    if (!s) return { missing: 'supplier', supplier: null };
+    if ((s.cats || []).indexOf(cat) < 0) return { missing: 'category', supplier: s };
+    if (!((s.codes || {})[cat] || []).length) return { missing: 'code', supplier: s };
+    return { missing: null, supplier: s, codes: s.codes[cat] };
+  }
+
   /* A supplier with a resource type but no account code for it cannot have a
-     bill in that category coded, which is worth flagging on the list. */
+     bill in that category coded. */
   function unmappedCats(s) {
     return (s.cats || []).filter(function (c) {
       var v = (s.codes || {})[c];
@@ -821,6 +818,7 @@ var VDATA = (function () {
     accountCodes: accountCodes, accountCodesFor: accountCodesFor,
     accountName: accountName, resourceCategories: resourceCategories,
     unmappedCats: unmappedCats, codeCount: codeCount,
+    supplierByName: supplierByName, billCodingGap: billCodingGap,
     dominantCategory: dominantCategory,
     approverFor: approverFor,
     uncodedLines: uncodedLines, isCoded: isCoded, UNCODED: UNCODED,
