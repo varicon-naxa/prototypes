@@ -12443,10 +12443,38 @@ var VDATA = (function () {
   }
   function billCodingGap(name, cat) {
     var s = supplierByName(name);
-    if (!s) return { missing: 'supplier', supplier: null };
-    if ((s.cats || []).indexOf(cat) < 0) return { missing: 'category', supplier: s };
-    if (!((s.codes || {})[cat] || []).length) return { missing: 'code', supplier: s };
-    return { missing: null, supplier: s, codes: s.codes[cat] };
+    /* The accounts valid for this category come back whatever the gap, so the
+       bill can offer the fix in place instead of sending the user off to the
+       supplier record and losing the bill they were coding. */
+    var options = accountCodesFor(cat);
+    if (!s) return { missing: 'supplier', cat: cat, supplier: null, options: options };
+    if ((s.cats || []).indexOf(cat) < 0) {
+      return { missing: 'category', cat: cat, supplier: s, options: options };
+    }
+    if (!((s.codes || {})[cat] || []).length) {
+      return { missing: 'code', cat: cat, supplier: s, options: options };
+    }
+    return { missing: null, cat: cat, supplier: s, options: options, codes: s.codes[cat] };
+  }
+
+  /* Apply the fix. Adds the category if it was never set up and merges the
+     accounts in, so coding one bill teaches the supplier record for the next
+     one. Flag and let them proceed — the same way the rest of the product
+     handles an unmet condition. */
+  function addSupplierMapping(name, cat, codes) {
+    var s = supplierByName(name);
+    if (!s) return null;
+    var next = JSON.parse(JSON.stringify(s));
+    next.cats = (next.cats || []).slice();
+    if (next.cats.indexOf(cat) < 0) next.cats.push(cat);
+    next.codes = next.codes || {};
+    var have = (next.codes[cat] || []).slice();
+    [].concat(codes || []).forEach(function (c) {
+      if (c && have.indexOf(c) < 0) have.push(c);
+    });
+    next.codes[cat] = have;
+    saveSupplier(next);
+    return next;
   }
 
   /* A supplier with a resource type but no account code for it cannot have a
@@ -12733,6 +12761,7 @@ var VDATA = (function () {
     accountName: accountName, resourceCategories: resourceCategories,
     unmappedCats: unmappedCats, codeCount: codeCount,
     supplierByName: supplierByName, billCodingGap: billCodingGap,
+    addSupplierMapping: addSupplierMapping,
     dominantCategory: dominantCategory,
     approverFor: approverFor,
     uncodedLines: uncodedLines, isCoded: isCoded, UNCODED: UNCODED,

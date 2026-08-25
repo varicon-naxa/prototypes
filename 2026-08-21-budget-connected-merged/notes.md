@@ -272,8 +272,18 @@ things that can be missing:
 | `code` | the category exists but has no account behind it |
 | `null` | ready, and the allowed accounts come back with it |
 
-**Not yet surfaced.** The prototype has no bill entry screen to flag it on, so the check
-exists and nothing calls it.
+The accounts valid for the category come back **whatever the gap**, so the bill can offer
+the fix in place. `VDATA.addSupplierMapping(supplier, category, codes)` applies it — adding
+the category if it was never set up and merging the accounts in, so coding one bill teaches
+the supplier record for the next one.
+
+**Fix inline, then carry on** — Alec's call, 2026-08-25. The bill flags what is missing and
+lets the user put it right without losing the bill, rather than blocking or sending them
+off to the supplier record. Same shape as the rest of the product: surface the unmet
+condition, let them proceed.
+
+**Not yet surfaced.** The prototype has no bill entry screen, so the check and the fix
+exist and nothing calls them. Deliberate — whoever builds Bills wires them up.
 
 ## Verified
 
