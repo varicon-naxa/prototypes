@@ -256,6 +256,11 @@ arrives for plant, which account does it post to?
 - Uncoded categories **flag rather than block** in the drawer footer: the record is valid,
   it is the bill that cannot post.
 
+**Clicking the row opens the supplier**, not just the pencil. The pencil stays as the
+affordance but carries no handler of its own — one delegated handler on the table body
+covers both, so it survives a sort or a page change. The checkbox and Archive are the two
+things excluded, since neither means "open this".
+
 **The codes are set here and shown nowhere else.** They surface where they are used —
 creating a purchase order, and coding a bill — so the supplier list stays a contact record.
 An earlier cut put category chips and an uncoded-category warning on the rows; both came

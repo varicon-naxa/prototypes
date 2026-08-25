@@ -1297,6 +1297,10 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
 .sp-table td { padding: 12px 14px; border-bottom: 1px solid #eef2f6; vertical-align: middle;
   color: #334155; white-space: nowrap }
 .sp-table tbody tr:hover { background: #f8fafc }
+/* the whole row opens the supplier */
+.sp-row { cursor: pointer }
+.sp-row:hover .sp-name { color: #f5a623 }
+.sp-row:hover .sp-acts i { color: #475569 }
 .sp-table .sp-check { width: 46px }
 .sp-name { color: #1b2a4a; font-weight: 500 }
 .sp-dash { color: #cbd5e1 }
@@ -14791,6 +14795,10 @@ function tsSave() {
 
 var SP = { page: 1, sort: 'name', dir: 1 };
 
+function spAttr(v) {
+  return String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+}
+
 function spRender() {
   var body = document.getElementById('spBody');
   if (!body) return;
@@ -14824,7 +14832,7 @@ function spRender() {
         /* No accounting state on this list. The codes are set on the supplier
            but they only surface where they are used — creating a PO, and
            coding a bill — so the row stays a contact record. */
-        return '<tr>' +
+        return '<tr class="sp-row" data-name="' + spAttr(s.name) + '">' +
           '<td class="sp-check"><input type="checkbox"></td>' +
           '<td class="sp-name">' + s.name + '</td>' +
           '<td>' + (s.abn || dash) + '</td>' +
@@ -14838,9 +14846,9 @@ function spRender() {
             : '<span class="sp-src varicon" title="Created in Varicon">' +
               '<i class="fas fa-check"></i></span>') + '</td>' +
           '<td><span class="sp-acts">' +
-            '<i class="fas fa-pen" title="Edit" onclick="spEdit(this)" ' +
-              'data-name="' + s.name + '"></i>' +
-            '<i class="fas fa-box-archive" title="Archive"></i></span></td>' +
+            '<i class="fas fa-pen" title="Edit"></i>' +
+            '<i class="fas fa-box-archive sp-archive" title="Archive"></i>' +
+            '</span></td>' +
           '</tr>';
       }).join('')
     : '<tr><td colspan="10"><div class="sp-empty"><i class="far fa-building"></i>' +
@@ -14858,6 +14866,16 @@ function spRender() {
       '<span class="' + (last ? 'off' : '') + '" onclick="spGo(' + (SP.page + 1) + ')"><i class="fas fa-angle-right"></i></span>' +
       '<span class="' + (last ? 'off' : '') + '" onclick="spGo(' + pages + ')"><i class="fas fa-angles-right"></i></span>';
   }
+
+  /* The row opens the supplier. The pencil still reads as the affordance but
+     it is the same gesture now, so it carries no handler of its own — the
+     checkbox and Archive are the only things that must not open the drawer. */
+  body.onclick = function (ev) {
+    var t = ev.target;
+    if (t.closest('input[type=checkbox]') || t.closest('.sp-archive')) return;
+    var tr = t.closest('.sp-row');
+    if (tr) spEdit(tr.getAttribute('data-name'));
+  };
 
   document.querySelectorAll('#pageSuppliers .sp-sortable').forEach(function (th) {
     th.classList.toggle('on', (th.getAttribute('onclick') || '').indexOf("'" + key + "'") >= 0);
@@ -14956,8 +14974,7 @@ function spAdd() {
   spOpenDrawer('Add Supplier');
 }
 
-function spEdit(el) {
-  var name = el && el.getAttribute ? el.getAttribute('data-name') : el;
+function spEdit(name) {
   var s = VDATA.suppliers().filter(function (x) { return x.name === name; })[0];
   if (!s) return;
   SPD = { cats: (s.cats || []).slice(), codes: JSON.parse(JSON.stringify(s.codes || {})),
