@@ -25,6 +25,10 @@ SP_DRAWER_HTML = os.path.join(OUT_DIR, "add-supplier.html")
 SP_CSS = os.path.join(OUT_DIR, "suppliers.css")
 SP_DRAWER_CSS = os.path.join(OUT_DIR, "supplier-drawer.css")
 SP_JS = os.path.join(OUT_DIR, "suppliers.js")
+EQ_HTML = os.path.join(OUT_DIR, "equipment.html")
+EQ_REG_HTML = os.path.join(OUT_DIR, "register-equipment.html")
+EQ_CSS = os.path.join(OUT_DIR, "equipment.css")
+EQ_JS = os.path.join(OUT_DIR, "equipment.js")
 
 
 def read(p):
@@ -445,6 +449,21 @@ function sdSyncData() {
 function sdSyncIfStale() { if (_sdVersion !== VDATA.version()) sdSyncData(); }
 """
 
+# The sidebar has expandable groups in the product but the base draws every
+# entry flat, so the submenu brings its own styling.
+NAV_CSS = """
+/* ═══ sidebar groups ═══ */
+.nav-sub { display: none; padding: 2px 0 6px }
+.nav-sub.open { display: block }
+.nav-subitem { display: block; padding: 8px 16px 8px 48px; font-size: 13px;
+  color: rgba(255,255,255,.6); cursor: pointer; text-decoration: none }
+.nav-subitem:hover { background: rgba(255,255,255,.06); color: #fff }
+.nav-subitem.active { background: #f5a623; color: #fff; font-weight: 600;
+  border-radius: 0 6px 6px 0; margin-right: 8px }
+.nav-item.nav-group.open .chev { transform: rotate(180deg) }
+.nav-item .chev { transition: transform .15s }
+"""
+
 MERGE_JS = '''
 /* ══════════════════════════════════════════════════════════════
    MERGE LAYER — tab routing across the three merged prototypes
@@ -505,26 +524,30 @@ render = function() {
    carries a Project filter of its own — so it hangs off the sidebar instead,
    and the project chrome comes off while it is open. */
 var TOP_PAGES = { pageTimesheet: 'Timesheet', pageAddTimesheet: 'Add Timesheet',
-                  pageSuppliers: 'Suppliers' };
+                  pageSuppliers: 'Suppliers',
+                  pageEquipment: 'Plant & Equipment',
+                  pageAddEquipment: 'Plant & Equipment' };
 var PROJECT_TITLE = null;
 
 function gotoTop(el, pageId) {
   if (el) {
-    document.querySelectorAll('.sidebar .nav-item').forEach(function (n) {
-      n.classList.toggle('active', n === el);
-    });
+    document.querySelectorAll('.sidebar .nav-item, .sidebar .nav-subitem')
+      .forEach(function (n) { n.classList.toggle('active', n === el); });
+    /* a sub-item's group stays open behind it */
+    var sub = el.closest && el.closest('.nav-sub');
+    if (sub) sub.classList.add('open');
   }
   showPage(pageId);
   if (pageId === 'pageTimesheet') tsSyncData();
   if (pageId === 'pageSuppliers') spSyncData();
+  if (pageId === 'pageEquipment') eqSyncData();
 }
 
 /* Back to the project the app was already showing. */
 function gotoProjects(el) {
   if (el) {
-    document.querySelectorAll('.sidebar .nav-item').forEach(function (n) {
-      n.classList.toggle('active', n === el);
-    });
+    document.querySelectorAll('.sidebar .nav-item, .sidebar .nav-subitem')
+      .forEach(function (n) { n.classList.toggle('active', n === el); });
   }
   var tab = [].slice.call(document.querySelectorAll('.budget-view-tabs .bv-tab'))
     .filter(function (t) { return t.classList.contains('active'); })[0];
@@ -533,10 +556,21 @@ function gotoProjects(el) {
     ? 'pageSiteDiary' : 'pageOverview') : 'pageOverview');
 }
 
+/* Sidebar groups expand in place rather than navigating. */
+function toggleNavGroup(el) {
+  var sub = el.nextElementSibling;
+  if (!sub || !sub.classList.contains('nav-sub')) return;
+  var open = sub.classList.toggle('open');
+  el.classList.toggle('open', open);
+}
+
 function gotoTab(el, pageId) {
   /* leaving a top-level page puts the project chrome back */
   document.querySelectorAll('.sidebar .nav-item').forEach(function (n) {
     n.classList.toggle('active', /Projects/.test(n.textContent));
+  });
+  document.querySelectorAll('.sidebar .nav-subitem').forEach(function (n) {
+    n.classList.remove('active');
   });
   IN_GUEST = !!GUEST_PAGES[pageId];
   document.querySelectorAll('.budget-view-tabs .bv-tab').forEach(function(t) {
@@ -572,6 +606,20 @@ def main():
         ('<a class="nav-item"><i class="far fa-comment-dots nav-icon"></i> Suppliers</a>',
          '<a class="nav-item" onclick="gotoTop(this,&#39;pageSuppliers&#39;)">'
          '<i class="far fa-comment-dots nav-icon"></i> Suppliers</a>'),
+        # Equipment is a group in the product, with the registry as its first
+        # child. Only the registry is built; the rest sit inert like the other
+        # unbuilt sidebar entries.
+        ('<a class="nav-item"><i class="fas fa-tools nav-icon"></i> Equipment</a>',
+         '<a class="nav-item nav-group" onclick="toggleNavGroup(this)">'
+         '<i class="fas fa-tools nav-icon"></i> Plant &amp; Equipment'
+         '<i class="fas fa-chevron-down chev"></i></a>'
+         '<div class="nav-sub" id="navPlant">'
+         '<a class="nav-subitem" onclick="gotoTop(this,&#39;pageEquipment&#39;)">Equipment Registry</a>'
+         '<a class="nav-subitem">Attachment Registry</a>'
+         '<a class="nav-subitem">Servicing and Maintenance</a>'
+         '<a class="nav-subitem">Asset Type</a>'
+         '<a class="nav-subitem">Defect Register</a>'
+         '</div>'),
     ]:
         if old not in base:
             raise SystemExit("FAIL: sidebar item not found: %s" % old[:60])
@@ -587,6 +635,7 @@ def main():
     # 2. child CSS before </head>
     style_block = ("\n<style>\n/* ═══ timesheet ═══ */\n" + read(TS_CSS) +
                    "\n/* ═══ suppliers ═══ */\n" + read(SP_CSS) + read(SP_DRAWER_CSS) +
+                   "\n/* ═══ plant & equipment ═══ */\n" + read(EQ_CSS) + NAV_CSS +
                    "\n/* ═══ merged: daily cost tracking ═══ */\n" + dc_css +
                    "\n/* ═══ merged: site diary ═══ */\n" + sd_css + "\n</style>\n")
     base = base.replace("</head>", style_block + "</head>", 1)
@@ -611,6 +660,12 @@ def main():
              '    <!-- ════ TOP-LEVEL PAGE: Suppliers ════ -->\n'
              '    <div class="page" id="pageSuppliers">\n' + read(SP_HTML) +
              '\n' + read(SP_DRAWER_HTML) +
+             '\n    </div>\n\n'
+             '    <!-- ════ TOP-LEVEL PAGE: Equipment Registry ════ -->\n'
+             '    <div class="page" id="pageEquipment">\n' + read(EQ_HTML) +
+             '\n    </div>\n\n'
+             '    <!-- ════ TOP-LEVEL PAGE: Register Equipment ════ -->\n'
+             '    <div class="page" id="pageAddEquipment">\n' + read(EQ_REG_HTML) +
              '\n    </div>\n')
     base = base.replace(anchor, pages, 1)
 
@@ -625,7 +680,9 @@ def main():
                "\n<!-- ═══ timesheet: list and add flow ═══ -->\n<script>\n"
                + read(TS_JS) + "\n</script>\n"
                "\n<!-- ═══ suppliers ═══ -->\n<script>\n"
-               + read(SP_JS) + "\n</script>\n")
+               + read(SP_JS) + "\n</script>\n"
+               "\n<!-- ═══ plant & equipment ═══ -->\n<script>\n"
+               + read(EQ_JS) + "\n</script>\n")
     base = base.replace("</body>", scripts + "</body>", 1)
 
     os.makedirs(OUT_DIR, exist_ok=True)

@@ -593,6 +593,101 @@ var VDATA = (function () {
     }, 0);
   }
 
+  /* ── equipment registry ─────────────────────────────────────────────────
+     The base's PLANT_FLEET is the register: the machines this job charges to
+     itself. Each carries its own cost rate and the basis it is charged on,
+     which is exactly the cost rate and operating unit the register asks for.
+
+     The meter reading is the hours the ledger has actually booked against the
+     machine, so a machine that has not worked reads zero rather than carrying
+     an invented odometer.
+
+     Everything the base has no opinion on — plant manager, next service, make,
+     model, serial — is left blank. It is the client's to fill in. */
+  function orgName() {
+    var el = document.querySelector('.sidebar-org span');
+    return (el && el.textContent.trim()) || 'Company';
+  }
+
+  /* The machine's type, read off its name. The product keeps an Asset Type
+     list; this is the nearest honest stand-in for one. */
+  function plantType(name) {
+    var n = String(name).toLowerCase();
+    if (n.indexOf('excavator') >= 0) return 'Excavators';
+    if (n.indexOf('tipper') >= 0 || n.indexOf('truck') >= 0) return 'Trucks';
+    if (n.indexOf('roller') >= 0) return 'Compaction';
+    if (n.indexOf('bobcat') >= 0 || n.indexOf('skid') >= 0) return 'Skid Steers';
+    if (n.indexOf('dozer') >= 0) return 'Dozers';
+    if (n.indexOf('cart') >= 0 || n.indexOf('water') >= 0) return 'Water Trucks';
+    return 'Miscellaneous';
+  }
+
+  /* Hours booked against a machine across the ledger — the meter movement this
+     job is responsible for. */
+  function plantHours(id) {
+    var l = ledger(), total = 0;
+    l.days.forEach(function (d) {
+      (l.byDate[d] || []).forEach(function (r) {
+        if (r.detail && r.detail.kind === 'plant' && r.detail.plant &&
+            r.detail.plant.id === id) {
+          total += r.detail.hrs || 0;
+        }
+      });
+    });
+    return Math.round(total * 10) / 10;
+  }
+
+  var _equipEdits = {};
+
+  function equipment() {
+    var out = PLANT_FLEET.map(function (m) {
+      return {
+        id: m.id,
+        name: m.name,
+        type: plantType(m.name),
+        owned: true,                    /* PLANT_FLEET is plant the job owns */
+        company: orgName(),
+        status: 'Active',
+        /* One rate per machine — what it costs this job to run it. The base
+           also keeps a wet hire rate (machine plus operator on one figure) but
+           that is a dayworks charge-out, not the machine's cost, and an
+           operator's time is a timesheet. It stays out of the register. */
+        rate: m.rate,
+        unit: m.basis,
+        meterType: 'hr',
+        meter: plantHours(m.id),
+        /* the client's to fill in */
+        nextService: '', plantManager: '', image: '',
+        manufacturer: '', year: '', model: '', vin: '', serial: '', plate: '',
+        weight: '', power: '', bucket: '', reach: '', dimension: '',
+        multiProject: false, attachments: [], forms: [], notes: ''
+      };
+    });
+    Object.keys(_equipEdits).forEach(function (id) {
+      var e = _equipEdits[id];
+      var found = out.filter(function (x) { return x.id === id; })[0];
+      if (found) Object.keys(e).forEach(function (k) { found[k] = e[k]; });
+      else out.push(e);
+    });
+    return out;
+  }
+
+  function saveEquipment(rec) {
+    _equipEdits[rec.id] = rec;
+    invalidate();
+  }
+  function equipmentById(id) {
+    return equipment().filter(function (e) { return e.id === id; })[0] || null;
+  }
+
+  /* The resources a machine's operating cost can be mapped to. The base's
+     plant fleet is the resource library, so it is the list. */
+  function plantResources() {
+    return PLANT_FLEET.map(function (m) {
+      return { id: m.id, name: m.name, unit: m.basis, rate: m.rate };
+    });
+  }
+
   /* ── the ledger ─────────────────────────────────────────────────────── */
 
   /* Cost for one cost centre in one period, split the way the budget splits
@@ -858,6 +953,9 @@ var VDATA = (function () {
     addTimesheet: addTimesheet, enteredRows: enteredRows,
     clearEntered: clearEntered, projectName: projectName,
     suppliers: suppliers, saveSupplier: saveSupplier,
+    equipment: equipment, saveEquipment: saveEquipment,
+    equipmentById: equipmentById, plantResources: plantResources,
+    plantHours: plantHours, plantType: plantType, orgName: orgName,
     accountCodes: accountCodes, accountCodesFor: accountCodesFor,
     accountName: accountName, resourceCategories: resourceCategories,
     unmappedCats: unmappedCats, codeCount: codeCount,

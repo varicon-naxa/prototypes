@@ -298,6 +298,41 @@ condition, let them proceed.
 **Not yet surfaced.** The prototype has no bill entry screen, so the check and the fix
 exist and nothing calls them. Deliberate — whoever builds Bills wires them up.
 
+## Plant & Equipment — 2026-08-25
+
+The sidebar's Equipment entry becomes the **Plant & Equipment** group, with Equipment
+Registry as its first child. The other four children (Attachment Registry, Servicing and
+Maintenance, Asset Type, Defect Register) sit inert like the rest of the unbuilt sidebar.
+
+### The registry
+
+Derived from the budget's own `PLANT_FLEET` — six machines, so a machine on the register
+is a machine the job charges itself for. **The meter reading is the hours the ledger has
+booked against it**, which ties the register to the calendar, the diary and the timesheet:
+192.1 hr on the Bobcat is the same 192.1 hr those tabs show.
+
+Status counts, type filter and the ALL/ACTIVE/MAINTENANCE/INACTIVE tabs all count the real
+list. Next servicing and plant manager are blank — the client's to fill in.
+
+### Registering a machine — one page, one rate
+
+The product's form is six tabs. Four of them — Attachments, Inspection & Forms, Documents,
+Maintenance — are empty lists of things you hang off a machine that *exists*: you cannot
+attach a warranty to a machine you have not created. Asking for them during registration is
+the same "four empty tables up front" the timesheet form had, so they come off the create
+flow and a note says where they went.
+
+What is left is one page: whose machine it is, what it is, what it costs, how its usage is
+read, and an optional fold for make/model/specs/notes.
+
+**Wet hire is gone. Each machine has its own cost rate** — one figure, in whichever unit it
+is charged by. The base still keeps a wet hire rate, but that is a dayworks charge-out
+rather than the machine's cost, and an operator's time is a timesheet.
+
+Save is held until the machine has a name, an ID, a type and a rate, with the footer naming
+which. A duplicate ID is refused — two machines on one ID is two meters landing on one
+record.
+
 ## Verified
 
 Computed styles, visible-text length and element counts on both guest tabs were

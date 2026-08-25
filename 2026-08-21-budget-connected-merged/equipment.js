@@ -166,7 +166,10 @@ var EQ_FIELDS = ['Name', 'Id', 'Rate', 'Manufacturer', 'Year', 'Model', 'Vin', '
 function eqSet(f, v) { var el = document.getElementById('eqf' + f); if (el) el.value = v || ''; }
 function eqVal(f) { var el = document.getElementById('eqf' + f); return el ? String(el.value).trim() : ''; }
 
-function eqFillSelects() {
+/* Type and plant manager are built once when the form opens. Rebuilding them
+   on every ownership toggle silently wiped whatever type had been chosen —
+   only the company list depends on owned vs hired. */
+function eqFillStatics() {
   var type = document.getElementById('eqfType');
   if (type) {
     var seen = VDATA.equipment().map(function (e) { return e.type; })
@@ -176,21 +179,28 @@ function eqFillSelects() {
     type.innerHTML = '<option value="">Select type…</option>' +
       seen.map(function (t) { return '<option>' + t + '</option>'; }).join('');
   }
-  var co = document.getElementById('eqfCompany');
-  if (co) {
-    /* Owned plant belongs to the org; hired plant comes from a supplier, and
-       the supplier list is the one the budget already knows about. */
-    co.innerHTML = EQD.owned
-      ? '<option>' + VDATA.orgName() + '</option>'
-      : '<option value="">Select supplier…</option>' +
-        VDATA.suppliers().map(function (s) {
-          return '<option>' + s.name + '</option>';
-        }).join('');
-  }
   var mgr = document.getElementById('eqfManager');
   if (mgr) {
     mgr.innerHTML = '<option value="">Not assigned</option>' +
       VDATA.workers().map(function (w) { return '<option>' + w.nm + '</option>'; }).join('');
+  }
+}
+
+/* Owned plant belongs to the org; hired plant comes from a supplier, and the
+   supplier list is the one the budget already knows about. */
+function eqFillCompany() {
+  var co = document.getElementById('eqfCompany');
+  if (!co) return;
+  var was = co.value;
+  co.innerHTML = EQD.owned
+    ? '<option>' + VDATA.orgName() + '</option>'
+    : '<option value="">Select supplier…</option>' +
+      VDATA.suppliers().map(function (s) {
+        return '<option>' + s.name + '</option>';
+      }).join('');
+  /* keep the pick if it is still in the list */
+  if (was && [].slice.call(co.options).some(function (o) { return o.value === was; })) {
+    co.value = was;
   }
 }
 
@@ -204,7 +214,8 @@ function eqOpenAdd() {
     var el = document.getElementById('eqFold' + k);
     if (el) el.classList.remove('open');
   });
-  eqFillSelects();
+  eqFillStatics();
+  eqFillCompany();
   var t = document.getElementById('eqRegTitle');
   if (t) t.textContent = 'Register New Equipment';
   var after = document.getElementById('eqAfter');
@@ -217,7 +228,8 @@ function eqEdit(id) {
   var e = VDATA.equipmentById(id);
   if (!e) return;
   EQD = { owned: e.owned, meter: e.meterType || 'hr', editing: id, open: {} };
-  eqFillSelects();
+  eqFillStatics();
+  eqFillCompany();
   eqSet('Name', e.name); eqSet('Id', e.id); eqSet('Rate', e.rate);
   eqSet('Manufacturer', e.manufacturer); eqSet('Year', e.year); eqSet('Model', e.model);
   eqSet('Vin', e.vin); eqSet('Serial', e.serial); eqSet('Plate', e.plate);
@@ -242,7 +254,7 @@ function eqBackToList() { eqSyncData(); showPage('pageEquipment'); }
 
 function eqSetOwned(on) {
   EQD.owned = on;
-  eqFillSelects();
+  eqFillCompany();          /* only the company list depends on this */
   eqDrRender();
 }
 function eqSetMeter(m) { EQD.meter = m; eqDrRender(); }
