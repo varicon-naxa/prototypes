@@ -593,6 +593,103 @@ var VDATA = (function () {
     }, 0);
   }
 
+  /* ── purchase orders ────────────────────────────────────────────────────
+     The base already raises POs against every budget line that carries
+     committed cost. Those are the orders a hired machine can be linked to,
+     so the list is real rather than a set of invented references. */
+  function purchaseOrders() {
+    var out = [];
+    liveLines().forEach(function (l) {
+      if (!isCoded(l)) return;
+      var pos;
+      try { pos = poRegister(l, l.code); } catch (e) { return; }
+      (pos || []).forEach(function (p) {
+        out.push({
+          ref: p.ref, supplier: p.supplier, raised: p.raised, open: p.open,
+          status: p.status, cc: l.cc, raisedOn: p.raisedOn
+        });
+      });
+    });
+    /* one row per reference — the same order can back several lines */
+    var seen = {};
+    return out.filter(function (p) {
+      if (seen[p.ref]) return false;
+      seen[p.ref] = 1;
+      return true;
+    });
+  }
+
+  /* Orders raised with a supplier that hires plant. A machine on hire is
+     linked to one of these. */
+  function plantPurchaseOrders() {
+    return purchaseOrders().filter(function (p) {
+      return /hire|plant|equipment|rents/i.test(p.supplier);
+    });
+  }
+
+  /* ── what a hire period costs per day and per hour ──────────────────────
+     Plant hire is written by the period — a month, a week — and the job wants
+     it per day or per hour. Working time, not calendar time: a month of hire
+     is four weeks of five days, and a day on site is eight hours. */
+  var HIRE_DAYS = { month: 20, week: 5, day: 1 };
+  var HOURS_PER_DAY = 8;
+
+  function hireDayRate(rate, period) {
+    if (period === 'hr') return (rate || 0) * HOURS_PER_DAY;
+    return (rate || 0) / (HIRE_DAYS[period] || 1);
+  }
+  function hireHourRate(rate, period) {
+    if (period === 'hr') return rate || 0;
+    return hireDayRate(rate, period) / HOURS_PER_DAY;
+  }
+
+  /* The rate the job is actually charged, in the machine's own charge basis. */
+  function chargeRate(e) {
+    if (!e) return 0;
+    if (!e.owned) {
+      return e.chargeBasis === 'hr'
+        ? hireHourRate(e.hireRate, e.hirePeriod)
+        : hireDayRate(e.hireRate, e.hirePeriod);
+    }
+    /* owned plant already carries its own rate and unit */
+    return e.unit === 'hr' && e.chargeBasis === 'day' ? (e.rate || 0) * HOURS_PER_DAY
+         : e.unit === 'day' && e.chargeBasis === 'hr' ? (e.rate || 0) / HOURS_PER_DAY
+         : (e.rate || 0);
+  }
+
+  /* What one day on site costs, given hours worked — the two rules applied in
+     order. Returns the charge and which rule set it, so the page can say why. */
+  function dayCharge(e, hoursWorked, stoodDown) {
+    var basis = e.chargeBasis || (e.unit === 'hr' ? 'hr' : 'day');
+    var rate = chargeRate(e);
+
+    if (stoodDown && e.standDown) {
+      /* Stand-down is a fact about a DAY — the machine sat on site and did not
+         work — so it is a share of the day rate whatever basis the job is
+         charged on. Taking a percentage of the hourly rate would price a
+         rained-off day at half an hour. */
+      var dayRate = e.owned ? chargeRate(e) : hireDayRate(e.hireRate, e.hirePeriod);
+      var sd = dayRate * ((e.standDownPct || 0) / 100);
+      return { amount: Math.round(sd), rule: 'stand-down',
+               note: (e.standDownPct || 0) + '% of the ' + Math.round(dayRate) +
+                     ' day rate — on site, not worked' };
+    }
+    if (basis === 'day') {
+      /* a day is a day: any work at all takes the day rate */
+      return { amount: Math.round(rate), rule: 'day',
+               note: 'charged by the day' };
+    }
+    var min = e.minHire || 0;
+    var billed = Math.max(hoursWorked || 0, min);
+    return {
+      amount: Math.round(rate * billed),
+      rule: billed > (hoursWorked || 0) ? 'minimum' : 'actual',
+      note: billed > (hoursWorked || 0)
+        ? (hoursWorked || 0) + ' hrs worked, charged at the ' + min + ' hr minimum'
+        : billed + ' hrs at $' + Math.round(rate) + '/hr'
+    };
+  }
+
   /* ── equipment registry ─────────────────────────────────────────────────
      The base's PLANT_FLEET is the register: the machines this job charges to
      itself. Each carries its own cost rate and the basis it is charged on,
@@ -654,6 +751,11 @@ var VDATA = (function () {
            operator's time is a timesheet. It stays out of the register. */
         rate: m.rate,
         unit: m.basis,
+        /* Owned plant charges at its own rate. The hire fields below only
+           apply to a machine on hire, and are the client's to set. */
+        poRef: '', hireRate: 0, hirePeriod: 'month',
+        chargeBasis: m.basis === 'hr' ? 'hr' : 'day',
+        minHire: 0, standDown: false, standDownPct: 50,
         meterType: 'hr',
         meter: plantHours(m.id),
         /* the client's to fill in */
@@ -956,6 +1058,9 @@ var VDATA = (function () {
     equipment: equipment, saveEquipment: saveEquipment,
     equipmentById: equipmentById, plantResources: plantResources,
     plantHours: plantHours, plantType: plantType, orgName: orgName,
+    purchaseOrders: purchaseOrders, plantPurchaseOrders: plantPurchaseOrders,
+    chargeRate: chargeRate, dayCharge: dayCharge,
+    hireDayRate: hireDayRate, hireHourRate: hireHourRate,
     accountCodes: accountCodes, accountCodesFor: accountCodesFor,
     accountName: accountName, resourceCategories: resourceCategories,
     unmappedCats: unmappedCats, codeCount: codeCount,

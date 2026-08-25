@@ -1637,6 +1637,44 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
 .eq-blocker.bad { color: #b45309 }
 .btn.eq-off { opacity: .45; pointer-events: none }
 
+/* ── hired plant ───────────────────────────────────────────────────────── */
+.eq-field-wide { max-width: 560px; margin-bottom: 16px }
+.eq-sub { font-size: 11px; color: #94a3b8; margin-top: 3px }
+
+.eq-rules { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 18px }
+.eq-rule { flex: 1; min-width: 260px; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 14px 16px; background: #fff }
+.eq-rule h4 { font-size: 13px; font-weight: 700; color: #1b2a4a; margin-bottom: 4px;
+  display: flex; align-items: center; gap: 10px }
+.eq-rule p { font-size: 12px; color: #64748b; margin-bottom: 10px; line-height: 1.5 }
+.eq-rule-row { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #475569 }
+.eq-rule-row input { width: 84px; padding: 8px 10px; border: 1px solid #e2e8f0;
+  border-radius: 6px; font-family: inherit; font-size: 13px; color: #1b2a4a }
+.eq-rule-row input:focus { outline: none; border-color: #f5a623 }
+/* a minimum in hours means nothing when the job is charged by the day */
+.eq-rule.eq-rule-off { opacity: .45 }
+.eq-rule.eq-rule-off .eq-rule-row { pointer-events: none }
+
+.eq-mini-toggle { margin-left: auto; cursor: pointer }
+.eq-mini-switch { display: inline-block; width: 34px; height: 19px; border-radius: 10px;
+  background: #cbd5e1; position: relative; transition: background .15s }
+.eq-mini-knob { position: absolute; top: 3px; left: 3px; width: 13px; height: 13px;
+  border-radius: 50%; background: #fff; transition: left .15s;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25) }
+.eq-mini-toggle.on .eq-mini-switch { background: #f5a623 }
+.eq-mini-toggle.on .eq-mini-knob { left: 18px }
+
+/* the rules worked through on a real day, so they are not abstract */
+.eq-worked { margin-top: 18px; border: 1px solid #e2e8f0; border-radius: 8px;
+  overflow: hidden }
+.eq-worked h4 { font-size: 11px; font-weight: 700; letter-spacing: .4px;
+  text-transform: uppercase; color: #64748b; background: #eef2f6; padding: 9px 14px }
+.eq-worked-row { display: flex; align-items: baseline; gap: 12px; padding: 10px 14px;
+  border-top: 1px solid #eef2f6; font-size: 13px }
+.eq-worked-row span { width: 190px; flex-shrink: 0; color: #1b2a4a }
+.eq-worked-row b { color: #1b2a4a; min-width: 76px }
+.eq-worked-row em { font-style: normal; font-size: 12px; color: #94a3b8 }
+
 /* ═══ sidebar groups ═══ */
 .nav-sub { display: none; padding: 2px 0 6px }
 .nav-sub.open { display: block }
@@ -3207,17 +3245,76 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
     <p class="section-subtitle">One rate per machine, in whichever unit you actually
       charge it by. This is the cost to you, not what you charge a client.</p>
 
-    <div class="eq-rate-row">
-      <div class="eq-field"><label>Cost rate <span class="eq-req">*</span></label>
-        <div class="eq-money"><span>$</span>
-          <input id="eqfRate" placeholder="0.00" oninput="eqDrRender()"></div></div>
-      <div class="eq-field"><label>Per <span class="eq-req">*</span></label>
-        <select id="eqfUnit" onchange="eqDrRender()">
-          <option value="hr">hour</option>
-          <option value="day">day</option>
-          <option value="week">week</option>
-        </select></div>
-      <div class="eq-rate-note" id="eqRateNote"></div>
+    <!-- owned: the machine's own internal rate -->
+    <div id="eqOwnedRate">
+      <div class="eq-rate-row">
+        <div class="eq-field"><label>Cost rate <span class="eq-req">*</span></label>
+          <div class="eq-money"><span>$</span>
+            <input id="eqfRate" placeholder="0.00" oninput="eqDrRender()"></div></div>
+        <div class="eq-field"><label>Per <span class="eq-req">*</span></label>
+          <select id="eqfUnit" onchange="eqDrRender()">
+            <option value="hr">hour</option>
+            <option value="day">day</option>
+            <option value="week">week</option>
+          </select></div>
+        <div class="eq-rate-note" id="eqRateNote"></div>
+      </div>
+    </div>
+
+    <!-- hired: the order holds the rate, so the machine points at it -->
+    <div id="eqHiredRate">
+      <div class="eq-field eq-field-wide">
+        <label>Purchase order</label>
+        <select id="eqfPo" onchange="eqPickPo()"></select>
+        <p class="eq-hint">The order holds the hire rate, so it is not typed here and
+          typed again on every booking. Cost tracks back to what was ordered.</p>
+      </div>
+
+      <div class="eq-rate-row" id="eqHireRateRow">
+        <div class="eq-field"><label>Hire rate <span class="eq-req">*</span></label>
+          <div class="eq-money"><span>$</span>
+            <input id="eqfHireRate" placeholder="0.00" oninput="eqDrRender()"></div></div>
+        <div class="eq-field"><label>Per <span class="eq-req">*</span></label>
+          <select id="eqfHirePeriod" onchange="eqDrRender()">
+            <option value="month">month</option>
+            <option value="week">week</option>
+            <option value="day">day</option>
+            <option value="hr">hour</option>
+          </select></div>
+        <div class="eq-field"><label>Charge the job by <span class="eq-req">*</span></label>
+          <select id="eqfChargeBasis" onchange="eqDrRender()">
+            <option value="day">day</option>
+            <option value="hr">hour</option>
+          </select></div>
+      </div>
+      <div class="eq-rate-note" id="eqHireNote"></div>
+
+      <!-- the two rules, kept apart -->
+      <div class="eq-rules">
+        <div class="eq-rule">
+          <h4>Minimum hire</h4>
+          <p>A short day still costs the minimum. Charged at the normal rate.</p>
+          <div class="eq-rule-row">
+            <input id="eqfMinHire" type="number" min="0" step="0.5" placeholder="0"
+              oninput="eqDrRender()">
+            <span id="eqMinUnit">hours a day</span>
+          </div>
+        </div>
+        <div class="eq-rule">
+          <h4>Stand-down rate
+            <label class="eq-mini-toggle" id="eqStandToggle" onclick="eqToggleStandDown(event)">
+              <span class="eq-mini-switch"><span class="eq-mini-knob"></span></span>
+            </label>
+          </h4>
+          <p>On site but not worked — rained off, broken down, waiting.</p>
+          <div class="eq-rule-row" id="eqStandRow">
+            <input id="eqfStandPct" type="number" min="0" max="100" placeholder="50"
+              oninput="eqDrRender()">
+            <span>% of the hire rate</span>
+          </div>
+        </div>
+      </div>
+      <div class="eq-worked" id="eqWorked"></div>
     </div>
   </div>
 
@@ -13002,6 +13099,103 @@ var VDATA = (function () {
     }, 0);
   }
 
+  /* ── purchase orders ────────────────────────────────────────────────────
+     The base already raises POs against every budget line that carries
+     committed cost. Those are the orders a hired machine can be linked to,
+     so the list is real rather than a set of invented references. */
+  function purchaseOrders() {
+    var out = [];
+    liveLines().forEach(function (l) {
+      if (!isCoded(l)) return;
+      var pos;
+      try { pos = poRegister(l, l.code); } catch (e) { return; }
+      (pos || []).forEach(function (p) {
+        out.push({
+          ref: p.ref, supplier: p.supplier, raised: p.raised, open: p.open,
+          status: p.status, cc: l.cc, raisedOn: p.raisedOn
+        });
+      });
+    });
+    /* one row per reference — the same order can back several lines */
+    var seen = {};
+    return out.filter(function (p) {
+      if (seen[p.ref]) return false;
+      seen[p.ref] = 1;
+      return true;
+    });
+  }
+
+  /* Orders raised with a supplier that hires plant. A machine on hire is
+     linked to one of these. */
+  function plantPurchaseOrders() {
+    return purchaseOrders().filter(function (p) {
+      return /hire|plant|equipment|rents/i.test(p.supplier);
+    });
+  }
+
+  /* ── what a hire period costs per day and per hour ──────────────────────
+     Plant hire is written by the period — a month, a week — and the job wants
+     it per day or per hour. Working time, not calendar time: a month of hire
+     is four weeks of five days, and a day on site is eight hours. */
+  var HIRE_DAYS = { month: 20, week: 5, day: 1 };
+  var HOURS_PER_DAY = 8;
+
+  function hireDayRate(rate, period) {
+    if (period === 'hr') return (rate || 0) * HOURS_PER_DAY;
+    return (rate || 0) / (HIRE_DAYS[period] || 1);
+  }
+  function hireHourRate(rate, period) {
+    if (period === 'hr') return rate || 0;
+    return hireDayRate(rate, period) / HOURS_PER_DAY;
+  }
+
+  /* The rate the job is actually charged, in the machine's own charge basis. */
+  function chargeRate(e) {
+    if (!e) return 0;
+    if (!e.owned) {
+      return e.chargeBasis === 'hr'
+        ? hireHourRate(e.hireRate, e.hirePeriod)
+        : hireDayRate(e.hireRate, e.hirePeriod);
+    }
+    /* owned plant already carries its own rate and unit */
+    return e.unit === 'hr' && e.chargeBasis === 'day' ? (e.rate || 0) * HOURS_PER_DAY
+         : e.unit === 'day' && e.chargeBasis === 'hr' ? (e.rate || 0) / HOURS_PER_DAY
+         : (e.rate || 0);
+  }
+
+  /* What one day on site costs, given hours worked — the two rules applied in
+     order. Returns the charge and which rule set it, so the page can say why. */
+  function dayCharge(e, hoursWorked, stoodDown) {
+    var basis = e.chargeBasis || (e.unit === 'hr' ? 'hr' : 'day');
+    var rate = chargeRate(e);
+
+    if (stoodDown && e.standDown) {
+      /* Stand-down is a fact about a DAY — the machine sat on site and did not
+         work — so it is a share of the day rate whatever basis the job is
+         charged on. Taking a percentage of the hourly rate would price a
+         rained-off day at half an hour. */
+      var dayRate = e.owned ? chargeRate(e) : hireDayRate(e.hireRate, e.hirePeriod);
+      var sd = dayRate * ((e.standDownPct || 0) / 100);
+      return { amount: Math.round(sd), rule: 'stand-down',
+               note: (e.standDownPct || 0) + '% of the ' + Math.round(dayRate) +
+                     ' day rate — on site, not worked' };
+    }
+    if (basis === 'day') {
+      /* a day is a day: any work at all takes the day rate */
+      return { amount: Math.round(rate), rule: 'day',
+               note: 'charged by the day' };
+    }
+    var min = e.minHire || 0;
+    var billed = Math.max(hoursWorked || 0, min);
+    return {
+      amount: Math.round(rate * billed),
+      rule: billed > (hoursWorked || 0) ? 'minimum' : 'actual',
+      note: billed > (hoursWorked || 0)
+        ? (hoursWorked || 0) + ' hrs worked, charged at the ' + min + ' hr minimum'
+        : billed + ' hrs at $' + Math.round(rate) + '/hr'
+    };
+  }
+
   /* ── equipment registry ─────────────────────────────────────────────────
      The base's PLANT_FLEET is the register: the machines this job charges to
      itself. Each carries its own cost rate and the basis it is charged on,
@@ -13063,6 +13257,11 @@ var VDATA = (function () {
            operator's time is a timesheet. It stays out of the register. */
         rate: m.rate,
         unit: m.basis,
+        /* Owned plant charges at its own rate. The hire fields below only
+           apply to a machine on hire, and are the client's to set. */
+        poRef: '', hireRate: 0, hirePeriod: 'month',
+        chargeBasis: m.basis === 'hr' ? 'hr' : 'day',
+        minHire: 0, standDown: false, standDownPct: 50,
         meterType: 'hr',
         meter: plantHours(m.id),
         /* the client's to fill in */
@@ -13365,6 +13564,9 @@ var VDATA = (function () {
     equipment: equipment, saveEquipment: saveEquipment,
     equipmentById: equipmentById, plantResources: plantResources,
     plantHours: plantHours, plantType: plantType, orgName: orgName,
+    purchaseOrders: purchaseOrders, plantPurchaseOrders: plantPurchaseOrders,
+    chargeRate: chargeRate, dayCharge: dayCharge,
+    hireDayRate: hireDayRate, hireHourRate: hireHourRate,
     accountCodes: accountCodes, accountCodesFor: accountCodesFor,
     accountName: accountName, resourceCategories: resourceCategories,
     unmappedCats: unmappedCats, codeCount: codeCount,
@@ -15863,7 +16065,10 @@ function eqRender() {
           '<td class="eq-name">' + e.name + '</td>' +
           '<td>' + e.id + '</td>' +
           '<td>' + e.type + '</td>' +
-          '<td>' + e.company + '</td>' +
+          '<td>' + e.company +
+            (e.owned ? '' : '<div class="eq-sub">' +
+              (e.poRef ? e.poRef + ' · ' : '') + eqMoney(VDATA.chargeRate(e)) + '/' +
+              (e.chargeBasis === 'hr' ? 'hr' : 'day') + ' hired</div>') + '</td>' +
           '<td><span class="eq-pill ' + e.status.toLowerCase() + '">' + e.status + '</span></td>' +
           '<td>' + meter + '</td>' +
           '<td>' + (e.nextService || dash) + '</td>' +
@@ -15939,9 +16144,9 @@ function eqCycle(which) {
    Register / edit a machine
    ══════════════════════════════════════════════════════════════════════════ */
 
-var EQD = { owned: true, meter: 'hr', editing: null, open: {} };
+var EQD = { owned: true, meter: 'hr', editing: null, open: {}, standDown: false };
 
-var EQ_FIELDS = ['Name', 'Id', 'Rate', 'Manufacturer', 'Year', 'Model', 'Vin', 'Serial',
+var EQ_FIELDS = ['Name', 'Id', 'Rate', 'HireRate', 'MinHire', 'StandPct', 'Manufacturer', 'Year', 'Model', 'Vin', 'Serial',
                  'Plate', 'Weight', 'Power', 'Bucket', 'Reach', 'Dim', 'Notes'];
 
 function eqSet(f, v) { var el = document.getElementById('eqf' + f); if (el) el.value = v || ''; }
@@ -15985,9 +16190,53 @@ function eqFillCompany() {
   }
 }
 
+/* Orders raised with a plant hire supplier. The machine points at one and
+   takes its rate from there rather than carrying a second copy. */
+function eqFillPos() {
+  var sel = document.getElementById('eqfPo');
+  if (!sel) return;
+  var pos = VDATA.plantPurchaseOrders();
+  var all = pos.length ? pos : VDATA.purchaseOrders();
+  sel.innerHTML = '<option value="">No order yet — enter the rate by hand</option>' +
+    all.map(function (p) {
+      return '<option value="' + p.ref + '">' + p.ref + ' · ' + p.supplier +
+             ' · ' + eqMoney(p.raised) + ' raised</option>';
+    }).join('');
+}
+
+/* Picking the order fills the rate in from it. */
+function eqPickPo() {
+  var sel = document.getElementById('eqfPo');
+  if (!sel || !sel.value) { eqDrRender(); return; }
+  var po = VDATA.purchaseOrders().filter(function (p) { return p.ref === sel.value; })[0];
+  if (po) {
+    var co = document.getElementById('eqfCompany');
+    if (co) {
+      /* the order's supplier is the supplier, so they cannot disagree */
+      var has = [].slice.call(co.options).some(function (o) { return o.value === po.supplier; });
+      if (has) co.value = po.supplier;
+    }
+    var rate = document.getElementById('eqfHireRate');
+    /* a hire order is written for a period; the raised value stands in for the
+       period rate until someone corrects it */
+    if (rate && !rate.value) rate.value = Math.round(po.raised / 4);
+  }
+  eqDrRender();
+}
+
+function eqToggleStandDown(ev) {
+  if (ev) ev.preventDefault();
+  EQD.standDown = !EQD.standDown;
+  eqDrRender();
+}
+
 function eqOpenAdd() {
-  EQD = { owned: true, meter: 'hr', editing: null, open: {} };
+  EQD = { owned: true, meter: 'hr', editing: null, open: {}, standDown: false };
   EQ_FIELDS.forEach(function (f) { eqSet(f, ''); });
+  ['HireRate', 'MinHire', 'StandPct'].forEach(function (f) { eqSet(f, ''); });
+  var hp = document.getElementById('eqfHirePeriod'); if (hp) hp.value = 'month';
+  var cb = document.getElementById('eqfChargeBasis'); if (cb) cb.value = 'day';
+  eqFillPos();
   var st = document.getElementById('eqfStatus'); if (st) st.value = 'Active';
   var un = document.getElementById('eqfUnit'); if (un) un.value = 'hr';
   var mu = document.getElementById('eqfMulti'); if (mu) mu.checked = false;
@@ -16008,9 +16257,17 @@ function eqOpenAdd() {
 function eqEdit(id) {
   var e = VDATA.equipmentById(id);
   if (!e) return;
-  EQD = { owned: e.owned, meter: e.meterType || 'hr', editing: id, open: {} };
+  EQD = { owned: e.owned, meter: e.meterType || 'hr', editing: id, open: {},
+          standDown: !!e.standDown };
   eqFillStatics();
   eqFillCompany();
+  eqFillPos();
+  eqSet('HireRate', e.hireRate || '');
+  eqSet('MinHire', e.minHire || '');
+  eqSet('StandPct', e.standDownPct || '');
+  var po = document.getElementById('eqfPo'); if (po) po.value = e.poRef || '';
+  var hp2 = document.getElementById('eqfHirePeriod'); if (hp2) hp2.value = e.hirePeriod || 'month';
+  var cb2 = document.getElementById('eqfChargeBasis'); if (cb2) cb2.value = e.chargeBasis || 'day';
   eqSet('Name', e.name); eqSet('Id', e.id); eqSet('Rate', e.rate);
   eqSet('Manufacturer', e.manufacturer); eqSet('Year', e.year); eqSet('Model', e.model);
   eqSet('Vin', e.vin); eqSet('Serial', e.serial); eqSet('Plate', e.plate);
@@ -16051,8 +16308,13 @@ function eqBlockerFor() {
   if (ty && !ty.value) return 'Pick a type';
   var co = document.getElementById('eqfCompany');
   if (!EQD.owned && co && !co.value) return 'Pick the supplier it is hired from';
-  var rate = parseFloat(eqVal('Rate'));
-  if (!(rate > 0)) return 'A cost rate is what makes the machine cost anything';
+  if (EQD.owned) {
+    var rate = parseFloat(eqVal('Rate'));
+    if (!(rate > 0)) return 'A cost rate is what makes the machine cost anything';
+  } else {
+    var hire = parseFloat(eqVal('HireRate'));
+    if (!(hire > 0)) return 'A hired machine needs its hire rate';
+  }
   /* An ID has to be unique — two machines sharing one is two meters and two
      sets of hours landing on the same record. */
   if (!EQD.editing && VDATA.equipmentById(eqVal('Id'))) {
@@ -16087,6 +16349,14 @@ function eqDrRender() {
         (EQD.meter === 'km' ? 'distance' : 'hours') +
         ' booked against this machine on site.';
   }
+
+  /* only one of the two rate blocks applies */
+  var ownedBlock = document.getElementById('eqOwnedRate');
+  var hiredBlock = document.getElementById('eqHiredRate');
+  if (ownedBlock) ownedBlock.style.display = EQD.owned ? '' : 'none';
+  if (hiredBlock) hiredBlock.style.display = EQD.owned ? 'none' : '';
+
+  if (!EQD.owned) eqRenderHire();
 
   /* what the rate means in the ledger's terms */
   var rate = parseFloat(eqVal('Rate')) || 0;
@@ -16128,6 +16398,67 @@ function eqDrRender() {
   }
 }
 
+/* The hired half: what the order's rate comes to per day or per hour, and
+   what the two rules do to a day on site. */
+function eqRenderHire() {
+  var hireRate = parseFloat(eqVal('HireRate')) || 0;
+  var periodEl = document.getElementById('eqfHirePeriod');
+  var basisEl = document.getElementById('eqfChargeBasis');
+  var period = periodEl ? periodEl.value : 'month';
+  var basis = basisEl ? basisEl.value : 'day';
+
+  var perDay = VDATA.hireDayRate(hireRate, period);
+  var perHour = VDATA.hireHourRate(hireRate, period);
+  var charged = basis === 'hr' ? perHour : perDay;
+
+  var note = document.getElementById('eqHireNote');
+  if (note) {
+    if (!hireRate) {
+      note.innerHTML = 'Pick the order, or enter the rate, and the conversion shows here.';
+    } else {
+      var words = { month: 'month (20 working days)', week: 'week (5 days)',
+                    day: 'day', hr: 'hour' };
+      note.innerHTML = eqMoney(hireRate) + ' per ' + words[period] +
+        ' works out at <b>' + eqMoney(perDay) + ' a day</b> or <b>' +
+        eqMoney(perHour) + ' an hour</b>. The job is charged by the <b>' +
+        (basis === 'hr' ? 'hour' : 'day') + '</b>, so a booking costs ' +
+        eqMoney(charged) + ' per ' + (basis === 'hr' ? 'hour' : 'day') + '.';
+    }
+  }
+
+  /* minimum hire only means something when charging by the hour */
+  var minRow = document.getElementById('eqfMinHire');
+  var minUnit = document.getElementById('eqMinUnit');
+  if (minUnit) minUnit.textContent = basis === 'hr' ? 'hours a day' : 'days';
+  if (minRow) minRow.closest('.eq-rule').classList.toggle('eq-rule-off', basis === 'day');
+
+  var tog = document.getElementById('eqStandToggle');
+  if (tog) tog.classList.toggle('on', EQD.standDown);
+  var sr = document.getElementById('eqStandRow');
+  if (sr) sr.style.display = EQD.standDown ? '' : 'none';
+
+  /* the rules, worked through on a real day */
+  var worked = document.getElementById('eqWorked');
+  if (worked) {
+    if (!hireRate) { worked.innerHTML = ''; return; }
+    var e = {
+      owned: false, hireRate: hireRate, hirePeriod: period, chargeBasis: basis,
+      minHire: parseFloat(eqVal('MinHire')) || 0,
+      standDown: EQD.standDown, standDownPct: parseFloat(eqVal('StandPct')) || 0
+    };
+    var cases = [
+      { label: 'A full day (8 hrs)', hrs: 8, sd: false },
+      { label: 'A short day (2 hrs)', hrs: 2, sd: false }
+    ];
+    if (EQD.standDown) cases.push({ label: 'Rained off, not worked', hrs: 0, sd: true });
+    worked.innerHTML = '<h4>What a day costs</h4>' + cases.map(function (c) {
+      var r = VDATA.dayCharge(e, c.hrs, c.sd);
+      return '<div class="eq-worked-row"><span>' + c.label + '</span>' +
+        '<b>' + eqMoney(r.amount) + '</b><em>' + r.note + '</em></div>';
+    }).join('');
+  }
+}
+
 function eqSave(another) {
   if (eqBlockerFor()) return;
   var ty = document.getElementById('eqfType');
@@ -16146,6 +16477,14 @@ function eqSave(another) {
     status: st ? st.value : 'Active',
     rate: parseFloat(eqVal('Rate')) || 0,
     unit: un ? un.value : 'hr',
+    /* hired plant: the order holds the rate, the machine says how it charges */
+    poRef: (document.getElementById('eqfPo') || {}).value || '',
+    hireRate: parseFloat(eqVal('HireRate')) || 0,
+    hirePeriod: (document.getElementById('eqfHirePeriod') || {}).value || 'month',
+    chargeBasis: (document.getElementById('eqfChargeBasis') || {}).value || 'day',
+    minHire: parseFloat(eqVal('MinHire')) || 0,
+    standDown: EQD.standDown,
+    standDownPct: parseFloat(eqVal('StandPct')) || 0,
     meterType: EQD.meter,
     /* hours already booked follow the machine; a new one starts at zero */
     meter: existing ? existing.meter : 0,

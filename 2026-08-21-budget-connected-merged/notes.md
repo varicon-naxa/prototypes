@@ -325,7 +325,36 @@ flow and a note says where they went.
 What is left is one page: whose machine it is, what it is, what it costs, how its usage is
 read, and an optional fold for make/model/specs/notes.
 
-**Wet hire is gone. Each machine has its own cost rate** — one figure, in whichever unit it
+### Hired plant — 2026-08-25
+
+A hired machine names the **purchase order** it came in on and takes the rate from there,
+so the hire rate has one home and cannot drift from what was ordered. The order list is the
+base's own PO register, filtered to hire suppliers.
+
+A PO is written for a hire period; the job needs cost per day or per hour, so the machine
+carries **both**: the period the order is priced in, and the basis the job is charged on.
+The conversion is shown rather than hidden — *$3,200 per month (20 working days) works out
+at $160 a day or $20 an hour* — because a divided-down monthly rate is the number somebody
+will query. Working time, not calendar: a month is four weeks of five days, a day is eight
+hours.
+
+Alec's call: **charge basis is per machine**, so a monthly excavator can cost daily while a
+monthly pump costs hourly.
+
+Two rules, deliberately separate:
+
+| Rule | What it does |
+| --- | --- |
+| **Minimum hire** | a short day charges *up* to the minimum, at the normal rate — 2 hrs against a 4 hr minimum costs 4 hrs |
+| **Stand-down** | a day on site and not worked charges its own reduced rate |
+
+A minimum in hours means nothing when the job is charged by the day, so that rule dims
+itself. And **stand-down is a share of the day rate whatever the charge basis** — pricing
+it off the hourly rate put a rained-off day at $10 instead of $80.
+
+The form works all three through on a real day so the rules are not abstract.
+
+**Wet hire is gone from the machine. Each machine has its own cost rate** — one figure, in whichever unit it
 is charged by. The base still keeps a wet hire rate, but that is a dayworks charge-out
 rather than the machine's cost, and an operator's time is a timesheet.
 
