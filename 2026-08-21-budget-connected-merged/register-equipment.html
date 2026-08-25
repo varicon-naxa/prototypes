@@ -1,0 +1,232 @@
+<!-- ════ TOP-LEVEL PAGE: Register New Equipment ════
+     Six tabs, as the product has them. Basic Info is the one that carries the
+     record; the rest manage lists hanging off it.
+
+     Resource mapping is the part that matters to the budget: a machine's dry
+     hire rate and its operating unit are what the ledger charges plant at, and
+     wet hire is the same machine with an operator on one rate. Both come from
+     the fleet the budget already prices. -->
+<div class="eq-reg">
+
+  <div class="eq-reg-head">
+    <h2>Register New Equipment</h2>
+    <div class="eq-reg-actions">
+      <button class="btn btn-outline" onclick="eqBackToList()">Cancel</button>
+      <button class="btn btn-outline" id="eqSaveAnother" onclick="eqSave(true)">Save and Add Another</button>
+      <button class="btn btn-primary" id="eqSave" onclick="eqSave(false)">Save</button>
+    </div>
+  </div>
+
+  <div class="eq-card">
+    <div class="eq-rtabs">
+      <span class="eq-rtab active" onclick="eqTab(this,'basic')">BASIC INFO</span>
+      <span class="eq-rtab" onclick="eqTab(this,'detail')">DETAILED INFO</span>
+      <span class="eq-rtab" onclick="eqTab(this,'attach')">ATTACHMENTS</span>
+      <span class="eq-rtab" onclick="eqTab(this,'forms')">INSPECTION &amp; FORMS</span>
+      <span class="eq-rtab" onclick="eqTab(this,'docs')">DOCUMENTS &amp; CERTIFICATIONS</span>
+      <span class="eq-rtab" onclick="eqTab(this,'maint')">MAINTENANCE</span>
+    </div>
+
+    <!-- ── BASIC INFO ─────────────────────────────────────────────────── -->
+    <div class="eq-pane active" id="eqPaneBasic">
+      <div class="eq-own-row">
+        <div class="eq-own">
+          <label class="eq-radio" id="eqOwnOwned" onclick="eqSetOwned(true)">
+            <span class="eq-dot"></span>
+            <span><b>Company Owned</b><em>Equipment is owned by the company</em></span>
+          </label>
+          <label class="eq-radio" id="eqOwnHired" onclick="eqSetOwned(false)">
+            <span class="eq-dot"></span>
+            <span><b>Hired</b><em>Equipment is hired through other suppliers</em></span>
+          </label>
+        </div>
+        <div class="eq-drop"><i class="fas fa-cloud-arrow-up"></i>
+          <span>Drag and drop your file here, or click to browse</span></div>
+      </div>
+
+      <div class="eq-grid">
+        <div class="eq-field"><label>Equipment Name <span class="eq-req">*</span></label>
+          <input id="eqfName" oninput="eqDrRender()" placeholder="e.g. 20T Excavator"></div>
+        <div class="eq-field"><label>Equipment ID <span class="eq-req">*</span></label>
+          <input id="eqfId" oninput="eqDrRender()" placeholder="e.g. P-21"></div>
+        <div class="eq-field"><label>Equipment Type <span class="eq-req">*</span></label>
+          <select id="eqfType" onchange="eqDrRender()"></select></div>
+        <div class="eq-field"><label>Status <span class="eq-req">*</span></label>
+          <select id="eqfStatus" onchange="eqDrRender()">
+            <option>Active</option><option>Maintenance</option><option>Inactive</option>
+          </select></div>
+        <div class="eq-field"><label id="eqfCompanyLabel">Company/Supplier <span class="eq-req">*</span></label>
+          <select id="eqfCompany" onchange="eqDrRender()"></select></div>
+        <div class="eq-field"><label>Plant Manager</label>
+          <select id="eqfManager"></select></div>
+      </div>
+
+      <label class="eq-check-row">
+        <input type="checkbox" id="eqfMulti">
+        <span>Allow this equipment to be used simultaneously on multiple projects</span>
+      </label>
+
+      <!-- ── resource mapping ── -->
+      <div class="eq-sec">
+        <h3>RESOURCE MAPPING</h3>
+        <p class="eq-sec-sub">Link this equipment to a specific resource to calculate
+          operating costs automatically.</p>
+        <div class="eq-callout"><i class="fas fa-circle-info"></i>
+          <div><b>What are these costs?</b><br>These are the costs incurred to you while
+            using this piece of plant or equipment. It is different from the rates you
+            charge to your clients.</div></div>
+
+        <label class="eq-radio-line" id="eqHireDry" onclick="eqSetHire('dry')">
+          <span class="eq-dot"></span> Equipment is dry hire</label>
+        <div class="eq-rate-block" id="eqDryBlock">
+          <h4>Dry Hire Rate <span class="eq-req">*</span></h4>
+          <div class="eq-rate-row">
+            <select id="eqfDryRes" onchange="eqPickResource('dry')"></select>
+            <input id="eqfDryUnit" placeholder="Operating Unit *" readonly>
+            <div class="eq-money"><span>$</span><input id="eqfDryRate" placeholder="Rate *"
+              oninput="eqDrRender()"></div>
+          </div>
+        </div>
+
+        <label class="eq-radio-line" id="eqHireWet" onclick="eqSetHire('wet')">
+          <span class="eq-dot"></span> Equipment is wet hire</label>
+        <div class="eq-rate-block" id="eqWetBlock">
+          <h4>Wet Hire Rate <span class="eq-req">*</span>
+            <em>machine and operator on one rate</em></h4>
+          <div class="eq-rate-row">
+            <select id="eqfWetRes" onchange="eqPickResource('wet')"></select>
+            <input id="eqfWetUnit" placeholder="Operating Unit *" readonly>
+            <div class="eq-money"><span>$</span><input id="eqfWetRate" placeholder="Rate *"
+              oninput="eqDrRender()"></div>
+          </div>
+        </div>
+
+        <label class="eq-radio-line" id="eqHireBoth" onclick="eqSetHire('both')">
+          <span class="eq-dot"></span> Equipment can be used as wet and dry hire</label>
+      </div>
+
+      <!-- ── meter ── -->
+      <div class="eq-sec">
+        <h3>METER READINGS</h3>
+        <p class="eq-sec-sub">Configure usage meter for the equipment</p>
+        <div class="eq-meter">
+          <label class="eq-radio-line" id="eqMeterHr" onclick="eqSetMeter('hr')">
+            <span class="eq-dot"></span> Engine Hours (hr)</label>
+          <label class="eq-radio-line" id="eqMeterKm" onclick="eqSetMeter('km')">
+            <span class="eq-dot"></span> Odometer Reading (km)</label>
+          <label class="eq-radio-line" id="eqMeterNone" onclick="eqSetMeter('none')">
+            <span class="eq-dot"></span> None</label>
+        </div>
+        <p class="eq-hint" id="eqMeterHint"></p>
+      </div>
+
+      <div class="eq-sec">
+        <h3>NOTES</h3>
+        <textarea id="eqfNotes" class="eq-notes" placeholder="Enter notes"></textarea>
+      </div>
+    </div>
+
+    <!-- ── DETAILED INFO ──────────────────────────────────────────────── -->
+    <div class="eq-pane" id="eqPaneDetail">
+      <div class="eq-sec">
+        <h3>EQUIPMENT IDENTIFICATIONS</h3>
+        <p class="eq-sec-sub">Make, model, and registration details</p>
+        <div class="eq-grid eq-grid-3">
+          <div class="eq-field"><input id="eqfManufacturer" placeholder="Manufacturer"></div>
+          <div class="eq-field"><input id="eqfYear" placeholder="Year"></div>
+          <div class="eq-field"><input id="eqfModel" placeholder="Model"></div>
+          <div class="eq-field"><input id="eqfVin" placeholder="Vin/Chasis No"></div>
+          <div class="eq-field"><input id="eqfSerial" placeholder="Serial Number"></div>
+          <div class="eq-field"><input id="eqfPlate" placeholder="License Plate"></div>
+        </div>
+      </div>
+      <div class="eq-sec">
+        <h3>EQUIPMENT SPECIFICATIONS</h3>
+        <p class="eq-sec-sub">Technical specifications and capabilities</p>
+        <div class="eq-grid eq-grid-3">
+          <div class="eq-field"><input id="eqfWeight" placeholder="Operating Weight"></div>
+          <div class="eq-field"><input id="eqfPower" placeholder="Engine Power"></div>
+          <div class="eq-field"><input id="eqfBucket" placeholder="Bucket Capacity"></div>
+          <div class="eq-field"><input id="eqfReach" placeholder="Max Reach"></div>
+          <div class="eq-field"><input id="eqfDim" placeholder="Dimension"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ATTACHMENTS ────────────────────────────────────────────────── -->
+    <div class="eq-pane" id="eqPaneAttach">
+      <div class="eq-pane-head">
+        <p>Assign attachments that work with this equipment.</p>
+        <button class="btn btn-outline btn-sm" onclick="eqAddAttachment()">
+          <i class="fas fa-plus"></i> Add Attachment</button>
+      </div>
+      <div class="eq-sub-table">
+        <table class="eq-table">
+          <thead><tr><th>Attachment</th><th>Resource</th><th>Unit</th><th>Rate</th><th></th></tr></thead>
+          <tbody id="eqAttachRows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── INSPECTION & FORMS ─────────────────────────────────────────── -->
+    <div class="eq-pane" id="eqPaneForms">
+      <p class="eq-pane-note">Assign Forms for this Equipment</p>
+      <div class="eq-quick-head">Quick access <i class="fas fa-circle-info eq-info"
+        title="A form assigned here is the one the crew gets on this machine."></i></div>
+      <div class="eq-quick" id="eqQuick"></div>
+
+      <div class="eq-forms-tab">FORMS</div>
+      <div class="eq-pane-head">
+        <span></span>
+        <div class="eq-pane-head-right">
+          <span class="eq-view on"><i class="fas fa-bars"></i></span>
+          <span class="eq-view"><i class="fas fa-table-columns"></i></span>
+          <div class="eq-search eq-search-sm"><input placeholder="Search">
+            <i class="fas fa-magnifying-glass"></i></div>
+          <button class="btn btn-outline btn-sm" onclick="eqAssignForm('')">
+            <i class="fas fa-plus"></i> Assign New Form</button>
+        </div>
+      </div>
+      <div class="eq-sub-table">
+        <table class="eq-table">
+          <thead><tr><th>Form ID</th><th>Form</th><th>Type</th><th>Submissions</th><th>Actions</th></tr></thead>
+          <tbody id="eqFormRows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── DOCUMENTS & CERTIFICATIONS ─────────────────────────────────── -->
+    <div class="eq-pane" id="eqPaneDocs">
+      <div class="eq-pane-head">
+        <p>Upload a document for this equipment (warranty, insurance, manual, etc.)</p>
+        <div class="eq-pane-head-right">
+          <span class="eq-view"><i class="fas fa-table-columns"></i></span>
+          <span class="eq-view on"><i class="fas fa-bars"></i></span>
+          <button class="btn btn-outline btn-sm" onclick="eqAddDoc()">
+            <i class="fas fa-plus"></i> Upload Document</button>
+        </div>
+      </div>
+      <div class="eq-sub-table">
+        <table class="eq-table">
+          <thead><tr><th>Document Name</th><th>Document Type</th><th>Description</th>
+            <th>Expiry Date</th><th>Upload Date</th><th>Uploaded By</th><th>Visibility</th>
+            <th>File</th><th>Actions</th></tr></thead>
+          <tbody id="eqDocRows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── MAINTENANCE ────────────────────────────────────────────────── -->
+    <div class="eq-pane" id="eqPaneMaint">
+      <div class="eq-pane-head">
+        <p class="eq-strong">Set up maintenance reminder rules for this equipment</p>
+        <button class="btn btn-outline btn-sm" onclick="eqAddCondition()">
+          <i class="fas fa-plus"></i> Add Conditions</button>
+      </div>
+      <div id="eqMaintRows"></div>
+      <div class="eq-note-info"><i class="fas fa-circle-info"></i>
+        Reminders will be sent based on the configured conditions. Click on
+        <b>+ Add Conditions</b> to get started.</div>
+    </div>
+  </div>
+</div>
