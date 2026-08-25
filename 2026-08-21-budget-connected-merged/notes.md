@@ -217,6 +217,45 @@ fixed weight, so a saved timesheet raises the **job's** cost by its full amount 
 period picks up its share. The review quotes the job figure for that reason — quoting a
 period figure would read as a discrepancy against the overview.
 
+## Suppliers — 2026-08-25
+
+A third top-level page off the sidebar. Every supplier is one the budget actually names —
+on a purchase order, a site docket, a bill or a cost-plus invoice — so the list is exactly
+who this job buys from and it grows when the budget does. Thirteen of them, not the 168 a
+real org carries.
+
+**Source means something.** Xero is the accounting substrate, so a supplier synced from it
+arrives with the accounting record attached; one created in Varicon starts bare and fills
+out as bills arrive. That is why the Varicon-sourced rows carry so many dashes — it is the
+state, not a gap in the mock.
+
+### Resource categories map to accounting codes
+
+The original Add Supplier form had a "Resource Types" multi-select and stopped there, which
+leaves unanswered the question the AP flow actually needs: when a bill from this supplier
+arrives for plant, which account does it post to?
+
+- A supplier can supply **several categories** — the base's own five, the same vocabulary
+  the calendar legend, the diary and the timesheet use.
+- Each category can carry **several accounting codes**. A supplier's materials might be
+  aggregates on one bill and concrete on the next, so the mapping constrains which accounts
+  a bill line may use rather than fixing one. `codes[category]` is a list.
+- What a supplier supplies is **derived**: a supplier appearing against a cost centre gets
+  that cost centre's dominant category from the budget's own build-up mix, so the hire
+  firms come out as plant and the concrete suppliers as material with no hand mapping.
+- Uncoded categories **flag rather than block**, on the row and in the drawer footer: the
+  record is valid, it is the bill that cannot post.
+
+The chart of accounts is the one thing here that is **not** derived — the budget has no
+concept of one, so `ACCOUNT_CODES` is new data.
+
+### Known rough edge
+
+The dominant-category heuristic is only as good as the cost centre's mix. Altus Traffic
+comes out as plant and material because of the cost centres it appears on, where a traffic
+management firm is really subcontract. Fixable by hand on the supplier, or by coding
+suppliers on the budget line rather than inferring them.
+
 ## Verified
 
 Computed styles, visible-text length and element counts on both guest tabs were

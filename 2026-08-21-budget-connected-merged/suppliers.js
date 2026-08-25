@@ -48,8 +48,12 @@ function spRender() {
           : '';
         var cats = (s.cats || []).map(function (c) {
           var m = VDATA.resourceCategories().filter(function (x) { return x.key === c; })[0];
-          return m ? '<span class="sp-catchip" style="background:' + m.colour +
-                     '1a;color:' + m.colour + '">' + m.name + '</span>' : '';
+          if (!m) return '';
+          var n = ((s.codes || {})[c] || []).length;
+          return '<span class="sp-catchip' + (n ? '' : ' unset') + '" style="background:' +
+            m.colour + '1a;color:' + m.colour + '" title="' +
+            (n ? n + ' account' + (n === 1 ? '' : 's') : 'no accounting code') + '">' +
+            m.name + (n > 1 ? ' ×' + n : '') + '</span>';
         }).join('');
         return '<tr>' +
           '<td class="sp-check"><input type="checkbox"></td>' +
@@ -204,17 +208,25 @@ function spToggleCat(key) {
   var i = SPD.cats.indexOf(key);
   if (i < 0) {
     SPD.cats.push(key);
-    /* Offer the obvious account rather than making them hunt: most categories
-       have one natural home, and it can be changed on the row. */
+    /* Offer the obvious account rather than making them hunt. Where a category
+       has exactly one natural home it is pre-picked; more can be added. */
     var opts = VDATA.accountCodesFor(key);
-    if (opts.length === 1) SPD.codes[key] = opts[0].code;
+    if (opts.length === 1) SPD.codes[key] = [opts[0].code];
   } else {
     SPD.cats.splice(i, 1);
     delete SPD.codes[key];
   }
   spDrRender();
 }
-function spSetCode(key, code) { SPD.codes[key] = code; spDrRender(); }
+
+/* A category may post to several accounts, so this is a toggle into a list
+   rather than a single choice. */
+function spToggleCode(key, code) {
+  var list = SPD.codes[key] || (SPD.codes[key] = []);
+  var i = list.indexOf(code);
+  if (i < 0) list.push(code); else list.splice(i, 1);
+  spDrRender();
+}
 
 function spDrRender() {
   var cats = VDATA.resourceCategories();
@@ -240,23 +252,31 @@ function spDrRender() {
         'here to be coded.</div>';
     } else {
       map.innerHTML =
-        '<div class="sp-map-head"><span>Category</span><span>Bills post to</span></div>' +
+        '<div class="sp-map-head"><span>Category</span><span>Bills may post to</span></div>' +
         SPD.cats.map(function (key) {
-          var cat = cats.filter(function (c) { return c.key === key; })[0] || { name: key, colour: '#94a3b8' };
+          var cat = cats.filter(function (c) { return c.key === key; })[0] ||
+                    { name: key, colour: '#94a3b8' };
           var opts = VDATA.accountCodesFor(key);
-          var cur = SPD.codes[key] || '';
-          return '<div class="sp-map-row' + (cur ? '' : ' unset') + '">' +
-            '<span class="sp-map-cat"><i class="sp-dot" style="background:' +
-              cat.colour + '"></i>' + cat.name + '</span>' +
-            '<select data-cat="' + key + '">' +
-            '<option value="">Not coded yet</option>' +
-            opts.map(function (a) {
-              return '<option value="' + a.code + '"' + (a.code === cur ? ' selected' : '') +
-                     '>' + a.code + ' · ' + a.name + '</option>';
-            }).join('') + '</select></div>';
+          var cur = SPD.codes[key] || [];
+          return '<div class="sp-map-row' + (cur.length ? '' : ' unset') + '">' +
+            '<div class="sp-map-cat"><i class="sp-dot" style="background:' +
+              cat.colour + '"></i>' + cat.name +
+              '<em>' + (cur.length ? cur.length + ' account' + (cur.length === 1 ? '' : 's')
+                                   : 'not coded yet') + '</em></div>' +
+            '<div class="sp-codes">' +
+              opts.map(function (a) {
+                var on = cur.indexOf(a.code) >= 0;
+                return '<span class="sp-code' + (on ? ' on' : '') + '" data-cat="' + key +
+                  '" data-code="' + a.code + '">' +
+                  '<i class="fas fa-' + (on ? 'check' : 'plus') + '"></i>' +
+                  '<b>' + a.code + '</b> ' + a.name + '</span>';
+              }).join('') +
+            '</div></div>';
         }).join('');
-      map.querySelectorAll('select').forEach(function (sel) {
-        sel.onchange = function () { spSetCode(sel.getAttribute('data-cat'), sel.value); };
+      map.querySelectorAll('.sp-code').forEach(function (el) {
+        el.onclick = function () {
+          spToggleCode(el.getAttribute('data-cat'), el.getAttribute('data-code'));
+        };
       });
     }
   }
@@ -309,7 +329,10 @@ function spSaveSupplier() {
   spCloseDrawer();
   spSyncData();
   if (typeof showToast === 'function') {
-    showToast(name + ' saved — ' + n + ' resource categor' + (n === 1 ? 'y' : 'ies') +
-              ' mapped to accounts');
+    var accounts = Object.keys(SPD.codes).reduce(function (a, k) {
+      return a + (SPD.codes[k] || []).length;
+    }, 0);
+    showToast(name + ' saved — ' + n + ' categor' + (n === 1 ? 'y' : 'ies') +
+              ' across ' + accounts + ' account' + (accounts === 1 ? '' : 's'));
   }
 }

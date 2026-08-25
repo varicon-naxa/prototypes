@@ -382,6 +382,177 @@ var VDATA = (function () {
     return (me && me.textContent.trim()) || 'Project manager';
   }
 
+  /* ── suppliers ──────────────────────────────────────────────────────────
+     Every firm the budget names on a purchase order, a site docket, a bill or
+     a cost-plus invoice. The list is therefore exactly who this job buys from,
+     and it grows when the budget does.
+
+     What a supplier supplies is derived too: a supplier appearing against a
+     cost centre supplies that cost centre's dominant category, so the plant
+     hire firms come out as plant and the concrete suppliers as material,
+     without a hand-written mapping.
+
+     The one thing here that is NOT derived is the chart of accounts — the
+     budget has no concept of one. ACCOUNT_CODES below is new data. */
+  var ACCOUNT_CODES = [
+    { code: '300', name: 'Materials purchased',        fits: ['material'] },
+    { code: '310', name: 'Aggregates and road base',   fits: ['material'] },
+    { code: '320', name: 'Concrete and masonry',       fits: ['material'] },
+    { code: '330', name: 'Steel and reinforcement',    fits: ['material'] },
+    { code: '400', name: 'Plant hire — external',      fits: ['plant'] },
+    { code: '410', name: 'Plant running costs',        fits: ['plant'] },
+    { code: '420', name: 'Fuel and oil',               fits: ['plant', 'misc'] },
+    { code: '500', name: 'Subcontractor costs',        fits: ['sub'] },
+    { code: '510', name: 'Traffic management',         fits: ['sub', 'misc'] },
+    { code: '600', name: 'Contract labour',            fits: ['labour'] },
+    { code: '610', name: 'Wages and salaries',         fits: ['labour'] },
+    { code: '700', name: 'Site consumables',           fits: ['misc'] },
+    { code: '710', name: 'Permits and fees',           fits: ['misc'] },
+    { code: '720', name: 'Professional fees',          fits: ['misc'] }
+  ];
+  function accountCodes() { return ACCOUNT_CODES.slice(); }
+  function accountCodesFor(cat) {
+    return ACCOUNT_CODES.filter(function (a) { return a.fits.indexOf(cat) >= 0; });
+  }
+  function accountName(code) {
+    var a = ACCOUNT_CODES.filter(function (x) { return x.code === code; })[0];
+    return a ? a.code + ' · ' + a.name : '';
+  }
+
+  function resourceCategories() {
+    return RESOURCE_CATEGORIES.map(function (c) {
+      return { key: c.key, name: c.name, colour: c.colour };
+    });
+  }
+
+  /* The dominant category of a cost centre, from the budget's own build-up
+     mix — what a supplier serving that cost centre is most likely selling. */
+  function dominantCategory(cc) {
+    var mix = (typeof RESOURCE_MIX !== 'undefined' && RESOURCE_MIX[cc]) || DEFAULT_MIX;
+    var best = null, bestV = -1;
+    RESOURCE_CATEGORIES.forEach(function (c) {
+      var v = mix[c.key] || 0;
+      /* Only the ABN share of labour is bought from a supplier; the rest is
+         payroll, which no supplier invoices for. */
+      if (c.key === 'labour') v = v * (mix.abn === undefined ? DEFAULT_MIX.abn : mix.abn);
+      if (v > bestV) { bestV = v; best = c.key; }
+    });
+    return best || 'material';
+  }
+
+  var _supplierEdits = {};      /* what the user changed or added in-session */
+
+  function suppliersRaw() {
+    var byName = {};
+    function note(name, cc) {
+      if (!name || name === 'various' || name === 'Payroll journal') return;
+      var e = byName[name] || (byName[name] = { name: name, ccs: {}, cats: {} });
+      if (cc) {
+        e.ccs[cc] = 1;
+        e.cats[dominantCategory(cc)] = 1;
+      }
+    }
+    liveLines().forEach(function (l) {
+      if (!l.suppliers) return;
+      ['po', 'dkt', 'bill'].forEach(function (k) { note(l.suppliers[k], l.cc); });
+    });
+    try {
+      costPlusInvoices.forEach(function (inv) { note(inv.supplier, null); });
+    } catch (e) { /* dayworks not loaded */ }
+    return Object.keys(byName).map(function (n) { return byName[n]; });
+  }
+
+  /* Contact detail. Xero is the accounting substrate, so a supplier synced
+     from it arrives with the accounting record attached; one created in
+     Varicon starts bare and fills out as bills arrive. That is why the
+     Varicon-sourced rows carry so many dashes — it is the state, not a gap in
+     the mock. */
+  function supplierDetail(e) {
+    var h = seed(e.name);
+    var fromXero = (h % 10) > 1;              /* most arrive with the ledger */
+    var slug = e.name.toLowerCase().replace(/[^a-z]+/g, '').slice(0, 12);
+    var streets = ['Wilde Rd', 'Korsman Dr', 'Bell Street', 'Pring St', 'Kessels Rd'];
+    var towns = ['HOLYOAKE', 'BRISBANE, QLD', 'TOOWOOMBA, QLD', 'SOUTHBANK, VIC', 'GATTON, QLD'];
+    var firsts = ['J. Hendricks', 'M. Falzon', 'R. Ngata', 'A. Kaur', 'D. Moreau'];
+    var cats = Object.keys(e.cats);
+    if (!cats.length) cats = ['material'];
+
+    /* A couple of suppliers are deliberately left without a code on one of
+       their categories, so the unmapped state is visible on the list. */
+    var codes = {};
+    cats.forEach(function (c, i) {
+      var opts = accountCodesFor(c);
+      if (!opts.length) return;
+      if ((h + i) % 7 === 0) return;          /* left unmapped on purpose */
+      /* A category can post to more than one account — a supplier's materials
+         might be aggregates on one bill and concrete on the next — so this is
+         a list, and some suppliers get two. */
+      var picked = [opts[(h + i) % opts.length].code];
+      if (opts.length > 1 && (h + i) % 3 === 0) {
+        var second = opts[(h + i + 1) % opts.length].code;
+        if (second !== picked[0]) picked.push(second);
+      }
+      codes[c] = picked;
+    });
+
+    return {
+      name: e.name,
+      id: 'SUP-' + (1000 + (h % 8000)),
+      abn: fromXero && (h % 3) ? String(40 + (h % 50)) + ' ' +
+           String(100 + (h % 900)) + ' ' + String(100 + ((h >> 3) % 900)) + ' ' +
+           String(100 + ((h >> 6) % 900)) : '',
+      address: fromXero ? (1 + (h % 200)) + ' ' + streets[h % streets.length] + ', ' +
+               towns[(h >> 2) % towns.length] + ', Australia' : '',
+      email: fromXero ? 'accounts@' + slug + '.com.au' : '',
+      phone: fromXero && (h % 4) === 0 ? '07 ' + (3000 + (h % 900)) + ' ' + (1000 + ((h >> 4) % 900)) : '',
+      contact: (h % 5) === 0 ? firsts[h % firsts.length] : '',
+      updated: (function () {
+        var d = new Date('2026-03-23T00:00:00');
+        d.setDate(d.getDate() + (h % 150));
+        return String(d.getDate()).padStart(2, '0') + '/' +
+               String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
+      })(),
+      source: fromXero ? 'xero' : 'varicon',
+      cats: cats,
+      codes: codes,
+      ccs: Object.keys(e.ccs)
+    };
+  }
+
+  function suppliers() {
+    var out = suppliersRaw().map(supplierDetail);
+    Object.keys(_supplierEdits).forEach(function (name) {
+      var edit = _supplierEdits[name];
+      var found = out.filter(function (s) { return s.name === name; })[0];
+      if (found) {
+        Object.keys(edit).forEach(function (k) { found[k] = edit[k]; });
+      } else {
+        out.push(edit);
+      }
+    });
+    return out.sort(function (a, b) { return a.name.localeCompare(b.name); });
+  }
+
+  function saveSupplier(rec) {
+    _supplierEdits[rec.name] = rec;
+    invalidate();
+  }
+
+  /* A supplier with a resource type but no account code for it cannot have a
+     bill in that category coded, which is worth flagging on the list. */
+  function unmappedCats(s) {
+    return (s.cats || []).filter(function (c) {
+      var v = (s.codes || {})[c];
+      return !v || !v.length;
+    });
+  }
+  /* Total accounts mapped across every category this supplier supplies. */
+  function codeCount(s) {
+    return Object.keys(s.codes || {}).reduce(function (a, k) {
+      return a + ((s.codes[k] || []).length);
+    }, 0);
+  }
+
   /* ── the ledger ─────────────────────────────────────────────────────── */
 
   /* Cost for one cost centre in one period, split the way the budget splits
@@ -646,6 +817,11 @@ var VDATA = (function () {
     timesheetsForWeek: timesheetsForWeek, iso: iso,
     addTimesheet: addTimesheet, enteredRows: enteredRows,
     clearEntered: clearEntered, projectName: projectName,
+    suppliers: suppliers, saveSupplier: saveSupplier,
+    accountCodes: accountCodes, accountCodesFor: accountCodesFor,
+    accountName: accountName, resourceCategories: resourceCategories,
+    unmappedCats: unmappedCats, codeCount: codeCount,
+    dominantCategory: dominantCategory,
     approverFor: approverFor,
     uncodedLines: uncodedLines, isCoded: isCoded, UNCODED: UNCODED,
     uncodedCount: function () {

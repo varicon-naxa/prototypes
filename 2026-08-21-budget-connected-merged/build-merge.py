@@ -20,6 +20,11 @@ TS_HTML = os.path.join(OUT_DIR, "timesheet.html")
 TS_ADD_HTML = os.path.join(OUT_DIR, "add-timesheet.html")
 TS_CSS = os.path.join(OUT_DIR, "timesheet.css")
 TS_JS = os.path.join(OUT_DIR, "timesheet.js")
+SP_HTML = os.path.join(OUT_DIR, "suppliers.html")
+SP_DRAWER_HTML = os.path.join(OUT_DIR, "add-supplier.html")
+SP_CSS = os.path.join(OUT_DIR, "suppliers.css")
+SP_DRAWER_CSS = os.path.join(OUT_DIR, "supplier-drawer.css")
+SP_JS = os.path.join(OUT_DIR, "suppliers.js")
 
 
 def read(p):
@@ -499,7 +504,8 @@ render = function() {
    The project tab bar belongs to a project. Timesheet spans projects — it
    carries a Project filter of its own — so it hangs off the sidebar instead,
    and the project chrome comes off while it is open. */
-var TOP_PAGES = { pageTimesheet: 'Timesheet', pageAddTimesheet: 'Add Timesheet' };
+var TOP_PAGES = { pageTimesheet: 'Timesheet', pageAddTimesheet: 'Add Timesheet',
+                  pageSuppliers: 'Suppliers' };
 var PROJECT_TITLE = null;
 
 function gotoTop(el, pageId) {
@@ -510,6 +516,7 @@ function gotoTop(el, pageId) {
   }
   showPage(pageId);
   if (pageId === 'pageTimesheet') tsSyncData();
+  if (pageId === 'pageSuppliers') spSyncData();
 }
 
 /* Back to the project the app was already showing. */
@@ -562,6 +569,9 @@ def main():
         ('<a class="nav-item active"><i class="fas fa-folder nav-icon"></i> Projects</a>',
          '<a class="nav-item active" onclick="gotoProjects(this)">'
          '<i class="fas fa-folder nav-icon"></i> Projects</a>'),
+        ('<a class="nav-item"><i class="far fa-comment-dots nav-icon"></i> Suppliers</a>',
+         '<a class="nav-item" onclick="gotoTop(this,&#39;pageSuppliers&#39;)">'
+         '<i class="far fa-comment-dots nav-icon"></i> Suppliers</a>'),
     ]:
         if old not in base:
             raise SystemExit("FAIL: sidebar item not found: %s" % old[:60])
@@ -576,6 +586,7 @@ def main():
 
     # 2. child CSS before </head>
     style_block = ("\n<style>\n/* ═══ timesheet ═══ */\n" + read(TS_CSS) +
+                   "\n/* ═══ suppliers ═══ */\n" + read(SP_CSS) + read(SP_DRAWER_CSS) +
                    "\n/* ═══ merged: daily cost tracking ═══ */\n" + dc_css +
                    "\n/* ═══ merged: site diary ═══ */\n" + sd_css + "\n</style>\n")
     base = base.replace("</head>", style_block + "</head>", 1)
@@ -596,6 +607,10 @@ def main():
              '\n    </div>\n\n'
              '    <!-- ════ TOP-LEVEL PAGE: Add Timesheet ════ -->\n'
              '    <div class="page" id="pageAddTimesheet">\n' + read(TS_ADD_HTML) +
+             '\n    </div>\n\n'
+             '    <!-- ════ TOP-LEVEL PAGE: Suppliers ════ -->\n'
+             '    <div class="page" id="pageSuppliers">\n' + read(SP_HTML) +
+             '\n' + read(SP_DRAWER_HTML) +
              '\n    </div>\n')
     base = base.replace(anchor, pages, 1)
 
@@ -608,7 +623,9 @@ def main():
                "\n<!-- ═══ merged script: site diary ═══ -->\n<script>\n"
                + sd_js + "\n</script>\n"
                "\n<!-- ═══ timesheet: list and add flow ═══ -->\n<script>\n"
-               + read(TS_JS) + "\n</script>\n")
+               + read(TS_JS) + "\n</script>\n"
+               "\n<!-- ═══ suppliers ═══ -->\n<script>\n"
+               + read(SP_JS) + "\n</script>\n")
     base = base.replace("</body>", scripts + "</body>", 1)
 
     os.makedirs(OUT_DIR, exist_ok=True)
