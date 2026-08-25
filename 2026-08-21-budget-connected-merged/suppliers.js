@@ -209,6 +209,13 @@ function spToggleCat(key) {
        to say, and the whole chart is a candidate. */
     SPD.openDrop = key;
     SPD.dropQ = '';
+    setTimeout(function () {
+      var q = document.getElementById('spDropQ');
+      if (!q) return;
+      q.focus();
+      var panel = q.closest('.sp-drop');
+      if (panel && panel.scrollIntoView) panel.scrollIntoView({ block: 'nearest' });
+    }, 0);
   } else {
     SPD.cats.splice(i, 1);
     delete SPD.codes[key];
@@ -306,7 +313,15 @@ function spDrRender() {
           SPD.dropQ = '';
           spDrRender();
           var q = document.getElementById('spDropQ');
-          if (q) q.focus();
+          if (q) {
+            q.focus();
+            /* the drawer body scrolls, so a list opened near the bottom would
+               otherwise expand out of sight */
+            var panel = q.closest('.sp-drop');
+            if (panel && panel.scrollIntoView) {
+              panel.scrollIntoView({ block: 'nearest' });
+            }
+          }
         };
       });
       map.querySelectorAll('.sp-tag i').forEach(function (el) {

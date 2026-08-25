@@ -244,7 +244,10 @@ arrives for plant, which account does it post to?
   tagged each account with the categories it suited and filtered by that — the same
   decision-on-their-behalf as the seeded mapping, since whether "420 Fuel and oil" is a
   plant account or an overhead is the client's call. Search is also the only control that
-  works when a real chart runs to hundreds of codes rather than the 28 here.
+  works when a real chart runs to hundreds of codes rather than the 28 here. It expands
+  **in flow** rather than floating: as an absolute popover it was clipped twice over, by
+  `.sp-map`'s `overflow:hidden` and again by the drawer body's own scroll, so only the
+  first row survived. Letting the row grow needs no z-index and no portal.
 - **Nothing is filled in for the client.** Every supplier starts with no categories and no
   codes. An earlier cut inferred the categories from the dominant category of the cost
   centres a supplier appeared against and seeded one or two accounts each — both were us
