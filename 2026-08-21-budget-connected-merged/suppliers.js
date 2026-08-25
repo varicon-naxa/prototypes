@@ -135,7 +135,16 @@ function spSyncData() {
    opens a row to code it.
    ══════════════════════════════════════════════════════════════════════════ */
 
-var SPD = { cats: [], codes: {}, editing: null };
+var SPD = { cats: [], codes: {}, editing: null, openDrop: null, dropQ: '' };
+
+/* Clicking away closes the account list, the way a select does. */
+document.addEventListener('click', function (ev) {
+  if (!SPD.openDrop) return;
+  if (ev.target.closest && (ev.target.closest('.sp-pick') || ev.target.closest('.sp-cat'))) return;
+  SPD.openDrop = null;
+  SPD.dropQ = '';
+  if (document.getElementById('spMap')) spDrRender();
+});
 
 var SP_FIELDS = ['Name', 'Id', 'Abn', 'Phone', 'Email',
                  'Addr1', 'Addr2', 'City', 'State', 'Post', 'Contact'];
@@ -181,6 +190,8 @@ function spEdit(el) {
 }
 
 function spCloseDrawer() {
+  SPD.openDrop = null;
+  SPD.dropQ = '';
   document.getElementById('spScrim').classList.remove('open');
   document.getElementById('spDrawer').classList.remove('open');
 }
@@ -194,10 +205,10 @@ function spToggleCat(key) {
   var i = SPD.cats.indexOf(key);
   if (i < 0) {
     SPD.cats.push(key);
-    /* Offer the obvious account rather than making them hunt. Where a category
-       has exactly one natural home it is pre-picked; more can be added. */
-    var opts = VDATA.accountCodesFor(key);
-    if (opts.length === 1) SPD.codes[key] = [opts[0].code];
+    /* Nothing pre-picked. Which account a category posts to is the client's
+       to say, and the whole chart is a candidate. */
+    SPD.openDrop = key;
+    SPD.dropQ = '';
   } else {
     SPD.cats.splice(i, 1);
     delete SPD.codes[key];
@@ -211,6 +222,8 @@ function spToggleCode(key, code) {
   var list = SPD.codes[key] || (SPD.codes[key] = []);
   var i = list.indexOf(code);
   if (i < 0) list.push(code); else list.splice(i, 1);
+  /* The list stays open: a category usually wants more than one account, and
+     reopening between each is the kind of thing that makes people give up. */
   spDrRender();
 }
 
@@ -242,28 +255,78 @@ function spDrRender() {
         SPD.cats.map(function (key) {
           var cat = cats.filter(function (c) { return c.key === key; })[0] ||
                     { name: key, colour: '#94a3b8' };
-          var opts = VDATA.accountCodesFor(key);
           var cur = SPD.codes[key] || [];
+          var open = SPD.openDrop === key;
+          var q = (SPD.dropQ || '').trim().toLowerCase();
+          var opts = VDATA.accountCodes().filter(function (a) {
+            return !open || !q || (a.code + ' ' + a.name).toLowerCase().indexOf(q) >= 0;
+          });
           return '<div class="sp-map-row' + (cur.length ? '' : ' unset') + '">' +
             '<div class="sp-map-cat"><i class="sp-dot" style="background:' +
               cat.colour + '"></i>' + cat.name +
               '<em>' + (cur.length ? cur.length + ' account' + (cur.length === 1 ? '' : 's')
                                    : 'not coded yet') + '</em></div>' +
-            '<div class="sp-codes">' +
-              opts.map(function (a) {
-                var on = cur.indexOf(a.code) >= 0;
-                return '<span class="sp-code' + (on ? ' on' : '') + '" data-cat="' + key +
-                  '" data-code="' + a.code + '">' +
-                  '<i class="fas fa-' + (on ? 'check' : 'plus') + '"></i>' +
-                  '<b>' + a.code + '</b> ' + a.name + '</span>';
-              }).join('') +
+            '<div class="sp-pick">' +
+              '<div class="sp-pick-box" data-open="' + key + '">' +
+                (cur.length
+                  ? cur.map(function (c) {
+                      return '<span class="sp-tag"><b>' + c + '</b> ' +
+                        VDATA.accountName(c).split(' · ')[1] +
+                        '<i class="fas fa-xmark" data-cat="' + key + '" data-code="' + c +
+                        '"></i></span>';
+                    }).join('')
+                  : '<span class="sp-pick-ph">Search accounting codes…</span>') +
+                '<i class="fas fa-chevron-down sp-pick-chev"></i>' +
+              '</div>' +
+              (open
+                ? '<div class="sp-drop">' +
+                    '<div class="sp-drop-search"><i class="fas fa-magnifying-glass"></i>' +
+                    '<input id="spDropQ" placeholder="Search code or name" ' +
+                    'value="' + (SPD.dropQ || '') + '" autocomplete="off"></div>' +
+                    '<div class="sp-drop-list">' +
+                      (opts.length
+                        ? opts.map(function (a) {
+                            var on = cur.indexOf(a.code) >= 0;
+                            return '<div class="sp-drop-row' + (on ? ' on' : '') +
+                              '" data-cat="' + key + '" data-code="' + a.code + '">' +
+                              '<span class="sp-drop-box"><i class="fas fa-check"></i></span>' +
+                              '<b>' + a.code + '</b><span>' + a.name + '</span></div>';
+                          }).join('')
+                        : '<div class="sp-drop-none">No account matches that.</div>') +
+                    '</div></div>'
+                : '') +
             '</div></div>';
         }).join('');
-      map.querySelectorAll('.sp-code').forEach(function (el) {
+
+      map.querySelectorAll('.sp-pick-box').forEach(function (el) {
+        el.onclick = function (ev) {
+          if (ev.target.closest('.sp-tag i')) return;   /* removing a tag, not opening */
+          var k = el.getAttribute('data-open');
+          SPD.openDrop = SPD.openDrop === k ? null : k;
+          SPD.dropQ = '';
+          spDrRender();
+          var q = document.getElementById('spDropQ');
+          if (q) q.focus();
+        };
+      });
+      map.querySelectorAll('.sp-tag i').forEach(function (el) {
+        el.onclick = function (ev) {
+          ev.stopPropagation();
+          spToggleCode(el.getAttribute('data-cat'), el.getAttribute('data-code'));
+        };
+      });
+      map.querySelectorAll('.sp-drop-row').forEach(function (el) {
         el.onclick = function () {
           spToggleCode(el.getAttribute('data-cat'), el.getAttribute('data-code'));
         };
       });
+      var dq = document.getElementById('spDropQ');
+      if (dq) {
+        dq.oninput = function () { SPD.dropQ = dq.value; spDrRender();
+          var again = document.getElementById('spDropQ');
+          if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); } };
+        dq.onclick = function (ev) { ev.stopPropagation(); };
+      }
     }
   }
 

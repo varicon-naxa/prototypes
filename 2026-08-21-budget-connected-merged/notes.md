@@ -240,6 +240,11 @@ arrives for plant, which account does it post to?
 - Each category can carry **several accounting codes**. A supplier's materials might be
   aggregates on one bill and concrete on the next, so the mapping constrains which accounts
   a bill line may use rather than fixing one. `codes[category]` is a list.
+- The picker is a **search over the whole chart of accounts**, unfiltered. An earlier cut
+  tagged each account with the categories it suited and filtered by that — the same
+  decision-on-their-behalf as the seeded mapping, since whether "420 Fuel and oil" is a
+  plant account or an overhead is the client's call. Search is also the only control that
+  works when a real chart runs to hundreds of codes rather than the 28 here.
 - **Nothing is filled in for the client.** Every supplier starts with no categories and no
   codes. An earlier cut inferred the categories from the dominant category of the cost
   centres a supplier appeared against and seeded one or two accounts each — both were us

@@ -395,25 +395,40 @@ var VDATA = (function () {
      The one thing here that is NOT derived is the chart of accounts — the
      budget has no concept of one. ACCOUNT_CODES below is new data. */
   var ACCOUNT_CODES = [
-    { code: '300', name: 'Materials purchased',        fits: ['material'] },
-    { code: '310', name: 'Aggregates and road base',   fits: ['material'] },
-    { code: '320', name: 'Concrete and masonry',       fits: ['material'] },
-    { code: '330', name: 'Steel and reinforcement',    fits: ['material'] },
-    { code: '400', name: 'Plant hire — external',      fits: ['plant'] },
-    { code: '410', name: 'Plant running costs',        fits: ['plant'] },
-    { code: '420', name: 'Fuel and oil',               fits: ['plant', 'misc'] },
-    { code: '500', name: 'Subcontractor costs',        fits: ['sub'] },
-    { code: '510', name: 'Traffic management',         fits: ['sub', 'misc'] },
-    { code: '600', name: 'Contract labour',            fits: ['labour'] },
-    { code: '610', name: 'Wages and salaries',         fits: ['labour'] },
-    { code: '700', name: 'Site consumables',           fits: ['misc'] },
-    { code: '710', name: 'Permits and fees',           fits: ['misc'] },
-    { code: '720', name: 'Professional fees',          fits: ['misc'] }
+    { code: '200', name: 'Sales' },
+    { code: '260', name: 'Other revenue' },
+    { code: '300', name: 'Materials purchased' },
+    { code: '310', name: 'Aggregates and road base' },
+    { code: '320', name: 'Concrete and masonry' },
+    { code: '330', name: 'Steel and reinforcement' },
+    { code: '340', name: 'Pipes and drainage products' },
+    { code: '350', name: 'Timber and formwork' },
+    { code: '400', name: 'Plant hire — external' },
+    { code: '410', name: 'Plant running costs' },
+    { code: '420', name: 'Fuel and oil' },
+    { code: '430', name: 'Plant repairs and maintenance' },
+    { code: '440', name: 'Small tools' },
+    { code: '500', name: 'Subcontractor costs' },
+    { code: '510', name: 'Traffic management' },
+    { code: '520', name: 'Survey and set-out' },
+    { code: '530', name: 'Testing and inspection' },
+    { code: '600', name: 'Contract labour' },
+    { code: '610', name: 'Wages and salaries' },
+    { code: '620', name: 'Superannuation' },
+    { code: '630', name: 'Site allowances' },
+    { code: '700', name: 'Site consumables' },
+    { code: '710', name: 'Permits and fees' },
+    { code: '720', name: 'Professional fees' },
+    { code: '730', name: 'Insurance' },
+    { code: '740', name: 'Waste and spoil disposal' },
+    { code: '800', name: 'Office and administration' },
+    { code: '810', name: 'Motor vehicle expenses' }
   ];
   function accountCodes() { return ACCOUNT_CODES.slice(); }
-  function accountCodesFor(cat) {
-    return ACCOUNT_CODES.filter(function (a) { return a.fits.indexOf(cat) >= 0; });
-  }
+  /* Every account, for every category. Which of a client's accounts suits
+     which category is the client's call — we have no basis for filtering it,
+     and guessing wrong hides the account they actually wanted. */
+  function accountCodesFor(cat) { return ACCOUNT_CODES.slice(); }
   function accountName(code) {
     var a = ACCOUNT_CODES.filter(function (x) { return x.code === code; })[0];
     return a ? a.code + ' · ' + a.name : '';

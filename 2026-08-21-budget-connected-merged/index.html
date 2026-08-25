@@ -1386,15 +1386,42 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
 .sp-map-row.unset .sp-map-cat em { color: #b45309 }
 .sp-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0 }
 
-.sp-codes { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; min-width: 0 }
-.sp-code { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
-  color: #475569; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px;
-  padding: 5px 10px; cursor: pointer; user-select: none; transition: all .15s }
-.sp-code:hover { border-color: #cbd5e1; background: #f8fafc }
-.sp-code i { font-size: 9px; opacity: .6 }
-.sp-code b { font-weight: 700; color: #1b2a4a }
-.sp-code.on { border-color: #f5a623; background: #fffbf3; color: #1b2a4a }
-.sp-code.on i { color: #f5a623; opacity: 1 }
+/* ── the account picker: search, not a wall of chips ────────────────────
+   A real chart of accounts runs to hundreds of codes, and we have no basis for
+   filtering it down by category, so the control has to be searchable. */
+.sp-pick { flex: 1; min-width: 0; position: relative }
+.sp-pick-box { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  min-height: 38px; padding: 6px 30px 6px 10px; border: 1px solid #e2e8f0;
+  border-radius: 6px; background: #fff; cursor: pointer; position: relative }
+.sp-pick-box:hover { border-color: #cbd5e1 }
+.sp-pick-ph { color: #94a3b8; font-size: 13px }
+.sp-pick-chev { position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
+  color: #94a3b8; font-size: 11px }
+.sp-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+  color: #1b2a4a; background: #fffbf3; border: 1px solid #f5a623; border-radius: 5px;
+  padding: 3px 8px; max-width: 100% }
+.sp-tag b { font-weight: 700 }
+.sp-tag i { color: #94a3b8; cursor: pointer; font-size: 10px }
+.sp-tag i:hover { color: #dc2626 }
+
+.sp-drop { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(15,23,42,.14); overflow: hidden }
+.sp-drop-search { display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+  border-bottom: 1px solid #eef2f6; color: #94a3b8 }
+.sp-drop-search input { border: none; outline: none; font-family: inherit; font-size: 13px;
+  width: 100%; color: #1b2a4a; background: transparent }
+.sp-drop-list { max-height: 210px; overflow-y: auto }
+.sp-drop-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  cursor: pointer; font-size: 13px; color: #475569 }
+.sp-drop-row:hover { background: #f8fafc }
+.sp-drop-row.on { background: #fffbf3 }
+.sp-drop-row b { font-weight: 700; color: #1b2a4a; min-width: 38px }
+.sp-drop-box { width: 16px; height: 16px; border: 1.5px solid #cbd5e1; border-radius: 4px;
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  color: transparent; font-size: 9px }
+.sp-drop-row.on .sp-drop-box { background: #f5a623; border-color: #f5a623; color: #fff }
+.sp-drop-none { padding: 18px 12px; text-align: center; color: #94a3b8; font-size: 13px }
 
 .sp-check-row { display: inline-flex; align-items: center; gap: 9px; font-size: 13px;
   color: #1b2a4a; cursor: pointer; user-select: none }
@@ -2777,9 +2804,10 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
     <!-- ── what they supply, and where it posts ────────────────────────── -->
     <div class="sp-sec">
       <h3>What does this supplier provide?</h3>
-      <p class="sp-sec-sub">Pick every category you buy from them, and the accounts each
-        one posts to. A bill for plant and a bill for materials from the same supplier do
-        not post to the same account, so each category is coded separately.</p>
+      <p class="sp-sec-sub">Pick every category you buy from them, then search your own
+        accounting codes for the accounts each one posts to. A bill for plant and a bill
+        for materials from the same supplier do not post to the same account, so each
+        category is coded separately.</p>
       <p class="sp-sec-sub sp-later">You can leave this until later — a bill will ask for
         anything missing when one arrives in a category that has not been set up.</p>
 
@@ -12309,25 +12337,40 @@ var VDATA = (function () {
      The one thing here that is NOT derived is the chart of accounts — the
      budget has no concept of one. ACCOUNT_CODES below is new data. */
   var ACCOUNT_CODES = [
-    { code: '300', name: 'Materials purchased',        fits: ['material'] },
-    { code: '310', name: 'Aggregates and road base',   fits: ['material'] },
-    { code: '320', name: 'Concrete and masonry',       fits: ['material'] },
-    { code: '330', name: 'Steel and reinforcement',    fits: ['material'] },
-    { code: '400', name: 'Plant hire — external',      fits: ['plant'] },
-    { code: '410', name: 'Plant running costs',        fits: ['plant'] },
-    { code: '420', name: 'Fuel and oil',               fits: ['plant', 'misc'] },
-    { code: '500', name: 'Subcontractor costs',        fits: ['sub'] },
-    { code: '510', name: 'Traffic management',         fits: ['sub', 'misc'] },
-    { code: '600', name: 'Contract labour',            fits: ['labour'] },
-    { code: '610', name: 'Wages and salaries',         fits: ['labour'] },
-    { code: '700', name: 'Site consumables',           fits: ['misc'] },
-    { code: '710', name: 'Permits and fees',           fits: ['misc'] },
-    { code: '720', name: 'Professional fees',          fits: ['misc'] }
+    { code: '200', name: 'Sales' },
+    { code: '260', name: 'Other revenue' },
+    { code: '300', name: 'Materials purchased' },
+    { code: '310', name: 'Aggregates and road base' },
+    { code: '320', name: 'Concrete and masonry' },
+    { code: '330', name: 'Steel and reinforcement' },
+    { code: '340', name: 'Pipes and drainage products' },
+    { code: '350', name: 'Timber and formwork' },
+    { code: '400', name: 'Plant hire — external' },
+    { code: '410', name: 'Plant running costs' },
+    { code: '420', name: 'Fuel and oil' },
+    { code: '430', name: 'Plant repairs and maintenance' },
+    { code: '440', name: 'Small tools' },
+    { code: '500', name: 'Subcontractor costs' },
+    { code: '510', name: 'Traffic management' },
+    { code: '520', name: 'Survey and set-out' },
+    { code: '530', name: 'Testing and inspection' },
+    { code: '600', name: 'Contract labour' },
+    { code: '610', name: 'Wages and salaries' },
+    { code: '620', name: 'Superannuation' },
+    { code: '630', name: 'Site allowances' },
+    { code: '700', name: 'Site consumables' },
+    { code: '710', name: 'Permits and fees' },
+    { code: '720', name: 'Professional fees' },
+    { code: '730', name: 'Insurance' },
+    { code: '740', name: 'Waste and spoil disposal' },
+    { code: '800', name: 'Office and administration' },
+    { code: '810', name: 'Motor vehicle expenses' }
   ];
   function accountCodes() { return ACCOUNT_CODES.slice(); }
-  function accountCodesFor(cat) {
-    return ACCOUNT_CODES.filter(function (a) { return a.fits.indexOf(cat) >= 0; });
-  }
+  /* Every account, for every category. Which of a client's accounts suits
+     which category is the client's call — we have no basis for filtering it,
+     and guessing wrong hides the account they actually wanted. */
+  function accountCodesFor(cat) { return ACCOUNT_CODES.slice(); }
   function accountName(code) {
     var a = ACCOUNT_CODES.filter(function (x) { return x.code === code; })[0];
     return a ? a.code + ' · ' + a.name : '';
@@ -14871,7 +14914,16 @@ function spSyncData() {
    opens a row to code it.
    ══════════════════════════════════════════════════════════════════════════ */
 
-var SPD = { cats: [], codes: {}, editing: null };
+var SPD = { cats: [], codes: {}, editing: null, openDrop: null, dropQ: '' };
+
+/* Clicking away closes the account list, the way a select does. */
+document.addEventListener('click', function (ev) {
+  if (!SPD.openDrop) return;
+  if (ev.target.closest && (ev.target.closest('.sp-pick') || ev.target.closest('.sp-cat'))) return;
+  SPD.openDrop = null;
+  SPD.dropQ = '';
+  if (document.getElementById('spMap')) spDrRender();
+});
 
 var SP_FIELDS = ['Name', 'Id', 'Abn', 'Phone', 'Email',
                  'Addr1', 'Addr2', 'City', 'State', 'Post', 'Contact'];
@@ -14917,6 +14969,8 @@ function spEdit(el) {
 }
 
 function spCloseDrawer() {
+  SPD.openDrop = null;
+  SPD.dropQ = '';
   document.getElementById('spScrim').classList.remove('open');
   document.getElementById('spDrawer').classList.remove('open');
 }
@@ -14930,10 +14984,10 @@ function spToggleCat(key) {
   var i = SPD.cats.indexOf(key);
   if (i < 0) {
     SPD.cats.push(key);
-    /* Offer the obvious account rather than making them hunt. Where a category
-       has exactly one natural home it is pre-picked; more can be added. */
-    var opts = VDATA.accountCodesFor(key);
-    if (opts.length === 1) SPD.codes[key] = [opts[0].code];
+    /* Nothing pre-picked. Which account a category posts to is the client's
+       to say, and the whole chart is a candidate. */
+    SPD.openDrop = key;
+    SPD.dropQ = '';
   } else {
     SPD.cats.splice(i, 1);
     delete SPD.codes[key];
@@ -14947,6 +15001,8 @@ function spToggleCode(key, code) {
   var list = SPD.codes[key] || (SPD.codes[key] = []);
   var i = list.indexOf(code);
   if (i < 0) list.push(code); else list.splice(i, 1);
+  /* The list stays open: a category usually wants more than one account, and
+     reopening between each is the kind of thing that makes people give up. */
   spDrRender();
 }
 
@@ -14978,28 +15034,78 @@ function spDrRender() {
         SPD.cats.map(function (key) {
           var cat = cats.filter(function (c) { return c.key === key; })[0] ||
                     { name: key, colour: '#94a3b8' };
-          var opts = VDATA.accountCodesFor(key);
           var cur = SPD.codes[key] || [];
+          var open = SPD.openDrop === key;
+          var q = (SPD.dropQ || '').trim().toLowerCase();
+          var opts = VDATA.accountCodes().filter(function (a) {
+            return !open || !q || (a.code + ' ' + a.name).toLowerCase().indexOf(q) >= 0;
+          });
           return '<div class="sp-map-row' + (cur.length ? '' : ' unset') + '">' +
             '<div class="sp-map-cat"><i class="sp-dot" style="background:' +
               cat.colour + '"></i>' + cat.name +
               '<em>' + (cur.length ? cur.length + ' account' + (cur.length === 1 ? '' : 's')
                                    : 'not coded yet') + '</em></div>' +
-            '<div class="sp-codes">' +
-              opts.map(function (a) {
-                var on = cur.indexOf(a.code) >= 0;
-                return '<span class="sp-code' + (on ? ' on' : '') + '" data-cat="' + key +
-                  '" data-code="' + a.code + '">' +
-                  '<i class="fas fa-' + (on ? 'check' : 'plus') + '"></i>' +
-                  '<b>' + a.code + '</b> ' + a.name + '</span>';
-              }).join('') +
+            '<div class="sp-pick">' +
+              '<div class="sp-pick-box" data-open="' + key + '">' +
+                (cur.length
+                  ? cur.map(function (c) {
+                      return '<span class="sp-tag"><b>' + c + '</b> ' +
+                        VDATA.accountName(c).split(' · ')[1] +
+                        '<i class="fas fa-xmark" data-cat="' + key + '" data-code="' + c +
+                        '"></i></span>';
+                    }).join('')
+                  : '<span class="sp-pick-ph">Search accounting codes…</span>') +
+                '<i class="fas fa-chevron-down sp-pick-chev"></i>' +
+              '</div>' +
+              (open
+                ? '<div class="sp-drop">' +
+                    '<div class="sp-drop-search"><i class="fas fa-magnifying-glass"></i>' +
+                    '<input id="spDropQ" placeholder="Search code or name" ' +
+                    'value="' + (SPD.dropQ || '') + '" autocomplete="off"></div>' +
+                    '<div class="sp-drop-list">' +
+                      (opts.length
+                        ? opts.map(function (a) {
+                            var on = cur.indexOf(a.code) >= 0;
+                            return '<div class="sp-drop-row' + (on ? ' on' : '') +
+                              '" data-cat="' + key + '" data-code="' + a.code + '">' +
+                              '<span class="sp-drop-box"><i class="fas fa-check"></i></span>' +
+                              '<b>' + a.code + '</b><span>' + a.name + '</span></div>';
+                          }).join('')
+                        : '<div class="sp-drop-none">No account matches that.</div>') +
+                    '</div></div>'
+                : '') +
             '</div></div>';
         }).join('');
-      map.querySelectorAll('.sp-code').forEach(function (el) {
+
+      map.querySelectorAll('.sp-pick-box').forEach(function (el) {
+        el.onclick = function (ev) {
+          if (ev.target.closest('.sp-tag i')) return;   /* removing a tag, not opening */
+          var k = el.getAttribute('data-open');
+          SPD.openDrop = SPD.openDrop === k ? null : k;
+          SPD.dropQ = '';
+          spDrRender();
+          var q = document.getElementById('spDropQ');
+          if (q) q.focus();
+        };
+      });
+      map.querySelectorAll('.sp-tag i').forEach(function (el) {
+        el.onclick = function (ev) {
+          ev.stopPropagation();
+          spToggleCode(el.getAttribute('data-cat'), el.getAttribute('data-code'));
+        };
+      });
+      map.querySelectorAll('.sp-drop-row').forEach(function (el) {
         el.onclick = function () {
           spToggleCode(el.getAttribute('data-cat'), el.getAttribute('data-code'));
         };
       });
+      var dq = document.getElementById('spDropQ');
+      if (dq) {
+        dq.oninput = function () { SPD.dropQ = dq.value; spDrRender();
+          var again = document.getElementById('spDropQ');
+          if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); } };
+        dq.onclick = function (ev) { ev.stopPropagation(); };
+      }
     }
   }
 
