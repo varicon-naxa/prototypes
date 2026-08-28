@@ -389,6 +389,52 @@ rate onto a machine overrides it, and the form says that in as many words. Alec'
 The form shows the charge-out against the cost rate so the margin on the machine is visible
 where both are set: *$153 per hour against $145 of cost — 5% margin on the machine.*
 
+## Charge-out rates set, and wet derived — 2026-08-28
+
+The six dry rates were the values that fell out of the old derivation, which left the 20T
+Excavator charging $153 against $145 of cost — a 5% margin that reads as a data fault. Set
+properly against cost:
+
+| Machine | Cost/hr | Charge/hr | Margin |
+| --- | --- | --- | --- |
+| 20T Excavator | $145.00 | $195 | 25.6% |
+| 5T Excavator | $95.00 | $130 | 26.9% |
+| 10T Tipper | $110.00 | $150 | 26.7% |
+| Bobcat / Skid Steer | $85.00 | $115 | 26.1% |
+| Smooth Drum Roller | $98.00 | $135 | 27.4% |
+| Water Cart | $86.84 | $120 | 27.6% |
+
+**Wet hire is now derived, not stored** — `dry + the packaged operator's sell` — so the two
+cannot drift apart. Holding both was two rates for one machine. Verified `wet = dry +
+operator` for all six. Dayworks margin moves 20.8% → 30%.
+
+One trap worth remembering: computing the wet list at definition time threw a
+`ReferenceError`, because `PLANT_FLEET` is declared further down the file than
+`WET_HIRE_RATES` — a `const` in its temporal dead zone. It is computed on first use instead.
+
+## The diary's plant page is the day's roster — 2026-08-28
+
+It listed only machines with cost booked that day, so a machine sitting on site doing
+nothing was simply absent — which is the machine a diary most needs to account for, since
+an idle machine still costs. Now every machine on the project appears with:
+
+- **who is on it** (all operators, where more than one worked it)
+- **its state** — Working / Stood down / Not on site
+- **hours, hourly rate, cost and allocation**
+
+Stand-down is *recorded* here and *priced* by the equipment register, so the register sets
+the rule and the diary records the day. Clicking the status chip on an idle machine stands
+it down and the cost appears — the Roller at $392, half its $784 day.
+
+Two bugs this surfaced:
+
+- The rate column showed the machine's **period** rate under an `/hr` heading: $1,160/hr
+  for a $1,160-per-*day* excavator, $3,300/hr for a per-*week* water cart. The table shows
+  hours, so the rate beside them is now hourly and reconciles against the cost.
+- Stand-down only configured for **hired** plant, so all six owned machines read "no
+  stand-down rate set" and the feature looked broken. An owned machine sitting in the rain
+  still ties up capital, so the rule now applies whoever owns it.
+
 ## Verified
 
 Computed styles, visible-text length and element counts on both guest tabs were

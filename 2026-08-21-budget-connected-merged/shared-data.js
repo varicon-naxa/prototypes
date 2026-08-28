@@ -668,7 +668,9 @@ var VDATA = (function () {
          work — so it is a share of the day rate whatever basis the job is
          charged on. Taking a percentage of the hourly rate would price a
          rained-off day at half an hour. */
-      var dayRate = e.owned ? chargeRate(e) : hireDayRate(e.hireRate, e.hirePeriod);
+      var dayRate = e.owned
+        ? (e.unit === 'hr' ? e.rate * 8 : e.unit === 'day' ? e.rate : e.rate / 5)
+        : hireDayRate(e.hireRate, e.hirePeriod);
       var sd = dayRate * ((e.standDownPct || 0) / 100);
       return { amount: Math.round(sd), rule: 'stand-down',
                note: (e.standDownPct || 0) + '% of the ' + Math.round(dayRate) +
@@ -688,6 +690,59 @@ var VDATA = (function () {
         ? (hoursWorked || 0) + ' hrs worked, charged at the ' + min + ' hr minimum'
         : billed + ' hrs at $' + Math.round(rate) + '/hr'
     };
+  }
+
+  /* ── stand-down, recorded per machine per day ───────────────────────────
+     A machine on site and not worked. The diary is where it is recorded; the
+     equipment register holds what it costs. */
+  var _stoodDown = {};
+  function standDownKey(iso, id) { return iso + '|' + id; }
+  function isStoodDown(iso, id) { return !!_stoodDown[standDownKey(iso, id)]; }
+  function setStoodDown(iso, id, on) {
+    if (on) _stoodDown[standDownKey(iso, id)] = 1;
+    else delete _stoodDown[standDownKey(iso, id)];
+  }
+
+  /* Every machine on the project for a given day, with what it was doing.
+     Machines with no hours are the point — an idle machine on hire still
+     costs, and a diary that hides it cannot account for the day. */
+  function plantRoster(iso) {
+    var booked = {};
+    (ledger().byDate[iso] || []).forEach(function (r) {
+      if (r.uncoded || !r.detail || r.detail.kind !== 'plant') return;
+      var id = r.detail.plant.id || r.detail.plant.no;
+      var b = booked[id] || (booked[id] = { hrs: 0, cost: 0, by: [], cc: r.cc, row: r });
+      b.hrs += r.detail.hrs || 0;
+      b.cost += r.cost || 0;
+      if (r.detail.by && b.by.indexOf(r.detail.by) < 0) b.by.push(r.detail.by);
+    });
+
+    return equipment().map(function (e) {
+      var b = booked[e.id];
+      var down = isStoodDown(iso, e.id);
+      var charge = null;
+      if (!b && down) {
+        /* priced by the register's own rule, so the two cannot disagree */
+        charge = dayCharge(e, 0, true);
+      }
+      return {
+        eqId: e.id, nm: e.name, no: e.id, sup: e.owned ? e.company : e.company,
+        owned: e.owned,
+        /* The table shows hours, so the rate beside them has to be hourly.
+           A machine priced by the day or the week was showing its period rate
+           under an /hr heading — $1,160/hr for a $1,160/day excavator. */
+        rate: Math.round(e.owned
+          ? (e.unit === 'hr' ? e.rate : e.unit === 'day' ? e.rate / 8 : e.rate / 38)
+          : hireHourRate(e.hireRate, e.hirePeriod)),
+        by: b ? b.by.join(', ') : '',
+        hrsDec: b ? Math.round(b.hrs * 10) / 10 : 0,
+        cost: b ? b.cost : (charge ? charge.amount : 0),
+        cc: b ? b.cc : '',
+        status: b ? 'working' : (down ? 'standdown' : 'offsite'),
+        standDownSet: !!e.standDown,
+        standDownNote: charge ? charge.note : ''
+      };
+    });
   }
 
   /* ── equipment registry ─────────────────────────────────────────────────
@@ -760,7 +815,11 @@ var VDATA = (function () {
            apply to a machine on hire, and are the client's to set. */
         poRef: '', hireRate: 0, hirePeriod: 'month',
         chargeBasis: m.basis === 'hr' ? 'hr' : 'day',
-        minHire: 0, standDown: false, standDownPct: 50,
+        minHire: 0,
+        /* Stand-down applies to owned plant too: a machine the company owns
+           still ties up capital and an operator when it sits in the rain, and
+           the job wears a reduced charge rather than nothing. */
+        standDown: true, standDownPct: 50,
         meterType: 'hr',
         meter: plantHours(m.id),
         /* the client's to fill in */
@@ -1063,6 +1122,8 @@ var VDATA = (function () {
     equipment: equipment, saveEquipment: saveEquipment,
     equipmentById: equipmentById, plantResources: plantResources,
     plantHours: plantHours, plantType: plantType, orgName: orgName,
+    plantRoster: plantRoster, isStoodDown: isStoodDown,
+    setStoodDown: setStoodDown,
     purchaseOrders: purchaseOrders, plantPurchaseOrders: plantPurchaseOrders,
     chargeRate: chargeRate, dayCharge: dayCharge,
     hireDayRate: hireDayRate, hireHourRate: hireHourRate,
@@ -1133,11 +1194,7 @@ function vdataDiaryRows() {
         cost: r.cost
       });
     } else if (dt.kind === 'plant') {
-      out.plant.push({
-        nm: dt.plant.nm, no: dt.plant.no, sup: dt.plant.sup, rate: dt.rate, by: dt.by,
-        hrs: Math.floor(dt.hrs) + 'h ' + String(Math.round((dt.hrs % 1) * 60)).padStart(2, '0') + 'm',
-        alloc: allocFor(r.cc, d + 'p' + i, i), cost: r.cost
-      });
+      /* plant comes from the roster below, so every machine appears */
     } else if (dt.kind === 'material') {
       out.materials.push({
         id: dt.src, srcType: dt.srcType, src: dt.src, nm: dt.nm, sup: dt.sup,
@@ -1160,7 +1217,29 @@ function vdataDiaryRows() {
       });
     }
   });
+  /* Every machine on the project, not only the ones that worked. */
+  out.plant = VDATA.plantRoster(d).map(function (p, i) {
+    var hrs = p.hrsDec
+      ? Math.floor(p.hrsDec) + 'h ' + String(Math.round((p.hrsDec % 1) * 60)).padStart(2, '0') + 'm'
+      : '';
+    return {
+      eqId: p.eqId, nm: p.nm, no: p.no, sup: p.sup, rate: p.rate,
+      by: p.by, hrs: hrs, cost: p.cost, status: p.status,
+      standDownSet: p.standDownSet, standDownNote: p.standDownNote,
+      alloc: p.cc ? VDATA.allocFor(p.cc, d + 'p' + i, i) : []
+    };
+  });
+
   return out;
+}
+
+/* Marking a machine stood down for the day. Named sd* so it sits with the
+   diary's own functions, which the merge prefixes that way. */
+function sdToggleStandDown(eqId) {
+  var d = VDATA.diaryDate();
+  VDATA.setStoodDown(d, eqId, !VDATA.isStoodDown(d, eqId));
+  rows.plant = vdataDiaryRows().plant;
+  renderPlant();
 }
 
 function vdataDiaryDateLabel() {

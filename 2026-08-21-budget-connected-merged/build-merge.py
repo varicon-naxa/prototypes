@@ -272,6 +272,25 @@ def build_site_diary():
     js = replace_decl(js, "var WORKERS=", "var WORKERS=[];", "SD WORKERS")
     js = replace_decl(js, "var PLANTITEMS=", "var PLANTITEMS=[];", "SD PLANTITEMS")
     js = replace_decl(js, "var ALLOC_OPTIONS=", "var ALLOC_OPTIONS=[];", "SD ALLOC_OPTIONS")
+    # The diary's plant table becomes the day's roster: every machine on the
+    # project, who is on it, and whether it is working, stood down or off site.
+    old_head = ('<th>Operated by</th><th>Hours</th><th>Hire rate</th><th>Cost</th>')
+    if old_head not in html:
+        raise SystemExit("FAIL: diary plant header not found")
+    html = html.replace(
+        old_head,
+        '<th>Operated by</th><th>Status</th><th>Hours</th><th>Hire rate</th><th>Cost</th>', 1)
+
+    old_render = ("b.innerHTML+='<tr><td><b style=\"color:var(--navy)\">'+r.nm+'</b>'"
+                  "+dktChip(r)+'</td><td><span style=\"font-family:monospace;font-size:12px;"
+                  "color:var(--muted)\">'+r.no+'</span></td><td>'+r.sup+'</td><td>'+r.by+"
+                  "'</td><td class=\"hrs\">'+r.hrs+'</td><td>'+rateCell+'</td><td>'+costCell+"
+                  "'</td><td>'+allocChips(r.alloc)+'</td>"
+                  "<td><span class=\"row-act\"><i class=\"fa-solid fa-pen\"></i></span></td></tr>';")
+    if old_render not in js:
+        raise SystemExit("FAIL: diary plant row markup not found")
+    js = js.replace(old_render, PLANT_ROW, 1)
+
     # The diary recomputed each row's cost as rate x hours, which lands a dollar
     # or two off the ledger amount the calendar shows for the very same row. The
     # ledger is the authority; where a row carries a cost, display it.
@@ -385,7 +404,45 @@ TAB_BAR_NEW = '''    <div class="budget-view-tabs">
 # painted a paid bill in the committed colour and an unapproved timesheet in
 # amber, when a bill is actual and an unapproved timesheet is tracked.
 # Same state, same colour, all three tabs.
+# The roster row. A machine with no hours is not an empty row to be tidied
+# away — it is the machine the diary most needs to account for, because an
+# idle machine on hire is still costing money.
+PLANT_ROW = (
+    "var st=r.status||'working';"
+    "var stLabel=st==='working'?'Working':st==='standdown'?'Stood down':'Not on site';"
+    "var stClass=st==='working'?'pl-working':st==='standdown'?'pl-down':'pl-off';"
+    "var canToggle=st!=='working';"
+    "var statusCell='<span class=\"pl-chip '+stClass+'\"'+"
+    "  (canToggle?' onclick=\"sdToggleStandDown(\\''+r.eqId+'\\')\" title=\"Mark stood down\"':'')+"
+    "  '>'+stLabel+'</span>';"
+    "var hrsCell=r.hrs?r.hrs:'<span style=\"color:var(--border)\">—</span>';"
+    "var byCell=r.by?r.by:'<span style=\"color:var(--border)\">—</span>';"
+    "var cCell=st==='working'?costCell"
+    "  :st==='standdown'?(r.standDownSet"
+    "    ?'<b style=\"color:#b45309\">'+money(r.cost)+'</b>'"
+    "    :'<span class=\"pl-nostand\">no stand-down rate set</span>')"
+    "  :'<span style=\"color:var(--border)\">—</span>';"
+    "b.innerHTML+='<tr class=\"pl-row '+stClass+'\">"
+    "<td><b style=\"color:var(--navy)\">'+r.nm+'</b>'+dktChip(r)+'</td>"
+    "<td><span style=\"font-family:monospace;font-size:12px;color:var(--muted)\">'+r.no+'</span></td>"
+    "<td>'+r.sup+'</td><td>'+byCell+'</td><td>'+statusCell+'</td>"
+    "<td class=\"hrs\">'+hrsCell+'</td><td>'+rateCell+'</td><td>'+cCell+'</td>"
+    "<td>'+allocChips(r.alloc)+'</td>"
+    "<td><span class=\"row-act\"><i class=\"fa-solid fa-pen\"></i></span></td></tr>';"
+)
+
 SD_PALETTE = """
+/* ═══ the day's plant roster ═══ */
+#pageSiteDiary .pl-chip{font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;
+  white-space:nowrap;display:inline-block}
+#pageSiteDiary .pl-working{background:#16a34a1a;color:#16a34a}
+#pageSiteDiary .pl-down{background:#b453091a;color:#b45309;cursor:pointer}
+#pageSiteDiary .pl-off{background:#f1f5f9;color:#94a3b8;cursor:pointer}
+#pageSiteDiary .pl-off:hover{background:#b453091a;color:#b45309}
+#pageSiteDiary .pl-down:hover{background:#f1f5f9;color:#94a3b8}
+#pageSiteDiary tr.pl-off td{opacity:.65}
+#pageSiteDiary .pl-nostand{font-size:11px;color:#b45309;font-style:italic}
+
 /* ═══ cost-state palette, from the budget ═══ */
 /* An approved timesheet is actual cost. */
 #pageSiteDiary .tag.app{background:#16a34a1a;color:#16a34a}

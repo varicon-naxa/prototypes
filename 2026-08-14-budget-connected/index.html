@@ -2708,25 +2708,40 @@ const DAYWORK_PEOPLE = [
    overrides this one — the register holds what to charge when nothing more
    specific has been agreed. */
 const DRY_HIRE_RATES = [
-  {plant:'P-04', rate:153},
-  {plant:'P-11', rate:83},
-  {plant:'P-07', rate:98},
-  {plant:'P-02', rate:56},
-  {plant:'P-15', rate:74},
-  {plant:'P-09', rate:115}
+  {plant:'P-04', rate:195},   /* $145/hr cost — 26% */
+  {plant:'P-11', rate:130},   /* $95/hr        — 27% */
+  {plant:'P-07', rate:150},   /* $110/hr       — 27% */
+  {plant:'P-02', rate:115},   /* $85/hr        — 26% */
+  {plant:'P-15', rate:135},   /* $98/hr        — 27% */
+  {plant:'P-09', rate:120}    /* $86.84/hr     — 28% */
 ];
 function dryHireFor(plantId){ return DRY_HIRE_RATES.find(d => d.plant === plantId) || null; }
 
-/* Wet hire = machine + operator, charged as one rate. Cost is the two
-   internal rates added together; the sell is this single figure. */
-const WET_HIRE_RATES = [
-  {plant:'P-04', name:'20T Excavator + operator', rate:265},
-  {plant:'P-11', name:'5T Excavator + operator',  rate:195},
-  {plant:'P-07', name:'10T Tipper + operator',    rate:210},
-  {plant:'P-02', name:'Bobcat + operator',        rate:168},
-  {plant:'P-15', name:'Roller + operator',        rate:186}
-];
-function wetHireFor(plantId){ return WET_HIRE_RATES.find(w => w.plant === plantId) || null; }
+/* The operator packaged into a wet rate. Wet hire quotes one figure for
+   machine and driver, so the driver in it is a plant operator on their
+   charge-out rate. */
+function packagedOperatorSell(){
+  const op = DAYWORK_PEOPLE.find(p => p.role === 'Plant operator');
+  return op ? op.labourSell : 0;
+}
+
+/* Wet hire = the machine's dry rate with an operator packaged in, charged as
+   one figure. DERIVED, not stored: holding it separately gave two rates for
+   the same machine that could drift apart, and the dry rate is the one the
+   register keeps. */
+function wetHireRates(){
+  const op = packagedOperatorSell();
+  return DRY_HIRE_RATES.map(d => {
+    const m = PLANT_FLEET.find(p => p.id === d.plant);
+    return { plant:d.plant, name:(m ? m.name : d.plant) + ' + operator',
+             rate:d.rate + op, dry:d.rate, operator:op };
+  });
+}
+/* Computed on first use, not at definition: PLANT_FLEET is declared further
+   down the file, so evaluating this here would read it before it exists. */
+let _wetRates = null;
+function wetRates(){ if (!_wetRates) _wetRates = wetHireRates(); return _wetRates; }
+function wetHireFor(plantId){ return wetRates().find(w => w.plant === plantId) || null; }
 function plantById(id){ return PLANT_FLEET.find(m => m.id === id) || null; }
 function personById(id){ return DAYWORK_PEOPLE.find(w => w.id === id) || null; }
 
@@ -5352,7 +5367,7 @@ function buildMappingTables(){
   document.getElementById('availLabourRates').innerHTML = drag(uploadedLabourRates, 'labour');
 
   // Wet hire: machine cost + a typical operator cost, sold as one rate.
-  document.getElementById('wetMappingBody').innerHTML = WET_HIRE_RATES.map(w => {
+  document.getElementById('wetMappingBody').innerHTML = wetRates().map(w => {
     const m = plantById(w.plant);
     const hourly = m ? (m.basis === 'hr' ? m.rate : m.basis === 'day' ? m.rate / 8 : m.rate / 38) : 0;
     const op = DAYWORK_PEOPLE.find(x => x.role === 'Plant operator');

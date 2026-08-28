@@ -2028,6 +2028,17 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
 #pageSiteDiary .usage-card .uc-head span{font-weight:400;color:var(--muted);font-size:12px;margin-left:6px}
 #pageSiteDiary .usage-card .uc-sub{font-size:12px;color:var(--muted);margin:5px 0 11px;display:flex;gap:14px;flex-wrap:wrap}
 #pageSiteDiary .usage-card .uc-sub b{color:var(--navy)}
+/* ═══ the day's plant roster ═══ */
+#pageSiteDiary .pl-chip{font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;
+  white-space:nowrap;display:inline-block}
+#pageSiteDiary .pl-working{background:#16a34a1a;color:#16a34a}
+#pageSiteDiary .pl-down{background:#b453091a;color:#b45309;cursor:pointer}
+#pageSiteDiary .pl-off{background:#f1f5f9;color:#94a3b8;cursor:pointer}
+#pageSiteDiary .pl-off:hover{background:#b453091a;color:#b45309}
+#pageSiteDiary .pl-down:hover{background:#f1f5f9;color:#94a3b8}
+#pageSiteDiary tr.pl-off td{opacity:.65}
+#pageSiteDiary .pl-nostand{font-size:11px;color:#b45309;font-style:italic}
+
 /* ═══ cost-state palette, from the budget ═══ */
 /* An approved timesheet is actual cost. */
 #pageSiteDiary .tag.app{background:#16a34a1a;color:#16a34a}
@@ -2315,7 +2326,7 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Equipment</th><th>Equipment No.</th><th>Supplier</th><th>Operated by</th><th>Hours</th><th>Hire rate</th><th>Cost</th><th id="th-alloc-p">Allocation (WBS)</th><th></th></tr></thead>
+        <thead><tr><th>Equipment</th><th>Equipment No.</th><th>Supplier</th><th>Operated by</th><th>Status</th><th>Hours</th><th>Hire rate</th><th>Cost</th><th id="th-alloc-p">Allocation (WBS)</th><th></th></tr></thead>
         <tbody id="tbody-plant"></tbody>
       </table>
     </div>
@@ -3280,6 +3291,24 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
           </select></div>
         <div class="eq-rate-note" id="eqChargeOutNote"></div>
       </div>
+      <!-- Stand-down applies whoever owns the machine: an idle day still
+           costs something, and the rate is a property of the machine. -->
+      <div class="eq-rules" style="margin-top:18px">
+        <div class="eq-rule">
+          <h4>Stand-down rate
+            <label class="eq-mini-toggle" id="eqStandToggle" onclick="eqToggleStandDown(event)">
+              <span class="eq-mini-switch"><span class="eq-mini-knob"></span></span>
+            </label>
+          </h4>
+          <p>On site but not worked — rained off, broken down, waiting.</p>
+          <div class="eq-rule-row" id="eqStandRow">
+            <input id="eqfStandPct" type="number" min="0" max="100" placeholder="50"
+              oninput="eqDrRender()">
+            <span>% of the hire rate</span>
+          </div>
+        </div>
+      </div>
+
       <p class="eq-override"><i class="fas fa-circle-info"></i>
         This is the default. If a project maps its own dayworks rate to this machine,
         <b>the project rate is used instead</b> on that job.</p>
@@ -3322,19 +3351,6 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
             <input id="eqfMinHire" type="number" min="0" step="0.5" placeholder="0"
               oninput="eqDrRender()">
             <span id="eqMinUnit">hours a day</span>
-          </div>
-        </div>
-        <div class="eq-rule">
-          <h4>Stand-down rate
-            <label class="eq-mini-toggle" id="eqStandToggle" onclick="eqToggleStandDown(event)">
-              <span class="eq-mini-switch"><span class="eq-mini-knob"></span></span>
-            </label>
-          </h4>
-          <p>On site but not worked — rained off, broken down, waiting.</p>
-          <div class="eq-rule-row" id="eqStandRow">
-            <input id="eqfStandPct" type="number" min="0" max="100" placeholder="50"
-              oninput="eqDrRender()">
-            <span>% of the hire rate</span>
           </div>
         </div>
       </div>
@@ -5108,25 +5124,40 @@ const DAYWORK_PEOPLE = [
    overrides this one — the register holds what to charge when nothing more
    specific has been agreed. */
 const DRY_HIRE_RATES = [
-  {plant:'P-04', rate:153},
-  {plant:'P-11', rate:83},
-  {plant:'P-07', rate:98},
-  {plant:'P-02', rate:56},
-  {plant:'P-15', rate:74},
-  {plant:'P-09', rate:115}
+  {plant:'P-04', rate:195},   /* $145/hr cost — 26% */
+  {plant:'P-11', rate:130},   /* $95/hr        — 27% */
+  {plant:'P-07', rate:150},   /* $110/hr       — 27% */
+  {plant:'P-02', rate:115},   /* $85/hr        — 26% */
+  {plant:'P-15', rate:135},   /* $98/hr        — 27% */
+  {plant:'P-09', rate:120}    /* $86.84/hr     — 28% */
 ];
 function dryHireFor(plantId){ return DRY_HIRE_RATES.find(d => d.plant === plantId) || null; }
 
-/* Wet hire = machine + operator, charged as one rate. Cost is the two
-   internal rates added together; the sell is this single figure. */
-const WET_HIRE_RATES = [
-  {plant:'P-04', name:'20T Excavator + operator', rate:265},
-  {plant:'P-11', name:'5T Excavator + operator',  rate:195},
-  {plant:'P-07', name:'10T Tipper + operator',    rate:210},
-  {plant:'P-02', name:'Bobcat + operator',        rate:168},
-  {plant:'P-15', name:'Roller + operator',        rate:186}
-];
-function wetHireFor(plantId){ return WET_HIRE_RATES.find(w => w.plant === plantId) || null; }
+/* The operator packaged into a wet rate. Wet hire quotes one figure for
+   machine and driver, so the driver in it is a plant operator on their
+   charge-out rate. */
+function packagedOperatorSell(){
+  const op = DAYWORK_PEOPLE.find(p => p.role === 'Plant operator');
+  return op ? op.labourSell : 0;
+}
+
+/* Wet hire = the machine's dry rate with an operator packaged in, charged as
+   one figure. DERIVED, not stored: holding it separately gave two rates for
+   the same machine that could drift apart, and the dry rate is the one the
+   register keeps. */
+function wetHireRates(){
+  const op = packagedOperatorSell();
+  return DRY_HIRE_RATES.map(d => {
+    const m = PLANT_FLEET.find(p => p.id === d.plant);
+    return { plant:d.plant, name:(m ? m.name : d.plant) + ' + operator',
+             rate:d.rate + op, dry:d.rate, operator:op };
+  });
+}
+/* Computed on first use, not at definition: PLANT_FLEET is declared further
+   down the file, so evaluating this here would read it before it exists. */
+let _wetRates = null;
+function wetRates(){ if (!_wetRates) _wetRates = wetHireRates(); return _wetRates; }
+function wetHireFor(plantId){ return wetRates().find(w => w.plant === plantId) || null; }
 function plantById(id){ return PLANT_FLEET.find(m => m.id === id) || null; }
 function personById(id){ return DAYWORK_PEOPLE.find(w => w.id === id) || null; }
 
@@ -7752,7 +7783,7 @@ function buildMappingTables(){
   document.getElementById('availLabourRates').innerHTML = drag(uploadedLabourRates, 'labour');
 
   // Wet hire: machine cost + a typical operator cost, sold as one rate.
-  document.getElementById('wetMappingBody').innerHTML = WET_HIRE_RATES.map(w => {
+  document.getElementById('wetMappingBody').innerHTML = wetRates().map(w => {
     const m = plantById(w.plant);
     const hourly = m ? (m.basis === 'hr' ? m.rate : m.basis === 'day' ? m.rate / 8 : m.rate / 38) : 0;
     const op = DAYWORK_PEOPLE.find(x => x.role === 'Plant operator');
@@ -13218,7 +13249,9 @@ var VDATA = (function () {
          work — so it is a share of the day rate whatever basis the job is
          charged on. Taking a percentage of the hourly rate would price a
          rained-off day at half an hour. */
-      var dayRate = e.owned ? chargeRate(e) : hireDayRate(e.hireRate, e.hirePeriod);
+      var dayRate = e.owned
+        ? (e.unit === 'hr' ? e.rate * 8 : e.unit === 'day' ? e.rate : e.rate / 5)
+        : hireDayRate(e.hireRate, e.hirePeriod);
       var sd = dayRate * ((e.standDownPct || 0) / 100);
       return { amount: Math.round(sd), rule: 'stand-down',
                note: (e.standDownPct || 0) + '% of the ' + Math.round(dayRate) +
@@ -13238,6 +13271,59 @@ var VDATA = (function () {
         ? (hoursWorked || 0) + ' hrs worked, charged at the ' + min + ' hr minimum'
         : billed + ' hrs at $' + Math.round(rate) + '/hr'
     };
+  }
+
+  /* ── stand-down, recorded per machine per day ───────────────────────────
+     A machine on site and not worked. The diary is where it is recorded; the
+     equipment register holds what it costs. */
+  var _stoodDown = {};
+  function standDownKey(iso, id) { return iso + '|' + id; }
+  function isStoodDown(iso, id) { return !!_stoodDown[standDownKey(iso, id)]; }
+  function setStoodDown(iso, id, on) {
+    if (on) _stoodDown[standDownKey(iso, id)] = 1;
+    else delete _stoodDown[standDownKey(iso, id)];
+  }
+
+  /* Every machine on the project for a given day, with what it was doing.
+     Machines with no hours are the point — an idle machine on hire still
+     costs, and a diary that hides it cannot account for the day. */
+  function plantRoster(iso) {
+    var booked = {};
+    (ledger().byDate[iso] || []).forEach(function (r) {
+      if (r.uncoded || !r.detail || r.detail.kind !== 'plant') return;
+      var id = r.detail.plant.id || r.detail.plant.no;
+      var b = booked[id] || (booked[id] = { hrs: 0, cost: 0, by: [], cc: r.cc, row: r });
+      b.hrs += r.detail.hrs || 0;
+      b.cost += r.cost || 0;
+      if (r.detail.by && b.by.indexOf(r.detail.by) < 0) b.by.push(r.detail.by);
+    });
+
+    return equipment().map(function (e) {
+      var b = booked[e.id];
+      var down = isStoodDown(iso, e.id);
+      var charge = null;
+      if (!b && down) {
+        /* priced by the register's own rule, so the two cannot disagree */
+        charge = dayCharge(e, 0, true);
+      }
+      return {
+        eqId: e.id, nm: e.name, no: e.id, sup: e.owned ? e.company : e.company,
+        owned: e.owned,
+        /* The table shows hours, so the rate beside them has to be hourly.
+           A machine priced by the day or the week was showing its period rate
+           under an /hr heading — $1,160/hr for a $1,160/day excavator. */
+        rate: Math.round(e.owned
+          ? (e.unit === 'hr' ? e.rate : e.unit === 'day' ? e.rate / 8 : e.rate / 38)
+          : hireHourRate(e.hireRate, e.hirePeriod)),
+        by: b ? b.by.join(', ') : '',
+        hrsDec: b ? Math.round(b.hrs * 10) / 10 : 0,
+        cost: b ? b.cost : (charge ? charge.amount : 0),
+        cc: b ? b.cc : '',
+        status: b ? 'working' : (down ? 'standdown' : 'offsite'),
+        standDownSet: !!e.standDown,
+        standDownNote: charge ? charge.note : ''
+      };
+    });
   }
 
   /* ── equipment registry ─────────────────────────────────────────────────
@@ -13310,7 +13396,11 @@ var VDATA = (function () {
            apply to a machine on hire, and are the client's to set. */
         poRef: '', hireRate: 0, hirePeriod: 'month',
         chargeBasis: m.basis === 'hr' ? 'hr' : 'day',
-        minHire: 0, standDown: false, standDownPct: 50,
+        minHire: 0,
+        /* Stand-down applies to owned plant too: a machine the company owns
+           still ties up capital and an operator when it sits in the rain, and
+           the job wears a reduced charge rather than nothing. */
+        standDown: true, standDownPct: 50,
         meterType: 'hr',
         meter: plantHours(m.id),
         /* the client's to fill in */
@@ -13613,6 +13703,8 @@ var VDATA = (function () {
     equipment: equipment, saveEquipment: saveEquipment,
     equipmentById: equipmentById, plantResources: plantResources,
     plantHours: plantHours, plantType: plantType, orgName: orgName,
+    plantRoster: plantRoster, isStoodDown: isStoodDown,
+    setStoodDown: setStoodDown,
     purchaseOrders: purchaseOrders, plantPurchaseOrders: plantPurchaseOrders,
     chargeRate: chargeRate, dayCharge: dayCharge,
     hireDayRate: hireDayRate, hireHourRate: hireHourRate,
@@ -13683,11 +13775,7 @@ function vdataDiaryRows() {
         cost: r.cost
       });
     } else if (dt.kind === 'plant') {
-      out.plant.push({
-        nm: dt.plant.nm, no: dt.plant.no, sup: dt.plant.sup, rate: dt.rate, by: dt.by,
-        hrs: Math.floor(dt.hrs) + 'h ' + String(Math.round((dt.hrs % 1) * 60)).padStart(2, '0') + 'm',
-        alloc: allocFor(r.cc, d + 'p' + i, i), cost: r.cost
-      });
+      /* plant comes from the roster below, so every machine appears */
     } else if (dt.kind === 'material') {
       out.materials.push({
         id: dt.src, srcType: dt.srcType, src: dt.src, nm: dt.nm, sup: dt.sup,
@@ -13710,7 +13798,29 @@ function vdataDiaryRows() {
       });
     }
   });
+  /* Every machine on the project, not only the ones that worked. */
+  out.plant = VDATA.plantRoster(d).map(function (p, i) {
+    var hrs = p.hrsDec
+      ? Math.floor(p.hrsDec) + 'h ' + String(Math.round((p.hrsDec % 1) * 60)).padStart(2, '0') + 'm'
+      : '';
+    return {
+      eqId: p.eqId, nm: p.nm, no: p.no, sup: p.sup, rate: p.rate,
+      by: p.by, hrs: hrs, cost: p.cost, status: p.status,
+      standDownSet: p.standDownSet, standDownNote: p.standDownNote,
+      alloc: p.cc ? VDATA.allocFor(p.cc, d + 'p' + i, i) : []
+    };
+  });
+
   return out;
+}
+
+/* Marking a machine stood down for the day. Named sd* so it sits with the
+   diary's own functions, which the merge prefixes that way. */
+function sdToggleStandDown(eqId) {
+  var d = VDATA.diaryDate();
+  VDATA.setStoodDown(d, eqId, !VDATA.isStoodDown(d, eqId));
+  rows.plant = vdataDiaryRows().plant;
+  renderPlant();
 }
 
 function vdataDiaryDateLabel() {
@@ -14122,7 +14232,7 @@ function renderPlant(){
   rows.plant.forEach(function(r){
     var rateCell=r.rate?sdMoney(r.rate)+'<span style="color:var(--muted);font-size:12px">/hr</span>':'—';
     var costCell=r.rate?'<b style="color:var(--navy)">'+sdMoney(r.cost!=null?r.cost:r.rate*hoursNum(r.hrs))+'</b>':'—';
-    b.innerHTML+='<tr><td><b style="color:var(--navy)">'+r.nm+'</b>'+dktChip(r)+'</td><td><span style="font-family:monospace;font-size:12px;color:var(--muted)">'+r.no+'</span></td><td>'+r.sup+'</td><td>'+r.by+'</td><td class="hrs">'+r.hrs+'</td><td>'+rateCell+'</td><td>'+costCell+'</td><td>'+allocChips(r.alloc)+'</td><td><span class="row-act"><i class="fa-solid fa-pen"></i></span></td></tr>';
+    var st=r.status||'working';var stLabel=st==='working'?'Working':st==='standdown'?'Stood down':'Not on site';var stClass=st==='working'?'pl-working':st==='standdown'?'pl-down':'pl-off';var canToggle=st!=='working';var statusCell='<span class="pl-chip '+stClass+'"'+  (canToggle?' onclick="sdToggleStandDown(\''+r.eqId+'\')" title="Mark stood down"':'')+  '>'+stLabel+'</span>';var hrsCell=r.hrs?r.hrs:'<span style="color:var(--border)">—</span>';var byCell=r.by?r.by:'<span style="color:var(--border)">—</span>';var cCell=st==='working'?costCell  :st==='standdown'?(r.standDownSet    ?'<b style="color:#b45309">'+money(r.cost)+'</b>'    :'<span class="pl-nostand">no stand-down rate set</span>')  :'<span style="color:var(--border)">—</span>';b.innerHTML+='<tr class="pl-row '+stClass+'"><td><b style="color:var(--navy)">'+r.nm+'</b>'+dktChip(r)+'</td><td><span style="font-family:monospace;font-size:12px;color:var(--muted)">'+r.no+'</span></td><td>'+r.sup+'</td><td>'+byCell+'</td><td>'+statusCell+'</td><td class="hrs">'+hrsCell+'</td><td>'+rateCell+'</td><td>'+cCell+'</td><td>'+allocChips(r.alloc)+'</td><td><span class="row-act"><i class="fa-solid fa-pen"></i></span></td></tr>';
   });
 }
 function fmtQty(n,unit){return '<span class="qty-main">'+(+n).toLocaleString('en-AU',{maximumFractionDigits:1})+'</span><span class="qty-unit">'+unit+'</span>';}
