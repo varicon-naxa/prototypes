@@ -2046,9 +2046,9 @@ select.res-name:focus,select.sr-name:focus{border-color:#f5a623}
           </div>
           <div class="card">
             <h3><i class="fas fa-user-gear" style="color:#0d9488;margin-right:8px"></i>Wet hire — plant and operator</h3>
-            <p class="card-sub">One charge-out rate covering the machine <em>and</em> the person running it. This is how
-              <em>plant</em> charges out — a timesheet charges the person at their own labour rate, and the machine takes
-              the remainder, so the two together come back to this figure.</p>
+            <p class="card-sub">One charge-out rate covering the machine <em>and</em> the person running it. The machine's
+              own dry rate is what the register holds; this is that rate with an operator packaged in. A timesheet charges
+              the person at their labour rate and the machine at its dry rate.</p>
             <table class="mini-table">
               <thead><tr><th>Machine</th><th style="width:34%">Wet hire rate</th>
                 <th class="right" style="width:110px">Sell ($/hr)</th><th class="right" style="width:130px">Cost ($/hr)</th></tr></thead>
@@ -2682,11 +2682,11 @@ const dayworksRecords = [
 
      cost  = the person's cost rate + the machine's internal cost rate
      sell  = the person at their labour sell rate, plus the machine at its
-             dry rate. Wet hire is a PLANT charge-out — machine and operator
-             on one rate — so it belongs to the machine, not to a line about
-             a person's time. The dry rate is the wet rate less the operator
-             this line is already charging, which is why the two together
-             still come to the wet rate.
+             own dry rate, held on the machine. Wet hire is that dry rate
+             with an operator packaged in, which is a PLANT charge-out and so
+             belongs to the machine rather than to a line about a person's
+             time. A project that maps its own dayworks rate to a machine
+             overrides the machine's default.
 
    Cost plus covers materials only: a supplier invoice is scanned in and a
    percentage is added on top. The claim shows the invoice and the marked-up
@@ -2699,6 +2699,23 @@ const DAYWORK_PEOPLE = [
   {id:'W-04', name:'S. Okafor',   role:'Site foreman',     costRate:92,  labourSell:135},
   {id:'W-05', name:'D. Papadakis', role:'General labourer', costRate:58, labourSell:88}
 ];
+
+/* Dry hire = the machine on its own, no operator. This is the machine's own
+   charge-out and it belongs to the machine, so it does not move when a
+   different person climbs into it.
+
+   It is a default. A project that maps its own dayworks rate onto a machine
+   overrides this one — the register holds what to charge when nothing more
+   specific has been agreed. */
+const DRY_HIRE_RATES = [
+  {plant:'P-04', rate:153},
+  {plant:'P-11', rate:83},
+  {plant:'P-07', rate:98},
+  {plant:'P-02', rate:56},
+  {plant:'P-15', rate:74},
+  {plant:'P-09', rate:115}
+];
+function dryHireFor(plantId){ return DRY_HIRE_RATES.find(d => d.plant === plantId) || null; }
 
 /* Wet hire = machine + operator, charged as one rate. Cost is the two
    internal rates added together; the sell is this single figure. */
@@ -2750,20 +2767,23 @@ function timesheetLine(t){
   // is worth.
   const labourSell = person.labourSell * t.hours;
 
-  // The machine's own charge-out. A wet rate covers machine and operator
-  // together, and the operator is already on this line, so the machine's
-  // share is the wet rate less that operator's sell. Labour + plant therefore
-  // still totals the wet rate — the money has not moved, it is just against
-  // the thing that earned it.
-  const dryHourly = wet ? Math.max(0, wet.rate - person.labourSell) : 0;
+  // The machine's own charge-out, taken from the machine. Falling back to
+  // wet-minus-the-operator only where no dry rate has been set — that
+  // derivation made a machine's rate depend on who was driving it, which is
+  // not a property a rate can have.
+  const dry = plant ? dryHireFor(plant.id) : null;
+  const dryHourly = dry ? dry.rate
+                  : wet ? Math.max(0, wet.rate - person.labourSell)
+                  : 0;
   const plantSell = dryHourly * t.hours;
+  const dryFromMachine = !!dry;
 
   return Object.assign({}, t, {
     person, plant, wet,
     labourCost:Math.round(labourCost), plantCost:Math.round(plantCost),
     cost:Math.round(labourCost + plantCost),
     labourSell:Math.round(labourSell), plantSell:Math.round(plantSell),
-    dryHourly:Math.round(dryHourly),
+    dryHourly:Math.round(dryHourly), dryFromMachine,
     sell:Math.round(labourSell + plantSell),
     sellBasis: plant ? 'labour + plant' : 'labour'
   });

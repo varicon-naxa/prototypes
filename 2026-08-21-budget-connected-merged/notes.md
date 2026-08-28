@@ -362,6 +362,33 @@ Save is held until the machine has a name, an ID, a type and a rate, with the fo
 which. A duplicate ID is refused — two machines on one ID is two meters landing on one
 record.
 
+## Plant charge-out — 2026-08-28
+
+A machine's charge-out is now **stored on the machine** as a dry rate (machine only, no
+operator), and wet hire is what it actually is: that rate with an operator packaged in.
+
+It was derived — `wet − the operator's sell` — which made a machine's rate depend on who
+was driving. The demo data showed it: the Bobcat charged **$60/hr** under one operator and
+**$56/hr** under another, same week. Pushed further, the 20T Excavator would have gone from
+$130 to $177/hr depending on whether a foreman or a labourer sat in it. A rate is a property
+of the machine.
+
+| | Before | After |
+| --- | --- | --- |
+| Rate per machine | varied by driver | one, stored |
+| Water Cart (no wet rate) | never charged out | $115/hr |
+| Dayworks revenue | $17,622 | $17,547 (−$75) |
+| Margin | 21.2% | 20.8% |
+
+The derivation stays as a **fallback** for a machine with no dry rate set, so nothing breaks
+before one is entered — the form says so when the field is blank.
+
+**The stored rate is a default, not the last word.** A project that maps its own dayworks
+rate onto a machine overrides it, and the form says that in as many words. Alec's call.
+
+The form shows the charge-out against the cost rate so the margin on the machine is visible
+where both are set: *$153 per hour against $145 of cost — 5% margin on the machine.*
+
 ## Verified
 
 Computed styles, visible-text length and element counts on both guest tabs were

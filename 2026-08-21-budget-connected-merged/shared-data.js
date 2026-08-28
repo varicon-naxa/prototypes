@@ -751,6 +751,11 @@ var VDATA = (function () {
            operator's time is a timesheet. It stays out of the register. */
         rate: m.rate,
         unit: m.basis,
+        /* What the machine charges out at, on its own, per hour. A default:
+           a project that maps its own dayworks rate to this machine wins. */
+        chargeOut: (function () {
+          try { var d = dryHireFor(m.id); return d ? d.rate : 0; } catch (e) { return 0; }
+        })(),
         /* Owned plant charges at its own rate. The hire fields below only
            apply to a machine on hire, and are the client's to set. */
         poRef: '', hireRate: 0, hirePeriod: 'month',

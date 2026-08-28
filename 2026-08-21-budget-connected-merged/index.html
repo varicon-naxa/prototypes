@@ -1675,6 +1675,13 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
 .eq-worked-row b { color: #1b2a4a; min-width: 76px }
 .eq-worked-row em { font-style: normal; font-size: 12px; color: #94a3b8 }
 
+/* the charge-out is a default the project can override */
+.eq-hint-inline { font-weight: 400; font-size: 11px; color: #94a3b8; margin-left: 5px }
+.eq-override { display: flex; gap: 9px; align-items: flex-start; margin-top: 14px;
+  background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 11px 14px;
+  font-size: 12px; color: #1e40af; line-height: 1.55 }
+.eq-override b { color: #1e3a8a }
+
 /* ═══ sidebar groups ═══ */
 .nav-sub { display: none; padding: 2px 0 6px }
 .nav-sub.open { display: block }
@@ -3259,6 +3266,23 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
           </select></div>
         <div class="eq-rate-note" id="eqRateNote"></div>
       </div>
+
+      <!-- What the machine bills at, as opposed to what it costs to run. Held
+           on the machine so it does not move with whoever is driving it. -->
+      <div class="eq-rate-row" style="margin-top:18px">
+        <div class="eq-field"><label>Charge-out rate <span class="eq-hint-inline">dry, machine only</span></label>
+          <div class="eq-money"><span>$</span>
+            <input id="eqfChargeOut" placeholder="0.00" oninput="eqDrRender()"></div></div>
+        <div class="eq-field"><label>Per</label>
+          <select id="eqfChargeOutUnit" onchange="eqDrRender()">
+            <option value="hr">hour</option>
+            <option value="day">day</option>
+          </select></div>
+        <div class="eq-rate-note" id="eqChargeOutNote"></div>
+      </div>
+      <p class="eq-override"><i class="fas fa-circle-info"></i>
+        This is the default. If a project maps its own dayworks rate to this machine,
+        <b>the project rate is used instead</b> on that job.</p>
     </div>
 
     <!-- hired: the order holds the rate, so the machine points at it -->
@@ -4422,9 +4446,9 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
           </div>
           <div class="card">
             <h3><i class="fas fa-user-gear" style="color:#0d9488;margin-right:8px"></i>Wet hire — plant and operator</h3>
-            <p class="card-sub">One charge-out rate covering the machine <em>and</em> the person running it. This is how
-              <em>plant</em> charges out — a timesheet charges the person at their own labour rate, and the machine takes
-              the remainder, so the two together come back to this figure.</p>
+            <p class="card-sub">One charge-out rate covering the machine <em>and</em> the person running it. The machine's
+              own dry rate is what the register holds; this is that rate with an operator packaged in. A timesheet charges
+              the person at their labour rate and the machine at its dry rate.</p>
             <table class="mini-table">
               <thead><tr><th>Machine</th><th style="width:34%">Wet hire rate</th>
                 <th class="right" style="width:110px">Sell ($/hr)</th><th class="right" style="width:130px">Cost ($/hr)</th></tr></thead>
@@ -5058,11 +5082,11 @@ const dayworksRecords = [
 
      cost  = the person's cost rate + the machine's internal cost rate
      sell  = the person at their labour sell rate, plus the machine at its
-             dry rate. Wet hire is a PLANT charge-out — machine and operator
-             on one rate — so it belongs to the machine, not to a line about
-             a person's time. The dry rate is the wet rate less the operator
-             this line is already charging, which is why the two together
-             still come to the wet rate.
+             own dry rate, held on the machine. Wet hire is that dry rate
+             with an operator packaged in, which is a PLANT charge-out and so
+             belongs to the machine rather than to a line about a person's
+             time. A project that maps its own dayworks rate to a machine
+             overrides the machine's default.
 
    Cost plus covers materials only: a supplier invoice is scanned in and a
    percentage is added on top. The claim shows the invoice and the marked-up
@@ -5075,6 +5099,23 @@ const DAYWORK_PEOPLE = [
   {id:'W-04', name:'S. Okafor',   role:'Site foreman',     costRate:92,  labourSell:135},
   {id:'W-05', name:'D. Papadakis', role:'General labourer', costRate:58, labourSell:88}
 ];
+
+/* Dry hire = the machine on its own, no operator. This is the machine's own
+   charge-out and it belongs to the machine, so it does not move when a
+   different person climbs into it.
+
+   It is a default. A project that maps its own dayworks rate onto a machine
+   overrides this one — the register holds what to charge when nothing more
+   specific has been agreed. */
+const DRY_HIRE_RATES = [
+  {plant:'P-04', rate:153},
+  {plant:'P-11', rate:83},
+  {plant:'P-07', rate:98},
+  {plant:'P-02', rate:56},
+  {plant:'P-15', rate:74},
+  {plant:'P-09', rate:115}
+];
+function dryHireFor(plantId){ return DRY_HIRE_RATES.find(d => d.plant === plantId) || null; }
 
 /* Wet hire = machine + operator, charged as one rate. Cost is the two
    internal rates added together; the sell is this single figure. */
@@ -5126,20 +5167,23 @@ function timesheetLine(t){
   // is worth.
   const labourSell = person.labourSell * t.hours;
 
-  // The machine's own charge-out. A wet rate covers machine and operator
-  // together, and the operator is already on this line, so the machine's
-  // share is the wet rate less that operator's sell. Labour + plant therefore
-  // still totals the wet rate — the money has not moved, it is just against
-  // the thing that earned it.
-  const dryHourly = wet ? Math.max(0, wet.rate - person.labourSell) : 0;
+  // The machine's own charge-out, taken from the machine. Falling back to
+  // wet-minus-the-operator only where no dry rate has been set — that
+  // derivation made a machine's rate depend on who was driving it, which is
+  // not a property a rate can have.
+  const dry = plant ? dryHireFor(plant.id) : null;
+  const dryHourly = dry ? dry.rate
+                  : wet ? Math.max(0, wet.rate - person.labourSell)
+                  : 0;
   const plantSell = dryHourly * t.hours;
+  const dryFromMachine = !!dry;
 
   return Object.assign({}, t, {
     person, plant, wet,
     labourCost:Math.round(labourCost), plantCost:Math.round(plantCost),
     cost:Math.round(labourCost + plantCost),
     labourSell:Math.round(labourSell), plantSell:Math.round(plantSell),
-    dryHourly:Math.round(dryHourly),
+    dryHourly:Math.round(dryHourly), dryFromMachine,
     sell:Math.round(labourSell + plantSell),
     sellBasis: plant ? 'labour + plant' : 'labour'
   });
@@ -13257,6 +13301,11 @@ var VDATA = (function () {
            operator's time is a timesheet. It stays out of the register. */
         rate: m.rate,
         unit: m.basis,
+        /* What the machine charges out at, on its own, per hour. A default:
+           a project that maps its own dayworks rate to this machine wins. */
+        chargeOut: (function () {
+          try { var d = dryHireFor(m.id); return d ? d.rate : 0; } catch (e) { return 0; }
+        })(),
         /* Owned plant charges at its own rate. The hire fields below only
            apply to a machine on hire, and are the client's to set. */
         poRef: '', hireRate: 0, hirePeriod: 'month',
@@ -16146,7 +16195,7 @@ function eqCycle(which) {
 
 var EQD = { owned: true, meter: 'hr', editing: null, open: {}, standDown: false };
 
-var EQ_FIELDS = ['Name', 'Id', 'Rate', 'HireRate', 'MinHire', 'StandPct', 'Manufacturer', 'Year', 'Model', 'Vin', 'Serial',
+var EQ_FIELDS = ['Name', 'Id', 'Rate', 'ChargeOut', 'HireRate', 'MinHire', 'StandPct', 'Manufacturer', 'Year', 'Model', 'Vin', 'Serial',
                  'Plate', 'Weight', 'Power', 'Bucket', 'Reach', 'Dim', 'Notes'];
 
 function eqSet(f, v) { var el = document.getElementById('eqf' + f); if (el) el.value = v || ''; }
@@ -16269,6 +16318,7 @@ function eqEdit(id) {
   var hp2 = document.getElementById('eqfHirePeriod'); if (hp2) hp2.value = e.hirePeriod || 'month';
   var cb2 = document.getElementById('eqfChargeBasis'); if (cb2) cb2.value = e.chargeBasis || 'day';
   eqSet('Name', e.name); eqSet('Id', e.id); eqSet('Rate', e.rate);
+  eqSet('ChargeOut', e.chargeOut || '');
   eqSet('Manufacturer', e.manufacturer); eqSet('Year', e.year); eqSet('Model', e.model);
   eqSet('Vin', e.vin); eqSet('Serial', e.serial); eqSet('Plate', e.plate);
   eqSet('Weight', e.weight); eqSet('Power', e.power); eqSet('Bucket', e.bucket);
@@ -16370,6 +16420,31 @@ function eqDrRender() {
       var perDay = unit === 'hr' ? rate * 8 : unit === 'day' ? rate : rate / 5;
       note.innerHTML = eqMoney(rate) + ' per ' + eqUnitWord(unit) +
         ' — about <b>' + eqMoney(perDay) + '</b> for an eight hour day on site.';
+    }
+  }
+
+  /* Charge-out against cost, so the margin on the machine is visible where
+     the two rates are set rather than only on a claim. */
+  var co = parseFloat(eqVal('ChargeOut')) || 0;
+  var coUnitEl = document.getElementById('eqfChargeOutUnit');
+  var coUnit = coUnitEl ? coUnitEl.value : 'hr';
+  var coNote = document.getElementById('eqChargeOutNote');
+  if (coNote) {
+    if (!co) {
+      coNote.innerHTML = 'What the machine bills at on its own, without an operator. ' +
+        'Leave it blank and dayworks falls back to the wet rate less the operator.';
+    } else {
+      /* both sides on the same footing before comparing them */
+      var costPerUnit = unit === coUnit ? rate
+        : unit === 'hr' && coUnit === 'day' ? rate * 8
+        : unit === 'day' && coUnit === 'hr' ? rate / 8
+        : unit === 'week' && coUnit === 'hr' ? rate / 38
+        : unit === 'week' && coUnit === 'day' ? rate / 5
+        : rate;
+      var mgn = co > 0 ? ((co - costPerUnit) / co) * 100 : 0;
+      coNote.innerHTML = eqMoney(co) + ' per ' + eqUnitWord(coUnit) +
+        (costPerUnit ? ' against ' + eqMoney(costPerUnit) + ' of cost — <b>' +
+          mgn.toFixed(0) + '% margin</b> on the machine.' : '.');
     }
   }
 
@@ -16477,6 +16552,8 @@ function eqSave(another) {
     status: st ? st.value : 'Active',
     rate: parseFloat(eqVal('Rate')) || 0,
     unit: un ? un.value : 'hr',
+    chargeOut: parseFloat(eqVal('ChargeOut')) || 0,
+    chargeOutUnit: (document.getElementById('eqfChargeOutUnit') || {}).value || 'hr',
     /* hired plant: the order holds the rate, the machine says how it charges */
     poRef: (document.getElementById('eqfPo') || {}).value || '',
     hireRate: parseFloat(eqVal('HireRate')) || 0,

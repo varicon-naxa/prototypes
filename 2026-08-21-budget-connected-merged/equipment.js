@@ -163,7 +163,7 @@ function eqCycle(which) {
 
 var EQD = { owned: true, meter: 'hr', editing: null, open: {}, standDown: false };
 
-var EQ_FIELDS = ['Name', 'Id', 'Rate', 'HireRate', 'MinHire', 'StandPct', 'Manufacturer', 'Year', 'Model', 'Vin', 'Serial',
+var EQ_FIELDS = ['Name', 'Id', 'Rate', 'ChargeOut', 'HireRate', 'MinHire', 'StandPct', 'Manufacturer', 'Year', 'Model', 'Vin', 'Serial',
                  'Plate', 'Weight', 'Power', 'Bucket', 'Reach', 'Dim', 'Notes'];
 
 function eqSet(f, v) { var el = document.getElementById('eqf' + f); if (el) el.value = v || ''; }
@@ -286,6 +286,7 @@ function eqEdit(id) {
   var hp2 = document.getElementById('eqfHirePeriod'); if (hp2) hp2.value = e.hirePeriod || 'month';
   var cb2 = document.getElementById('eqfChargeBasis'); if (cb2) cb2.value = e.chargeBasis || 'day';
   eqSet('Name', e.name); eqSet('Id', e.id); eqSet('Rate', e.rate);
+  eqSet('ChargeOut', e.chargeOut || '');
   eqSet('Manufacturer', e.manufacturer); eqSet('Year', e.year); eqSet('Model', e.model);
   eqSet('Vin', e.vin); eqSet('Serial', e.serial); eqSet('Plate', e.plate);
   eqSet('Weight', e.weight); eqSet('Power', e.power); eqSet('Bucket', e.bucket);
@@ -387,6 +388,31 @@ function eqDrRender() {
       var perDay = unit === 'hr' ? rate * 8 : unit === 'day' ? rate : rate / 5;
       note.innerHTML = eqMoney(rate) + ' per ' + eqUnitWord(unit) +
         ' — about <b>' + eqMoney(perDay) + '</b> for an eight hour day on site.';
+    }
+  }
+
+  /* Charge-out against cost, so the margin on the machine is visible where
+     the two rates are set rather than only on a claim. */
+  var co = parseFloat(eqVal('ChargeOut')) || 0;
+  var coUnitEl = document.getElementById('eqfChargeOutUnit');
+  var coUnit = coUnitEl ? coUnitEl.value : 'hr';
+  var coNote = document.getElementById('eqChargeOutNote');
+  if (coNote) {
+    if (!co) {
+      coNote.innerHTML = 'What the machine bills at on its own, without an operator. ' +
+        'Leave it blank and dayworks falls back to the wet rate less the operator.';
+    } else {
+      /* both sides on the same footing before comparing them */
+      var costPerUnit = unit === coUnit ? rate
+        : unit === 'hr' && coUnit === 'day' ? rate * 8
+        : unit === 'day' && coUnit === 'hr' ? rate / 8
+        : unit === 'week' && coUnit === 'hr' ? rate / 38
+        : unit === 'week' && coUnit === 'day' ? rate / 5
+        : rate;
+      var mgn = co > 0 ? ((co - costPerUnit) / co) * 100 : 0;
+      coNote.innerHTML = eqMoney(co) + ' per ' + eqUnitWord(coUnit) +
+        (costPerUnit ? ' against ' + eqMoney(costPerUnit) + ' of cost — <b>' +
+          mgn.toFixed(0) + '% margin</b> on the machine.' : '.');
     }
   }
 
@@ -494,6 +520,8 @@ function eqSave(another) {
     status: st ? st.value : 'Active',
     rate: parseFloat(eqVal('Rate')) || 0,
     unit: un ? un.value : 'hr',
+    chargeOut: parseFloat(eqVal('ChargeOut')) || 0,
+    chargeOutUnit: (document.getElementById('eqfChargeOutUnit') || {}).value || 'hr',
     /* hired plant: the order holds the rate, the machine says how it charges */
     poRef: (document.getElementById('eqfPo') || {}).value || '',
     hireRate: parseFloat(eqVal('HireRate')) || 0,
