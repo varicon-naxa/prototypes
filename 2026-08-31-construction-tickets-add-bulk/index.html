@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Construction Tickets — add from the list, and bulk upload</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#eef0f4;color:#1f2937;font-size:14px}
+
+  /* ---- prototype chrome ---- */
+  .proto-bar{background:#16254d;color:#fff;padding:14px 22px;display:flex;align-items:center;gap:22px;flex-wrap:wrap;position:sticky;top:0;z-index:60}
+  .proto-bar .brand{display:flex;align-items:center;gap:10px}
+  .proto-bar .mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#f7941d,#f15a24);display:flex;align-items:center;justify-content:center;font-weight:800}
+  .proto-bar h1{font-size:15px;font-weight:700}
+  .proto-bar p{font-size:11px;color:rgba(255,255,255,.55);margin-top:1px}
+  .tabs{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+  .tabs button{background:rgba(255,255,255,.08);color:rgba(255,255,255,.75);border:0;padding:8px 14px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .tabs button:hover{background:rgba(255,255,255,.16);color:#fff}
+  .tabs button.on{background:#f7941d;color:#fff}
+
+  .view{display:none}
+  .view.on{display:block}
+
+  /* ---- app shell ---- */
+  .shell{display:flex;min-height:calc(100vh - 58px);background:#fff}
+  .rail{width:222px;background:#16254d;color:#fff;padding:12px 0;flex-shrink:0}
+  .rail .item{padding:9px 18px;font-size:13px;color:rgba(255,255,255,.72);display:flex;align-items:center;gap:10px}
+  .rail .item .ic{width:16px;text-align:center;opacity:.75;font-size:13px}
+  .rail .item.on{background:#f7941d;color:#fff;font-weight:600}
+  .rail .item.on .ic{opacity:1}
+  .rail .sec{padding:12px 18px 4px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.35)}
+  .rail .badge{margin-left:auto;background:#f7941d;color:#fff;border-radius:10px;padding:0 7px;font-size:10.5px;font-weight:700}
+  .rail .item.on .badge{background:rgba(0,0,0,.2)}
+  .main{flex:1;min-width:0}
+  .topbar{height:58px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;padding:0 22px;gap:14px}
+  .topbar .t{font-size:17px;font-weight:600}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:12px}
+  .body{padding:22px}
+
+  h2.page{font-size:20px;font-weight:700}
+  .sub{font-size:12.5px;color:#6b7280;margin-top:3px}
+
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0}
+  .tile{border:1px solid #e5e7eb;border-radius:10px;padding:16px 18px;position:relative}
+  .tile.sel{border:2px solid #16254d}
+  .tile .n{font-size:26px;font-weight:700;line-height:1}
+  .tile .l{font-size:12.5px;font-weight:600;margin-top:8px}
+  .tile .d{font-size:11px;color:#9ca3af;margin-top:2px}
+  .red{color:#e11d48}.amber{color:#d97706}.green{color:#059669}
+
+  .filters{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+  select,input[type=text],input[type=date],textarea{font-family:inherit;font-size:13px;border:1px solid #d1d5db;border-radius:7px;padding:9px 11px;color:#1f2937;background:#fff}
+  select{min-width:150px;cursor:pointer}
+  .search{margin-left:auto;min-width:250px}
+
+  .subtabs{display:flex;gap:22px;border-bottom:1px solid #e5e7eb;margin-bottom:0}
+  .subtabs span{padding:9px 2px;font-size:13px;color:#6b7280;cursor:pointer;border-bottom:2px solid transparent}
+  .subtabs span.on{color:#f7941d;border-bottom-color:#f7941d;font-weight:600}
+
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:12px;font-weight:600;color:#4b5563;padding:12px 10px;border-bottom:1px solid #e5e7eb;white-space:nowrap}
+  td{padding:12px 10px;border-bottom:1px solid #f1f3f5;font-size:13px;vertical-align:middle}
+  tr.new-row{animation:flash 1.6s ease-out}
+  @keyframes flash{from{background:#fff7ed}to{background:transparent}}
+  .who{display:flex;align-items:center;gap:10px}
+  .av{width:30px;height:30px;border-radius:50%;background:#f7941d;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700;flex-shrink:0}
+  .who .nm{font-weight:600;font-size:13px}
+  .who .mt{font-size:11.5px;color:#6b7280;margin-top:1px}
+  .tt{display:flex;align-items:center;gap:9px}
+  .tt .ic{width:26px;height:26px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:12px}
+  .pill{display:inline-block;padding:3px 9px;border-radius:12px;font-size:11.5px;font-weight:600}
+  .p-noexp{background:#e6f0fa;color:#2b6cb0}
+  .p-valid{background:#e7f6ee;color:#067647}
+  .p-soon{background:#fef3c7;color:#b45309}
+  .p-exp{background:#fee2e2;color:#b91c1c}
+  .p-draft{background:#f3f4f6;color:#4b5563}
+
+  .btn{border:0;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:7px}
+  .btn-pri{background:#f7941d;color:#fff}
+  .btn-pri:hover{background:#e8850f}
+  .btn-ghost{background:#fff;color:#374151;border:1px solid #d1d5db}
+  .btn-ghost:hover{border-color:#9ca3af}
+  .btn-sm{padding:7px 12px;font-size:12.5px}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .actions{display:flex;gap:10px;margin-left:auto}
+
+  /* ---- annotations ---- */
+  .note{border-left:3px solid #e11d48;background:#fff5f6;padding:11px 14px;border-radius:0 8px 8px 0;font-size:12.5px;color:#7f1d1d;margin:10px 0;line-height:1.55}
+  .note b{color:#9f1239}
+  .note.ok{border-left-color:#059669;background:#f0fdf6;color:#065f46}
+  .note.ok b{color:#047857}
+  .note.q{border-left-color:#d97706;background:#fffbeb;color:#78350f}
+  .note.q b{color:#b45309}
+  .marker{display:inline-flex;width:19px;height:19px;border-radius:50%;background:#e11d48;color:#fff;font-size:11px;font-weight:700;align-items:center;justify-content:center;margin-right:7px;flex-shrink:0}
+
+  /* ---- add panel ---- */
+  .panel{border:1px solid #e5e7eb;border-radius:10px;background:#fbfbfc;padding:20px;margin-bottom:20px}
+  .panel h3{font-size:14.5px;font-weight:700;margin-bottom:16px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .fld{display:flex;flex-direction:column;gap:6px}
+  .fld label{font-size:12px;font-weight:600;color:#4b5563}
+  .fld .hint{font-size:11px;color:#9ca3af}
+  .req:after{content:" *";color:#e11d48}
+  .drop{border:1.5px dashed #d1d5db;border-radius:8px;padding:22px;text-align:center;font-size:12.5px;color:#9ca3af;background:#fff}
+  .row-end{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+
+  /* worker picker */
+  .picker{position:relative}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;border:1px solid #d1d5db;border-radius:7px;padding:7px;background:#fff;min-height:42px;align-items:center;cursor:text}
+  .chips.focus{border-color:#f7941d;box-shadow:0 0 0 3px rgba(247,148,29,.12)}
+  .chip{background:#fff3e5;border:1px solid #fbd7a8;color:#9a4a04;border-radius:14px;padding:3px 8px 3px 4px;font-size:12px;display:flex;align-items:center;gap:6px;font-weight:600}
+  .chip .cav{width:19px;height:19px;border-radius:50%;background:#f7941d;color:#fff;font-size:9.5px;display:flex;align-items:center;justify-content:center;font-weight:700}
+  .chip .x{cursor:pointer;opacity:.6;font-size:13px;line-height:1}
+  .chip .x:hover{opacity:1}
+  .chips input{border:0;outline:0;flex:1;min-width:130px;padding:4px;font-size:13px;font-family:inherit;background:transparent}
+  .menu{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #e5e7eb;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.12);margin-top:5px;max-height:262px;overflow:auto;z-index:40;display:none}
+  .menu.on{display:block}
+  .menu .opt{padding:9px 12px;display:flex;align-items:center;gap:10px;cursor:pointer}
+  .menu .opt:hover{background:#fff8f0}
+  .menu .opt.dis{opacity:.45;cursor:not-allowed}
+  .menu .grp{padding:7px 12px;font-size:10.5px;letter-spacing:.7px;text-transform:uppercase;color:#9ca3af;background:#fafafa;font-weight:700}
+  .menu .none{padding:14px 12px;color:#9ca3af;font-size:12.5px}
+
+  .pernum{border:1px solid #e5e7eb;border-radius:8px;background:#fff;margin-top:6px;overflow:hidden}
+  .pernum .hd{padding:8px 12px;background:#f9fafb;font-size:11.5px;color:#6b7280;border-bottom:1px solid #f1f3f5}
+  .pernum .r{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #f6f7f8}
+  .pernum .r:last-child{border-bottom:0}
+  .pernum .r .nm{flex:1;font-size:12.5px}
+  .pernum .r input{width:190px;padding:6px 9px;font-size:12.5px}
+
+  /* ---- wizard ---- */
+  .wizwrap{max-width:1080px}
+  .steps{display:flex;gap:0;margin-bottom:22px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden}
+  .steps .s{flex:1;padding:12px 14px;font-size:12.5px;color:#9ca3af;border-right:1px solid #e5e7eb;display:flex;align-items:center;gap:9px;background:#fafafa}
+  .steps .s:last-child{border-right:0}
+  .steps .s .num{width:21px;height:21px;border-radius:50%;background:#e5e7eb;color:#6b7280;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+  .steps .s.on{background:#fff;color:#1f2937;font-weight:600}
+  .steps .s.on .num{background:#f7941d;color:#fff}
+  .steps .s.done{color:#059669;background:#fff}
+  .steps .s.done .num{background:#059669;color:#fff}
+
+  .opts{display:flex;flex-direction:column;gap:10px}
+  .opt-card{border:1.5px solid #e5e7eb;border-radius:9px;padding:14px 16px;cursor:pointer;display:flex;gap:12px;align-items:flex-start;background:#fff}
+  .opt-card:hover{border-color:#fbd7a8}
+  .opt-card.on{border-color:#f7941d;background:#fffaf4}
+  .opt-card .rad{width:17px;height:17px;border-radius:50%;border:2px solid #d1d5db;margin-top:2px;flex-shrink:0;position:relative}
+  .opt-card.on .rad{border-color:#f7941d}
+  .opt-card.on .rad:after{content:"";position:absolute;inset:3px;border-radius:50%;background:#f7941d}
+  .opt-card .ti{font-size:13.5px;font-weight:600}
+  .opt-card .de{font-size:12px;color:#6b7280;margin-top:3px;line-height:1.55}
+  .opt-card .tagline{font-size:11px;margin-top:6px;font-weight:600;color:#b45309}
+
+  .checks{display:flex;flex-wrap:wrap;gap:9px;margin-top:10px}
+  .chk{display:flex;align-items:center;gap:7px;border:1px solid #e5e7eb;border-radius:7px;padding:7px 11px;font-size:12.5px;cursor:pointer;background:#fff}
+  .chk.on{border-color:#f7941d;background:#fffaf4;font-weight:600}
+  .chk input{accent-color:#f7941d}
+
+  .sheet{border:1px solid #e5e7eb;border-radius:9px;overflow:auto;background:#fff;margin-top:12px}
+  .sheet table{min-width:100%;font-size:12px}
+  .sheet th{background:#f9fafb;padding:9px 11px;font-size:11px;white-space:nowrap}
+  .sheet th.locked{background:#eef2f7;color:#4b5563}
+  .sheet td{padding:8px 11px;white-space:nowrap;color:#4b5563}
+  .sheet td.locked{background:#f8fafc;color:#94a3b8;font-family:ui-monospace,Menlo,monospace;font-size:11px}
+  .sheet td.pre{color:#1f2937}
+  .sheet td.blank{color:#c9ced6}
+
+  .box{border:1px solid #e5e7eb;border-radius:10px;padding:18px;background:#fff;margin-bottom:16px}
+  .box h4{font-size:13.5px;font-weight:700;margin-bottom:4px}
+  .box .bh{font-size:12px;color:#6b7280;margin-bottom:12px;line-height:1.55}
+
+  .counts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .cnt{border:1px solid #e5e7eb;border-radius:9px;padding:11px 15px;cursor:pointer;min-width:112px;background:#fff}
+  .cnt.on{border-width:2px;padding:10px 14px}
+  .cnt .n{font-size:20px;font-weight:700}
+  .cnt .l{font-size:11.5px;color:#6b7280;margin-top:2px}
+  .cnt.c-new.on{border-color:#059669}.cnt.c-upd.on{border-color:#2b6cb0}
+  .cnt.c-warn.on{border-color:#d97706}.cnt.c-err.on{border-color:#e11d48}
+
+  .rowstat{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:11px;white-space:nowrap}
+  .rs-new{background:#e7f6ee;color:#067647}
+  .rs-upd{background:#e6f0fa;color:#2b6cb0}
+  .rs-warn{background:#fef3c7;color:#b45309}
+  .rs-err{background:#fee2e2;color:#b91c1c}
+  .why{font-size:11.5px;color:#6b7280;margin-top:3px}
+  .why.bad{color:#b91c1c}
+  .why.warn{color:#b45309}
+
+  .toggle{display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border:1px solid #e5e7eb;border-radius:8px;margin-top:9px;cursor:pointer;background:#fff}
+  .toggle.on{border-color:#f7941d;background:#fffaf4}
+  .toggle input{margin-top:2px;accent-color:#f7941d}
+  .toggle .tt2{font-size:12.5px;font-weight:600}
+  .toggle .td2{font-size:11.5px;color:#6b7280;margin-top:2px;line-height:1.5}
+
+  .dz{border:1.5px dashed #d1d5db;border-radius:10px;padding:34px;text-align:center;background:#fafbfc}
+  .dz .big{font-size:32px;margin-bottom:8px}
+  .dz .t{font-size:13.5px;font-weight:600}
+  .dz .s{font-size:12px;color:#9ca3af;margin-top:4px}
+
+  .maprow{display:grid;grid-template-columns:1fr 26px 1fr;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f4f5f7}
+  .maprow:last-child{border-bottom:0}
+  .maprow .src{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:#f6f7f9;border:1px solid #eceef1;border-radius:6px;padding:7px 10px}
+  .maprow .ar{text-align:center;color:#c9ced6}
+  .maprow select{width:100%}
+
+  /* ---- decisions ---- */
+  .doc{max-width:860px;padding:26px 22px;line-height:1.65}
+  .doc h3{font-size:16px;font-weight:700;margin:26px 0 10px}
+  .doc h3:first-child{margin-top:0}
+  .doc p{font-size:13.5px;color:#374151;margin-bottom:11px}
+  .doc ol,.doc ul{margin:0 0 14px 20px}
+  .doc li{font-size:13.5px;color:#374151;margin-bottom:9px}
+  .doc code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:#f3f4f6;padding:1px 5px;border-radius:4px}
+  .doc .lead{font-size:13.5px;color:#111827;font-weight:600}
+  .kv{border:1px solid #e5e7eb;border-radius:9px;overflow:hidden;margin:12px 0 18px}
+  .kv .r{display:grid;grid-template-columns:190px 1fr;border-bottom:1px solid #f1f3f5}
+  .kv .r:last-child{border-bottom:0}
+  .kv .k{background:#fafafa;padding:10px 13px;font-size:12.5px;font-weight:600;color:#4b5563}
+  .kv .v{padding:10px 13px;font-size:12.5px;color:#374151}
+
+  .modal{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:80;padding:24px}
+  .modal.on{display:flex}
+  .modal .card{background:#fff;border-radius:12px;max-width:520px;width:100%;padding:26px;text-align:center}
+  .modal .card .ic{font-size:38px;margin-bottom:10px}
+  .modal .card h3{font-size:17px;font-weight:700;margin-bottom:8px}
+  .modal .card p{font-size:13px;color:#6b7280;line-height:1.6;margin-bottom:18px}
+  .sumline{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f3f5;font-size:13px;text-align:left}
+  .sumline:last-of-type{border-bottom:0}
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <div class="brand">
+    <div class="mark">V</div>
+    <div>
+      <h1>Construction Tickets — add from the list, and bulk upload</h1>
+      <p>Prototype · 31 Aug 2026 · built from the live Tickets page and the worker-drawer add form</p>
+    </div>
+  </div>
+  <div class="tabs">
+    <button data-v="today">Screen today</button>
+    <button class="on" data-v="add">Add ticket</button>
+    <button data-v="bulk">Bulk upload</button>
+    <button data-v="rules">Rules &amp; open questions</button>
+  </div>
+</div>
+
+<!-- ============================= SCREEN TODAY ============================= -->
+<div class="view" id="v-today">
+  <div class="shell">
+    <div class="rail" id="rail-a"></div>
+    <div class="main">
+      <div class="topbar">
+        <div class="t">Tickets</div>
+        <div class="right">
+          <button class="btn btn-ghost btn-sm">Initial Data Upload</button>
+          <button class="btn btn-ghost btn-sm">+</button>
+          <span style="font-size:13px;font-weight:600">Varicon Info</span>
+        </div>
+      </div>
+      <div class="body">
+        <div style="display:flex;align-items:flex-start">
+          <div>
+            <h2 class="page">Construction Tickets</h2>
+            <div class="sub">Track licences, certificates and competencies across your workforce.</div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-ghost btn-sm">Manage Ticket Types</button>
+          </div>
+        </div>
+
+        <div class="note"><span class="marker">1</span><b>There is no way to add a ticket from this page.</b> The only route is Workers → open a worker → Tickets tab → Add ticket. To load a crew of 40, you open 40 drawers. The page that owns the data cannot create it.</div>
+
+        <div class="tiles">
+          <div class="tile sel"><div class="n">1</div><div class="l">Total Tickets</div><div class="d">Across all workers</div></div>
+          <div class="tile"><div class="n red">0</div><div class="l">Expired</div><div class="d">Renewal overdue</div></div>
+          <div class="tile"><div class="n amber">0</div><div class="l">Expiring soon</div><div class="d">Action required soon</div></div>
+          <div class="tile"><div class="n green">0</div><div class="l">Valid</div><div class="d">Up to date</div></div>
+        </div>
+
+        <div class="note"><span class="marker">2</span><b>1 total, but 0 + 0 + 0 underneath.</b> The one ticket on file has no expiry, so it belongs to none of the three status tiles. Every "No expiry" ticket is invisible in the compliance count — the tiles say nothing is expiring, when the truth is nothing is being measured.</div>
+
+        <div class="filters">
+          <select><option>All workers</option></select>
+          <select><option>Company</option></select>
+          <select><option>Ticket type</option></select>
+          <select><option>Status</option></select>
+          <input type="text" class="search" placeholder="Search worker or ticket number">
+        </div>
+
+        <div class="subtabs"><span class="on">All</span><span>Active</span><span>Draft</span></div>
+        <table>
+          <thead><tr><th style="width:34px"></th><th>Worker</th><th>Ticket Type</th><th>Number</th><th>Issued</th><th>Expires</th><th>Status</th><th>Document</th><th>Actions</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td><div class="who"><div class="av">BK</div><div><div class="nm">B K</div><div class="mt">(Dump Truck Operator) Dump Truck Operator · Cookie's Civil Pty</div></div></div></td>
+              <td><div class="tt"><div class="ic">🔧</div><div>Plant Equipment Operator (RIIWHS201D)</div></div></td>
+              <td>532534</td><td>24 Aug 2023</td><td style="color:#9ca3af">No expiry</td>
+              <td><span class="pill p-noexp">No expiry</span></td><td>—</td><td>🗑</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="note" style="margin-top:20px"><span class="marker">3</span><b>One ticket across the whole workforce is not a data problem, it is an entry problem.</b> Nobody is going to key a year of licences in one at a time, so the register stays empty and the expiry tiles above stay meaningless. Bulk upload is what makes the rest of the page true.</div>
+        <div class="note"><span class="marker">4</span><b>"Initial Data Upload" already sits in the top right</b> — a tenant-wide importer that most people meet once, at onboarding, and never find again. Tickets churn forever: every renewal, every new hire, every subbie crew. It needs its own door on this page.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= ADD TICKET ============================= -->
+<div class="view on" id="v-add">
+  <div class="shell">
+    <div class="rail" id="rail-b"></div>
+    <div class="main">
+      <div class="topbar">
+        <div class="t">Tickets</div>
+        <div class="right">
+          <button class="btn btn-ghost btn-sm">Initial Data Upload</button>
+          <span style="font-size:13px;font-weight:600">Varicon Info</span>
+        </div>
+      </div>
+      <div class="body">
+        <div style="display:flex;align-items:flex-start">
+          <div>
+            <h2 class="page">Construction Tickets</h2>
+            <div class="sub">Track licences, certificates and competencies across your workforce.</div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-ghost btn-sm">Manage Ticket Types</button>
+            <button class="btn btn-ghost btn-sm" id="goBulk">⬆ Bulk upload</button>
+            <button class="btn btn-pri btn-sm" id="openAdd">＋ Add ticket</button>
+          </div>
+        </div>
+
+        <div class="note ok" style="margin-top:14px"><b>Two buttons, one grammar.</b> <b>Add ticket</b> is the worker-drawer form with a Worker field on the front — the same fields, the same draft/publish, one implementation. <b>Bulk upload</b> is the same form's columns as a spreadsheet. Nothing new to learn in either direction.</div>
+
+        <!-- add panel -->
+        <div class="panel" id="addPanel" style="display:none">
+          <h3>Add ticket / certification</h3>
+
+          <div class="fld" style="margin-bottom:14px">
+            <label class="req">Worker</label>
+            <div class="picker">
+              <div class="chips" id="chips"><input type="text" id="wsearch" placeholder="Search by name, employee ID or company…"></div>
+              <div class="menu" id="wmenu"></div>
+            </div>
+            <div class="hint">Pick more than one when a crew sat the same course on the same day — one submission writes one ticket per worker.</div>
+          </div>
+
+          <div class="grid2">
+            <div class="fld">
+              <label class="req">Ticket type</label>
+              <select id="f-type"><option value="">Select ticket type…</option></select>
+            </div>
+            <div class="fld" id="singleNumWrap">
+              <label>Ticket / licence number</label>
+              <input type="text" id="f-num" placeholder="e.g. 532534">
+            </div>
+          </div>
+
+          <div id="perNumWrap" style="display:none;margin-top:14px">
+            <label style="font-size:12px;font-weight:600;color:#4b5563">Ticket / licence number</label>
+            <div class="pernum" id="perNum"><div class="hd">One number per worker — the certificate number is personal, the course is not.</div></div>
+          </div>
+
+          <div class="grid2" style="margin-top:14px">
+            <div class="fld"><label>Issued date</label><input type="date" id="f-iss"></div>
+            <div class="fld"><label>Expiry date</label><input type="date" id="f-exp"><div class="hint" id="expHint">Leave blank to use the ticket type's expiry rule.</div></div>
+          </div>
+          <div class="grid2" style="margin-top:14px">
+            <div class="fld"><label>Issuing body</label><input type="text" id="f-body" placeholder="e.g. SafeWork NSW"></div>
+            <div class="fld"><label>State</label><select id="f-state"><option value="">Select state…</option><option>NSW</option><option>VIC</option><option>QLD</option><option>WA</option><option>SA</option><option>TAS</option><option>NT</option><option>ACT</option></select></div>
+          </div>
+
+          <div class="fld" style="margin-top:14px">
+            <label>Upload document (front &amp; back)</label>
+            <div class="drop">Drag and drop or browse to upload ticket photo or PDF</div>
+            <div class="hint" id="docHint">Optional here. Publishing without it leaves the ticket flagged as unverified.</div>
+          </div>
+
+          <div class="fld" style="margin-top:14px">
+            <label>Notes</label>
+            <textarea rows="2" placeholder="Optional — conditions, restrictions, training provider…"></textarea>
+          </div>
+
+          <div class="row-end">
+            <button class="btn btn-ghost" id="cancelAdd">Cancel</button>
+            <button class="btn btn-ghost" id="draftAdd">Save as draft</button>
+            <button class="btn btn-pri" id="pubAdd">Publish</button>
+          </div>
+          <div id="addErr" style="color:#b91c1c;font-size:12.5px;text-align:right;margin-top:8px;display:none"></div>
+        </div>
+
+        <div class="tiles" id="tiles"></div>
+
+        <div class="filters">
+          <select><option>All workers</option></select>
+          <select><option>Company</option></select>
+          <select><option>Ticket type</option></select>
+          <select><option>Status</option></select>
+          <input type="text" class="search" placeholder="Search worker or ticket number">
+        </div>
+
+        <div class="subtabs" id="listTabs"><span class="on" data-tab="all">All</span><span data-tab="active">Active</span><span data-tab="draft">Draft</span></div>
+        <table>
+          <thead><tr><th style="width:34px"><input type="checkbox"></th><th>Worker</th><th>Ticket Type</th><th>Number</th><th>Issued</th><th>Expires</th><th>Status</th><th>Document</th><th>Actions</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= BULK UPLOAD ============================= -->
+<div class="view" id="v-bulk">
+  <div class="shell">
+    <div class="rail" id="rail-c"></div>
+    <div class="main">
+      <div class="topbar"><div class="t">Tickets · Bulk upload</div><div class="right"><span style="font-size:13px;font-weight:600">Varicon Info</span></div></div>
+      <div class="body">
+        <div class="wizwrap">
+          <h2 class="page">Bulk upload tickets</h2>
+          <div class="sub">Download a template, fill it in, upload it back. Nothing is saved until you review what it will do.</div>
+
+          <div class="steps" id="steps">
+            <div class="s on" data-s="1"><div class="num">1</div>What you're uploading</div>
+            <div class="s" data-s="2"><div class="num">2</div>Download the template</div>
+            <div class="s" data-s="3"><div class="num">3</div>Upload &amp; match columns</div>
+            <div class="s" data-s="4"><div class="num">4</div>Review before importing</div>
+          </div>
+
+          <!-- STEP 1 -->
+          <div class="wstep" id="w1">
+            <div class="box">
+              <h4>What are you uploading?</h4>
+              <div class="bh">Two different things share the word "ticket". Say which one up front and every later step changes to match.</div>
+              <div class="opts" id="modeOpts">
+                <div class="opt-card on" data-mode="tickets">
+                  <div class="rad"></div>
+                  <div>
+                    <div class="ti">Worker tickets</div>
+                    <div class="de">The licences and certificates your people hold — a row per worker per ticket. This is the register on the Tickets page.</div>
+                  </div>
+                </div>
+                <div class="opt-card" data-mode="types">
+                  <div class="rad"></div>
+                  <div>
+                    <div class="ti">Ticket types (the catalogue)</div>
+                    <div class="de">The list of tickets that exist in your tenant — code, name, category, expiry rule, whether a document is required. Same wizard, feeds Manage Ticket Types.</div>
+                    <div class="tagline">Do this first if your ticket types aren't set up yet — worker tickets are matched against it.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="row-end"><button class="btn btn-pri" onclick="goStep(2)">Continue</button></div>
+          </div>
+
+          <!-- STEP 2 -->
+          <div class="wstep" id="w2" style="display:none">
+            <div class="box">
+              <h4>What should the template contain?</h4>
+              <div class="bh">This is the choice that decides whether you are adding or correcting. Pre-filled exports carry a locked record ID, so a row that comes back updates the ticket it came from. A blank template has no IDs, so every row creates something new.</div>
+              <div class="opts" id="tmplOpts">
+                <div class="opt-card on" data-t="workers">
+                  <div class="rad"></div>
+                  <div>
+                    <div class="ti">Pre-filled with your workers — ticket columns blank</div>
+                    <div class="de">One row per active worker, their details already filled and locked. You fill in the ticket columns. Nobody has to spell a name the way we spell it.</div>
+                    <div class="tagline">Best for the first load, or a course a whole crew just sat.</div>
+                  </div>
+                </div>
+                <div class="opt-card" data-t="full">
+                  <div class="rad"></div>
+                  <div>
+                    <div class="ti">Pre-filled with workers <em>and</em> their current tickets</div>
+                    <div class="de">Everything on file today, exported for editing. Change an expiry, add a number, fix a typo, then re-upload — matched rows update rather than duplicate.</div>
+                    <div class="tagline">Best for a renewal run or a data clean-up.</div>
+                  </div>
+                </div>
+                <div class="opt-card" data-t="blank">
+                  <div class="rad"></div>
+                  <div>
+                    <div class="ti">Blank template — headers only</div>
+                    <div class="de">Column headers and nothing else. For pasting from a subbie's spreadsheet or a training provider's report. Workers are matched on employee ID, then email, then exact name within company.</div>
+                    <div class="tagline">Every row creates. Rows that can't be matched to a worker are held back as errors, never guessed.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="colPick" style="margin-top:18px">
+                <div style="font-size:12.5px;font-weight:600;color:#4b5563">Worker columns to include</div>
+                <div class="bh" style="margin-top:3px;margin-bottom:0">Locked, read-only columns — they exist so the person filling this in recognises the row. Editing them changes nothing on the worker.</div>
+                <div class="checks" id="colChecks"></div>
+              </div>
+
+              <div style="margin-top:18px">
+                <div style="font-size:12.5px;font-weight:600;color:#4b5563">Who's included</div>
+                <div class="checks" id="scopeChecks">
+                  <label class="chk on"><input type="checkbox" checked data-scope="active">Active workers only</label>
+                  <label class="chk"><input type="checkbox" data-scope="subbie">Include subcontractor workers</label>
+                  <label class="chk"><input type="checkbox" data-scope="project">Only workers on a selected project</label>
+                </div>
+              </div>
+
+              <div style="margin-top:18px;font-size:12.5px;font-weight:600;color:#4b5563">Preview</div>
+              <div class="sheet" id="preview"></div>
+              <div style="font-size:11.5px;color:#9ca3af;margin-top:7px" id="previewNote"></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end">
+              <button class="btn btn-ghost" onclick="goStep(1)">Back</button>
+              <button class="btn btn-ghost" id="dlBtn">⬇ Download CSV</button>
+              <button class="btn btn-pri" onclick="goStep(3)">I've filled it in →</button>
+            </div>
+          </div>
+
+          <!-- STEP 3 -->
+          <div class="wstep" id="w3" style="display:none">
+            <div class="box">
+              <h4>Upload your file</h4>
+              <div class="bh">CSV or XLSX. Column order doesn't matter — anything we can't place, you map by hand below.</div>
+              <div class="dz" id="dz">
+                <div class="big">⬆</div>
+                <div class="t">Drag and drop, or browse</div>
+                <div class="s">Max 5 MB · up to 5,000 rows</div>
+                <div style="margin-top:14px"><button class="btn btn-ghost btn-sm" id="useSample">Use the sample file</button></div>
+              </div>
+              <div id="fileInfo" style="display:none;margin-top:14px">
+                <div style="display:flex;align-items:center;gap:10px;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;background:#fff">
+                  <div style="font-size:20px">📄</div>
+                  <div><div style="font-size:13px;font-weight:600">tickets-august-intake.csv</div><div style="font-size:11.5px;color:#6b7280">12 rows · 9 columns · read in 0.4s</div></div>
+                  <button class="btn btn-ghost btn-sm" style="margin-left:auto" id="clearFile">Remove</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="box" id="mapBox" style="display:none">
+              <h4>Match your columns</h4>
+              <div class="bh">Eight matched automatically. One we couldn't place — tell us what it is, or leave it out.</div>
+              <div id="mapRows"></div>
+            </div>
+
+            <div style="display:flex;gap:10px;justify-content:flex-end">
+              <button class="btn btn-ghost" onclick="goStep(2)">Back</button>
+              <button class="btn btn-pri" id="toReview" disabled>Check the file →</button>
+            </div>
+          </div>
+
+          <!-- STEP 4 -->
+          <div class="wstep" id="w4" style="display:none">
+            <div class="box">
+              <h4>What this file will do</h4>
+              <div class="bh">A dry run. Nothing has been written yet — this is the file read against what's already on record.</div>
+              <div class="counts" id="counts"></div>
+              <div class="sheet" id="reviewSheet"></div>
+              <div style="margin-top:16px" id="fixToggles"></div>
+            </div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center">
+              <div style="font-size:12.5px;color:#6b7280;margin-right:auto" id="importSummary"></div>
+              <button class="btn btn-ghost" onclick="goStep(3)">Back</button>
+              <button class="btn btn-pri" id="doImport">Import</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= RULES ============================= -->
+<div class="view" id="v-rules">
+  <div style="background:#fff;min-height:calc(100vh - 58px)">
+  <div class="doc">
+    <h3>What the prototype commits to</h3>
+    <p class="lead">Nine rules. Each one is a decision someone has to make before this gets built, and each is made here rather than left to the implementation.</p>
+    <ol>
+      <li><b>Add from the list page is the existing form with a Worker field on the front.</b> Ticket type, number, issued, expiry, issuing body, state, document, notes, and the Save as draft / Publish pair are the worker-drawer form verbatim. One component, two entry points. Two forms would drift within a release.</li>
+      <li><b>Worker is multi-select.</b> The real event is a crew of six sitting the same course on the same day, not one person one ticket. Selecting more than one worker turns the number field into one row per worker, because the certificate number is personal and the course is not. One submission, N ticket records.</li>
+      <li><b>A pre-filled export is the update path; a blank template is the create path.</b> The difference is a locked <code>Record ID</code> column that only pre-filled exports carry. A row with an ID updates that record. A row without one creates. Nothing is ever matched on a person's name alone to decide between the two.</li>
+      <li><b>Worker matching on a blank template is employee ID, then email, then exact name within company.</b> Two candidates is an error row, not a best guess. Getting a licence onto the wrong person is worse than not importing it.</li>
+      <li><b>A ticket type that isn't in the catalogue never appears silently.</b> The review step lists the unknown types and offers one checkbox to add them to Manage Ticket Types. Left unchecked, those rows are errors. Free-text ticket types are how a register becomes ninety spellings of "white card".</li>
+      <li><b>Blank expiry is derived from the ticket type's rule; a past expiry imports as Expired.</b> An expired licence is not a bad row — it's the reason you're loading the data. Rejecting it hides the risk you bought the module for.</li>
+      <li><b>Documents can't come through a spreadsheet.</b> Where the ticket type requires one, imported rows land as <b>Draft — document missing</b>, in the Draft tab that already exists, and are chased from there. Consistent with the standing rule that compliance gates flag rather than block.</li>
+      <li><b>The review step is a dry run and the only way to import.</b> Counted as New / Update / Warning / Error, filterable, fixable inline. Skipping the error rows imports the rest. There is no path that writes on upload.</li>
+      <li><b>Every import is one reversible batch.</b> The Activity tab records who imported what, when, from which file, with a single undo while the batch is the most recent change to those records.</li>
+    </ol>
+
+    <h3>Statuses, since the tiles depend on them</h3>
+    <div class="kv">
+      <div class="r"><div class="k">Valid</div><div class="v">Has an expiry date, more than 30 days out.</div></div>
+      <div class="r"><div class="k">Expiring soon</div><div class="v">Expiry within 30 days. Threshold is a tenant setting, not a constant.</div></div>
+      <div class="r"><div class="k">Expired</div><div class="v">Expiry in the past.</div></div>
+      <div class="r"><div class="k">No expiry</div><div class="v">The ticket type carries no expiry rule. Counts as valid, and is why the current page shows 1 total against 0 + 0 + 0.</div></div>
+      <div class="r"><div class="k">Draft</div><div class="v">Incomplete — missing a required document or number. Not counted in compliance either way.</div></div>
+    </div>
+
+    <h3>Open questions</h3>
+    <p>Three things the prototype deliberately shows rather than answers.</p>
+    <ul>
+      <li><b>One importer or two doors?</b> <em>Initial Data Upload</em> in the top right already imports tenant-wide data. Tickets churn forever, so they need an entry point on this page — but that should be the same importer scoped to tickets, not a second codebase. If it can't be, this replaces the tickets section of Initial Data Upload rather than sitting beside it.</li>
+      <li><b>Who loads a subcontractor's tickets?</b> Today the head contractor keys the subbie's crew. The export/re-upload pair is exactly the shape you'd hand a subbie to fill in themselves — which is a different permission model and probably a different release.</li>
+      <li><b>Does a ticket expiring stop anything?</b> The register only pays for itself when an expired high-risk licence is visible where the work is assigned — the scheduler, the SWMS, the site sign-in. Flag, don't block, per the standing decision. Out of scope here, but it's the reason this page matters.</li>
+    </ul>
+
+    <h3>Source</h3>
+    <p>Built 31 Aug 2026 from two screenshots of production: the Construction Tickets list under User Management, and the Add ticket / certification form on the worker drawer's TICKETS tab. Worker names and companies in the prototype are invented; the single real row (B K · Plant Equipment Operator RIIWHS201D · #532534) is carried through so the recreation matches.</p>
+  </div>
+  </div>
+</div>
+
+<div class="modal" id="modal"><div class="card" id="modalCard"></div></div>
+
+<script>
+/* ---------------- shared data ---------------- */
+const RAIL = [
+  {s:'Timesheet'},{s:'Leave Request',b:'13'},{s:'Scheduler'},{s:'Daywork Record'},
+  {s:'Purchase Order',b:'3'},{s:'Site Docket'},{s:'Bills'},{sec:1},{s:'Forms'},
+  {s:'Plant & Equipment'},{s:'Resource Assigner'},{s:'Suppliers'},{s:'File Manager'},
+  {sec:1},{s:'User Management',hd:1},{s:'Users',sub:1},{s:'Workers',sub:1},
+  {s:'Roles and Permissions',sub:1},{s:'Clients',sub:1},{s:'Construction Tickets',sub:1,on:1},
+  {s:'Payroll Settings'},{s:'Settings'}
+];
+function drawRail(el){
+  el.innerHTML = RAIL.map(r=>{
+    if(r.sec) return '<div style="height:1px;background:rgba(255,255,255,.12);margin:8px 16px"></div>';
+    return '<div class="item'+(r.on?' on':'')+'" style="'+(r.sub?'padding-left:26px;':'')+'">'
+      + (r.sub?'':'<span class="ic">▪</span>') + '<span>'+r.s+'</span>'
+      + (r.b?'<span class="badge">'+r.b+'</span>':'') + '</div>';
+  }).join('');
+}
+['rail-a','rail-b','rail-c'].forEach(id=>drawRail(document.getElementById(id)));
+
+const WORKERS = [
+  {id:'W1', name:'B K',            emp:'EMP-1041', co:"Cookie's Civil Pty", role:'Dump Truck Operator', email:'bk@cookiescivil.com.au'},
+  {id:'W2', name:'Dave Nguyen',    emp:'EMP-1042', co:"Cookie's Civil Pty", role:'Excavator Operator',  email:'dave.n@cookiescivil.com.au'},
+  {id:'W3', name:'Jack Mercer',    emp:'EMP-1044', co:"Cookie's Civil Pty", role:'Pipelayer',           email:'jack.m@cookiescivil.com.au'},
+  {id:'W4', name:'Sam Whitcombe',  emp:'EMP-1007', co:'Varicon Info',       role:'Leading Hand',        email:'sam.w@varicon.com.au'},
+  {id:'W5', name:'Ellie Doust',    emp:'EMP-1009', co:'Varicon Info',       role:'Foreman',             email:'ellie.d@varicon.com.au'},
+  {id:'W6', name:'Priya Raman',    emp:'EMP-1012', co:'Varicon Info',       role:'Site Engineer',       email:'priya.r@varicon.com.au'},
+  {id:'W7', name:"Tui Fa'alogo",   emp:'EMP-2203', co:'Northline Traffic',  role:'Traffic Controller',  email:'tui@northlinetraffic.com.au', sub:1},
+  {id:'W8', name:'Marco Bianchi',  emp:'EMP-2210', co:'Northline Traffic',  role:'Roller Operator',     email:'marco@northlinetraffic.com.au', sub:1}
+];
+const TYPES = [
+  {code:'CPCCWHS1001', name:'Construction Induction (White Card)', exp:0,  doc:1},
+  {code:'RIIWHS201D',  name:'Plant Equipment Operator',            exp:0,  doc:0},
+  {code:'HLTAID011',   name:'Provide First Aid',                   exp:36, doc:1},
+  {code:'TLILIC0003',  name:'Forklift Licence (LF)',               exp:60, doc:1},
+  {code:'RIIWHS302E',  name:'Implement Traffic Management Plan',   exp:36, doc:1},
+  {code:'RIIHAN308F',  name:'Load and Unload Plant',               exp:60, doc:0},
+  {code:'HR',          name:'Driver Licence — Heavy Rigid',        exp:60, doc:1}
+];
+const initials = n => n.split(/\s+/).map(p=>p[0]).join('').slice(0,2).toUpperCase();
+const fmt = d => { if(!d) return null; const dt=new Date(d+'T00:00:00'); if(isNaN(dt)) return d;
+  return dt.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()]+' '+dt.getFullYear(); };
+const TODAY = new Date('2026-08-31T00:00:00');
+function statusOf(t){
+  if(t.draft) return 'draft';
+  if(!t.expiry) return 'noexp';
+  const d=(new Date(t.expiry+'T00:00:00')-TODAY)/86400000;
+  if(d<0) return 'expired'; if(d<=30) return 'soon'; return 'valid';
+}
+const PILL = {noexp:['p-noexp','No expiry'],valid:['p-valid','Valid'],soon:['p-soon','Expiring soon'],expired:['p-exp','Expired'],draft:['p-draft','Draft']};
+
+/* ---------------- tab switching ---------------- */
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>show(b.dataset.v));
+function show(v){
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('on'));
+  document.getElementById('v-'+v).classList.add('on');
+  window.scrollTo(0,0);
+}
+document.getElementById('goBulk').onclick=()=>show('bulk');
+
+/* ---------------- list state ---------------- */
+let TICKETS = [{ w:'W1', type:'RIIWHS201D', num:'532534', issued:'2023-08-24', expiry:null, state:'NT', doc:0 }];
+let listTab='all', flashIds=[];
+
+function renderList(){
+  const tb=document.getElementById('tbody');
+  const rows = TICKETS.filter(t=>{
+    const s=statusOf(t);
+    if(listTab==='draft') return s==='draft';
+    if(listTab==='active') return s!=='draft';
+    return true;
+  });
+  tb.innerHTML = rows.map((t,i)=>{
+    const w=WORKERS.find(x=>x.id===t.w), ty=TYPES.find(x=>x.code===t.type), s=statusOf(t);
+    return '<tr class="'+(flashIds.includes(t._id)?'new-row':'')+'">'
+      +'<td><input type="checkbox"></td>'
+      +'<td><div class="who"><div class="av">'+initials(w.name)+'</div><div><div class="nm">'+w.name+'</div>'
+        +'<div class="mt">'+w.role+' · '+w.co+'</div></div></div></td>'
+      +'<td><div class="tt"><div class="ic">🔧</div><div>'+ty.name+' ('+ty.code+')</div></div></td>'
+      +'<td>'+(t.num||'<span style="color:#c9ced6">—</span>')+'</td>'
+      +'<td>'+(fmt(t.issued)||'—')+'</td>'
+      +'<td'+(t.expiry?'':' style="color:#9ca3af"')+'>'+(fmt(t.expiry)||'No expiry')+'</td>'
+      +'<td><span class="pill '+PILL[s][0]+'">'+PILL[s][1]+'</span></td>'
+      +'<td>'+(t.doc?'📎':'—')+'</td><td>🗑</td></tr>';
+  }).join('') || '<tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:34px">No tickets in this view.</td></tr>';
+  renderTiles();
+}
+function renderTiles(){
+  const c={total:TICKETS.length,expired:0,soon:0,valid:0,noexp:0,draft:0};
+  TICKETS.forEach(t=>{const s=statusOf(t); if(s==='expired')c.expired++; else if(s==='soon')c.soon++;
+    else if(s==='valid')c.valid++; else if(s==='noexp')c.noexp++; else c.draft++;});
+  document.getElementById('tiles').innerHTML =
+     tile(c.total,'Total Tickets','Across all workers','','sel')
+   + tile(c.expired,'Expired','Renewal overdue','red')
+   + tile(c.soon,'Expiring soon','Action required soon','amber')
+   + tile(c.valid+c.noexp,'Valid','Up to date · includes '+c.noexp+' with no expiry','green');
+}
+const tile=(n,l,d,cls,sel)=>'<div class="tile '+(sel||'')+'"><div class="n '+(cls||'')+'">'+n+'</div><div class="l">'+l+'</div><div class="d">'+d+'</div></div>';
+
+document.querySelectorAll('#listTabs span').forEach(s=>s.onclick=()=>{
+  document.querySelectorAll('#listTabs span').forEach(x=>x.classList.remove('on'));
+  s.classList.add('on'); listTab=s.dataset.tab; renderList();
+});
+
+/* ---------------- add panel ---------------- */
+const panel=document.getElementById('addPanel');
+document.getElementById('openAdd').onclick=()=>{panel.style.display='block';panel.scrollIntoView({behavior:'smooth',block:'center'});document.getElementById('wsearch').focus();};
+document.getElementById('cancelAdd').onclick=()=>{panel.style.display='none';resetForm();};
+
+TYPES.forEach(t=>{const o=document.createElement('option');o.value=t.code;o.textContent=t.name+' ('+t.code+')';document.getElementById('f-type').appendChild(o);});
+
+let picked=[];
+const chips=document.getElementById('chips'), wsearch=document.getElementById('wsearch'), wmenu=document.getElementById('wmenu');
+function renderChips(){
+  chips.querySelectorAll('.chip').forEach(c=>c.remove());
+  picked.forEach(id=>{
+    const w=WORKERS.find(x=>x.id===id);
+    const el=document.createElement('div'); el.className='chip';
+    el.innerHTML='<span class="cav">'+initials(w.name)+'</span>'+w.name+'<span class="x">×</span>';
+    el.querySelector('.x').onclick=e=>{e.stopPropagation();picked=picked.filter(p=>p!==id);renderChips();renderPerNum();};
+    chips.insertBefore(el,wsearch);
+  });
+  wsearch.placeholder = picked.length? 'Add another…' : 'Search by name, employee ID or company…';
+}
+function renderMenu(){
+  const q=wsearch.value.toLowerCase().trim();
+  const hits=WORKERS.filter(w=>!q || (w.name+' '+w.emp+' '+w.co+' '+w.role).toLowerCase().includes(q));
+  if(!hits.length){wmenu.innerHTML='<div class="none">No worker matches "'+wsearch.value+'". Workers are created in User Management → Workers.</div>';return;}
+  let html='', co='';
+  hits.forEach(w=>{
+    if(w.co!==co){co=w.co;html+='<div class="grp">'+co+(w.sub?' · subcontractor':'')+'</div>';}
+    const on=picked.includes(w.id);
+    html+='<div class="opt'+(on?' dis':'')+'" data-id="'+w.id+'"><div class="av" style="width:26px;height:26px;font-size:10.5px">'+initials(w.name)+'</div>'
+      +'<div><div style="font-size:13px;font-weight:600">'+w.name+'</div><div style="font-size:11.5px;color:#6b7280">'+w.emp+' · '+w.role+'</div></div>'
+      +(on?'<div style="margin-left:auto;font-size:11.5px;color:#059669;font-weight:600">Added</div>':'')+'</div>';
+  });
+  wmenu.innerHTML=html;
+  wmenu.querySelectorAll('.opt:not(.dis)').forEach(o=>o.onmousedown=e=>{
+    e.preventDefault(); picked.push(o.dataset.id); wsearch.value=''; renderChips(); renderMenu(); renderPerNum();
+  });
+}
+chips.onclick=()=>wsearch.focus();
+wsearch.onfocus=()=>{chips.classList.add('focus');wmenu.classList.add('on');renderMenu();};
+wsearch.onblur =()=>{chips.classList.remove('focus');setTimeout(()=>wmenu.classList.remove('on'),120);};
+wsearch.oninput=renderMenu;
+wsearch.onkeydown=e=>{if(e.key==='Backspace'&&!wsearch.value&&picked.length){picked.pop();renderChips();renderMenu();renderPerNum();}};
+
+function renderPerNum(){
+  const multi=picked.length>1;
+  document.getElementById('singleNumWrap').style.display=multi?'none':'flex';
+  document.getElementById('perNumWrap').style.display=multi?'block':'none';
+  if(!multi) return;
+  const box=document.getElementById('perNum');
+  box.innerHTML='<div class="hd">One number per worker — the certificate number is personal, the course is not.</div>'
+    + picked.map(id=>{const w=WORKERS.find(x=>x.id===id);
+        return '<div class="r"><div class="av" style="width:24px;height:24px;font-size:10px">'+initials(w.name)+'</div>'
+          +'<div class="nm">'+w.name+'</div><input type="text" data-w="'+id+'" placeholder="Ticket / licence number"></div>';}).join('');
+}
+document.getElementById('f-type').onchange=function(){
+  const t=TYPES.find(x=>x.code===this.value);
+  document.getElementById('expHint').textContent = !t ? 'Leave blank to use the ticket type’s expiry rule.'
+    : t.exp ? 'Leave blank and we’ll set it to '+(t.exp/12)+' years from the issued date, this type’s rule.'
+            : 'This type carries no expiry. Leave blank.';
+  document.getElementById('docHint').textContent = t && t.doc
+    ? 'This type requires a document. Publish without one and it stays a draft flagged “document missing”.'
+    : 'Optional here. Publishing without it leaves the ticket flagged as unverified.';
+};
+function resetForm(){
+  picked=[];renderChips();renderPerNum();
+  ['f-num','f-iss','f-exp','f-body'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('f-type').value='';document.getElementById('f-state').value='';
+  document.getElementById('addErr').style.display='none';
+}
+function submitAdd(draft){
+  const err=document.getElementById('addErr');
+  if(!picked.length||!document.getElementById('f-type').value){
+    err.textContent = !picked.length ? 'Pick at least one worker.' : 'Pick a ticket type.';
+    err.style.display='block'; return;
+  }
+  const ty=TYPES.find(x=>x.code===document.getElementById('f-type').value);
+  const iss=document.getElementById('f-iss').value;
+  let exp=document.getElementById('f-exp').value;
+  if(!exp && ty.exp && iss){const d=new Date(iss+'T00:00:00');d.setMonth(d.getMonth()+ty.exp);exp=d.toISOString().slice(0,10);}
+  flashIds=[];
+  picked.forEach(id=>{
+    const num = picked.length>1 ? (document.querySelector('#perNum input[data-w="'+id+'"]')||{}).value : document.getElementById('f-num').value;
+    const _id='T'+Math.random().toString(36).slice(2,8);
+    flashIds.push(_id);
+    TICKETS.unshift({_id,w:id,type:ty.code,num,issued:iss,expiry:exp||null,doc:0,draft:draft||(ty.doc?1:0)});
+  });
+  const n=picked.length;
+  panel.style.display='none'; resetForm(); renderList();
+  toast(draft?'📝':'✅', draft?'Saved as draft':(ty.doc?'Published — document still needed':'Published'),
+    n+' ticket'+(n>1?'s':'')+' added.'+(!draft&&ty.doc?' '+(n>1?'They sit':'It sits')+' in the Draft tab until the certificate is attached, because this type requires a document.':''));
+  setTimeout(()=>{flashIds=[];},2000);
+}
+document.getElementById('pubAdd').onclick=()=>submitAdd(false);
+document.getElementById('draftAdd').onclick=()=>submitAdd(true);
+
+function toast(ic,t,b){
+  document.getElementById('modalCard').innerHTML='<div class="ic">'+ic+'</div><h3>'+t+'</h3><p>'+b+'</p>'
+    +'<button class="btn btn-pri" onclick="document.getElementById(\'modal\').classList.remove(\'on\')">Done</button>';
+  document.getElementById('modal').classList.add('on');
+}
+
+/* ---------------- wizard ---------------- */
+let mode='tickets', tmpl='workers', step=1;
+const COLS=[{k:'emp',l:'Employee ID',on:1},{k:'co',l:'Company',on:1},{k:'role',l:'Role',on:1},{k:'email',l:'Email',on:0},{k:'proj',l:'Current project',on:0}];
+
+document.querySelectorAll('#modeOpts .opt-card').forEach(c=>c.onclick=()=>{
+  document.querySelectorAll('#modeOpts .opt-card').forEach(x=>x.classList.remove('on'));
+  c.classList.add('on'); mode=c.dataset.mode; syncMode();
+});
+function syncMode(){
+  const isTypes = mode==='types';
+  document.querySelectorAll('#tmplOpts .opt-card').forEach(c=>c.style.display = isTypes && c.dataset.t!=='blank' ? 'none':'flex');
+  document.getElementById('colPick').style.display = isTypes?'none':'block';
+  document.getElementById('scopeChecks').parentElement.style.display = isTypes?'none':'block';
+  if(isTypes){ tmpl='blank'; document.querySelectorAll('#tmplOpts .opt-card').forEach(x=>x.classList.toggle('on',x.dataset.t==='blank')); }
+  renderPreview();
+}
+document.querySelectorAll('#tmplOpts .opt-card').forEach(c=>c.onclick=()=>{
+  document.querySelectorAll('#tmplOpts .opt-card').forEach(x=>x.classList.remove('on'));
+  c.classList.add('on'); tmpl=c.dataset.t; renderPreview();
+});
+document.getElementById('colChecks').innerHTML = COLS.map(c=>
+  '<label class="chk'+(c.on?' on':'')+'"><input type="checkbox" data-c="'+c.k+'"'+(c.on?' checked':'')+'>'+c.l+'</label>').join('');
+document.querySelectorAll('#colChecks input').forEach(i=>i.onchange=function(){
+  COLS.find(c=>c.k===this.dataset.c).on=this.checked;
+  this.parentElement.classList.toggle('on',this.checked); renderPreview();
+});
+document.querySelectorAll('#scopeChecks input').forEach(i=>i.onchange=function(){
+  this.parentElement.classList.toggle('on',this.checked); renderPreview();
+});
+
+function templateCols(){
+  if(mode==='types') return {locked:[],open:['Code','Ticket type name','Category','Expiry (months, blank = none)','Document required (Y/N)','States']};
+  const locked = (tmpl!=='blank'?['Record ID','Worker']:[]).concat(tmpl!=='blank'?COLS.filter(c=>c.on).map(c=>c.l):[]);
+  const open = tmpl==='blank'
+    ? ['Employee ID','Worker name','Company','Ticket type','Ticket number','Issued date','Expiry date','Issuing body','State','Notes']
+    : ['Ticket type','Ticket number','Issued date','Expiry date','Issuing body','State','Notes'];
+  return {locked,open};
+}
+function previewRows(){
+  if(mode==='types') return [['CPCCWHS1001','Construction Induction (White Card)','WHS','','Y','ALL'],['','','','','','']];
+  const incSub=document.querySelector('#scopeChecks input[data-scope="subbie"]').checked;
+  const ws=WORKERS.filter(w=>incSub||!w.sub).slice(0,4);
+  if(tmpl==='blank') return [['EMP-1041','B K',"Cookie's Civil Pty",'','','','','','',''],['','','','','','','','','','']];
+  return ws.map(w=>{
+    const lock=['WKR-'+w.id.slice(1).padStart(4,'0'),w.name].concat(COLS.filter(c=>c.on).map(c=>c.k==='proj'?'(26-015) Mt Ousley Road':w[c.k]||''));
+    if(tmpl==='full'){
+      const t=TICKETS.find(t=>t.w===w.id);
+      const ty=t?TYPES.find(x=>x.code===t.type):null;
+      lock[0] = t ? 'TKT-'+(t._id||'0001') : lock[0];
+      return {lock, open: t?[ty.name+' ('+ty.code+')',t.num,'24/08/2023','',' ',t.state||'',''] : ['','','','','','','']};
+    }
+    return {lock, open:['','','','','','','']};
+  }).map(r=>r.lock?r:r);
+}
+function renderPreview(){
+  const {locked,open}=templateCols();
+  const rows=previewRows();
+  let head='<tr>'+locked.map(c=>'<th class="locked">🔒 '+c+'</th>').join('')+open.map(c=>'<th>'+c+'</th>').join('')+'</tr>';
+  let body='';
+  rows.forEach(r=>{
+    if(Array.isArray(r)) body+='<tr>'+r.map(v=>'<td class="'+(v?'pre':'blank')+'">'+(v||'—')+'</td>').join('')+'</tr>';
+    else body+='<tr>'+r.lock.map(v=>'<td class="locked">'+(v||'')+'</td>').join('')+r.open.map(v=>'<td class="'+(v&&v.trim()?'pre':'blank')+'">'+(v&&v.trim()?v:'—')+'</td>').join('')+'</tr>';
+  });
+  document.getElementById('preview').innerHTML='<table>'+head+body+'</table>';
+  const notes={
+    workers:'Locked columns are read-only context so the row is recognisable. The Record ID identifies the worker, so a returned row attaches its ticket to the right person without matching on spelling.',
+    full:'Record ID here is the ticket, not the worker — edit a row and it updates that exact ticket. Delete a row and nothing happens; deletions are never inferred from an absent row.',
+    blank:'No IDs, so every row creates. Workers are matched on employee ID, then email, then exact name within company; anything ambiguous is held back for you to resolve.',
+  };
+  document.getElementById('previewNote').textContent = mode==='types'
+    ? 'Feeds Manage Ticket Types. Codes are matched on Code — an existing code updates its type, a new one creates it.'
+    : notes[tmpl];
+}
+function goStep(n){
+  step=n;
+  [1,2,3,4].forEach(i=>document.getElementById('w'+i).style.display = i===n?'block':'none');
+  document.querySelectorAll('#steps .s').forEach(s=>{
+    const i=+s.dataset.s; s.classList.toggle('on',i===n); s.classList.toggle('done',i<n);
+  });
+  if(n===2) renderPreview();
+  if(n===4) renderReview();
+  window.scrollTo(0,0);
+}
+syncMode();
+
+document.getElementById('dlBtn').onclick=()=>{
+  const {locked,open}=templateCols(); const rows=previewRows();
+  let csv=[locked.concat(open).join(',')];
+  rows.forEach(r=>{
+    const cells = Array.isArray(r) ? r : r.lock.concat(r.open);
+    csv.push(cells.map(c=>'"'+String(c||'').replace(/"/g,'""')+'"').join(','));
+  });
+  const blob=new Blob([csv.join('\n')],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download = mode==='types'?'varicon-ticket-types-template.csv':'varicon-worker-tickets-'+tmpl+'.csv';
+  a.click();
+};
+
+/* --- step 3 --- */
+const SRC=['Employee No','Name','Ticket','Cert Number','Date Issued','Expires','Issued By','St','Cost Centre'];
+const FIELDS=['Employee ID','Worker name','Ticket type','Ticket number','Issued date','Expiry date','Issuing body','State','— don’t import —'];
+const AUTO ={'Employee No':'Employee ID','Name':'Worker name','Ticket':'Ticket type','Cert Number':'Ticket number','Date Issued':'Issued date','Expires':'Expiry date','Issued By':'Issuing body','St':'State','Cost Centre':''};
+document.getElementById('useSample').onclick=()=>{
+  document.getElementById('fileInfo').style.display='block';
+  document.getElementById('mapBox').style.display='block';
+  document.getElementById('toReview').disabled=false;
+  document.getElementById('mapRows').innerHTML = SRC.map(s=>{
+    const guess=AUTO[s];
+    return '<div class="maprow"><div class="src">'+s+'</div><div class="ar">→</div>'
+      +'<select>'+FIELDS.map(f=>'<option'+(f===guess||(!guess&&f.startsWith('—'))?' selected':'')+'>'+f+'</option>').join('')+'</select></div>';
+  }).join('');
+};
+document.getElementById('clearFile').onclick=()=>{
+  document.getElementById('fileInfo').style.display='none';
+  document.getElementById('mapBox').style.display='none';
+  document.getElementById('toReview').disabled=true;
+};
+document.getElementById('dz').onclick=e=>{if(e.target.id!=='useSample')document.getElementById('useSample').click();};
+document.getElementById('toReview').onclick=()=>goStep(4);
+
+/* --- step 4 --- */
+const IMPORT=[
+  {emp:'EMP-1041',w:'B K',t:'Plant Equipment Operator (RIIWHS201D)',n:'532534',i:'24/08/2023',e:'',k:'upd',why:'Matched ticket TKT-0001 — issuing body and state filled in, nothing else changes.'},
+  {emp:'EMP-1041',w:'B K',t:'Provide First Aid (HLTAID011)',n:'FA-88213',i:'12/03/2026',e:'12/03/2029',k:'new'},
+  {emp:'EMP-1042',w:'Dave Nguyen',t:'Construction Induction (CPCCWHS1001)',n:'0012 4471',i:'02/02/2021',e:'',k:'warn',why:'This type requires a document. Imports as Draft — document missing.'},
+  {emp:'EMP-1042',w:'Dave Nguyen',t:'Forklift Licence (TLILIC0003)',n:'4471223',i:'19/07/2021',e:'19/07/2026',k:'warn',why:'Expiry is in the past. Imports as Expired — that is the point of loading it.'},
+  {emp:'EMP-1044',w:'Jack Mercer',t:'Construction Induction (CPCCWHS1001)',n:'0018 9902',i:'08/11/2022',e:'',k:'warn',why:'This type requires a document. Imports as Draft — document missing.'},
+  {emp:'EMP-1007',w:'Sam Whitcombe',t:'Provide First Aid (HLTAID011)',n:'FA-90114',i:'20/09/2025',e:'20/09/2028',k:'new'},
+  {emp:'EMP-1009',w:'Ellie Doust',t:'Confined Space Entry (RIIWHS202E)',n:'CS-4410',i:'14/06/2026',e:'14/06/2028',k:'warn',why:'Ticket type not in your catalogue. Tick the box below to add it, or this row will not import.',unknown:1},
+  {emp:'EMP-2203',w:"Tui Fa'alogo",t:'Implement Traffic Management Plan (RIIWHS302E)',n:'TM-7781',i:'03/03/2026',e:'03/03/2029',k:'new'},
+  {emp:'EMP-2210',w:'Marco Bianchi',t:'Plant Equipment Operator (RIIWHS201D)',n:'661201',i:'11/05/2024',e:'',k:'new'},
+  {emp:'',       w:'D. Nguyen',t:'Load and Unload Plant (RIIHAN308F)',n:'LU-2201',i:'01/08/2026',e:'',k:'err',why:'No employee ID, and "D. Nguyen" is not an exact name match. Two candidates in Cookie’s Civil Pty — resolve rather than guess.'},
+  {emp:'EMP-9999',w:'Rob Petersen',t:'Provide First Aid (HLTAID011)',n:'FA-11002',i:'05/05/2026',e:'05/05/2029',k:'err',why:'No worker with employee ID EMP-9999. Create the worker first, or correct the ID.'},
+  {emp:'EMP-1012',w:'Priya Raman',t:'',n:'PR-3320',i:'',e:'',k:'err',why:'Ticket type is blank. Required on every row.'}
+];
+let filter='all', addTypes=false, skipErr=true;
+function renderReview(){
+  const c={new:0,upd:0,warn:0,err:0};
+  IMPORT.forEach(r=>{ let k=r.k; if(r.unknown&&!addTypes)k='err'; if(r.unknown&&addTypes)k='warn'; c[k]++; });
+  document.getElementById('counts').innerHTML=
+     cnt('all',IMPORT.length,'All rows','')
+   + cnt('new',c.new,'New tickets','c-new')
+   + cnt('upd',c.upd,'Updates','c-upd')
+   + cnt('warn',c.warn,'Warnings','c-warn')
+   + cnt('err',c.err,'Errors','c-err');
+  document.querySelectorAll('#counts .cnt').forEach(el=>el.onclick=()=>{filter=el.dataset.f;renderReview();});
+
+  const rows=IMPORT.filter(r=>{
+    let k=r.k; if(r.unknown) k=addTypes?'warn':'err';
+    return filter==='all'||filter===k;
+  });
+  const LBL={new:['rs-new','New'],upd:['rs-upd','Update'],warn:['rs-warn','Warning'],err:['rs-err','Error']};
+  document.getElementById('reviewSheet').innerHTML='<table><tr><th>Row</th><th>Worker</th><th>Ticket type</th><th>Number</th><th>Issued</th><th>Expiry</th><th>What will happen</th></tr>'
+    + rows.map(r=>{
+      let k=r.k; if(r.unknown) k=addTypes?'warn':'err';
+      const why = r.unknown&&addTypes ? 'Ticket type "Confined Space Entry (RIIWHS202E)" will be added to your catalogue, then this ticket created.' : r.why;
+      return '<tr><td style="color:#c9ced6">'+(IMPORT.indexOf(r)+2)+'</td>'
+        +'<td class="pre">'+(r.w||'—')+'<div class="why">'+(r.emp||'no employee ID')+'</div></td>'
+        +'<td class="pre" style="white-space:normal;max-width:280px">'+(r.t||'<span style="color:#b91c1c">blank</span>')+'</td>'
+        +'<td>'+(r.n||'—')+'</td><td>'+(r.i||'—')+'</td><td>'+(r.e||'—')+'</td>'
+        +'<td style="white-space:normal;max-width:300px"><span class="rowstat '+LBL[k][0]+'">'+LBL[k][1]+'</span>'
+        +(why?'<div class="why '+(k==='err'?'bad':k==='warn'?'warn':'')+'">'+why+'</div>':'')+'</td></tr>';
+    }).join('')+'</table>';
+
+  document.getElementById('fixToggles').innerHTML=
+     '<label class="toggle'+(addTypes?' on':'')+'"><input type="checkbox" id="tg1"'+(addTypes?' checked':'')+'>'
+    +'<div><div class="tt2">Add 1 unrecognised ticket type to the catalogue</div>'
+    +'<div class="td2">Confined Space Entry (RIIWHS202E). Added to Manage Ticket Types with no expiry rule until you set one. Leave this off and the row stays an error — ticket types are never created silently.</div></div></label>'
+    +'<label class="toggle'+(skipErr?' on':'')+'"><input type="checkbox" id="tg2"'+(skipErr?' checked':'')+'>'
+    +'<div><div class="tt2">Import everything else and give me the errors as a file</div>'
+    +'<div class="td2">Error rows come back as a CSV with the reason in the last column. Fix it and upload that file — nothing else has to be done twice.</div></div></label>';
+  document.getElementById('tg1').onchange=function(){addTypes=this.checked;renderReview();};
+  document.getElementById('tg2').onchange=function(){skipErr=this.checked;renderReview();};
+
+  const willImport=c.new+c.upd+c.warn;
+  document.getElementById('importSummary').innerHTML= c.err && !skipErr
+    ? '<span style="color:#b91c1c;font-weight:600">'+c.err+' error rows block the import.</span> Fix them, or tick the box above.'
+    : '<b>'+willImport+'</b> rows will be written · <b>'+c.err+'</b> held back';
+  document.getElementById('doImport').disabled = c.err>0 && !skipErr;
+  document.getElementById('doImport').onclick=()=>runImport(c,willImport);
+}
+const cnt=(f,n,l,cls)=>'<div class="cnt '+cls+(filter===f?' on':'')+'" data-f="'+f+'"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>';
+
+function runImport(c,willImport){
+  const map={'Provide First Aid (HLTAID011)':'HLTAID011','Construction Induction (CPCCWHS1001)':'CPCCWHS1001',
+    'Forklift Licence (TLILIC0003)':'TLILIC0003','Implement Traffic Management Plan (RIIWHS302E)':'RIIWHS302E',
+    'Plant Equipment Operator (RIIWHS201D)':'RIIWHS201D','Load and Unload Plant (RIIHAN308F)':'RIIHAN308F'};
+  const iso=d=>{if(!d)return null;const [dd,mm,yy]=d.split('/');return yy+'-'+mm+'-'+dd;};
+  IMPORT.forEach(r=>{
+    let k=r.k; if(r.unknown) k=addTypes?'warn':'err';
+    if(k==='err') return;
+    if(k==='upd'){const t=TICKETS.find(t=>t.w==='W1'&&t.type==='RIIWHS201D'); if(t)t.state='NT'; return;}
+    const w=WORKERS.find(x=>x.emp===r.emp); const code=map[r.t];
+    if(!w) return;
+    if(!code&&r.unknown){TYPES.push({code:'RIIWHS202E',name:'Confined Space Entry',exp:0,doc:0});}
+    const c2=code||'RIIWHS202E';
+    const ty=TYPES.find(x=>x.code===c2);
+    TICKETS.unshift({_id:'T'+Math.random().toString(36).slice(2,8),w:w.id,type:c2,num:r.n,
+      issued:iso(r.i),expiry:iso(r.e),doc:0,draft: ty&&ty.doc?1:0});
+  });
+  renderList();
+  document.getElementById('modalCard').innerHTML='<div class="ic">✅</div><h3>Imported</h3>'
+    +'<div style="text-align:left;margin:14px 0 18px">'
+    +'<div class="sumline"><span>New tickets created</span><b>'+(c.new+c.warn)+'</b></div>'
+    +'<div class="sumline"><span>Existing tickets updated</span><b>'+c.upd+'</b></div>'
+    +'<div class="sumline"><span>Landed as Draft (document required)</span><b>3</b></div>'
+    +'<div class="sumline"><span>Imported as Expired</span><b>1</b></div>'
+    +'<div class="sumline"><span>Ticket types added</span><b>'+(addTypes?1:0)+'</b></div>'
+    +'<div class="sumline"><span>Held back with errors</span><b>'+c.err+'</b></div></div>'
+    +'<p style="text-align:left">One batch, recorded in Activity. Undo restores every record to what it was, while this is still the most recent change to them.</p>'
+    +'<div style="display:flex;gap:10px;justify-content:center">'
+    +'<button class="btn btn-ghost" onclick="document.getElementById(\'modal\').classList.remove(\'on\')">Undo this import</button>'
+    +'<button class="btn btn-pri" onclick="document.getElementById(\'modal\').classList.remove(\'on\');show(\'add\')">See the register</button></div>';
+  document.getElementById('modal').classList.add('on');
+}
+
+renderChips(); renderList();
+</script>
+</body>
+</html>
