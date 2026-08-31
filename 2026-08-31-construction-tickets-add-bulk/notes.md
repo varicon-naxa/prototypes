@@ -156,3 +156,32 @@ can be read against each other: the workbook ships the same eight workers the Ti
 their real employee IDs, phone numbers and current tickets — no invented sample rows sitting
 beside them. Worker record IDs are `WKR-000n` and ticket record IDs `TKT-000n`, deliberately
 unlike the `EMP-` employee IDs so the two are never confused.
+
+---
+
+## One template, full ticket detail, and no double-ups (31 Aug 2026)
+
+Alec's call: **drop the template menu.** The export always comes down pre-filled with employees
+*and* their current tickets. There is no blank-versus-pre-filled choice to get wrong — an employee
+with no tickets simply has no rows on the TICKETS sheet yet, and the same file serves a first load,
+a renewal run and a clean-up.
+
+**Every ticket row carries the whole record**, not just the type: Ticket Type, Number, Issued,
+Expiry, Issuing Body, State and Notes — exactly the fields on the Add ticket panel — plus a
+read-only Document column, because a certificate cannot travel in a spreadsheet.
+
+**What happens if the same ticket is filled in twice.** A ticket's identity is its
+`Ticket Record ID`; where that is blank, **worker + ticket type + ticket number**.
+
+| Case | What happens |
+|---|---|
+| Same file uploaded twice | Rows carry their Record ID, so the second upload rewrites the same values. Nothing created — the importer is idempotent |
+| Row added by hand rather than edited | No Record ID, but worker + type + number match — updates that ticket, no second copy |
+| Two identical rows in one file | Collapsed to one before anything is written, reported in the review |
+| Same type, **different number** | **A renewal, not a duplicate.** Both kept, newer current, older marked superseded — collapsing them would destroy the expiry history |
+| In column M *and* on the TICKETS sheet | The TICKETS sheet wins; column M is ignored for that employee |
+| Row deleted from the sheet | Nothing. Deletions are never inferred from an absent row |
+
+The review step gained an **Already on record** count with the matched ticket named per row, the
+workbook states the rule in the `Ticket Record ID` and `Ticket Number` cell comments, and the
+sample file now exercises all four duplicate cases.

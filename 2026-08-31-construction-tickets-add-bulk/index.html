@@ -201,12 +201,15 @@
   .cnt .l{font-size:11.5px;color:#6b7280;margin-top:2px}
   .cnt.c-new.on{border-color:#059669}.cnt.c-upd.on{border-color:#2b6cb0}
   .cnt.c-warn.on{border-color:#d97706}.cnt.c-err.on{border-color:#e11d48}
+  .cnt.c-dup.on{border-color:#7c3aed}
 
   .rowstat{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:11px;white-space:nowrap}
   .rs-new{background:#e7f6ee;color:#067647}
   .rs-upd{background:#e6f0fa;color:#2b6cb0}
   .rs-warn{background:#fef3c7;color:#b45309}
   .rs-err{background:#fee2e2;color:#b91c1c}
+  .rs-dup{background:#ede9fe;color:#5b21b6}
+  .why.dup{color:#5b21b6}
   .why{font-size:11.5px;color:#6b7280;margin-top:3px}
   .why.bad{color:#b91c1c}
   .why.warn{color:#b45309}
@@ -422,7 +425,8 @@
     <p>Not a new importer. The same workbook, three edits:</p>
     <ol>
       <li>A locked <b>Record ID</b> column in front of the EMPLOYEES sheet, present only on an export of your real employees. It is what makes a re-upload update instead of duplicate.</li>
-      <li>A second sheet, <b>TICKETS</b> — one row per ticket, keyed on Employee ID, carrying Ticket Type, Number, Issued, Expiry, Issuing Body, State, Notes, and a read-only Document column. Its own locked <b>Ticket Record ID</b> for the same reason.</li>
+      <li>A second sheet, <b>TICKETS</b> — one row per ticket, keyed on Employee ID, carrying <b>every field the Add ticket panel has</b>: Ticket Type, Number, Issued, Expiry, Issuing Body, State and Notes, plus a read-only Document column. Nothing about a ticket has to be filled in afterwards by hand. Its own locked <b>Ticket Record ID</b> identifies the ticket.</li>
+      <li><b>One download, not a menu.</b> The export always comes down filled with your employees and everything already on their record. There is no blank-versus-pre-filled choice to get wrong: an employee with no tickets simply has no rows on the TICKETS sheet yet, and the same file serves a first load, a renewal run and a clean-up.</li>
       <li>Column M stays and keeps working, but takes <b>more than one ticket type, separated by a comma</b> — exactly how this workbook already handles Employee Payroll Allowance and Form Numbers. The dropdown stays as a spelling aid; its validation never blocked a typed value, so this needs no change to the file's mechanics. Each type listed creates a draft ticket carrying nothing but the type. If an employee also appears on the TICKETS sheet, column M is ignored for that employee — the sheet with the detail wins.</li>
       <li><b>Everything an import creates lands in Draft</b>, in the Draft tab that already exists on the Tickets page, and is published from there once checked. That is what the current template already does, said out loud and applied to both routes.</li>
     </ol>
@@ -430,7 +434,20 @@
 
     <p><b>The built file is real</b> — not a mockup. <a href="Employee_Upload_Template_round_trip.xlsx" download style="color:#f7941d;font-weight:600">Download the revised workbook</a>: it is the production template with those edits applied, dropdowns repointed after the column insert, validations widened to 500 rows, a hidden <code>_State</code> lookup added, the empty Pay Category sheet dropped, and every new column carrying a Varicon-authored cell comment in the same voice as the existing ones.</p>
 
-    <div class="note ok"><b>Two routes, deliberately.</b> Column M is the quick one — <em>this worker holds these three</em> — and gives you three draft shells to complete later. The TICKETS sheet is the full one, carrying number, dates, issuing body and state per ticket. Both land in Draft, so there is no path where a spreadsheet writes straight into the live compliance register.</div>
+    <div class="note ok"><b>Two routes, deliberately.</b> Column M is the quick one — <em>this worker holds these three</em> — and gives you three draft shells to complete later. The TICKETS sheet is the full one, carrying number, dates, issuing body, state and notes per ticket, so nothing is left to key in afterwards. Both land in Draft, so there is no path where a spreadsheet writes straight into the live compliance register.</div>
+
+    <h3>What happens if the same ticket is filled in twice</h3>
+    <p>The realistic failure is not a malicious one. Somebody re-sends the file they already sent, or adds a row at the bottom instead of editing the row we exported, or lists a ticket in column M that is also on the TICKETS sheet. All three have to be safe without anyone thinking about it.</p>
+    <p><b>A ticket's identity is its Ticket Record ID. Where that is blank, it is worker + ticket type + ticket number.</b> Everything follows from that:</p>
+    <div class="kv">
+      <div class="r"><div class="k">Same file uploaded twice</div><div class="v">Every row carries its Record ID, so the second upload updates the same tickets with the same values. Nothing is created. The importer is idempotent.</div></div>
+      <div class="r"><div class="k">Row added by hand instead of edited</div><div class="v">No Record ID, but worker + type + number match a ticket already on record — so it updates that ticket rather than creating a second copy.</div></div>
+      <div class="r"><div class="k">Two identical rows in one file</div><div class="v">Collapsed to one before anything is written, and reported as such in the review.</div></div>
+      <div class="r"><div class="k">Same type, different number</div><div class="v"><b>Not a duplicate — a renewal.</b> Both are kept, the newer becomes current and the older is marked superseded. Collapsing them would destroy the expiry history, which is the one thing the register exists to hold.</div></div>
+      <div class="r"><div class="k">Listed in column M <em>and</em> on the TICKETS sheet</div><div class="v">The TICKETS sheet wins. The column M entry is ignored for that employee rather than creating an empty second draft beside the detailed one.</div></div>
+      <div class="r"><div class="k">A row deleted from the sheet</div><div class="v">Nothing. Deletions are never inferred from an absent row — round-tripping an export loses rows for ordinary reasons.</div></div>
+    </div>
+    <p>All of it is shown in the review step before a single record is written, counted under <b>Already on record</b>, with the matched ticket named on each row.</p>
 
     <div class="note q"><b>Two things in the file worth a separate look.</b> The <code>_Role</code> dropdown carries <code>milan</code>, <code>SagarTestResource</code> and <code>Supervisor 1</code> — test data in a customer-facing list <em>(this may just be the tenant this copy was exported from — unverified)</em>. And <code>_Tickets</code> names its eight types inconsistently: five carry a code, "Working at Heights" and "Driving Licence" do not. Ticket types are about to be matched on their name, so that list wants a tidy first.</div>
   </div>
@@ -484,32 +501,31 @@
           <!-- STEP 2 -->
           <div class="wstep" id="w2" style="display:none">
             <div class="box">
-              <h4>What should the template contain?</h4>
-              <div class="bh">This is the same <b>Employee Upload Template</b> you download today — one extra sheet, and the option to have it come down already filled with your people. The choice below is what decides whether a returned row adds or corrects: a pre-filled export carries a locked <b>Record ID</b>, a blank one does not.</div>
+              <h4>What you'll get</h4>
+              <div class="bh">The <b>Employee Upload Template</b> you download today, filled with your people and everything already on their record. One template, not a menu — you always get what is on file, you change what needs changing, and you send the same file back.</div>
+
               <div class="opts" id="tmplOpts">
-                <div class="opt-card on" data-t="workers">
-                  <div class="rad"></div>
-                  <div>
-                    <div class="ti">Pre-filled with your employees — TICKETS sheet empty</div>
-                    <div class="de">Every active employee already on the EMPLOYEES sheet, locked, with their Record ID. You add rows to the TICKETS sheet against their Employee ID. Nobody has to spell a name the way we spell it.</div>
-                    <div class="tagline">Best for the first load, or a course a whole crew just sat.</div>
-                  </div>
-                </div>
-                <div class="opt-card" data-t="full">
+                <div class="opt-card on" data-t="full">
                   <div class="rad"></div>
                   <div>
                     <div class="ti">Pre-filled with your employees <em>and</em> their current tickets</div>
-                    <div class="de">Everything on file today on both sheets. Change an expiry, add a number, fix a typo, re-upload — each row carries its Ticket Record ID, so it updates rather than duplicating.</div>
-                    <div class="tagline">Best for a renewal run or a data clean-up. This is the download-and-reupload path.</div>
+                    <div class="de">Everything on file today across both sheets. Add a ticket, change an expiry, fix a typo, then re-upload. Each row carries a locked <b>Record ID</b>, so what comes back updates the record it came from instead of creating a second one.</div>
+                    <div class="tagline">Works the same whether you are loading tickets for the first time or running renewals — an employee with no tickets simply has no rows on the TICKETS sheet yet.</div>
                   </div>
                 </div>
-                <div class="opt-card" data-t="blank">
-                  <div class="rad"></div>
-                  <div>
-                    <div class="ti">Blank template — headers only</div>
-                    <div class="de">What you get today, plus the TICKETS sheet. For pasting from a subbie's spreadsheet or a training provider's report. Employees are matched on Employee ID, then email, then exact name within company.</div>
-                    <div class="tagline">No Record IDs, so every row creates. Anything ambiguous is held back, never guessed.</div>
-                  </div>
+              </div>
+
+              <div style="margin-top:16px">
+                <div style="font-size:12.5px;font-weight:600;color:#4b5563;margin-bottom:6px">Every ticket row carries the full record — the same fields as the Add ticket panel</div>
+                <div class="checks" style="gap:7px">
+                  <span class="chk on" style="cursor:default">Ticket type</span>
+                  <span class="chk on" style="cursor:default">Ticket / licence number</span>
+                  <span class="chk on" style="cursor:default">Issued date</span>
+                  <span class="chk on" style="cursor:default">Expiry date</span>
+                  <span class="chk on" style="cursor:default">Issuing body</span>
+                  <span class="chk on" style="cursor:default">State</span>
+                  <span class="chk on" style="cursor:default">Notes</span>
+                  <span class="chk" style="cursor:default;opacity:.6">Document — read-only, cannot travel in a spreadsheet</span>
                 </div>
               </div>
 
@@ -573,6 +589,7 @@
             <div class="box">
               <h4>What this file will do</h4>
               <div class="bh">A dry run. Nothing has been written yet — this is the file read against what's already on record. Everything it creates lands in the <b>Draft</b> tab, checked and published from there; an import never writes straight into the live register.</div>
+              <div class="note ok" style="margin:0 0 14px"><b>You cannot double up a ticket.</b> A ticket is identified by its <b>Ticket Record ID</b>; where that is blank, by <b>worker + ticket type + ticket number</b>. Anything matching an existing ticket on those three updates it instead of creating a second — so re-uploading the same file twice changes nothing the second time. Same type with a <em>different</em> number is a renewal, not a duplicate: both are kept and the older is marked superseded.</div>
               <div class="counts" id="counts"></div>
               <div class="sheet" id="reviewSheet"></div>
               <div style="margin-top:16px" id="fixToggles"></div>
@@ -594,17 +611,18 @@
   <div style="background:#fff;min-height:calc(100vh - 58px)">
   <div class="doc">
     <h3>What the prototype commits to</h3>
-    <p class="lead">Eleven rules. Each one is a decision someone has to make before this gets built, and each is made here rather than left to the implementation.</p>
+    <p class="lead">Fourteen rules. Each one is a decision someone has to make before this gets built, and each is made here rather than left to the implementation.</p>
     <ol>
       <li><b>Add from the list page is the existing form with a Worker field on the front, in a side panel.</b> Ticket type, number, issued, expiry, issuing body, state, document, notes, and the Save as draft / Publish pair are the worker-drawer form verbatim. One component, two entry points — inline on the worker's Tickets tab where the worker is already known, in the standard right-hand panel from the list page where it isn't. Two forms would drift within a release.</li>
-      <li><b>One worker, many ticket types.</b> A ticket belongs to a person — its number, its certificate and its expiry are all personal — so worker is a single selection. But a worker holds three or four tickets, and you learn them all in one sitting, so ticket type is multi-select and each selection opens its own set of fields. One panel, one worker, N tickets written. When a <em>crew</em> of six sits the same course, that is six workers and the wrong tool: it is the case bulk upload exists for, which is why the two buttons sit side by side rather than one being a power-user afterthought.</li>
-      <li><b>Everything added here lands in Draft.</b> Multi-add is a capture flow — you are getting what the worker told you out of your head and into the system, and the certificate is usually a photo that arrives later. So <b>Save to draft</b> is the primary action and the tickets sit in the Draft tab that already exists. Each card carries its own status while you type — <em>needs document</em>, <em>needs number</em>, <em>ready to publish</em> — so nothing has to be guessed at afterwards. <b>Publish complete ones</b> is there for the tickets that already have everything; it publishes those and leaves the rest in Draft with the reason attached, rather than making you come back and re-enter a complete ticket just because the one beside it was short a photo.</li>
-      <li><b>A pre-filled export is the update path; a blank template is the create path.</b> The difference is a locked <code>Record ID</code> column that only pre-filled exports carry. A row with an ID updates that record. A row without one creates. Nothing is ever matched on a person's name alone to decide between the two.</li>
-      <li><b>Worker matching on a blank template is employee ID, then email, then exact name within company.</b> Two candidates is an error row, not a best guess. Getting a licence onto the wrong person is worse than not importing it.</li>
+      <li><b>One worker per ticket.</b> A ticket is a record about a person — its number, its certificate and its expiry all belong to that person — so the panel writes exactly one. When a crew of six sits the same course on the same day, that is six rows, and keying them one at a time through this panel is the wrong tool. It is the case bulk upload exists for, which is why the two buttons sit side by side rather than one being a power-user afterthought.</li>
+      <li><b>One export, and it always carries Record IDs.</b> There is no blank-versus-pre-filled choice to get wrong. The download comes back filled with your employees and everything on their record, each row carrying a locked <code>Record ID</code>, so what returns updates what it came from. A row you add yourself has no ID and creates — but only after the identity check below, so adding a row by hand still cannot produce a second copy of a ticket you already hold.</li>
+      <li><b>Matching a row to a person is employee ID, then email, then exact name within company.</b> Two candidates is an error row, not a best guess. Getting a licence onto the wrong person is worse than not importing it.</li>
       <li><b>A ticket type that isn't in the catalogue never appears silently.</b> The review step lists the unknown types and offers one checkbox to add them to Manage Ticket Types. Left unchecked, those rows are errors. Free-text ticket types are how a register becomes ninety spellings of "white card".</li>
       <li><b>Blank expiry is derived from the ticket type's rule; a past expiry imports as Expired.</b> An expired licence is not a bad row — it's the reason you're loading the data. Rejecting it hides the risk you bought the module for.</li>
       <li><b>Every ticket an import creates lands in Draft.</b> Not only the incomplete ones. An import is somebody else's spreadsheet arriving in your compliance register, and it gets checked before it counts — so imported tickets sit in the Draft tab that already exists and are published from there. Each carries the reason it is still a draft: document missing, no number, expired on arrival, or simply not yet reviewed. This is what the current Employee Upload Template already does with its Tickets column; the rule is now stated rather than buried in a cell comment.</li>
       <li><b>Documents can't come through a spreadsheet.</b> Where the ticket type requires one, the imported draft is flagged <b>document missing</b> and chased from the Draft tab. Consistent with the standing rule that compliance gates flag rather than block.</li>
+      <li><b>A ticket cannot be doubled up.</b> Its identity is the <b>Ticket Record ID</b>; where that is blank, <b>worker + ticket type + ticket number</b>. Three consequences, all visible in the review before anything is written: a row matching an existing ticket on those three <em>updates</em> it rather than creating a second; two identical rows inside one file are collapsed to one; and uploading the same file twice changes nothing the second time. The importer is idempotent by design, because the realistic failure is somebody re-sending the file they already sent.</li>
+      <li><b>Same type, different number is a renewal — not a duplicate.</b> A worker who re-sits their first aid certificate has two HLTAID011 tickets with different numbers and dates, and both are kept: the newer becomes current, the older is marked superseded. Collapsing them would destroy the expiry history, which is the one thing the register exists to hold. Only an exact match on the number is treated as the same ticket.</li>
       <li><b>The workbook takes many tickets per worker, two ways.</b> Column M on the EMPLOYEES sheet accepts several ticket types separated by a comma — the idiom the file already uses for Allowances and Form Numbers — and creates a draft shell for each. The TICKETS sheet takes one row per ticket and carries the real detail. Where both are present for an employee, the TICKETS sheet wins.</li>
       <li><b>The review step is a dry run and the only way to import.</b> Counted as New / Update / Warning / Error, filterable, fixable inline. Skipping the error rows imports the rest. There is no path that writes on upload.</li>
       <li><b>Column M keeps working.</b> The existing <code>Tickets</code> dropdown still creates a draft shell, so nobody's saved workbook breaks. Where an employee appears on the TICKETS sheet, column M is ignored for that employee — the richer source wins, and the rule is stated rather than discovered.</li>
@@ -909,7 +927,7 @@ function toast(ic,t,b){
 }
 
 /* ---------------- wizard ---------------- */
-let mode='tickets', tmpl='workers', step=1;
+let mode='tickets', tmpl='full', step=1;
 let sheet='emp';
 
 document.querySelectorAll('#modeOpts .opt-card').forEach(c=>c.onclick=()=>{
@@ -918,16 +936,12 @@ document.querySelectorAll('#modeOpts .opt-card').forEach(c=>c.onclick=()=>{
 });
 function syncMode(){
   const isTypes = mode==='types';
-  document.querySelectorAll('#tmplOpts .opt-card').forEach(c=>c.style.display = isTypes && c.dataset.t!=='blank' ? 'none':'flex');
+  document.getElementById('tmplOpts').style.display = isTypes?'none':'flex';
   document.getElementById('scopeChecks').parentElement.style.display = isTypes?'none':'block';
   document.getElementById('sheetTabs').style.display = isTypes?'none':'flex';
-  if(isTypes){ tmpl='blank'; document.querySelectorAll('#tmplOpts .opt-card').forEach(x=>x.classList.toggle('on',x.dataset.t==='blank')); }
+  tmpl = isTypes ? 'types' : 'full';
   renderPreview();
 }
-document.querySelectorAll('#tmplOpts .opt-card').forEach(c=>c.onclick=()=>{
-  document.querySelectorAll('#tmplOpts .opt-card').forEach(x=>x.classList.remove('on'));
-  c.classList.add('on'); tmpl=c.dataset.t; renderPreview();
-});
 document.querySelectorAll('#sheetTabs span').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('#sheetTabs span').forEach(x=>x.classList.remove('on'));
   t.classList.add('on'); sheet=t.dataset.sh; renderPreview();
@@ -945,8 +959,8 @@ const TKT_COLS = ['Employee ID','Worker Name','Ticket Type','Ticket Number','Iss
 
 function templateCols(){
   if(mode==='types') return {locked:[],open:['Code','Ticket type name','Category','Expiry (months, blank = none)','Document required (Y/N)','States']};
-  if(sheet==='tk')  return {locked: tmpl==='blank'?[]:['Ticket Record ID'], open: TKT_COLS};
-  return {locked: tmpl==='blank'?[]:['Record ID'], open: EMP_COLS};
+  if(sheet==='tk')  return {locked:['Ticket Record ID'], open: TKT_COLS};
+  return {locked:['Record ID'], open: EMP_COLS};
 }
 function previewRows(){
   if(mode==='types') return [['CPCCWHS1001','Construction Induction (White Card)','WHS','','Y','ALL'],['','','','','','']];
@@ -954,18 +968,14 @@ function previewRows(){
   const ws=WORKERS.filter(w=>incSub||!w.sub);
 
   if(sheet==='emp'){
-    if(tmpl==='blank') return [EMP_COLS.map(()=>''),EMP_COLS.map(()=>'')];
     return ws.map(w=>{
       const [fn,...ln]=w.name.split(' ');
       return {lock:['WKR-'+String(WORKERS.indexOf(w)+1).padStart(4,'0')],
               open:[fn,ln.join(' '),w.co,w.role,w.emp,w.email,w.ph,
-                    w.sub?'Subcontractor':'Wages','','','Active','', tmpl==='full'?ticketCount(w):'']};
+                    w.sub?'Subcontractor':'Wages','','','Active','', ticketCount(w)]};
     });
   }
   // TICKETS sheet
-  if(tmpl==='workers') return [{lock:[''],open:['EMP-1041','B K','','','','','','','','']},
-                               {lock:[''],open:['','','','','','','','','','']}];
-  if(tmpl==='blank')   return [TKT_COLS.map(()=>''),TKT_COLS.map(()=>'')];
   const out=[];
   ws.forEach(w=>{
     TICKETS.filter(t=>t.w===w.id).forEach(t=>{
@@ -990,14 +1000,9 @@ function renderPreview(){
     else body+='<tr>'+r.lock.map(v=>'<td class="locked">'+(v||'')+'</td>').join('')+r.open.map(v=>'<td class="'+(v&&v.trim()?'pre':'blank')+'">'+(v&&v.trim()?v:'—')+'</td>').join('')+'</tr>';
   });
   document.getElementById('preview').innerHTML='<table>'+head+body+'</table>';
-  const notes={
-    workers:'The EMPLOYEES sheet comes down filled and locked. You add rows to the TICKETS sheet against the Employee ID — no Ticket Record IDs, so every ticket row creates.',
-    full:'Both sheets filled. Ticket Record ID is the ticket, not the person: edit a row and it updates that exact ticket. Delete a row and nothing happens — deletions are never inferred from an absent row.',
-    blank:'What the template gives you today, plus the TICKETS sheet. No IDs, so every row creates. Employees are matched on Employee ID, then email, then exact name within company.'
-  };
   document.getElementById('previewNote').textContent = mode==='types'
     ? 'Feeds Manage Ticket Types, and the _Tickets dropdown the workbook already uses. Matched on Code — an existing code updates its type, a new one creates it.'
-    : notes[tmpl];
+    : 'Ticket Record ID is the ticket, not the person: edit a row and it updates that exact ticket. Add a row with the ID left blank and it creates one. Delete a row and nothing happens — deletions are never inferred from an absent row.';
 }
 function goStep(n){
   step=n;
@@ -1046,16 +1051,25 @@ const IMPORT=[
   {emp:'EMP-2210',w:'Marco Bianchi',t:'Plant Equipment Operator (RIIWHS201D)',n:'661201',i:'11/05/2024',e:'',k:'new',why:'Creates a draft ticket. Complete on arrival — publish it from the Draft tab.'},
   {emp:'',       w:'D. Nguyen',t:'Load and Unload Plant (RIIHAN308F)',n:'LU-2201',i:'01/08/2026',e:'',k:'err',why:'No employee ID, and "D. Nguyen" is not an exact name match. Two candidates in Cookie’s Civil Pty — resolve rather than guess.'},
   {emp:'EMP-9999',w:'Rob Petersen',t:'Provide First Aid (HLTAID011)',n:'FA-11002',i:'05/05/2026',e:'05/05/2029',k:'err',why:'No worker with employee ID EMP-9999. Create the worker first, or correct the ID.'},
-  {emp:'EMP-1012',w:'Priya Raman',t:'',n:'PR-3320',i:'',e:'',k:'err',why:'Ticket type is blank. Required on every row.'}
+  {emp:'EMP-1012',w:'Priya Raman',t:'',n:'PR-3320',i:'',e:'',k:'err',why:'Ticket type is blank. Required on every row.'},
+  {emp:'EMP-1041',w:'B K',t:'Plant Equipment Operator (RIIWHS201D)',n:'532534',i:'24/08/2023',e:'',k:'dup',
+   why:'Same ticket already on record — added as a new row instead of editing TKT-0001, but worker + type + number match it exactly. Updates TKT-0001. No second copy is created.'},
+  {emp:'EMP-1044',w:'Jack Mercer',t:'Construction Induction (CPCCWHS1001)',n:'0018 9902',i:'08/11/2022',e:'',k:'dup',
+   why:'Identical to row 5 of this same file. The two rows are collapsed into one; the second is not imported.'},
+  {emp:'EMP-1007',w:'Sam Whitcombe',t:'Provide First Aid (HLTAID011)',n:'FA-99820',i:'14/08/2026',e:'14/08/2029',k:'warn',
+   why:'Same type as row 7 but a different number and a later issue date — a renewal, not a duplicate. Both are kept and the earlier one is marked superseded, so the expiry history survives.'},
+  {emp:'EMP-1042',w:'Dave Nguyen',t:'White Card (CPCCWHS1001)',n:'',i:'',e:'',k:'dup',
+   why:'Listed in the Tickets column on the EMPLOYEES sheet as well. The TICKETS sheet row wins — the column M entry is ignored for this employee rather than creating an empty second draft.'}
 ];
 let filter='all', addTypes=false, skipErr=true;
 function renderReview(){
-  const c={new:0,upd:0,warn:0,err:0};
+  const c={new:0,upd:0,dup:0,warn:0,err:0};
   IMPORT.forEach(r=>{ let k=r.k; if(r.unknown&&!addTypes)k='err'; if(r.unknown&&addTypes)k='warn'; c[k]++; });
   document.getElementById('counts').innerHTML=
      cnt('all',IMPORT.length,'All rows','')
    + cnt('new',c.new,'New drafts','c-new')
    + cnt('upd',c.upd,'Updates','c-upd')
+   + cnt('dup',c.dup,'Already on record','c-dup')
    + cnt('warn',c.warn,'Drafts flagged','c-warn')
    + cnt('err',c.err,'Errors','c-err');
   document.querySelectorAll('#counts .cnt').forEach(el=>el.onclick=()=>{filter=el.dataset.f;renderReview();});
@@ -1064,7 +1078,7 @@ function renderReview(){
     let k=r.k; if(r.unknown) k=addTypes?'warn':'err';
     return filter==='all'||filter===k;
   });
-  const LBL={new:['rs-new','New draft'],upd:['rs-upd','Update'],warn:['rs-warn','Draft — flagged'],err:['rs-err','Error']};
+  const LBL={new:['rs-new','New draft'],upd:['rs-upd','Update'],dup:['rs-dup','Already on record'],warn:['rs-warn','Draft — flagged'],err:['rs-err','Error']};
   document.getElementById('reviewSheet').innerHTML='<table><tr><th>Row</th><th>Worker</th><th>Ticket type</th><th>Number</th><th>Issued</th><th>Expiry</th><th>What will happen</th></tr>'
     + rows.map(r=>{
       let k=r.k; if(r.unknown) k=addTypes?'warn':'err';
@@ -1074,7 +1088,7 @@ function renderReview(){
         +'<td class="pre" style="white-space:normal;max-width:280px">'+(r.t||'<span style="color:#b91c1c">blank</span>')+'</td>'
         +'<td>'+(r.n||'—')+'</td><td>'+(r.i||'—')+'</td><td>'+(r.e||'—')+'</td>'
         +'<td style="white-space:normal;max-width:300px"><span class="rowstat '+LBL[k][0]+'">'+LBL[k][1]+'</span>'
-        +(why?'<div class="why '+(k==='err'?'bad':k==='warn'?'warn':'')+'">'+why+'</div>':'')+'</td></tr>';
+        +(why?'<div class="why '+(k==='err'?'bad':k==='warn'?'warn':k==='dup'?'dup':'')+'">'+why+'</div>':'')+'</td></tr>';
     }).join('')+'</table>';
 
   document.getElementById('fixToggles').innerHTML=
@@ -1101,11 +1115,12 @@ function runImport(c,willImport){
     'Forklift Licence (TLILIC0003)':'TLILIC0003','Implement Traffic Management Plan (RIIWHS302E)':'RIIWHS302E',
     'Plant Equipment Operator (RIIWHS201D)':'RIIWHS201D','Load and Unload Plant (RIIHAN308F)':'RIIHAN308F'};
   const iso=d=>{if(!d)return null;const [dd,mm,yy]=d.split('/');return yy+'-'+mm+'-'+dd;};
-  let made=0, noDoc=0, asExpired=0, typesAdded=0;
+  let made=0, noDoc=0, asExpired=0, typesAdded=0, deduped=0;
   const past=d=>d && new Date(d+'T00:00:00') < TODAY;
   IMPORT.forEach(r=>{
     let k=r.k; if(r.unknown) k=addTypes?'warn':'err';
     if(k==='err') return;
+    if(k==='dup'){ deduped++; return; }
     if(k==='upd'){const t=TICKETS.find(t=>t.w==='W1'&&t.type==='RIIWHS201D'); if(t)t.state='NT'; return;}
     const w=WORKERS.find(x=>x.emp===r.emp); const code=map[r.t];
     if(!w) return;
@@ -1127,6 +1142,7 @@ function runImport(c,willImport){
     +'<div style="text-align:left;margin:14px 0 18px">'
     +'<div class="sumline"><span>New draft tickets created</span><b>'+made+'</b></div>'
     +'<div class="sumline"><span>Existing tickets updated</span><b>'+c.upd+'</b></div>'
+    +'<div class="sumline"><span>Already on record — not duplicated</span><b>'+deduped+'</b></div>'
     +'<div class="sumline"><span>&nbsp;&nbsp;of those, flagged document missing</span><b>'+noDoc+'</b></div>'
     +'<div class="sumline"><span>&nbsp;&nbsp;of those, already expired</span><b>'+asExpired+'</b></div>'
     +'<div class="sumline"><span>Ticket types added</span><b>'+typesAdded+'</b></div>'
