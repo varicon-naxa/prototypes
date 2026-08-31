@@ -21,7 +21,10 @@ Follows on from `2026-05-21-worker-construction-tickets`, which built the regist
 
 **Fix.** Two buttons on the list page, one grammar.
 
-1. **Add ticket** — the worker-drawer form with a **Worker** field on the front. Same fields, same
+1. **Add ticket** — the worker-drawer form with a **Worker** field on the front, opened as a
+   **right-hand side panel**, the pattern the rest of the product already uses (Alec's call,
+   31 Aug 2026 — not an inline panel on the page). Scrim behind it, Esc and click-away close it,
+   the list stays visible so you can add several without losing your place. Same fields, same
    Save as draft / Publish. Worker is multi-select, because the real event is a crew sitting the
    same course on the same day; selecting more than one turns the number field into one row per
    worker, since the certificate number is personal and the course is not. One submission, N records.
