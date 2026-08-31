@@ -128,3 +128,31 @@ dropped, and Varicon-voiced cell comments on every new column.
 the tenant this copy came from — unverified)*. And `_Tickets` names its eight types
 inconsistently: five carry a code, "Working at Heights" and "Driving Licence" don't. Types are
 about to be matched on name, so that list wants a tidy first.
+
+---
+
+## Multi-ticket lives in the workbook, and everything imports as Draft (31 Aug 2026)
+
+Alec's clarification: **multiple tickets belong on the Excel, not on the add panel.** The side
+panel stays one worker, one ticket. Two changes to the workbook instead:
+
+- **Column M takes several ticket types separated by a comma** — the idiom the file already uses
+  for Employee Payroll Allowance and Form Numbers. No mechanical change was needed: the column's
+  data validation has `showErrorMessage=False`, so the dropdown was only ever a spelling aid and
+  a typed multi-value has always been accepted. Each type listed creates a draft shell.
+- **The TICKETS sheet carries the detail** — one row per ticket, so a worker holds as many as
+  they hold, each with number, issued, expiry, issuing body, state and notes. Where an employee
+  appears on both, the TICKETS sheet wins.
+
+**Everything an import creates lands in Draft.** Not only the incomplete rows. An import is
+someone else's spreadsheet arriving in a compliance register, so it is checked before it counts:
+imported tickets sit in the Draft tab that already exists and are published from there, each
+carrying its reason — document missing, no number, expired on arrival, or simply not yet
+reviewed. This is what the production template already does with column M; the rule is now stated
+rather than buried in a cell comment. The wizard's review step and the import summary both say so.
+
+**The export carries the prototype's own people.** Alec's instruction, so the sheet and the screen
+can be read against each other: the workbook ships the same eight workers the Tickets page shows,
+their real employee IDs, phone numbers and current tickets — no invented sample rows sitting
+beside them. Worker record IDs are `WKR-000n` and ticket record IDs `TKT-000n`, deliberately
+unlike the `EMP-` employee IDs so the two are never confused.
