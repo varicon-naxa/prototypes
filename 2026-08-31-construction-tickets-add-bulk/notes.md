@@ -55,16 +55,19 @@ required, states — matched on Code, feeding Manage Ticket Types. Do that first
 isn't set up, because worker tickets are validated against it.
 
 **Views.** *Screen today* (recreation with the four defects annotated) · *Add ticket* (live — pick
-workers, publish, watch the register and the tiles move) · *Bulk upload* (live wizard, real CSV
-download, twelve-row sample file that exercises new, update, missing document, past expiry, unknown
-ticket type, ambiguous name, unknown employee ID and a blank required field) · *Rules & open
-questions*.
+workers, publish, watch the register and the tiles move) · *Template today* (the real
+`Employee_Upload_Template.xlsx` pulled apart, with the revised workbook to download) · *Bulk upload*
+(live wizard over both sheets, twelve-row sample file that exercises new, update, missing document,
+past expiry, unknown ticket type, ambiguous name, unknown employee ID and a blank required field) ·
+*Rules & open questions*.
 
 **Three open questions, shown rather than answered.**
 
-1. **One importer or two doors?** Bulk upload needs an entry point on this page, but it should be
-   Initial Data Upload scoped to tickets, not a second codebase. If it can't be, this replaces
-   Initial Data Upload's tickets section rather than sitting beside it.
+1. ~~**One importer or two doors?**~~ **Answered by the file** (see the revision below): there is
+   one importer — the Employee Upload Template behind Initial Data Upload — and it already has a
+   Tickets column, so this is an edit to that workbook, not a new importer. What remains open is
+   whether the Tickets page's door and the Initial Data Upload door share one wizard, or the
+   tickets door is a thin scoped version of it.
 2. **Who loads a subcontractor's tickets?** The export/re-upload pair is exactly the shape you'd
    hand a subbie to fill in themselves — a different permission model, probably a different release.
 3. **Does an expired ticket stop anything?** The register only pays for itself when an expired
@@ -73,3 +76,51 @@ questions*.
 
 Worker names and companies are invented. The single real row (B K · Plant Equipment Operator
 RIIWHS201D · #532534 · 24 Aug 2023) is carried through so the recreation matches the screenshot.
+
+---
+
+## Revised 31 Aug 2026 against the real template
+
+Alec supplied `Employee_Upload_Template.xlsx`. It changes the design, because **ticket import
+already exists** — and stops one field short of being useful.
+
+The workbook has 12 sheets: EMPLOYEES (13 columns), six hidden lookup sheets feeding dropdowns,
+and five visible sheets reprinting the same lists, one of which (Pay Category) is a header and
+nothing else. Column **M, Tickets**, is a single-select dropdown from a hidden `_Tickets` sheet
+of 8 types. Its cell comment: *"Pick a ticket type from the dropdown. On import it is added to
+the employee as a DRAFT ticket to complete later."*
+
+**Four things wrong with column M**
+
+1. One dropdown cell is **one ticket per employee**. Most workers hold three or four.
+2. It carries the **type and nothing else** — no number, issued, expiry, issuing body, state. So
+   every import is a draft shell someone opens and completes by hand: the drawer-by-drawer work
+   is moved, not removed. With no expiry, the register still can't say what lapses next month.
+3. The workbook **already has the multi-value idiom** — Allowances and Form Numbers both say
+   "separated by a comma". Tickets, the column with the dropdown, takes one. (Comma-separation
+   wouldn't be enough for a ticket anyway; the inconsistency just shows it was an afterthought.)
+4. **Nothing round-trips.** The file ships three dummy rows with blank Company and Role. It is a
+   create-only form, so there is no correct-at-scale path and no protection against a second
+   upload duplicating everyone — which is exactly Alec's ask.
+
+**So this is not a new importer.** Three edits to the workbook they already have:
+
+- A locked **Record ID** column in front of EMPLOYEES, present only on an export of real
+  employees. It is what makes a re-upload update instead of duplicate.
+- A second sheet, **TICKETS** — one row per ticket, keyed on Employee ID, carrying Ticket Type,
+  Number, Issued, Expiry, Issuing Body, State, Notes and a read-only Document column, with its
+  own locked **Ticket Record ID**.
+- **Column M stays and keeps working** so no saved workbook breaks. Its comment now says what it
+  does and points at the TICKETS sheet; where an employee appears there, column M is ignored for
+  that employee.
+
+`Employee_Upload_Template_round_trip.xlsx` in this folder is the real thing, not a mockup: the
+production file with those edits applied, dropdowns repointed after the column insert,
+validations widened to 500 rows, a hidden `_State` lookup added, the empty Pay Category sheet
+dropped, and Varicon-voiced cell comments on every new column.
+
+**Two things in the supplied file worth a separate look.** `_Role` carries `milan`,
+`SagarTestResource` and `Supervisor 1` — test data in a customer-facing dropdown *(possibly just
+the tenant this copy came from — unverified)*. And `_Tickets` names its eight types
+inconsistently: five carry a code, "Working at Heights" and "Driving Licence" don't. Types are
+about to be matched on name, so that list wants a tidy first.

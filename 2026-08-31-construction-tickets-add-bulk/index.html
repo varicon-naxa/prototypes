@@ -241,6 +241,7 @@
   <div class="tabs">
     <button data-v="today">Screen today</button>
     <button class="on" data-v="add">Add ticket</button>
+    <button data-v="template">Template today</button>
     <button data-v="bulk">Bulk upload</button>
     <button data-v="rules">Rules &amp; open questions</button>
   </div>
@@ -414,6 +415,55 @@
   </div>
 </div>
 
+
+<!-- ============================= TEMPLATE TODAY ============================= -->
+<div class="view" id="v-template">
+  <div style="background:#fff;min-height:calc(100vh - 58px)">
+  <div class="doc" style="max-width:1080px">
+    <h3>The Employee Upload Template as it ships today</h3>
+    <p class="lead">Read from <code>Employee_Upload_Template.xlsx</code>, downloaded 31 Aug 2026. Ticket import is not missing — it is already here, and it stops one field short of being useful.</p>
+
+    <p>Twelve sheets. One you fill in (<b>EMPLOYEES</b>), six hidden lookup sheets feeding dropdowns (<code>_EmploymentType</code>, <code>_Allowances</code>, <code>_Role</code>, <code>_Status</code>, <code>_CompanyName</code>, <code>_Tickets</code>), and five visible sheets that reprint the same lists again — one of which, <b>Pay Category</b>, is a header and nothing else.</p>
+
+    <div class="sheet" style="margin:14px 0 6px">
+      <table>
+        <tr><th>#</th><th>Column</th><th>What the cell comment says</th></tr>
+        <tr><td>A</td><td class="pre">First Name</td><td>Required, text</td></tr>
+        <tr><td>B</td><td class="pre">Last Name</td><td>Required, text</td></tr>
+        <tr><td>C</td><td class="pre">Company Name</td><td>Organisation or supplier name · dropdown, 187 entries</td></tr>
+        <tr><td>D</td><td class="pre">Role</td><td>"equivalent to Labour Cost Sheet's resource" · dropdown, 10 entries</td></tr>
+        <tr><td>E</td><td class="pre">Employee ID</td><td>Unique identifier, required</td></tr>
+        <tr><td>F</td><td class="pre">Email</td><td>Optional</td></tr>
+        <tr><td>G</td><td class="pre">Phone Number</td><td>+614xxxxxxxx</td></tr>
+        <tr><td>H</td><td class="pre">Employment Type</td><td>Dropdown: Salary / Wages / Casual / Subcontractor</td></tr>
+        <tr><td>I</td><td class="pre">Pay Category</td><td>Optional. Its visible sheet is empty</td></tr>
+        <tr><td>J</td><td class="pre">Employee Payroll Allowance</td><td><b>"separated by a comma"</b> — multiple values, one cell</td></tr>
+        <tr><td>K</td><td class="pre">Status</td><td>Active / Inactive</td></tr>
+        <tr><td>L</td><td class="pre">Form Numbers</td><td><b>"separated by a comma"</b> — multiple values, one cell</td></tr>
+        <tr><td>M</td><td class="pre" style="background:#fff7ed">Tickets</td><td style="white-space:normal">"Tickets is optional. Pick a ticket type from the dropdown. On import it is added to the employee as a <b>DRAFT</b> ticket to complete later."</td></tr>
+      </table>
+    </div>
+
+    <h3>Four things wrong with column M</h3>
+    <div class="note"><span class="marker">1</span><b>One dropdown cell means one ticket per employee.</b> A worker holding a white card, a first aid certificate and an HR licence cannot be expressed. Most workers hold three or four.</div>
+    <div class="note"><span class="marker">2</span><b>It carries the type and nothing else.</b> No number, no issued date, no expiry, no issuing body, no state. So every imported ticket is a draft shell somebody opens and completes by hand — the importer moves the drawer-by-drawer work, it does not remove it. And with no expiry date, the register still cannot tell you what lapses next month, which is the entire reason to hold the data.</div>
+    <div class="note"><span class="marker">3</span><b>The workbook already has the idiom and tickets did not get it.</b> Allowances and Form Numbers both say "separated by a comma" and take many values in one cell. Tickets — the column with the dropdown — takes one. Even comma-separation would not be enough here, because a ticket has dates, but the inconsistency shows the column was an afterthought.</div>
+    <div class="note"><span class="marker">4</span><b>There is no download of your existing employees.</b> The file ships with three dummy rows — James Baker VAR-1, Ford Humphries VAR-2, Matilda Grace Anderson VAR-3 — and blank Company and Role. It is a create-only form. Nothing round-trips, so there is no way to correct at scale, and no protection against a second upload duplicating everyone.</div>
+
+    <h3>What changes</h3>
+    <p>Not a new importer. The same workbook, three edits:</p>
+    <ol>
+      <li>A locked <b>Record ID</b> column in front of the EMPLOYEES sheet, present only on an export of your real employees. It is what makes a re-upload update instead of duplicate.</li>
+      <li>A second sheet, <b>TICKETS</b> — one row per ticket, keyed on Employee ID, carrying Ticket Type, Number, Issued, Expiry, Issuing Body, State, Notes, and a read-only Document column. Its own locked <b>Ticket Record ID</b> for the same reason.</li>
+      <li>Column M stays and keeps working, so nothing breaks for anyone using it. Its comment now says what it actually does and points at the TICKETS sheet. If an employee appears on TICKETS, column M is ignored for that employee.</li>
+    </ol>
+    <p><b>The built file is real</b> — not a mockup. <a href="Employee_Upload_Template_round_trip.xlsx" download style="color:#f7941d;font-weight:600">Download the revised workbook</a>: it is the production template with those edits applied, dropdowns repointed after the column insert, validations widened to 500 rows, a hidden <code>_State</code> lookup added, the empty Pay Category sheet dropped, and every new column carrying a Varicon-authored cell comment in the same voice as the existing ones.</p>
+
+    <div class="note q"><b>Two things in the file worth a separate look.</b> The <code>_Role</code> dropdown carries <code>milan</code>, <code>SagarTestResource</code> and <code>Supervisor 1</code> — test data in a customer-facing list <em>(this may just be the tenant this copy was exported from — unverified)</em>. And <code>_Tickets</code> names its eight types inconsistently: five carry a code, "Working at Heights" and "Driving Licence" do not. Ticket types are about to be matched on their name, so that list wants a tidy first.</div>
+  </div>
+  </div>
+</div>
+
 <!-- ============================= BULK UPLOAD ============================= -->
 <div class="view" id="v-bulk">
   <div class="shell">
@@ -462,56 +512,53 @@
           <div class="wstep" id="w2" style="display:none">
             <div class="box">
               <h4>What should the template contain?</h4>
-              <div class="bh">This is the choice that decides whether you are adding or correcting. Pre-filled exports carry a locked record ID, so a row that comes back updates the ticket it came from. A blank template has no IDs, so every row creates something new.</div>
+              <div class="bh">This is the same <b>Employee Upload Template</b> you download today — one extra sheet, and the option to have it come down already filled with your people. The choice below is what decides whether a returned row adds or corrects: a pre-filled export carries a locked <b>Record ID</b>, a blank one does not.</div>
               <div class="opts" id="tmplOpts">
                 <div class="opt-card on" data-t="workers">
                   <div class="rad"></div>
                   <div>
-                    <div class="ti">Pre-filled with your workers — ticket columns blank</div>
-                    <div class="de">One row per active worker, their details already filled and locked. You fill in the ticket columns. Nobody has to spell a name the way we spell it.</div>
+                    <div class="ti">Pre-filled with your employees — TICKETS sheet empty</div>
+                    <div class="de">Every active employee already on the EMPLOYEES sheet, locked, with their Record ID. You add rows to the TICKETS sheet against their Employee ID. Nobody has to spell a name the way we spell it.</div>
                     <div class="tagline">Best for the first load, or a course a whole crew just sat.</div>
                   </div>
                 </div>
                 <div class="opt-card" data-t="full">
                   <div class="rad"></div>
                   <div>
-                    <div class="ti">Pre-filled with workers <em>and</em> their current tickets</div>
-                    <div class="de">Everything on file today, exported for editing. Change an expiry, add a number, fix a typo, then re-upload — matched rows update rather than duplicate.</div>
-                    <div class="tagline">Best for a renewal run or a data clean-up.</div>
+                    <div class="ti">Pre-filled with your employees <em>and</em> their current tickets</div>
+                    <div class="de">Everything on file today on both sheets. Change an expiry, add a number, fix a typo, re-upload — each row carries its Ticket Record ID, so it updates rather than duplicating.</div>
+                    <div class="tagline">Best for a renewal run or a data clean-up. This is the download-and-reupload path.</div>
                   </div>
                 </div>
                 <div class="opt-card" data-t="blank">
                   <div class="rad"></div>
                   <div>
                     <div class="ti">Blank template — headers only</div>
-                    <div class="de">Column headers and nothing else. For pasting from a subbie's spreadsheet or a training provider's report. Workers are matched on employee ID, then email, then exact name within company.</div>
-                    <div class="tagline">Every row creates. Rows that can't be matched to a worker are held back as errors, never guessed.</div>
+                    <div class="de">What you get today, plus the TICKETS sheet. For pasting from a subbie's spreadsheet or a training provider's report. Employees are matched on Employee ID, then email, then exact name within company.</div>
+                    <div class="tagline">No Record IDs, so every row creates. Anything ambiguous is held back, never guessed.</div>
                   </div>
                 </div>
-              </div>
-
-              <div id="colPick" style="margin-top:18px">
-                <div style="font-size:12.5px;font-weight:600;color:#4b5563">Worker columns to include</div>
-                <div class="bh" style="margin-top:3px;margin-bottom:0">Locked, read-only columns — they exist so the person filling this in recognises the row. Editing them changes nothing on the worker.</div>
-                <div class="checks" id="colChecks"></div>
               </div>
 
               <div style="margin-top:18px">
                 <div style="font-size:12.5px;font-weight:600;color:#4b5563">Who's included</div>
                 <div class="checks" id="scopeChecks">
-                  <label class="chk on"><input type="checkbox" checked data-scope="active">Active workers only</label>
+                  <label class="chk on"><input type="checkbox" checked data-scope="active">Active employees only</label>
                   <label class="chk"><input type="checkbox" data-scope="subbie">Include subcontractor workers</label>
                   <label class="chk"><input type="checkbox" data-scope="project">Only workers on a selected project</label>
                 </div>
               </div>
 
-              <div style="margin-top:18px;font-size:12.5px;font-weight:600;color:#4b5563">Preview</div>
+              <div style="margin-top:18px;display:flex;align-items:center;gap:14px">
+                <div style="font-size:12.5px;font-weight:600;color:#4b5563">Preview</div>
+                <div class="subtabs" id="sheetTabs" style="border:0;margin:0"><span class="on" data-sh="emp">EMPLOYEES</span><span data-sh="tk">TICKETS</span></div>
+              </div>
               <div class="sheet" id="preview"></div>
               <div style="font-size:11.5px;color:#9ca3af;margin-top:7px" id="previewNote"></div>
             </div>
             <div style="display:flex;gap:10px;justify-content:flex-end">
               <button class="btn btn-ghost" onclick="goStep(1)">Back</button>
-              <button class="btn btn-ghost" id="dlBtn">⬇ Download CSV</button>
+              <a class="btn btn-ghost" id="dlBtn" href="Employee_Upload_Template_round_trip.xlsx" download>⬇ Download Employee Upload Template</a>
               <button class="btn btn-pri" onclick="goStep(3)">I've filled it in →</button>
             </div>
           </div>
@@ -520,17 +567,17 @@
           <div class="wstep" id="w3" style="display:none">
             <div class="box">
               <h4>Upload your file</h4>
-              <div class="bh">CSV or XLSX. Column order doesn't matter — anything we can't place, you map by hand below.</div>
+              <div class="bh">The filled-in workbook back, or any CSV. Sheet and column order don't matter — anything we can't place, you map by hand below.</div>
               <div class="dz" id="dz">
                 <div class="big">⬆</div>
                 <div class="t">Drag and drop, or browse</div>
-                <div class="s">Max 5 MB · up to 5,000 rows</div>
+                <div class="s">XLSX or CSV · max 5 MB · up to 5,000 rows</div>
                 <div style="margin-top:14px"><button class="btn btn-ghost btn-sm" id="useSample">Use the sample file</button></div>
               </div>
               <div id="fileInfo" style="display:none;margin-top:14px">
                 <div style="display:flex;align-items:center;gap:10px;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;background:#fff">
                   <div style="font-size:20px">📄</div>
-                  <div><div style="font-size:13px;font-weight:600">tickets-august-intake.csv</div><div style="font-size:11.5px;color:#6b7280">12 rows · 9 columns · read in 0.4s</div></div>
+                  <div><div style="font-size:13px;font-weight:600">Employee_Upload_Template.xlsx</div><div style="font-size:11.5px;color:#6b7280">TICKETS sheet · 12 rows · 11 columns · read in 0.4s</div></div>
                   <button class="btn btn-ghost btn-sm" style="margin-left:auto" id="clearFile">Remove</button>
                 </div>
               </div>
@@ -584,6 +631,7 @@
       <li><b>Blank expiry is derived from the ticket type's rule; a past expiry imports as Expired.</b> An expired licence is not a bad row — it's the reason you're loading the data. Rejecting it hides the risk you bought the module for.</li>
       <li><b>Documents can't come through a spreadsheet.</b> Where the ticket type requires one, imported rows land as <b>Draft — document missing</b>, in the Draft tab that already exists, and are chased from there. Consistent with the standing rule that compliance gates flag rather than block.</li>
       <li><b>The review step is a dry run and the only way to import.</b> Counted as New / Update / Warning / Error, filterable, fixable inline. Skipping the error rows imports the rest. There is no path that writes on upload.</li>
+      <li><b>Column M keeps working.</b> The existing <code>Tickets</code> dropdown still creates a draft shell, so nobody's saved workbook breaks. Where an employee appears on the TICKETS sheet, column M is ignored for that employee — the richer source wins, and the rule is stated rather than discovered.</li>
       <li><b>Every import is one reversible batch.</b> The Activity tab records who imported what, when, from which file, with a single undo while the batch is the most recent change to those records.</li>
     </ol>
 
@@ -599,12 +647,13 @@
     <h3>Open questions</h3>
     <p>Three things the prototype deliberately shows rather than answers.</p>
     <ul>
-      <li><b>One importer or two doors?</b> <em>Initial Data Upload</em> in the top right already imports tenant-wide data. Tickets churn forever, so they need an entry point on this page — but that should be the same importer scoped to tickets, not a second codebase. If it can't be, this replaces the tickets section of Initial Data Upload rather than sitting beside it.</li>
+      <li><b>Answered by the file, not by us:</b> there is one importer, and it is the <b>Employee Upload Template</b> behind Initial Data Upload. It already has a Tickets column. So this is not a new importer — it is that workbook plus a TICKETS sheet and a Record ID, reached by a second door on this page. See <em>Template today</em>. What is still open is whether the Tickets page's door and the Initial Data Upload door share one wizard, or whether the tickets door is a thin scoped version of it.</li>
       <li><b>Who loads a subcontractor's tickets?</b> Today the head contractor keys the subbie's crew. The export/re-upload pair is exactly the shape you'd hand a subbie to fill in themselves — which is a different permission model and probably a different release.</li>
       <li><b>Does a ticket expiring stop anything?</b> The register only pays for itself when an expired high-risk licence is visible where the work is assigned — the scheduler, the SWMS, the site sign-in. Flag, don't block, per the standing decision. Out of scope here, but it's the reason this page matters.</li>
     </ul>
 
     <h3>Source</h3>
+    <p>Extended 31 Aug 2026 against the real <code>Employee_Upload_Template.xlsx</code> Alec supplied — which already carries a Tickets column, so the design became an edit to that workbook rather than a new importer. The revised file is built and downloadable from the <em>Template today</em> tab.</p>
     <p>Built 31 Aug 2026 from two screenshots of production: the Construction Tickets list under User Management, and the Add ticket / certification form on the worker drawer's TICKETS tab. Worker names and companies in the prototype are invented; the single real row (B K · Plant Equipment Operator RIIWHS201D · #532534) is carried through so the recreation matches.</p>
   </div>
   </div>
@@ -823,7 +872,7 @@ function toast(ic,t,b){
 
 /* ---------------- wizard ---------------- */
 let mode='tickets', tmpl='workers', step=1;
-const COLS=[{k:'emp',l:'Employee ID',on:1},{k:'co',l:'Company',on:1},{k:'role',l:'Role',on:1},{k:'email',l:'Email',on:0},{k:'proj',l:'Current project',on:0}];
+let sheet='emp';
 
 document.querySelectorAll('#modeOpts .opt-card').forEach(c=>c.onclick=()=>{
   document.querySelectorAll('#modeOpts .opt-card').forEach(x=>x.classList.remove('on'));
@@ -832,8 +881,8 @@ document.querySelectorAll('#modeOpts .opt-card').forEach(c=>c.onclick=()=>{
 function syncMode(){
   const isTypes = mode==='types';
   document.querySelectorAll('#tmplOpts .opt-card').forEach(c=>c.style.display = isTypes && c.dataset.t!=='blank' ? 'none':'flex');
-  document.getElementById('colPick').style.display = isTypes?'none':'block';
   document.getElementById('scopeChecks').parentElement.style.display = isTypes?'none':'block';
+  document.getElementById('sheetTabs').style.display = isTypes?'none':'flex';
   if(isTypes){ tmpl='blank'; document.querySelectorAll('#tmplOpts .opt-card').forEach(x=>x.classList.toggle('on',x.dataset.t==='blank')); }
   renderPreview();
 }
@@ -841,40 +890,58 @@ document.querySelectorAll('#tmplOpts .opt-card').forEach(c=>c.onclick=()=>{
   document.querySelectorAll('#tmplOpts .opt-card').forEach(x=>x.classList.remove('on'));
   c.classList.add('on'); tmpl=c.dataset.t; renderPreview();
 });
-document.getElementById('colChecks').innerHTML = COLS.map(c=>
-  '<label class="chk'+(c.on?' on':'')+'"><input type="checkbox" data-c="'+c.k+'"'+(c.on?' checked':'')+'>'+c.l+'</label>').join('');
-document.querySelectorAll('#colChecks input').forEach(i=>i.onchange=function(){
-  COLS.find(c=>c.k===this.dataset.c).on=this.checked;
-  this.parentElement.classList.toggle('on',this.checked); renderPreview();
+document.querySelectorAll('#sheetTabs span').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('#sheetTabs span').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on'); sheet=t.dataset.sh; renderPreview();
 });
 document.querySelectorAll('#scopeChecks input').forEach(i=>i.onchange=function(){
   this.parentElement.classList.toggle('on',this.checked); renderPreview();
 });
 
+/* The real Employee Upload Template: EMPLOYEES sheet as it ships today, with a locked
+   Record ID in front, plus a TICKETS sheet that carries one row per ticket. */
+const EMP_COLS = ['First Name','Last Name','Company Name','Role','Employee ID','Email','Phone Number',
+                  'Employment Type','Pay Category','Employee Payroll Allowance','Status','Form Numbers','Tickets'];
+const TKT_COLS = ['Employee ID','Worker Name','Ticket Type','Ticket Number','Issued Date','Expiry Date',
+                  'Issuing Body','State','Notes','Document'];
+
 function templateCols(){
   if(mode==='types') return {locked:[],open:['Code','Ticket type name','Category','Expiry (months, blank = none)','Document required (Y/N)','States']};
-  const locked = (tmpl!=='blank'?['Record ID','Worker']:[]).concat(tmpl!=='blank'?COLS.filter(c=>c.on).map(c=>c.l):[]);
-  const open = tmpl==='blank'
-    ? ['Employee ID','Worker name','Company','Ticket type','Ticket number','Issued date','Expiry date','Issuing body','State','Notes']
-    : ['Ticket type','Ticket number','Issued date','Expiry date','Issuing body','State','Notes'];
-  return {locked,open};
+  if(sheet==='tk')  return {locked: tmpl==='blank'?[]:['Ticket Record ID'], open: TKT_COLS};
+  return {locked: tmpl==='blank'?[]:['Record ID'], open: EMP_COLS};
 }
 function previewRows(){
   if(mode==='types') return [['CPCCWHS1001','Construction Induction (White Card)','WHS','','Y','ALL'],['','','','','','']];
   const incSub=document.querySelector('#scopeChecks input[data-scope="subbie"]').checked;
   const ws=WORKERS.filter(w=>incSub||!w.sub).slice(0,4);
-  if(tmpl==='blank') return [['EMP-1041','B K',"Cookie's Civil Pty",'','','','','','',''],['','','','','','','','','','']];
-  return ws.map(w=>{
-    const lock=['WKR-'+w.id.slice(1).padStart(4,'0'),w.name].concat(COLS.filter(c=>c.on).map(c=>c.k==='proj'?'(26-015) Mt Ousley Road':w[c.k]||''));
-    if(tmpl==='full'){
-      const t=TICKETS.find(t=>t.w===w.id);
-      const ty=t?TYPES.find(x=>x.code===t.type):null;
-      lock[0] = t ? 'TKT-'+String(TICKETS.indexOf(t)+1).padStart(4,'0') : lock[0];
-      return {lock, open: t?[ty.name+' ('+ty.code+')',t.num,'24/08/2023','',' ',t.state||'',''] : ['','','','','','','']};
-    }
-    return {lock, open:['','','','','','','']};
-  }).map(r=>r.lock?r:r);
+
+  if(sheet==='emp'){
+    if(tmpl==='blank') return [EMP_COLS.map(()=>''),EMP_COLS.map(()=>'')];
+    return ws.map((w,i)=>{
+      const [fn,...ln]=w.name.split(' ');
+      return {lock:['EMP-'+String(i+1).padStart(4,'0')],
+              open:[fn,ln.join(' '),w.co,w.role,w.emp,w.email,'+61 4XX XXX XXX',
+                    w.sub?'Subcontractor':'Wages','','','Active','', tmpl==='full'?ticketCount(w):'']};
+    });
+  }
+  // TICKETS sheet
+  if(tmpl==='workers') return [{lock:[''],open:['VAR-1','','','','','','','','','']},
+                               {lock:[''],open:['','','','','','','','','','']}];
+  if(tmpl==='blank')   return [TKT_COLS.map(()=>''),TKT_COLS.map(()=>'')];
+  const out=[];
+  ws.forEach(w=>{
+    TICKETS.filter(t=>t.w===w.id).forEach(t=>{
+      const ty=TYPES.find(x=>x.code===t.type);
+      out.push({lock:['TKT-'+String(TICKETS.indexOf(t)+1).padStart(4,'0')],
+        open:[w.emp,w.name,ty.name+' ('+ty.code+')',t.num||'',dmy(t.issued),dmy(t.expiry),'',t.state||'','',
+              t.doc?'Attached':(ty.doc?'Missing':'Not required')]});
+    });
+  });
+  return out.length?out:[{lock:[''],open:['VAR-1','','','','','','','','','']}];
 }
+const dmy=d=>{if(!d)return '';const [y,m,dd]=d.split('-');return dd+'/'+m+'/'+y;};
+const ticketCount=w=>{const n=TICKETS.filter(t=>t.w===w.id).length;return n?n+' — see TICKETS sheet':'';};
+
 function renderPreview(){
   const {locked,open}=templateCols();
   const rows=previewRows();
@@ -886,12 +953,12 @@ function renderPreview(){
   });
   document.getElementById('preview').innerHTML='<table>'+head+body+'</table>';
   const notes={
-    workers:'Locked columns are read-only context so the row is recognisable. The Record ID identifies the worker, so a returned row attaches its ticket to the right person without matching on spelling.',
-    full:'Record ID here is the ticket, not the worker — edit a row and it updates that exact ticket. Delete a row and nothing happens; deletions are never inferred from an absent row.',
-    blank:'No IDs, so every row creates. Workers are matched on employee ID, then email, then exact name within company; anything ambiguous is held back for you to resolve.',
+    workers:'The EMPLOYEES sheet comes down filled and locked. You add rows to the TICKETS sheet against the Employee ID — no Ticket Record IDs, so every ticket row creates.',
+    full:'Both sheets filled. Ticket Record ID is the ticket, not the person: edit a row and it updates that exact ticket. Delete a row and nothing happens — deletions are never inferred from an absent row.',
+    blank:'What the template gives you today, plus the TICKETS sheet. No IDs, so every row creates. Employees are matched on Employee ID, then email, then exact name within company.'
   };
   document.getElementById('previewNote').textContent = mode==='types'
-    ? 'Feeds Manage Ticket Types. Codes are matched on Code — an existing code updates its type, a new one creates it.'
+    ? 'Feeds Manage Ticket Types, and the _Tickets dropdown the workbook already uses. Matched on Code — an existing code updates its type, a new one creates it.'
     : notes[tmpl];
 }
 function goStep(n){
@@ -905,19 +972,6 @@ function goStep(n){
   window.scrollTo(0,0);
 }
 syncMode();
-
-document.getElementById('dlBtn').onclick=()=>{
-  const {locked,open}=templateCols(); const rows=previewRows();
-  let csv=[locked.concat(open).join(',')];
-  rows.forEach(r=>{
-    const cells = Array.isArray(r) ? r : r.lock.concat(r.open);
-    csv.push(cells.map(c=>'"'+String(c||'').replace(/"/g,'""')+'"').join(','));
-  });
-  const blob=new Blob([csv.join('\n')],{type:'text/csv'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download = mode==='types'?'varicon-ticket-types-template.csv':'varicon-worker-tickets-'+tmpl+'.csv';
-  a.click();
-};
 
 /* --- step 3 --- */
 const SRC=['Employee No','Name','Ticket','Cert Number','Date Issued','Expires','Issued By','St','Cost Centre'];
