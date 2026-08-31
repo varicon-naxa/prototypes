@@ -1009,17 +1009,22 @@ function runImport(c,willImport){
     'Forklift Licence (TLILIC0003)':'TLILIC0003','Implement Traffic Management Plan (RIIWHS302E)':'RIIWHS302E',
     'Plant Equipment Operator (RIIWHS201D)':'RIIWHS201D','Load and Unload Plant (RIIHAN308F)':'RIIHAN308F'};
   const iso=d=>{if(!d)return null;const [dd,mm,yy]=d.split('/');return yy+'-'+mm+'-'+dd;};
+  let made=0, asDraft=0, asExpired=0, typesAdded=0;
   IMPORT.forEach(r=>{
     let k=r.k; if(r.unknown) k=addTypes?'warn':'err';
     if(k==='err') return;
     if(k==='upd'){const t=TICKETS.find(t=>t.w==='W1'&&t.type==='RIIWHS201D'); if(t)t.state='NT'; return;}
     const w=WORKERS.find(x=>x.emp===r.emp); const code=map[r.t];
     if(!w) return;
-    if(!code&&r.unknown){TYPES.push({code:'RIIWHS202E',name:'Confined Space Entry',exp:0,doc:0});}
+    if(!code&&r.unknown&&!TYPES.some(t=>t.code==='RIIWHS202E')){
+      TYPES.push({code:'RIIWHS202E',name:'Confined Space Entry',exp:0,doc:0}); typesAdded++;
+    }
     const c2=code||'RIIWHS202E';
     const ty=TYPES.find(x=>x.code===c2);
-    TICKETS.unshift({_id:'T'+Math.random().toString(36).slice(2,8),w:w.id,type:c2,num:r.n,
-      issued:iso(r.i),expiry:iso(r.e),doc:0,draft: ty&&ty.doc?1:0});
+    const rec={_id:'T'+Math.random().toString(36).slice(2,8),w:w.id,type:c2,num:r.n,
+      issued:iso(r.i),expiry:iso(r.e),doc:0,draft: ty&&ty.doc?1:0};
+    TICKETS.unshift(rec); made++;
+    const s=statusOf(rec); if(s==='draft') asDraft++; if(s==='expired') asExpired++;
   });
   renderList();
   document.getElementById('modalCard').innerHTML='<div class="ic">✅</div><h3>Imported</h3>'
