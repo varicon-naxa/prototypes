@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Onboarding · Review Workers</title>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
+  :root {
+    --primary-main: #143666;
+    --primary-dark: #0C2043;
+    --primary-bg: rgba(20, 54, 102, 0.08);
+    --secondary-main: #F19100;
+    --secondary-dark: #C17400;
+    --secondary-bg: rgba(241, 145, 0, 0.08);
+    --text-primary: rgba(0, 5, 10, 0.87);
+    --text-secondary: rgba(0, 5, 10, 0.64);
+    --text-disabled: rgba(0, 5, 10, 0.38);
+    --bg-default: #F2F7FD;
+    --bg-paper: #FFFFFF;
+    --info-main: #0075E0;
+    --info-bg: #E5F1FC;
+    --info-border: #B5D4F4;
+    --success-main: #0F8A0F;
+    --success-bg: #DBF0DC;
+    --divider: #E0E0E0;
+    --border-solid: #C4C4C4;
+    --grey-50: #FAFAFA;
+    --grey-100: #F5F5F5;
+    --grey-300: #E0E0E0;
+    --grey-400: #BDBDBD;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-default);
+    color: var(--text-primary);
+    overflow: hidden;
+  }
+
+  .wizard { position: fixed; inset: 0; background: #fff; display: flex; flex-direction: column; }
+
+  /* ---------- Stepper (shared chrome) ---------- */
+  .stepper {
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 22px 16px 18px; background: #fff;
+    border-bottom: 1px solid var(--divider); flex-shrink: 0; overflow-x: auto;
+  }
+  .step { display: flex; align-items: center; }
+  .step-node { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 64px; }
+  .step-circle {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; border: 2px solid var(--grey-400);
+    color: var(--text-disabled); background: #fff;
+  }
+  .step-circle.done { background: var(--primary-main); border-color: var(--primary-main); color: #fff; }
+  .step-circle.active { background: var(--secondary-main); border-color: var(--secondary-main); color: #fff; }
+  .step-label { font-size: 11px; font-weight: 600; color: var(--text-disabled); white-space: nowrap; text-align: center; }
+  .step-label.done { color: var(--primary-main); }
+  .step-label.active { color: var(--secondary-main); }
+  .step-line { width: 40px; height: 2px; background: var(--grey-300); margin: 13px 6px 0; flex-shrink: 0; }
+  .step-line.done { background: var(--primary-main); }
+
+  .wizard-body { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 32px 120px; display: flex; justify-content: center; }
+  .wizard-content { width: 100%; max-width: 960px; }
+
+  .org-card {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--grey-50); border: 1px solid var(--divider); border-radius: 8px;
+    padding: 12px 18px; margin-bottom: 24px;
+  }
+  .org-left { display: flex; align-items: center; gap: 12px; }
+  .org-icon {
+    width: 36px; height: 36px; border-radius: 6px; background: var(--primary-bg);
+    display: flex; align-items: center; justify-content: center; color: var(--primary-main);
+  }
+  .org-meta .org-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.4px; color: var(--text-secondary); }
+  .org-meta .org-name { font-size: 15px; font-weight: 600; color: var(--secondary-main); }
+
+  .btn {
+    height: 36px; padding: 0 14px; border-radius: 6px; font-family: inherit;
+    font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-outline { background: #fff; border: 1px solid var(--border-solid); color: var(--text-primary); }
+  .btn-outline.orange { border-color: var(--secondary-main); color: var(--secondary-dark); }
+  .btn-primary { background: var(--secondary-main); border: 1px solid var(--secondary-main); color: var(--primary-dark); }
+  .btn-primary:disabled { background: #F7D9A8; border-color: #F7D9A8; color: rgba(0,5,10,.38); cursor: not-allowed; }
+  .btn-navy { background: var(--primary-main); border: 1px solid var(--primary-main); color: #fff; }
+  .btn-link { background: none; border: none; color: var(--info-main); font-weight: 600; font-size: 12.5px; cursor: pointer; font-family: inherit; text-decoration: underline; }
+
+  h2.page-title { font-size: 24px; font-weight: 600; color: var(--primary-main); margin-bottom: 6px; }
+  .page-subtitle { font-size: 14px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 20px; max-width: 760px; }
+
+  .banner { display: flex; align-items: flex-start; gap: 10px; border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.5; margin-bottom: 16px; }
+  .banner.info { background: var(--info-bg); border: 1px solid var(--info-border); color: var(--primary-dark); }
+  .banner.rule { background: var(--secondary-bg); border: 1px solid rgba(241,145,0,0.35); color: #7A4A00; }
+  .banner svg { flex-shrink: 0; margin-top: 1px; }
+  .banner .banner-text { flex: 1; }
+  .banner .banner-text strong { font-weight: 700; }
+  .banner-close { background: none; border: none; cursor: pointer; color: inherit; opacity: 0.6; flex-shrink: 0; }
+  .banner-close:hover { opacity: 1; }
+
+  /* ---------- Mini sub-stepper (within step 8) ---------- */
+  .mini-steps { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
+  .mini-step {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--divider); background: #fff; border-radius: 999px;
+    padding: 7px 14px 7px 8px; font-family: inherit; font-size: 12.5px; font-weight: 600;
+    color: var(--text-disabled); cursor: pointer;
+  }
+  .mini-step .num {
+    width: 20px; height: 20px; border-radius: 50%; background: var(--grey-100); color: var(--text-disabled);
+    display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;
+  }
+  .mini-step.done { color: var(--primary-main); border-color: rgba(20,54,102,.35); }
+  .mini-step.done .num { background: var(--primary-main); color: #fff; }
+  .mini-step.active { color: var(--secondary-dark); border-color: var(--secondary-main); background: var(--secondary-bg); }
+  .mini-step.active .num { background: var(--secondary-main); color: #fff; }
+  .mini-step:disabled { cursor: not-allowed; }
+  .mini-sep { color: var(--grey-400); font-size: 13px; }
+
+  /* ---------- Cards ---------- */
+  .card { border: 1px solid var(--divider); border-radius: 10px; background: #fff; margin-bottom: 20px; }
+  .card-head { padding: 18px 20px 14px; border-bottom: 1px solid var(--divider); }
+  .card-head h3 { font-size: 16px; font-weight: 700; color: var(--primary-main); margin-bottom: 4px; }
+  .card-head p { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+  .card-body { padding: 18px 20px; }
+  .card-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 20px; border-top: 1px solid var(--divider); background: var(--grey-50);
+    border-radius: 0 0 10px 10px;
+  }
+  .card-foot .foot-note { font-size: 12.5px; color: var(--text-secondary); }
+
+  /* ---------- Role chips ---------- */
+  .chip-label { font-size: 11.5px; font-weight: 700; letter-spacing: 0.4px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 10px; }
+  .chip-grid { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 20px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--border-solid); background: #fff; border-radius: 999px;
+    padding: 8px 14px; font-family: inherit; font-size: 13px; font-weight: 500; color: var(--text-primary);
+    cursor: pointer; transition: all .12s;
+  }
+  .chip:hover { border-color: var(--primary-main); }
+  .chip .tick {
+    width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--grey-400);
+    display: inline-flex; align-items: center; justify-content: center; color: transparent; flex-shrink: 0;
+  }
+  .chip.on { border-color: var(--primary-main); background: var(--primary-bg); font-weight: 600; color: var(--primary-main); }
+  .chip.on .tick { background: var(--primary-main); border-color: var(--primary-main); color: #fff; }
+  .chip .tick svg { width: 11px; height: 11px; }
+  .chip.custom { border-style: dashed; }
+  .chip .remove { background: none; border: none; padding: 0; cursor: pointer; color: inherit; opacity: .55; display: inline-flex; }
+  .chip .remove:hover { opacity: 1; }
+  .chip .remove svg { width: 13px; height: 13px; }
+
+  .add-role-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .add-role-row input {
+    height: 38px; width: 260px; border: 1px solid var(--border-solid); border-radius: 6px;
+    padding: 0 12px; font-family: inherit; font-size: 13px;
+  }
+  .add-role-row input:focus { outline: none; border-color: var(--primary-main); }
+
+  .selected-summary {
+    margin-top: 18px; padding: 12px 14px; border-radius: 8px;
+    background: var(--grey-50); border: 1px solid var(--divider); font-size: 12.5px; color: var(--text-secondary);
+  }
+  .selected-summary strong { color: var(--primary-main); }
+
+  /* ---------- Table ---------- */
+  .card-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--divider); }
+  .search-box { position: relative; }
+  .search-box input {
+    height: 36px; width: 240px; border: 1px solid var(--border-solid); border-radius: 6px;
+    padding: 0 12px 0 34px; font-family: inherit; font-size: 13px;
+  }
+  .search-box svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); width: 15px; height: 15px; }
+  .demo-chip {
+    display: inline-flex; align-items: center; gap: 6px; background: #fff;
+    border: 1px dashed var(--border-solid); border-radius: 999px; padding: 6px 12px;
+    font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text-secondary); cursor: pointer;
+  }
+  .demo-chip:hover { border-color: var(--primary-main); color: var(--primary-main); }
+  .demo-tag { font-size: 9px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--secondary-dark); background: var(--secondary-bg); padding: 2px 5px; border-radius: 3px; }
+
+  .table-wrap { overflow-x: auto; }
+  table.grid-table { width: 100%; border-collapse: collapse; min-width: 940px; }
+  table.grid-table th {
+    text-align: left; font-size: 12px; font-weight: 700; color: var(--primary-main);
+    padding: 12px 14px; background: var(--grey-50); border-bottom: 1px solid var(--divider); white-space: nowrap;
+  }
+  table.grid-table td { padding: 10px 14px; border-bottom: 1px solid var(--divider); font-size: 13px; vertical-align: middle; }
+  table.grid-table td.name { font-weight: 600; white-space: nowrap; }
+  table.grid-table tbody tr:hover { background: var(--grey-50); }
+
+  .cell-input {
+    height: 34px; border: 1px solid var(--border-solid); border-radius: 6px;
+    padding: 0 10px; font-family: inherit; font-size: 12.5px; width: 100%; min-width: 130px;
+  }
+  .phone-wrap { display: flex; align-items: center; border: 1px solid var(--border-solid); border-radius: 6px; height: 34px; overflow: hidden; min-width: 150px; }
+  .phone-wrap .flag { display: inline-flex; align-items: center; gap: 3px; padding: 0 6px 0 8px; font-size: 13px; color: var(--text-secondary); border-right: 1px solid var(--divider); height: 100%; }
+  .phone-wrap input { border: none; height: 100%; padding: 0 8px; font-family: inherit; font-size: 12.5px; width: 100%; }
+  .phone-wrap input:focus { outline: none; }
+
+  select.cell-select {
+    height: 34px; border: 1px solid var(--border-solid); border-radius: 6px; padding: 0 8px;
+    font-family: inherit; font-size: 12.5px; color: var(--text-secondary); background: #fff; min-width: 150px; width: 100%;
+  }
+  select.cell-select.chosen { color: var(--text-primary); border-color: var(--primary-main); }
+
+  .wage-cell { white-space: nowrap; }
+  .wage-cell .amount { font-weight: 600; }
+  .wage-cell .src { display: block; font-size: 10px; color: var(--text-disabled); letter-spacing: .3px; text-transform: uppercase; font-weight: 700; }
+
+  .btn-update {
+    height: 32px; padding: 0 14px; border-radius: 6px; border: 1px solid #F7D9A8;
+    background: #FCE7C4; color: var(--secondary-dark);
+    font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  }
+  .btn-update:hover { background: #FADCAC; }
+
+  /* ---------- Rates ---------- */
+  .markup-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    padding: 16px 20px; border: 1px solid var(--divider); border-radius: 10px; background: #fff; margin-bottom: 18px;
+  }
+  .markup-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .markup-field { display: flex; flex-direction: column; gap: 4px; }
+  .markup-field .lbl { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-secondary); }
+  .markup-input-wrap { display: flex; align-items: center; border: 1px solid var(--border-solid); border-radius: 6px; height: 38px; overflow: hidden; width: 118px; }
+  .markup-input-wrap input { border: none; height: 100%; width: 100%; padding: 0 10px; font-family: inherit; font-size: 15px; font-weight: 700; color: var(--primary-main); }
+  .markup-input-wrap input:focus { outline: none; }
+  .markup-input-wrap .pct { padding: 0 10px; font-size: 14px; font-weight: 700; color: var(--text-secondary); background: var(--grey-50); height: 100%; display: inline-flex; align-items: center; border-left: 1px solid var(--divider); }
+  .markup-hint { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; max-width: 380px; }
+
+  .video-btn {
+    display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
+    border: 1px solid var(--info-border); background: var(--info-bg); border-radius: 8px;
+    padding: 8px 14px 8px 10px; font-family: inherit; color: var(--primary-dark); text-align: left;
+  }
+  .video-btn:hover { border-color: var(--info-main); }
+  .video-btn .play {
+    width: 34px; height: 34px; border-radius: 6px; background: var(--info-main); color: #fff;
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .video-btn .vt { font-size: 13px; font-weight: 700; }
+  .video-btn .vs { font-size: 11.5px; color: var(--text-secondary); }
+
+  .rate-card { border: 1px solid var(--divider); border-radius: 10px; background: #fff; margin-bottom: 12px; overflow: hidden; }
+  .rate-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 18px; flex-wrap: wrap; }
+  .rate-title { display: flex; align-items: center; gap: 10px; }
+  .rate-title .rname { font-size: 15px; font-weight: 700; color: var(--primary-main); }
+  .count-pill { font-size: 11px; font-weight: 700; color: var(--primary-main); background: var(--primary-bg); border-radius: 999px; padding: 3px 9px; }
+  .count-pill.zero { color: var(--text-disabled); background: var(--grey-100); }
+
+  .formula { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 0 18px 14px; }
+  .fbox { border: 1px solid var(--divider); border-radius: 8px; padding: 8px 12px; background: var(--grey-50); min-width: 120px; }
+  .fbox .fl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-secondary); }
+  .fbox .fv { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+  .fbox .fs { font-size: 10.5px; color: var(--text-disabled); }
+  .fop { font-size: 16px; font-weight: 700; color: var(--text-disabled); }
+  .fbox.result { background: var(--success-bg); border-color: rgba(15,138,15,.35); }
+  .fbox.result .fv { color: #0A5C0A; font-size: 17px; }
+  .fbox.result .fl { color: #0A5C0A; }
+  .fbox.empty .fv { color: var(--text-disabled); font-size: 13px; font-weight: 600; }
+
+  .rate-markup { display: flex; align-items: center; gap: 8px; }
+  .rate-markup .rm-lbl { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--text-secondary); }
+  .rate-markup .rm-wrap { display: flex; align-items: center; border: 1px solid var(--border-solid); border-radius: 6px; height: 32px; overflow: hidden; width: 86px; }
+  .rate-markup .rm-wrap input { border: none; height: 100%; width: 100%; padding: 0 8px; font-family: inherit; font-size: 13px; font-weight: 700; color: var(--primary-main); }
+  .rate-markup .rm-wrap input:focus { outline: none; }
+  .rate-markup .rm-wrap .pct { padding: 0 7px; font-size: 12px; font-weight: 700; color: var(--text-secondary); background: var(--grey-50); height: 100%; display: inline-flex; align-items: center; border-left: 1px solid var(--divider); }
+  .rate-markup .rm-wrap.custom { border-color: var(--secondary-main); }
+  .rate-markup .rm-state { font-size: 10.5px; color: var(--text-disabled); font-weight: 600; }
+  .rate-markup .rm-reset { background: none; border: none; font-size: 11px; color: var(--info-main); cursor: pointer; text-decoration: underline; font-family: inherit; }
+
+  .applies-note {
+    display: flex; align-items: center; gap: 7px; margin: 0 18px 12px;
+    background: var(--info-bg); border: 1px solid var(--info-border); border-radius: 7px;
+    padding: 8px 12px; font-size: 12.5px; color: var(--primary-dark);
+  }
+  .applies-note svg { width: 14px; height: 14px; flex-shrink: 0; }
+  .applies-note strong { font-weight: 700; }
+
+  .rate-toggle {
+    width: 100%; text-align: left; background: var(--grey-50); border: none; border-top: 1px solid var(--divider);
+    padding: 10px 18px; font-family: inherit; font-size: 12px; font-weight: 600; color: var(--primary-main); cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .rate-toggle svg { width: 14px; height: 14px; }
+  .rate-workers { border-top: 1px solid var(--divider); }
+  .rw-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 18px; font-size: 12.5px; border-bottom: 1px solid var(--divider); }
+  .rw-row:last-child { border-bottom: none; }
+  .rw-row.highest { background: #FFFBF3; }
+  .rw-name { display: flex; align-items: center; gap: 8px; }
+  .rw-flag { font-size: 9.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--secondary-dark); background: var(--secondary-bg); border: 1px solid rgba(241,145,0,.4); border-radius: 4px; padding: 2px 5px; }
+  .rw-wage { font-weight: 600; }
+  .rw-empty { padding: 14px 18px; font-size: 12.5px; color: var(--text-disabled); }
+
+  /* ---------- Footer ---------- */
+  .wizard-footer {
+    flex-shrink: 0; border-top: 1px solid var(--divider); background: #fff;
+    display: flex; align-items: center; justify-content: space-between; padding: 16px 32px;
+  }
+  .footer-caption { font-size: 12.5px; color: var(--text-secondary); }
+  .footer-actions { display: flex; gap: 10px; }
+
+  /* ---------- Modal ---------- */
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 90; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .modal { background: #fff; border-radius: 12px; width: 100%; max-width: 520px; box-shadow: 0 15px 35px rgba(0,0,0,.2); overflow: hidden; }
+  .modal.wide { max-width: 720px; }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--divider); }
+  .modal-head h3 { font-size: 16px; font-weight: 700; color: var(--primary-main); }
+  .modal-head .x { background: none; border: none; cursor: pointer; color: var(--text-secondary); display: inline-flex; }
+  .modal-body { padding: 20px; }
+  .modal-body p.mp { font-size: 13px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 14px; }
+  .modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--divider); background: var(--grey-50); }
+  .modal input.mi { width: 100%; height: 40px; border: 1px solid var(--border-solid); border-radius: 6px; padding: 0 12px; font-family: inherit; font-size: 14px; }
+  .modal input.mi:focus { outline: none; border-color: var(--primary-main); }
+  .video-frame {
+    aspect-ratio: 16 / 9; background: #0C2043; border-radius: 8px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: rgba(255,255,255,.85);
+  }
+  .video-frame .vplay { width: 62px; height: 62px; border-radius: 50%; background: rgba(255,255,255,.14); display: flex; align-items: center; justify-content: center; }
+  .video-frame .vcap { font-size: 12.5px; color: rgba(255,255,255,.55); }
+
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wizard">
+
+  <div class="stepper" id="stepper"></div>
+
+  <div class="wizard-body">
+    <div class="wizard-content">
+
+      <div class="org-card">
+        <div class="org-left">
+          <div class="org-icon"><i data-lucide="building-2" style="width:18px;height:18px;"></i></div>
+          <div class="org-meta">
+            <div class="org-tag">SETTING UP FOR</div>
+            <div class="org-name">Kerb Your Enthusiasm Contracting Pty Ltd</div>
+          </div>
+        </div>
+        <button class="btn btn-outline">Switch Organization <i data-lucide="chevron-down" style="width:14px;height:14px;"></i></button>
+      </div>
+
+      <h2 class="page-title">Review Workers</h2>
+      <p class="page-subtitle" id="pageSubtitle"></p>
+
+      <!-- Sub-stepper within step 8 -->
+      <div class="mini-steps" id="miniSteps"></div>
+
+      <!-- ============ PHASE 1 — ROLES ============ -->
+      <section id="phase1">
+        <div class="banner info">
+          <i data-lucide="info" style="width:16px;height:16px;"></i>
+          <div class="banner-text">
+            Roles are how Varicon groups your workers — a <strong>worker resource</strong>. Pick the ones your crew actually does; you can add more at any time, including while you're assigning workers on the next screen.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3>Which roles do your workers do?</h3>
+            <p>Tick the roles that apply to your business. These become the options you'll assign each worker to.</p>
+          </div>
+          <div class="card-body">
+            <div class="chip-label">Common construction roles</div>
+            <div class="chip-grid" id="suggestedChips"></div>
+
+            <div class="chip-label" id="customLabel" hidden>Your own roles</div>
+            <div class="chip-grid" id="customChips" hidden></div>
+
+            <div class="chip-label">Add your own</div>
+            <div class="add-role-row">
+              <input type="text" id="newRoleInput" placeholder="e.g. Dogman, Rigger, Shotfirer" maxlength="40">
+              <button class="btn btn-outline" onclick="addCustomRole()"><i data-lucide="plus" style="width:14px;height:14px;"></i> Add role</button>
+            </div>
+
+            <div class="selected-summary" id="rolesSummary"></div>
+          </div>
+          <div class="card-foot">
+            <span class="foot-note">Nothing is locked in — roles can be added or renamed later under Resources.</span>
+            <button class="btn btn-primary" id="rolesContinue" onclick="goPhase(2)">Continue <i data-lucide="arrow-right" style="width:14px;height:14px;"></i></button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ PHASE 2 — WORKERS ============ -->
+      <section id="phase2" hidden>
+        <div class="banner info">
+          <i data-lucide="info" style="width:16px;height:16px;"></i>
+          <div class="banner-text">
+            Each worker is assigned a resource based on their pay type and role (e.g. "Operator — Wages"). Phone and email are pre-filled from Xero — override if needed. Need a role you didn't create? Pick <strong>+ Add new role…</strong> at the bottom of any Worker Resource dropdown.
+          </div>
+          <button class="banner-close" onclick="this.closest('.banner').remove()"><i data-lucide="x" style="width:15px;height:15px;"></i></button>
+        </div>
+
+        <div class="card">
+          <div class="card-toolbar">
+            <button class="demo-chip" onclick="fillExampleAssignments()">
+              <span class="demo-tag">Preview</span> Fill example assignments
+            </button>
+            <div class="search-box">
+              <i data-lucide="search"></i>
+              <input type="text" placeholder="Search workers" id="workerSearch">
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="grid-table">
+              <thead>
+                <tr>
+                  <th>Worker ID</th>
+                  <th>Phone</th>
+                  <th>Email</th>
+                  <th>Payment Type</th>
+                  <th>Worker Resource</th>
+                  <th>Wage (from Xero)</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="workerRows"></tbody>
+            </table>
+          </div>
+
+          <div class="card-foot">
+            <span class="foot-note" id="assignProgress"></span>
+            <div style="display:flex; gap:10px;">
+              <button class="btn btn-outline" onclick="goPhase(1)"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Back to roles</button>
+              <button class="btn btn-primary" id="workersContinue" onclick="goPhase(3)">Continue to charge rates <i data-lucide="arrow-right" style="width:14px;height:14px;"></i></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ PHASE 3 — RATES ============ -->
+      <section id="phase3" hidden>
+        <div class="banner rule">
+          <i data-lucide="calculator" style="width:16px;height:16px;"></i>
+          <div class="banner-text">
+            <strong>You don't enter any rates.</strong> For each role, Varicon takes the <strong>highest wage</strong> of the workers in that role (pulled from Xero) and adds a markup — 26% by default — to get one charge rate for the whole role.
+          </div>
+        </div>
+
+        <div class="markup-bar">
+          <div class="markup-left">
+            <div class="markup-field">
+              <span class="lbl">Default markup</span>
+              <div class="markup-input-wrap">
+                <input type="number" id="globalMarkup" value="26" min="0" max="200" step="1">
+                <span class="pct">%</span>
+              </div>
+            </div>
+            <div class="markup-hint">
+              Applied to every role unless you override it below. Covers on-costs — super, leave, insurance, allowances and overheads.
+            </div>
+          </div>
+          <button class="video-btn" onclick="openVideo()">
+            <span class="play"><i data-lucide="play" style="width:16px;height:16px;"></i></span>
+            <span>
+              <span class="vt">Watch how this works</span><br>
+              <span class="vs">2 min · Charge rates explained</span>
+            </span>
+          </button>
+        </div>
+
+        <div id="rateCards"></div>
+
+        <div class="card-foot" style="border:1px solid var(--divider); border-radius:10px;">
+          <span class="foot-note" id="ratesSummary"></span>
+          <button class="btn btn-outline" onclick="goPhase(2)"><i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Back to workers</button>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <div class="wizard-footer">
+    <button class="btn btn-outline orange">Skip and Finish Later</button>
+    <div class="footer-caption">Step 8 of 9 — Workers</div>
+    <div class="footer-actions">
+      <button class="btn btn-outline">Back</button>
+      <button class="btn btn-primary">Next</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add role modal -->
+<div class="scrim" id="addRoleScrim" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Add a new role</h3>
+      <button class="x" onclick="closeAddRole()"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+    </div>
+    <div class="modal-body">
+      <p class="mp">This role is added to your list and becomes available for every worker.</p>
+      <input class="mi" type="text" id="modalRoleInput" placeholder="Role name" maxlength="40">
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeAddRole()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAddRole()">Add role</button>
+    </div>
+  </div>
+</div>
+
+<!-- Video modal -->
+<div class="scrim" id="videoScrim" hidden>
+  <div class="modal wide">
+    <div class="modal-head">
+      <h3>How charge rates are calculated</h3>
+      <button class="x" onclick="closeVideo()"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="video-frame">
+        <div class="vplay"><i data-lucide="play" style="width:26px;height:26px;"></i></div>
+        <div class="vcap">Video placeholder — 2:04</div>
+      </div>
+      <p class="mp" style="margin-top:14px; margin-bottom:0;">
+        Covers: why the highest wage in a role is used, what the 26% markup is meant to absorb, and when to override a role's markup.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= Wizard chrome ================= */
+const STEPS = ["Project","Integration","Purchase Order Settings","Bills","Accounting Codes","Resources","Suppliers","Workers","Tracking Category"];
+const CURRENT = 8;
+const stepperEl = document.getElementById('stepper');
+STEPS.forEach((label, i) => {
+  const n = i + 1;
+  const state = n < CURRENT ? 'done' : (n === CURRENT ? 'active' : '');
+  const wrap = document.createElement('div');
+  wrap.className = 'step';
+  wrap.innerHTML = `
+    <div class="step-node">
+      <div class="step-circle ${state}">${n < CURRENT ? '<i data-lucide="check" style="width:14px;height:14px;"></i>' : n}</div>
+      <div class="step-label ${state}">${label}</div>
+    </div>
+    ${n < STEPS.length ? `<div class="step-line ${n < CURRENT ? 'done' : ''}"></div>` : ''}
+  `;
+  stepperEl.appendChild(wrap);
+});
+
+/* ================= Data ================= */
+const SUGGESTED_ROLES = [
+  "Labourer", "Equipment Operator", "Supervisor", "Foreman", "Engineer",
+  "Pipe Fitter", "Truck Driver", "Leading Hand", "Carpenter", "Concreter", "Traffic Controller"
+];
+
+const PAYMENT_TYPES = ["Wages", "Salary", "Casual", "Contractor"];
+
+/* Xero-sourced workers: wage is what Xero holds, never entered here */
+const WORKERS = [
+  { name: "Wayne Kerr",     phone: "",           email: "",                  wage: 38.50, demoRole: "Labourer" },
+  { name: "Sandy Groundes", phone: "",           email: "",                  wage: 42.00, demoRole: "Labourer" },
+  { name: "Pat Holland",    phone: "",           email: "",                  wage: 45.50, demoRole: "Equipment Operator" },
+  { name: "Doug Holt",      phone: "",           email: "",                  wage: 52.00, demoRole: "Equipment Operator" },
+  { name: "Curt Sett",      phone: "0400123345", email: "curt@kyc.com.au",   wage: 61.00, demoRole: "Foreman" },
+  { name: "Rob Banks",      phone: "0411204553", email: "rob@kyc.com.au",    wage: 39.00, demoRole: "Labourer" },
+  { name: "Sue Flay",       phone: "0422118907", email: "sue@kyc.com.au",    wage: 44.00, demoRole: "Traffic Controller" },
+  { name: "Justin Case",    phone: "0433765120", email: "justin@kyc.com.au", wage: 47.50, demoRole: "Pipe Fitter" },
+  { name: "Barb Dwyer",     phone: "0444230981", email: "barb@kyc.com.au",   wage: 58.00, demoRole: "Supervisor" },
+  { name: "Terry Bull",     phone: "0455901234", email: "",                  wage: 36.00, demoRole: "Labourer" },
+  { name: "Anne Chovie",    phone: "0466512340", email: "anne@kyc.com.au",   wage: 41.00, demoRole: "Traffic Controller" },
+  { name: "Neil Down",      phone: "0477884412", email: "neil@kyc.com.au",   wage: 43.50, demoRole: "Truck Driver" },
+  { name: "Paige Turner",   phone: "0488330076", email: "paige@kyc.com.au",  wage: 55.00, demoRole: "Engineer" },
+  { name: "Stan Still",     phone: "0499126650", email: "",                  wage: 49.00, demoRole: "Equipment Operator" },
+];
+
+/* ================= State ================= */
+let phase = 1;
+let roles = [];                       // chosen role names, in order
+let customRoles = [];                 // user-typed roles
+let assignments = {};                 // worker index -> role name
+let paymentTypes = {};                // worker index -> payment type
+let globalMarkup = 26;
+let roleMarkups = {};                 // role -> number | undefined (undefined = inherit)
+let pendingRoleRow = null;            // row index awaiting a new role from the modal
+let openRoleDetail = {};              // role -> bool
+
+/* ================= Phase 1: roles ================= */
+function toggleRole(name) {
+  const i = roles.indexOf(name);
+  if (i >= 0) {
+    roles.splice(i, 1);
+    // drop assignments pointing at a removed role
+    Object.keys(assignments).forEach(k => { if (assignments[k] === name) delete assignments[k]; });
+    delete roleMarkups[name];
+  } else {
+    roles.push(name);
+  }
+  renderRoles();
+}
+
+function addCustomRole() {
+  const input = document.getElementById('newRoleInput');
+  const name = input.value.trim();
+  if (!name) return;
+  const exists = [...SUGGESTED_ROLES, ...customRoles].some(r => r.toLowerCase() === name.toLowerCase());
+  if (!exists) customRoles.push(name);
+  if (!roles.some(r => r.toLowerCase() === name.toLowerCase())) roles.push(name);
+  input.value = '';
+  renderRoles();
+}
+
+document.getElementById('newRoleInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); addCustomRole(); }
+});
+
+function removeCustomRole(name, ev) {
+  ev.stopPropagation();
+  customRoles = customRoles.filter(r => r !== name);
+  roles = roles.filter(r => r !== name);
+  Object.keys(assignments).forEach(k => { if (assignments[k] === name) delete assignments[k]; });
+  delete roleMarkups[name];
+  renderRoles();
+}
+
+function chipHtml(name, isCustom) {
+  const on = roles.includes(name);
+  return `
+    <button class="chip ${on ? 'on' : ''} ${isCustom ? 'custom' : ''}" onclick="toggleRole('${name.replace(/'/g, "\\'")}')">
+      <span class="tick"><i data-lucide="check"></i></span>
+      <span>${name}</span>
+      ${isCustom ? `<span class="remove" onclick="removeCustomRole('${name.replace(/'/g, "\\'")}', event)"><i data-lucide="x"></i></span>` : ''}
+    </button>`;
+}
+
+function renderRoles() {
+  document.getElementById('suggestedChips').innerHTML = SUGGESTED_ROLES.map(r => chipHtml(r, false)).join('');
+  const hasCustom = customRoles.length > 0;
+  document.getElementById('customLabel').hidden = !hasCustom;
+  document.getElementById('customChips').hidden = !hasCustom;
+  document.getElementById('customChips').innerHTML = customRoles.map(r => chipHtml(r, true)).join('');
+
+  const summary = document.getElementById('rolesSummary');
+  if (roles.length === 0) {
+    summary.innerHTML = 'No roles selected yet — tick at least one above to continue.';
+  } else {
+    summary.innerHTML = `<strong>${roles.length} role${roles.length === 1 ? '' : 's'} selected:</strong> ${roles.join(' · ')}`;
+  }
+  document.getElementById('rolesContinue').disabled = roles.length === 0;
+  document.getElementById('rolesContinue').innerHTML =
+    (roles.length ? `Continue with ${roles.length} role${roles.length === 1 ? '' : 's'}` : 'Continue') +
+    ' <i data-lucide="arrow-right" style="width:14px;height:14px;"></i>';
+
+  renderMini();
+  icons();
+}
+
+/* ================= Phase 2: workers ================= */
+function roleOptions(selected) {
+  const opts = roles.map(r => `<option value="${r}" ${selected === r ? 'selected' : ''}>${r}</option>`).join('');
+  return `
+    <option value="" ${selected ? '' : 'selected'} disabled hidden>Select Role...</option>
+    ${opts}
+    <option value="__add__">+ Add new role…</option>`;
+}
+
+function renderWorkers() {
+  document.getElementById('workerRows').innerHTML = WORKERS.map((w, i) => {
+    const assigned = assignments[i] || '';
+    const pt = paymentTypes[i] || '';
+    return `
+      <tr data-name="${w.name.toLowerCase()}">
+        <td class="name">${w.name}</td>
+        <td>
+          <div class="phone-wrap">
+            <span class="flag">🇦🇺 <i data-lucide="chevron-down" style="width:11px;height:11px;"></i></span>
+            <input type="text" value="${w.phone}" placeholder="Add Phone..." oninput="WORKERS[${i}].phone = this.value">
+          </div>
+        </td>
+        <td><input class="cell-input" type="text" value="${w.email}" placeholder="Add Email..." oninput="WORKERS[${i}].email = this.value"></td>
+        <td>
+          <select class="cell-select ${pt ? 'chosen' : ''}" onchange="setPaymentType(${i}, this.value)">
+            <option value="" ${pt ? '' : 'selected'} disabled hidden>Select type...</option>
+            ${PAYMENT_TYPES.map(t => `<option value="${t}" ${pt === t ? 'selected' : ''}>${t}</option>`).join('')}
+          </select>
+        </td>
+        <td>
+          <select class="cell-select ${assigned ? 'chosen' : ''}" onchange="setRole(${i}, this)">
+            ${roleOptions(assigned)}
+          </select>
+        </td>
+        <td class="wage-cell">
+          <span class="amount">$${w.wage.toFixed(2)}/hr</span>
+          <span class="src">Xero</span>
+        </td>
+        <td><button class="btn-update">Update</button></td>
+      </tr>`;
+  }).join('');
+  updateAssignProgress();
+  icons();
+}
+
+function setPaymentType(i, val) {
+  paymentTypes[i] = val;
+  renderWorkers();
+}
+
+function setRole(i, sel) {
+  if (sel.value === '__add__') {
+    pendingRoleRow = i;
+    sel.value = assignments[i] || '';
+    openAddRole();
+    return;
+  }
+  assignments[i] = sel.value;
+  renderWorkers();
+}
+
+function updateAssignProgress() {
+  const done = Object.values(assignments).filter(Boolean).length;
+  const el = document.getElementById('assignProgress');
+  el.textContent = `${done} of ${WORKERS.length} workers assigned to a role` +
+    (done < WORKERS.length ? ' — unassigned workers won’t get a charge rate yet.' : '.');
+  document.getElementById('workersContinue').disabled = done === 0;
+}
+
+function fillExampleAssignments() {
+  WORKERS.forEach((w, i) => {
+    if (roles.includes(w.demoRole)) {
+      assignments[i] = w.demoRole;
+      if (!paymentTypes[i]) paymentTypes[i] = "Wages";
+    }
+  });
+  renderWorkers();
+}
+
+document.getElementById('workerSearch').addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll('#workerRows tr').forEach(tr => {
+    tr.style.display = tr.dataset.name.includes(q) ? '' : 'none';
+  });
+});
+
+/* ---- add-role modal ---- */
+function openAddRole() {
+  document.getElementById('addRoleScrim').hidden = false;
+  const mi = document.getElementById('modalRoleInput');
+  mi.value = '';
+  setTimeout(() => mi.focus(), 30);
+}
+function closeAddRole() {
+  document.getElementById('addRoleScrim').hidden = true;
+  pendingRoleRow = null;
+}
+function confirmAddRole() {
+  const name = document.getElementById('modalRoleInput').value.trim();
+  if (!name) return;
+  const known = [...SUGGESTED_ROLES, ...customRoles].find(r => r.toLowerCase() === name.toLowerCase());
+  const finalName = known || name;
+  if (!known) customRoles.push(finalName);
+  if (!roles.includes(finalName)) roles.push(finalName);
+  if (pendingRoleRow !== null) assignments[pendingRoleRow] = finalName;
+  closeAddRole();
+  renderRoles();
+  renderWorkers();
+}
+document.getElementById('modalRoleInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); confirmAddRole(); }
+});
+
+/* ================= Phase 3: rates ================= */
+function markupFor(role) {
+  return roleMarkups[role] === undefined ? globalMarkup : roleMarkups[role];
+}
+
+function roleWorkers(role) {
+  return WORKERS.map((w, i) => ({ ...w, i })).filter(w => assignments[w.i] === role);
+}
+
+function renderRates() {
+  const host = document.getElementById('rateCards');
+  host.innerHTML = roles.map(role => {
+    const ws = roleWorkers(role);
+    const mk = markupFor(role);
+    const isCustom = roleMarkups[role] !== undefined;
+    const highest = ws.length ? Math.max(...ws.map(w => w.wage)) : null;
+    const topWorker = ws.length ? ws.find(w => w.wage === highest) : null;
+    const rate = highest !== null ? highest * (1 + mk / 100) : null;
+    const open = !!openRoleDetail[role];
+    const safe = role.replace(/'/g, "\\'");
+
+    return `
+      <div class="rate-card">
+        <div class="rate-head">
+          <div class="rate-title">
+            <span class="rname">${role}</span>
+            <span class="count-pill ${ws.length ? '' : 'zero'}">${ws.length} worker${ws.length === 1 ? '' : 's'}</span>
+          </div>
+          <div class="rate-markup">
+            <span class="rm-lbl">Markup</span>
+            <div class="rm-wrap ${isCustom ? 'custom' : ''}">
+              <input type="number" min="0" max="200" step="1" value="${mk}" oninput="setRoleMarkup('${safe}', this.value)">
+              <span class="pct">%</span>
+            </div>
+            ${isCustom
+              ? `<button class="rm-reset" onclick="resetRoleMarkup('${safe}')">use default</button>`
+              : `<span class="rm-state">default</span>`}
+          </div>
+        </div>
+
+        <div class="formula">
+          ${highest === null ? `
+            <div class="fbox empty"><div class="fl">Highest wage</div><div class="fv">No workers yet</div></div>
+          ` : `
+            <div class="fbox">
+              <div class="fl">Highest wage in role</div>
+              <div class="fv">$${highest.toFixed(2)}/hr</div>
+              <div class="fs">${topWorker.name} · from Xero</div>
+            </div>
+          `}
+          <span class="fop">+</span>
+          <div class="fbox">
+            <div class="fl">Markup</div>
+            <div class="fv">${mk}%</div>
+            <div class="fs">${isCustom ? 'overridden for this role' : 'default'}</div>
+          </div>
+          <span class="fop">=</span>
+          ${rate === null ? `
+            <div class="fbox empty"><div class="fl">Charge rate</div><div class="fv">—</div></div>
+          ` : `
+            <div class="fbox result">
+              <div class="fl">Charge rate</div>
+              <div class="fv">$${Math.round(rate)}/hr</div>
+              <div class="fs">rounded from $${rate.toFixed(2)} · applies to the whole role</div>
+            </div>
+          `}
+        </div>
+
+        ${ws.length ? `
+          <div class="applies-note">
+            <i data-lucide="users"></i>
+            <span>This single rate of <strong>$${Math.round(rate)}/hr</strong> is charged for <strong>all ${ws.length} worker${ws.length === 1 ? '' : 's'}</strong> in ${role} — not their individual wages.</span>
+          </div>` : ''}
+
+        <button class="rate-toggle" onclick="toggleRoleDetail('${safe}')">
+          <i data-lucide="${open ? 'chevron-up' : 'chevron-down'}"></i>
+          ${open ? 'Hide' : 'Show'} the ${ws.length} worker${ws.length === 1 ? '' : 's'} and their Xero wages
+        </button>
+
+        ${open ? `
+          <div class="rate-workers">
+            ${ws.length ? ws.sort((a, b) => b.wage - a.wage).map(w => `
+              <div class="rw-row ${w.wage === highest ? 'highest' : ''}">
+                <span class="rw-name">${w.name} ${w.wage === highest ? '<span class="rw-flag">Highest — sets the rate</span>' : ''}</span>
+                <span class="rw-wage">$${w.wage.toFixed(2)}/hr</span>
+              </div>`).join('')
+              : `<div class="rw-empty">No workers assigned to ${role} yet. Go back and assign someone, or leave this role empty.</div>`}
+          </div>` : ''}
+      </div>`;
+  }).join('');
+
+  const priced = roles.filter(r => roleWorkers(r).length > 0).length;
+  document.getElementById('ratesSummary').textContent =
+    `${priced} of ${roles.length} role${roles.length === 1 ? '' : 's'} have a charge rate. Rates recalculate whenever wages change in Xero.`;
+  icons();
+}
+
+function setRoleMarkup(role, val) {
+  const n = parseFloat(val);
+  roleMarkups[role] = isNaN(n) ? 0 : n;
+  renderRates();
+}
+function resetRoleMarkup(role) {
+  delete roleMarkups[role];
+  renderRates();
+}
+function toggleRoleDetail(role) {
+  openRoleDetail[role] = !openRoleDetail[role];
+  renderRates();
+}
+document.getElementById('globalMarkup').addEventListener('input', e => {
+  const n = parseFloat(e.target.value);
+  globalMarkup = isNaN(n) ? 0 : n;
+  renderRates();
+});
+
+function openVideo() { document.getElementById('videoScrim').hidden = false; icons(); }
+function closeVideo() { document.getElementById('videoScrim').hidden = true; }
+
+/* ================= Phase navigation ================= */
+const SUBTITLES = {
+  1: "We've pulled your workers from your accounting software. First, set up the roles your workers do — then you'll assign each worker to one. Workers will be created as Inactive — activate them after induction.",
+  2: "Assign each worker an employment type and a role. Phone and email are pre-filled from Xero — override if needed. Workers will be created as Inactive — activate them after induction.",
+  3: "No rates to key in. Varicon works out one charge rate per role from the wages already in Xero, plus a markup you control.",
+};
+
+const MINI = [
+  { n: 1, label: "Create roles" },
+  { n: 2, label: "Assign workers" },
+  { n: 3, label: "Charge rates" },
+];
+
+function renderMini() {
+  document.getElementById('miniSteps').innerHTML = MINI.map((s, idx) => {
+    const state = s.n < phase ? 'done' : (s.n === phase ? 'active' : '');
+    const reachable = s.n === 1 || (s.n === 2 && roles.length > 0) || (s.n === 3 && Object.values(assignments).filter(Boolean).length > 0);
+    return `
+      <button class="mini-step ${state}" onclick="goPhase(${s.n})" ${reachable ? '' : 'disabled'}>
+        <span class="num">${s.n < phase ? '<i data-lucide=\'check\' style=\'width:11px;height:11px;\'></i>' : s.n}</span>
+        ${s.label}
+      </button>
+      ${idx < MINI.length - 1 ? '<span class="mini-sep">›</span>' : ''}`;
+  }).join('');
+  icons();
+}
+
+function goPhase(n) {
+  if (n === 2 && roles.length === 0) return;
+  if (n === 3 && Object.values(assignments).filter(Boolean).length === 0) return;
+  phase = n;
+  [1, 2, 3].forEach(p => { document.getElementById('phase' + p).hidden = (p !== n); });
+  document.getElementById('pageSubtitle').textContent = SUBTITLES[n];
+  if (n === 2) renderWorkers();
+  if (n === 3) renderRates();
+  renderMini();
+  document.querySelector('.wizard-body').scrollTop = 0;
+  icons();
+}
+
+function icons() { if (window.lucide) window.lucide.createIcons(); }
+
+/* ================= Init ================= */
+renderRoles();
+goPhase(1);
+</script>
+</body>
+</html>
