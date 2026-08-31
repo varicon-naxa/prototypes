@@ -416,6 +416,7 @@
     </div>
 
     <h3>Four things wrong with column M</h3>
+    <p style="font-size:12.5px;color:#6b7280;margin-bottom:12px">All four are why the column is not extended but <b>removed from the export</b> — see <em>What changes</em> below. It is still read on the way in, so existing files keep working.</p>
     <div class="note"><span class="marker">1</span><b>One dropdown cell means one ticket per worker.</b> A worker holding a white card, a first aid certificate and an HR licence cannot be expressed. Most workers hold three or four.</div>
     <div class="note"><span class="marker">2</span><b>It carries the type and nothing else.</b> No number, no issued date, no expiry, no issuing body, no state. So every imported ticket is a draft shell somebody opens and completes by hand — the importer moves the drawer-by-drawer work, it does not remove it. And with no expiry date, the register still cannot tell you what lapses next month, which is the entire reason to hold the data.</div>
     <div class="note"><span class="marker">3</span><b>The workbook already has the idiom and tickets did not get it.</b> Allowances and Form Numbers both say "separated by a comma" and take many values in one cell. Tickets — the column with the dropdown — takes one. Even comma-separation would not be enough here, because a ticket has dates, but the inconsistency shows the column was an afterthought.</div>
@@ -427,24 +428,24 @@
       <li>A locked <b>Record ID</b> column in front of the EMPLOYEES sheet, present only on an export of your real workers. It is what makes a re-upload update instead of duplicate.</li>
       <li>A second sheet, <b>TICKETS</b> — one row per ticket, keyed on Employee ID, carrying <b>every field the Add ticket panel has</b>: Ticket Type, Number, Issued, Expiry, Issuing Body, State and Notes, plus a read-only Document column. Nothing about a ticket has to be filled in afterwards by hand. Its own locked <b>Ticket Record ID</b> identifies the ticket.</li>
       <li><b>One download, not a menu.</b> The export always comes down filled with your workers and everything already on their record. There is no blank-versus-pre-filled choice to get wrong: a worker with no tickets simply has no rows on the TICKETS sheet yet, and the same file serves a first load, a renewal run and a clean-up.</li>
-      <li>Column M stays and keeps working, but takes <b>more than one ticket type, separated by a comma</b> — exactly how this workbook already handles Employee Payroll Allowance and Form Numbers. The dropdown stays as a spelling aid; its validation never blocked a typed value, so this needs no change to the file's mechanics. Each type listed creates a draft ticket carrying nothing but the type. If a worker also appears on the TICKETS sheet, column M is ignored for that worker — the sheet with the detail wins.</li>
+      <li><b>Column M is removed from the export.</b> Leaving it in gave the file two places to put a ticket — a dropdown that carries a type and nothing else, and a sheet that carries the whole record — and no way for the person filling it in to know which one we wanted. Tickets now live in exactly one place. Files that still have the column keep importing (see below), but nothing we hand out asks the question twice.</li>
       <li><b>Everything an import creates lands in Draft</b>, in the Draft tab that already exists on the Tickets page, and is published from there once checked. That is what the current template already does, said out loud and applied to both routes.</li>
     </ol>
     <div class="note ok"><b>The download carries the same people as this prototype</b> — the eight workers on the Tickets page, their real employee IDs, and the tickets already on the register. Nothing invented sits beside them, so the sheet and the screen can be read against each other without anyone having to work out which row is a sample.</div>
 
     <p><b>The built file is real</b> — not a mockup. <a href="Employee_Upload_Template_round_trip.xlsx" download style="color:#f7941d;font-weight:600">Download the revised workbook</a>: it is the production template with those edits applied, dropdowns repointed after the column insert, validations widened to 500 rows, a hidden <code>_State</code> lookup added, the empty Pay Category sheet dropped, and every new column carrying a Varicon-authored cell comment in the same voice as the existing ones.</p>
 
-    <div class="note ok"><b>Two routes, deliberately.</b> Column M is the quick one — <em>this worker holds these three</em> — and gives you three draft shells to complete later. The TICKETS sheet is the full one, carrying number, dates, issuing body, state and notes per ticket, so nothing is left to key in afterwards. Both land in Draft, so there is no path where a spreadsheet writes straight into the live compliance register.</div>
+    <div class="note ok"><b>One place for a ticket, and the old one still opens.</b> The template we hand out has no Tickets column — the TICKETS sheet is the only place a ticket goes, carrying type, number, dates, issuing body, state and notes. But the importer still <em>reads</em> a Tickets column when an older saved copy arrives with one, so nobody's existing workbook stops working; those entries become draft shells exactly as they do today, and lose to the TICKETS sheet where both name the same ticket. Removing the column from the export and removing support for it are different decisions, and only the first one is worth making now.</div>
 
     <h3>What happens if the same ticket is filled in twice</h3>
-    <p>The realistic failure is not a malicious one. Somebody re-sends the file they already sent, or adds a row at the bottom instead of editing the row we exported, or lists a ticket in column M that is also on the TICKETS sheet. All three have to be safe without anyone thinking about it.</p>
+    <p>The realistic failure is not a malicious one. Somebody re-sends the file they already sent, or adds a row at the bottom instead of editing the row we exported, or fills in an old copy of the template that still has a Tickets column. All three have to be safe without anyone thinking about it.</p>
     <p><b>A ticket's identity is its Ticket Record ID. Where that is blank, it is worker + ticket type + ticket number.</b> Everything follows from that:</p>
     <div class="kv">
       <div class="r"><div class="k">Same file uploaded twice</div><div class="v">Every row carries its Record ID, so the second upload updates the same tickets with the same values. Nothing is created. The importer is idempotent.</div></div>
       <div class="r"><div class="k">Row added by hand instead of edited</div><div class="v">No Record ID, but worker + type + number match a ticket already on record — so it updates that ticket rather than creating a second copy.</div></div>
       <div class="r"><div class="k">Two identical rows in one file</div><div class="v">Collapsed to one before anything is written, and reported as such in the review.</div></div>
       <div class="r"><div class="k">Same type, different number</div><div class="v"><b>Not a duplicate — a renewal.</b> Both are kept, the newer becomes current and the older is marked superseded. Collapsing them would destroy the expiry history, which is the one thing the register exists to hold.</div></div>
-      <div class="r"><div class="k">Listed in column M <em>and</em> on the TICKETS sheet</div><div class="v">The TICKETS sheet wins. The column M entry is ignored for that worker rather than creating an empty second draft beside the detailed one.</div></div>
+      <div class="r"><div class="k">An old copy with a Tickets column</div><div class="v">Still imported, so nobody's saved workbook breaks. Where the same worker and type also appear on the TICKETS sheet, the sheet wins — no empty second draft beside the detailed one.</div></div>
       <div class="r"><div class="k">A row deleted from the sheet</div><div class="v">Nothing. Deletions are never inferred from an absent row — round-tripping an export loses rows for ordinary reasons.</div></div>
     </div>
     <p>All of it is shown in the review step before a single record is written, counted under <b>Already on record</b>, with the matched ticket named on each row.</p>
@@ -634,9 +635,9 @@
       <li><b>Documents can't come through a spreadsheet.</b> Where the ticket type requires one, the imported draft is flagged <b>document missing</b> and chased from the Draft tab. Consistent with the standing rule that compliance gates flag rather than block.</li>
       <li><b>A ticket cannot be doubled up.</b> Its identity is the <b>Ticket Record ID</b>; where that is blank, <b>worker + ticket type + ticket number</b>. Three consequences, all visible in the review before anything is written: a row matching an existing ticket on those three <em>updates</em> it rather than creating a second; two identical rows inside one file are collapsed to one; and uploading the same file twice changes nothing the second time. The importer is idempotent by design, because the realistic failure is somebody re-sending the file they already sent.</li>
       <li><b>Same type, different number is a renewal — not a duplicate.</b> A worker who re-sits their first aid certificate has two HLTAID011 tickets with different numbers and dates, and both are kept: the newer becomes current, the older is marked superseded. Collapsing them would destroy the expiry history, which is the one thing the register exists to hold. Only an exact match on the number is treated as the same ticket.</li>
-      <li><b>The workbook takes many tickets per worker, two ways.</b> Column M on the EMPLOYEES sheet accepts several ticket types separated by a comma — the idiom the file already uses for Allowances and Form Numbers — and creates a draft shell for each. The TICKETS sheet takes one row per ticket and carries the real detail. Where both are present for a worker, the TICKETS sheet wins.</li>
+      <li><b>A ticket goes in exactly one place.</b> The TICKETS sheet, one row per ticket, carrying the whole record. The <code>Tickets</code> column is gone from the EMPLOYEES sheet in the template we hand out: two places to enter the same thing is a question the person filling it in cannot answer, and the dropdown could only ever carry a type anyway. Nothing is lost — the column never held a number, a date or a certificate.</li>
       <li><b>The review step is a dry run and the only way to import.</b> Counted as New / Update / Warning / Error, filterable, fixable inline. Skipping the error rows imports the rest. There is no path that writes on upload.</li>
-      <li><b>Column M keeps working.</b> The existing <code>Tickets</code> dropdown still creates a draft shell, so nobody's saved workbook breaks. Where a worker appears on the TICKETS sheet, column M is ignored for that worker — the richer source wins, and the rule is stated rather than discovered.</li>
+      <li><b>Removing the column from the export is not removing support for it.</b> Workbooks already saved on somebody's desktop still have a <code>Tickets</code> column, and they keep importing: those entries still create draft shells. Where the same worker and type also appear on the TICKETS sheet, the sheet wins. Deprecate what we hand out; keep reading what we already sent.</li>
       <li><b>Every import is one reversible batch.</b> The Activity tab records who imported what, when, from which file, with a single undo while the batch is the most recent change to those records.</li>
     </ol>
 
@@ -985,7 +986,7 @@ function scopedWorkers(){
 /* The real Employee Upload Template: EMPLOYEES sheet as it ships today, with a locked
    Record ID in front, plus a TICKETS sheet that carries one row per ticket. */
 const EMP_COLS = ['First Name','Last Name','Company Name','Role','Employee ID','Email','Phone Number',
-                  'Employment Type','Pay Category','Employee Payroll Allowance','Status','Form Numbers','Tickets'];
+                  'Employment Type','Pay Category','Employee Payroll Allowance','Status','Form Numbers'];
 const TKT_COLS = ['Employee ID','Worker Name','Ticket Type','Ticket Number','Issued Date','Expiry Date',
                   'Issuing Body','State','Notes','Document'];
 
@@ -1003,7 +1004,7 @@ function previewRows(){
       const [fn,...ln]=w.name.split(' ');
       return {lock:['WKR-'+String(WORKERS.indexOf(w)+1).padStart(4,'0')],
               open:[fn,ln.join(' '),w.co,w.role,w.emp,w.email,w.ph,
-                    w.pay,'','','Active','', ticketCount(w)]};
+                    w.pay,'','','Active','']};
     });
   }
   // TICKETS sheet
@@ -1019,7 +1020,6 @@ function previewRows(){
   return out.length?out:[{lock:[''],open:['','','','','','','','','','']}];
 }
 const dmy=d=>{if(!d)return '';const [y,m,dd]=d.split('-');return dd+'/'+m+'/'+y;};
-const ticketCount=w=>{const n=TICKETS.filter(t=>t.w===w.id).length;return n?n+' — see TICKETS sheet':'';};
 
 function renderPreview(){
   const {locked,open}=templateCols();
@@ -1096,7 +1096,7 @@ const IMPORT=[
   {emp:'EMP-1007',w:'Sam Whitcombe',t:'Provide First Aid (HLTAID011)',n:'FA-99820',i:'14/08/2026',e:'14/08/2029',k:'warn',
    why:'Same type as row 7 but a different number and a later issue date — a renewal, not a duplicate. Both are kept and the earlier one is marked superseded, so the expiry history survives.'},
   {emp:'EMP-1042',w:'Dave Nguyen',t:'White Card (CPCCWHS1001)',n:'',i:'',e:'',k:'dup',
-   why:'Listed in the Tickets column on the EMPLOYEES sheet as well. The TICKETS sheet row wins — the column M entry is ignored for this worker rather than creating an empty second draft.'}
+   why:'Came from an older copy of the template that still has a Tickets column on the EMPLOYEES sheet. That column is still read, but the TICKETS sheet row for the same worker and type wins — no empty second draft is created beside the detailed one.'}
 ];
 let filter='all', addTypes=false, skipErr=true;
 function renderReview(){

@@ -210,3 +210,28 @@ Alec on the export's *Who's included* filters:
 A running count sits under the filters — *"4 workers and 1 ticket will be exported"* — because the
 combination of three filters is easy to get wrong silently. Switch every payment type off and it
 says so rather than exporting an empty file.
+
+---
+
+## One place for a ticket (1 Sep 2026)
+
+Alec, looking at the built workbook: *"we still have a ticket column here and then a ticket tab
+too."* Correct, and it was my error — I had kept column M for backwards compatibility and papered
+over the overlap with a precedence rule. A precedence rule is not an answer to *which box do I type
+in*; it is an answer to what the importer does after somebody has already guessed wrong.
+
+**The Tickets column is removed from the EMPLOYEES sheet.** The TICKETS sheet is the only place a
+ticket goes. Nothing is lost: the column only ever held a type, never a number, a date or a
+certificate.
+
+**Removing it from the export is not removing support for it.** Workbooks already saved on
+somebody's desktop still have the column, and they keep importing — those entries still create
+draft shells, and lose to the TICKETS sheet where both name the same worker and type. Deprecate
+what we hand out; keep reading what we already sent. Two decisions, and only the first is worth
+making now.
+
+The workbook was rebuilt accordingly: column N deleted, its `_Tickets` data validation dropped, and
+the five remaining dropdowns repointed to their shifted columns — `delete_cols` moves the cells but
+not the validation ranges, so every dropdown would otherwise have silently validated the wrong
+field. The `_Tickets` lookup sheet stays, because it still feeds the TICKETS sheet's Ticket Type
+dropdown.
