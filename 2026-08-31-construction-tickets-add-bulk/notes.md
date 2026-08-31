@@ -185,3 +185,28 @@ read-only Document column, because a certificate cannot travel in a spreadsheet.
 The review step gained an **Already on record** count with the matched ticket named per row, the
 workbook states the rule in the `Ticket Record ID` and `Ticket Number` cell comments, and the
 sample file now exercises all four duplicate cases.
+
+---
+
+## Workers, not employees — and payment type (1 Sep 2026)
+
+Alec on the export's *Who's included* filters:
+
+- **"We call them workers not employees for legal purposes."** Calling a subcontractor an employee
+  is a characterisation nobody wants in writing. The filter now reads **Active workers only**, and
+  the prototype's language is *worker* throughout.
+  The workbook is **deliberately not renamed** — it still ships an `EMPLOYEES` sheet, an
+  `Employee ID` column and `Employee Payroll Allowance`, because renaming a column in a live
+  importer breaks every saved copy customers already hold. Flagged on the *Template today* tab as a
+  decision plus migration, not a quiet edit.
+- **"Include subcontractor workers" was the wrong shape.** It treated subcontractors as an
+  exception to workers. Replaced with a **Payment type** filter — Subcontractor, Casual, Salary,
+  Wages — all four on by default. Same four values the workbook's `Employment Type` column already
+  carries, which is a second naming mismatch: the product says *payment type*, the file says
+  *employment type*. Also flagged, and the workbook's column comment now says so.
+- **"Only workers on a selected project" gave no way to select a project.** Ticking it now reveals
+  a project dropdown, and the preview filters live.
+
+A running count sits under the filters — *"4 workers and 1 ticket will be exported"* — because the
+combination of three filters is easy to get wrong silently. Switch every payment type off and it
+says so rather than exporting an empty file.
