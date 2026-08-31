@@ -25,9 +25,10 @@ Follows on from `2026-05-21-worker-construction-tickets`, which built the regist
    **right-hand side panel**, the pattern the rest of the product already uses (Alec's call,
    31 Aug 2026 — not an inline panel on the page). Scrim behind it, Esc and click-away close it,
    the list stays visible so you can add several without losing your place. Same fields, same
-   Save as draft / Publish. Worker is multi-select, because the real event is a crew sitting the
-   same course on the same day; selecting more than one turns the number field into one row per
-   worker, since the certificate number is personal and the course is not. One submission, N records.
+   Save as draft / Publish. **One worker per ticket** (Alec's call, 31 Aug 2026) — a ticket's
+   number, document and expiry all belong to one person. A crew of six who sat the same course is
+   six rows, and keying those one at a time is the wrong tool: it is the case bulk upload exists
+   for, which is why the two buttons sit side by side.
 2. **Bulk upload** — a four-step wizard: what you're uploading → download the template → upload and
    match columns → review before importing.
 
@@ -44,8 +45,8 @@ A row with a Record ID updates. A row without one creates. Nothing is ever match
 name alone to decide between the two, and an ambiguous match is an error row rather than a guess —
 a licence on the wrong person is worse than a licence not imported.
 
-**Nine rules the prototype commits to** (full text on the *Rules & open questions* tab): one form
-behind both entry points · multi-worker add · ID decides create-vs-update · strict worker matching ·
+**Ten rules the prototype commits to** (full text on the *Rules & open questions* tab): one form
+behind both entry points · one worker per ticket · ID decides create-vs-update · strict worker matching ·
 unknown ticket types never appear silently (one checkbox adds them to the catalogue, otherwise those
 rows error) · blank expiry derives from the type's rule and a **past expiry imports as Expired**,
 because that is the risk you're loading the data to see · documents can't come through a spreadsheet,
@@ -57,8 +58,8 @@ import is one reversible batch recorded in Activity.
 required, states — matched on Code, feeding Manage Ticket Types. Do that first if the catalogue
 isn't set up, because worker tickets are validated against it.
 
-**Views.** *Screen today* (recreation with the four defects annotated) · *Add ticket* (live — pick
-workers, publish, watch the register and the tiles move) · *Template today* (the real
+**Views.** *Screen today* (recreation with the four defects annotated) · *Add ticket* (live — pick a
+worker, publish, watch the register and the tiles move) · *Template today* (the real
 `Employee_Upload_Template.xlsx` pulled apart, with the revised workbook to download) · *Bulk upload*
 (live wizard over both sheets, twelve-row sample file that exercises new, update, missing document,
 past expiry, unknown ticket type, ambiguous name, unknown employee ID and a blank required field) ·

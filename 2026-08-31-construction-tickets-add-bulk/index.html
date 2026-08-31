@@ -132,6 +132,11 @@
   .chip{background:#fff3e5;border:1px solid #fbd7a8;color:#9a4a04;border-radius:14px;padding:3px 8px 3px 4px;font-size:12px;display:flex;align-items:center;gap:6px;font-weight:600}
   .chip .cav{width:19px;height:19px;border-radius:50%;background:#f7941d;color:#fff;font-size:9.5px;display:flex;align-items:center;justify-content:center;font-weight:700}
   .chip .x{cursor:pointer;opacity:.6;font-size:13px;line-height:1}
+  .chip-one{flex:1;padding:6px 10px 6px 6px;gap:9px;font-weight:600}
+  .chip-one .cav{width:26px;height:26px;font-size:11px}
+  .chip-one .cnm{font-size:13px}
+  .chip-one .cmt{font-size:11.5px;font-weight:400;color:#a9662c;margin-left:2px}
+  .chip-one .x{margin-left:auto;font-size:15px}
   .chip .x:hover{opacity:1}
   .chips input{border:0;outline:0;flex:1;min-width:130px;padding:4px;font-size:13px;font-family:inherit;background:transparent}
   .menu{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #e5e7eb;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.12);margin-top:5px;max-height:262px;overflow:auto;z-index:40;display:none}
@@ -587,7 +592,7 @@
     <p class="lead">Nine rules. Each one is a decision someone has to make before this gets built, and each is made here rather than left to the implementation.</p>
     <ol>
       <li><b>Add from the list page is the existing form with a Worker field on the front, in a side panel.</b> Ticket type, number, issued, expiry, issuing body, state, document, notes, and the Save as draft / Publish pair are the worker-drawer form verbatim. One component, two entry points — inline on the worker's Tickets tab where the worker is already known, in the standard right-hand panel from the list page where it isn't. Two forms would drift within a release.</li>
-      <li><b>Worker is multi-select.</b> The real event is a crew of six sitting the same course on the same day, not one person one ticket. Selecting more than one worker turns the number field into one row per worker, because the certificate number is personal and the course is not. One submission, N ticket records.</li>
+      <li><b>One worker per ticket.</b> A ticket is a record about a person — its number, its document and its expiry all belong to that person — so the form writes exactly one. When a crew of six sits the same course on the same day, that is six rows, and keying them one at a time through this panel is the wrong tool. It is the case bulk upload exists for, which is why the two buttons sit side by side rather than one being a power-user afterthought.</li>
       <li><b>A pre-filled export is the update path; a blank template is the create path.</b> The difference is a locked <code>Record ID</code> column that only pre-filled exports carry. A row with an ID updates that record. A row without one creates. Nothing is ever matched on a person's name alone to decide between the two.</li>
       <li><b>Worker matching on a blank template is employee ID, then email, then exact name within company.</b> Two candidates is an error row, not a best guess. Getting a licence onto the wrong person is worse than not importing it.</li>
       <li><b>A ticket type that isn't in the catalogue never appears silently.</b> The review step lists the unknown types and offers one checkbox to add them to Manage Ticket Types. Left unchecked, those rows are errors. Free-text ticket types are how a register becomes ninety spellings of "white card".</li>
@@ -640,7 +645,7 @@
               <div class="chips" id="chips"><input type="text" id="wsearch" placeholder="Search by name, employee ID or company…"></div>
               <div class="menu" id="wmenu"></div>
             </div>
-            <div class="hint">Pick more than one when a crew sat the same course on the same day — one submission writes one ticket per worker.</div>
+            <div class="hint">One worker per ticket. A crew who all sat the same course is one row each — that is what bulk upload is for.</div>
           </div>
 
           <div class="grid2">
@@ -648,15 +653,10 @@
               <label class="req">Ticket type</label>
               <select id="f-type"><option value="">Select ticket type…</option></select>
             </div>
-            <div class="fld" id="singleNumWrap">
+            <div class="fld">
               <label>Ticket / licence number</label>
               <input type="text" id="f-num" placeholder="e.g. 532534">
             </div>
-          </div>
-
-          <div id="perNumWrap" style="display:none;margin-top:14px">
-            <label style="font-size:12px;font-weight:600;color:#4b5563">Ticket / licence number</label>
-            <div class="pernum" id="perNum"><div class="hd">One number per worker — the certificate number is personal, the course is not.</div></div>
           </div>
 
           <div class="grid2" style="margin-top:14px">
@@ -812,18 +812,22 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape' && drawer.classList
 
 TYPES.forEach(t=>{const o=document.createElement('option');o.value=t.code;o.textContent=t.name+' ('+t.code+')';document.getElementById('f-type').appendChild(o);});
 
-let picked=[];
+let picked=null;
 const chips=document.getElementById('chips'), wsearch=document.getElementById('wsearch'), wmenu=document.getElementById('wmenu');
 function renderChips(){
   chips.querySelectorAll('.chip').forEach(c=>c.remove());
-  picked.forEach(id=>{
-    const w=WORKERS.find(x=>x.id===id);
-    const el=document.createElement('div'); el.className='chip';
-    el.innerHTML='<span class="cav">'+initials(w.name)+'</span>'+w.name+'<span class="x">×</span>';
-    el.querySelector('.x').onclick=e=>{e.stopPropagation();picked=picked.filter(p=>p!==id);renderChips();renderPerNum();};
+  if(picked){
+    const w=WORKERS.find(x=>x.id===picked);
+    const el=document.createElement('div'); el.className='chip chip-one';
+    el.innerHTML='<span class="cav">'+initials(w.name)+'</span>'
+      +'<span class="cnm">'+w.name+'</span>'
+      +'<span class="cmt">'+w.emp+' · '+w.role+' · '+w.co+'</span>'
+      +'<span class="x" title="Change worker">×</span>';
+    el.querySelector('.x').onclick=e=>{e.stopPropagation();picked=null;renderChips();wsearch.focus();};
     chips.insertBefore(el,wsearch);
-  });
-  wsearch.placeholder = picked.length? 'Add another…' : 'Search by name, employee ID or company…';
+  }
+  wsearch.style.display = picked ? 'none' : 'block';
+  wsearch.placeholder = 'Search by name, employee ID or company…';
 }
 function renderMenu(){
   const q=wsearch.value.toLowerCase().trim();
@@ -832,33 +836,23 @@ function renderMenu(){
   let html='', co='';
   hits.forEach(w=>{
     if(w.co!==co){co=w.co;html+='<div class="grp">'+co+(w.sub?' · subcontractor':'')+'</div>';}
-    const on=picked.includes(w.id);
+    const on=picked===w.id;
     html+='<div class="opt'+(on?' dis':'')+'" data-id="'+w.id+'"><div class="av" style="width:26px;height:26px;font-size:10.5px">'+initials(w.name)+'</div>'
       +'<div><div style="font-size:13px;font-weight:600">'+w.name+'</div><div style="font-size:11.5px;color:#6b7280">'+w.emp+' · '+w.role+'</div></div>'
       +(on?'<div style="margin-left:auto;font-size:11.5px;color:#059669;font-weight:600">Added</div>':'')+'</div>';
   });
   wmenu.innerHTML=html;
   wmenu.querySelectorAll('.opt:not(.dis)').forEach(o=>o.onmousedown=e=>{
-    e.preventDefault(); picked.push(o.dataset.id); wsearch.value=''; renderChips(); renderMenu(); renderPerNum();
+    e.preventDefault(); picked=o.dataset.id; wsearch.value=''; renderChips();
+    wmenu.classList.remove('on'); document.getElementById('f-type').focus();
   });
 }
 chips.onclick=()=>wsearch.focus();
 wsearch.onfocus=()=>{chips.classList.add('focus');wmenu.classList.add('on');renderMenu();};
 wsearch.onblur =()=>{chips.classList.remove('focus');setTimeout(()=>wmenu.classList.remove('on'),120);};
 wsearch.oninput=renderMenu;
-wsearch.onkeydown=e=>{if(e.key==='Backspace'&&!wsearch.value&&picked.length){picked.pop();renderChips();renderMenu();renderPerNum();}};
+wsearch.onkeydown=e=>{if(e.key==='Backspace'&&!wsearch.value&&picked){picked=null;renderChips();renderMenu();}};
 
-function renderPerNum(){
-  const multi=picked.length>1;
-  document.getElementById('singleNumWrap').style.display=multi?'none':'flex';
-  document.getElementById('perNumWrap').style.display=multi?'block':'none';
-  if(!multi) return;
-  const box=document.getElementById('perNum');
-  box.innerHTML='<div class="hd">One number per worker — the certificate number is personal, the course is not.</div>'
-    + picked.map(id=>{const w=WORKERS.find(x=>x.id===id);
-        return '<div class="r"><div class="av" style="width:24px;height:24px;font-size:10px">'+initials(w.name)+'</div>'
-          +'<div class="nm">'+w.name+'</div><input type="text" data-w="'+id+'" placeholder="Ticket / licence number"></div>';}).join('');
-}
 document.getElementById('f-type').onchange=function(){
   const t=TYPES.find(x=>x.code===this.value);
   document.getElementById('expHint').textContent = !t ? 'Leave blank to use the ticket type’s expiry rule.'
@@ -869,15 +863,15 @@ document.getElementById('f-type').onchange=function(){
     : 'Optional here. Publishing without it leaves the ticket flagged as unverified.';
 };
 function resetForm(){
-  picked=[];renderChips();renderPerNum();
+  picked=null;renderChips();
   ['f-num','f-iss','f-exp','f-body'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('f-type').value='';document.getElementById('f-state').value='';
   document.getElementById('addErr').style.display='none';
 }
 function submitAdd(draft){
   const err=document.getElementById('addErr');
-  if(!picked.length||!document.getElementById('f-type').value){
-    err.textContent = !picked.length ? 'Pick at least one worker.' : 'Pick a ticket type.';
+  if(!picked||!document.getElementById('f-type').value){
+    err.textContent = !picked ? 'Pick a worker.' : 'Pick a ticket type.';
     err.style.display='block'; return;
   }
   const ty=TYPES.find(x=>x.code===document.getElementById('f-type').value);
@@ -887,17 +881,14 @@ function submitAdd(draft){
     const d=new Date(iss+'T00:00:00'); d.setMonth(d.getMonth()+ty.exp);
     exp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   }
-  flashIds=[];
-  picked.forEach(id=>{
-    const num = picked.length>1 ? (document.querySelector('#perNum input[data-w="'+id+'"]')||{}).value : document.getElementById('f-num').value;
-    const _id='T'+Math.random().toString(36).slice(2,8);
-    flashIds.push(_id);
-    TICKETS.unshift({_id,w:id,type:ty.code,num,issued:iss,expiry:exp||null,doc:0,draft:draft||(ty.doc?1:0)});
-  });
-  const n=picked.length;
+  const _id='T'+Math.random().toString(36).slice(2,8);
+  flashIds=[_id];
+  const wk=WORKERS.find(x=>x.id===picked);
+  TICKETS.unshift({_id,w:picked,type:ty.code,num:document.getElementById('f-num').value,
+    issued:iss,expiry:exp||null,doc:0,draft:draft||(ty.doc?1:0)});
   closeDrawer(); renderList();
   toast(draft?'📝':'✅', draft?'Saved as draft':(ty.doc?'Published — document still needed':'Published'),
-    n+' ticket'+(n>1?'s':'')+' added.'+(!draft&&ty.doc?' '+(n>1?'They sit':'It sits')+' in the Draft tab until the certificate is attached, because this type requires a document.':''));
+    ty.name+' added for '+wk.name+'.'+(!draft&&ty.doc?' It sits in the Draft tab until the certificate is attached, because this type requires a document.':''));
   setTimeout(()=>{flashIds=[];},2000);
 }
 document.getElementById('pubAdd').onclick=()=>submitAdd(false);
