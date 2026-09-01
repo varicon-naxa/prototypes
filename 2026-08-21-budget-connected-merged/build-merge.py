@@ -272,6 +272,25 @@ def build_site_diary():
     js = replace_decl(js, "var WORKERS=", "var WORKERS=[];", "SD WORKERS")
     js = replace_decl(js, "var PLANTITEMS=", "var PLANTITEMS=[];", "SD PLANTITEMS")
     js = replace_decl(js, "var ALLOC_OPTIONS=", "var ALLOC_OPTIONS=[];", "SD ALLOC_OPTIONS")
+    # ── the delivery tracker ────────────────────────────────────────────
+    # Description first: it is what someone scans the list for. Source is the
+    # order, and only ever a PO or a Bill — a docket is one delivery against an
+    # order, not the thing that was ordered, so it belongs in the build-up.
+    old_head = ('<thead><tr><th>Source</th><th>Supplier</th><th class="num">Order qty</th>')
+    if old_head not in html:
+        raise SystemExit("FAIL: tracker header not found")
+    html = html.replace(
+        old_head,
+        '<thead><tr><th>Description</th><th>Supplier</th><th>Source</th>'
+        '<th class="num">Order qty</th>', 1)
+
+    # Locate the row's opening cells in the diary source rather than matching a
+    # transcribed copy of them — a hand-copied anchor of this size is a
+    # transcription bug waiting to happen.
+    r_start = js.index("b.innerHTML+=")
+    r_end = js.index("'<td class=\"num\">'+fmtQty(r.ordered", r_start)
+    js = js[:r_start] + "b.innerHTML+=\n" + TRACKER_ROW + "\n        " + js[r_end:]
+
     # The diary's plant table becomes the day's roster: every machine on the
     # project, who is on it, and whether it is working, stood down or off site.
     old_head = ('<th>Operated by</th><th>Hours</th><th>Hire rate</th><th>Cost</th>')
@@ -294,6 +313,12 @@ def build_site_diary():
     # The diary recomputed each row's cost as rate x hours, which lands a dollar
     # or two off the ledger amount the calendar shows for the very same row. The
     # ledger is the authority; where a row carries a cost, display it.
+    # A docket is never the source: it is a delivery against one.
+    js = js.replace(
+        "var tag=(r.srcType==='Bill')?'bill':(r.srcType==='Docket')?'docket'"
+        ":(r.srcType==='Manual')?'manual':'po';",
+        "var tag=(r.srcType==='Bill')?'bill':'po';")
+
     # Matched on the arithmetic, not the money() wrapper — that has already been
     # renamed to sdMoney by this point. Order matters: the labour expression
     # contains the plant one as a prefix, so labour is rewritten first.
@@ -407,6 +432,32 @@ TAB_BAR_NEW = '''    <div class="budget-view-tabs">
 # The roster row. A machine with no hours is not an empty row to be tidied
 # away — it is the machine the diary most needs to account for, because an
 # idle machine on hire is still costing money.
+# Description, supplier, then the order. Clicking the order opens the build-up
+# rather than the edit form — what someone wants from a delivery figure is
+# where it came from.
+# The build-up panel: what a delivered figure is made of.
+BUILDUP_HTML = """
+<div class="bu-scrim" id="buScrim" onclick="sdCloseBuildUp()"></div>
+<aside class="bu-drawer" id="buDrawer">
+  <div class="bu-head">
+    <h2 id="buTitle"></h2>
+    <p id="buSub"></p>
+    <button class="bu-close" onclick="sdCloseBuildUp()"><i class="fa-solid fa-xmark"></i></button>
+  </div>
+  <div class="bu-body" id="buBody"></div>
+</aside>
+"""
+
+TRACKER_ROW = (
+    "'<tr class=\"tk-row\">'+"
+    "'<td><div class=\"po-cell\"><span class=\"po-mat tk-desc\">'+r.nm+'</span>'+"
+    "  (r.cc?'<span class=\"tk-cc\">'+r.cc+'</span>':'')+'</div></td>'+"
+    "'<td>'+r.sup+'</td>'+"
+    "'<td><span class=\"tk-src\" onclick=\"sdOpenBuildUp(\\''+r.src+'\\')\" "
+    "  title=\"See the deliveries behind this\">'+r.src+"
+    "  ' <span class=\"src-tag '+tag+'\">'+(r.srcType||'PO')+'</span></span></td>'+"
+)
+
 PLANT_ROW = (
     "var st=r.status||'working';"
     "var stLabel=st==='working'?'Working':st==='standdown'?'Stood down':'Not on site';"
@@ -432,6 +483,50 @@ PLANT_ROW = (
 )
 
 SD_PALETTE = """
+/* ═══ the delivery tracker ═══ */
+#pageSiteDiary .tk-row td{vertical-align:top}
+#pageSiteDiary .tk-desc{font-weight:600;color:#1b2a4a}
+#pageSiteDiary .tk-cc{display:block;font-size:11px;color:#94a3b8;margin-top:2px}
+#pageSiteDiary .tk-src{display:inline-flex;align-items:center;gap:7px;cursor:pointer;
+  font-family:monospace;font-size:12px;color:#1b2a4a;padding:3px 8px;border-radius:6px;
+  border:1px solid #e2e8f0;background:#fff}
+#pageSiteDiary .tk-src:hover{border-color:#f5a623;background:#fffbf3}
+
+/* ═══ the build-up behind an order ═══ */
+#pageSiteDiary .bu-scrim{position:fixed;inset:0;background:rgba(15,23,42,.45);opacity:0;
+  pointer-events:none;transition:opacity .25s;z-index:500}
+#pageSiteDiary .bu-scrim.show{opacity:1;pointer-events:auto}
+#pageSiteDiary .bu-drawer{position:fixed;top:0;right:0;bottom:0;width:560px;max-width:94vw;
+  background:#fff;box-shadow:-10px 0 40px rgba(0,0,0,.18);transform:translateX(100%);
+  transition:transform .25s;z-index:501;display:flex;flex-direction:column}
+#pageSiteDiary .bu-drawer.show{transform:translateX(0)}
+#pageSiteDiary .bu-head{padding:18px 24px;border-bottom:1px solid #e2e8f0}
+#pageSiteDiary .bu-head h2{font-size:17px;font-weight:700;color:#1b2a4a;display:flex;
+  align-items:center;gap:10px}
+#pageSiteDiary .bu-head p{font-size:13px;color:#64748b;margin-top:4px}
+#pageSiteDiary .bu-close{position:absolute;top:18px;right:22px;border:none;background:none;
+  color:#94a3b8;font-size:17px;cursor:pointer}
+#pageSiteDiary .bu-body{flex:1;overflow-y:auto;padding:20px 24px}
+#pageSiteDiary .bu-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
+  margin-bottom:20px}
+#pageSiteDiary .bu-tile{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;
+  padding:12px 14px}
+#pageSiteDiary .bu-tile span{display:block;font-size:11px;color:#94a3b8}
+#pageSiteDiary .bu-tile b{font-size:17px;color:#1b2a4a}
+#pageSiteDiary .bu-sec{font-size:11px;font-weight:700;letter-spacing:.4px;
+  text-transform:uppercase;color:#64748b;margin:0 0 10px}
+#pageSiteDiary .bu-line{display:flex;gap:12px;align-items:baseline;padding:10px 0;
+  border-bottom:1px solid #eef2f6;font-size:13px}
+#pageSiteDiary .bu-line:last-child{border-bottom:none}
+#pageSiteDiary .bu-date{width:92px;flex-shrink:0;color:#64748b;font-size:12px}
+#pageSiteDiary .bu-ref{width:104px;flex-shrink:0;font-family:monospace;font-size:12px;
+  color:#1b2a4a}
+#pageSiteDiary .bu-qty{margin-left:auto;font-weight:600;color:#1b2a4a}
+#pageSiteDiary .bu-cost{width:78px;text-align:right;color:#64748b}
+#pageSiteDiary .bu-future{opacity:.45}
+#pageSiteDiary .bu-note{font-size:12px;color:#64748b;background:#f8fafc;
+  border-left:3px solid #cbd5e1;padding:10px 13px;border-radius:0 6px 6px 0;margin-top:16px}
+
 /* ═══ the day's plant roster ═══ */
 #pageSiteDiary .pl-chip{font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;
   white-space:nowrap;display:inline-block}
@@ -706,7 +801,7 @@ def main():
              '    <div class="page" id="pageDailyCost">\n' + dc_html +
              '\n    </div>\n\n'
              '    <!-- ════ MERGED PAGE: Site Diary ════ -->\n'
-             '    <div class="page" id="pageSiteDiary">\n' + sd_html +
+             '    <div class="page" id="pageSiteDiary">\n' + sd_html + BUILDUP_HTML +
              '\n    </div>\n\n'
              '    <!-- ════ TOP-LEVEL PAGE: Timesheet ════ -->\n'
              '    <div class="page" id="pageTimesheet">\n' + read(TS_HTML) +
