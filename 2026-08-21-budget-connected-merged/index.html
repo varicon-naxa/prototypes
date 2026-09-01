@@ -2028,6 +2028,14 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
 #pageSiteDiary .usage-card .uc-head span{font-weight:400;color:var(--muted);font-size:12px;margin-left:6px}
 #pageSiteDiary .usage-card .uc-sub{font-size:12px;color:var(--muted);margin:5px 0 11px;display:flex;gap:14px;flex-wrap:wrap}
 #pageSiteDiary .usage-card .uc-sub b{color:var(--navy)}
+/* ═══ how someone is engaged ═══ */
+#pageSiteDiary .abn-chip{display:inline-flex;align-items:center;gap:6px;margin-left:7px;
+  padding:1px 8px;border-radius:10px;background:#ede9fe;color:#6d28d9;font-size:10px;
+  font-weight:700;letter-spacing:.3px}
+#pageSiteDiary .abn-po{font-family:monospace;font-weight:600;font-size:10px;cursor:pointer;
+  border-bottom:1px dotted #a78bfa}
+#pageSiteDiary .abn-po:hover{color:#4c1d95}
+
 /* ═══ whose view is on screen ═══ */
 #pageSiteDiary .sd-view{display:inline-flex;border:1px solid #e2e8f0;border-radius:8px;
   overflow:hidden;background:#fff;margin-right:14px}
@@ -12847,9 +12855,24 @@ var VDATA = (function () {
   }
 
   /* The crew, from the base's people. */
+  /* Employees are on the books and go through a timesheet. ABN contractors
+     invoice against a purchase order — the base's model, and its budget splits
+     a share of labour off to them. Either way the cost is labour: a contractor
+     swinging a shovel is not a subcontract package.
+
+     Which of the crew are contractors is fixed here rather than drawn at
+     random, so the same person is the same kind of engagement everywhere. */
+  var ABN_CREW = ['W-01', 'W-03'];
+
   function workers() {
     return DAYWORK_PEOPLE.map(function (p) {
-      return { id: p.id, nm: p.name, role: p.role, rate: p.costRate, in: false };
+      var abn = ABN_CREW.indexOf(p.id) >= 0;
+      return {
+        id: p.id, nm: p.name, role: p.role, rate: p.costRate, in: false,
+        abn: abn,
+        /* a contractor is engaged on an order, and invoices against it */
+        po: abn ? 'PO-' + (2000 + (seed(p.id + 'abn') % 900)) : null
+      };
     });
   }
 
@@ -13052,6 +13075,41 @@ var VDATA = (function () {
     return list[seed(key) % list.length];
   }
 
+  /* ── was an order raised, and what is the source? ───────────────────────
+     A bill is not an order. Where a PO exists the PO is the source and the
+     bill is one of the things that lands against it, next to the dockets. A
+     bill stands as the source only when nothing was ordered first.
+
+     Whether one was raised depends on what is being bought, which is a demo
+     assumption held here rather than sprinkled about: a subcontractor is never
+     engaged without one, supply usually is ordered, and sundries — a permit, a
+     tank of fuel — often are not.
+
+     Note what is NOT in the key: the cost state. The same arrangement tracked
+     and billed is one order, not two. */
+  function orderFor(arrangement, kind) {
+    var h = seed(arrangement);
+    var raised = kind === 'sub' ? true
+               : kind === 'material' ? (h % 10) < 8
+               : (h % 10) < 5;
+    return raised
+      ? { src: 'PO-' + (1000 + (h % 900)), srcType: 'PO', raised: true }
+      : { src: 'BILL-' + (1000 + (h % 900)), srcType: 'Bill', raised: false };
+  }
+
+  /* What lands against the order on the day: a docket while it is tracked, a
+     bill once it is paid. Different documents, so different references. */
+  function eventFor(key, state, ord) {
+    if (state !== 'actual') {
+      return { ref: 'DKT-' + (1000 + (seed(key + 'dk') % 9000)), doc: 'Docket' };
+    }
+    /* When no order was raised the bill is the source, so the billed line is
+       that same document — not a second bill number sitting under the first. */
+    return ord && !ord.raised
+      ? { ref: ord.src, doc: 'Bill' }
+      : { ref: 'BILL-' + (4000 + (seed(key + 'bl') % 900)), doc: 'Bill' };
+  }
+
   /* ── the delivery tracker, as at a date ─────────────────────────────────
      One row per order — a PO or a Bill — with the deliveries that have landed
      against it up to and including the day being looked at. Open the diary on
@@ -13063,17 +13121,20 @@ var VDATA = (function () {
     l.days.forEach(function (d) {
       (l.byDate[d] || []).forEach(function (r) {
         if (r.uncoded || !r.detail || kinds.indexOf(r.detail.kind) < 0) return;
+        if (r.detail.kind === 'labour' && !r.detail.abn) return;
         var dt = r.detail;
         var e = bySrc[dt.src] || (bySrc[dt.src] = {
           src: dt.src, srcType: dt.srcType, nm: dt.nm, sup: dt.sup,
-          kind: dt.kind,
-          unit: dt.unit, rate: dt.rate, cc: r.cc, code: dt.code,
+          kind: dt.kind, raised: dt.raised,
+          unit: dt.unit, rateUnit: dt.rateUnit || dt.unit,
+          rate: dt.rate2 || dt.rate, cc: r.cc, code: dt.code,
           ccs: [], totalQty: 0, deliveries: []
         });
         e.totalQty += dt.qty || 0;
         if (e.ccs.indexOf(r.cc) < 0) e.ccs.push(r.cc);
         e.deliveries.push({
-          date: d, docket: dt.docket, qty: dt.qty || 0, cost: r.cost || 0,
+          date: d, docket: dt.docket, doc: dt.doc || 'Docket',
+          qty: dt.qty || 0, cost: r.cost || 0,
           state: r.state, cc: r.cc, forWork: dt.forWork || ''
         });
       });
@@ -13084,9 +13145,12 @@ var VDATA = (function () {
       /* The order is bigger than everything delivered in the period — a job
          that has taken every last unit of every order is not the normal case.
          Demo assumption, held in one place rather than sprinkled about. */
-      var ordered = (e.kind === 'material' || e.kind === 'sub')
-        ? Math.round(e.totalQty / 0.72 * 10) / 10
-        : Math.round(e.totalQty * 10) / 10;
+      /* An order is raised for more than has been taken from it — supply, a
+         subcontract, and an ABN contractor's hours alike. Sundries are the
+         exception: a permit is bought and it is done. */
+      var ordered = (e.kind === 'misc' || !e.raised)
+        ? Math.round(e.totalQty * 10) / 10
+        : Math.round(e.totalQty / 0.72 * 10) / 10;
 
       var upTo = e.deliveries.filter(function (x) { return x.date <= iso; })
         .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
@@ -13101,12 +13165,12 @@ var VDATA = (function () {
         var value = Math.max(1, Math.round(ordered));
         var pc = function (v) { return Math.round(v / value * 1000) / 10; };
         var asPc = function (x) {
-          return { date: x.date, docket: x.docket, qty: pc(x.qty), cost: x.cost,
-                   state: x.state, cc: x.cc, forWork: x.forWork };
+          return { date: x.date, docket: x.docket, doc: x.doc, qty: pc(x.qty),
+                   cost: x.cost, state: x.state, cc: x.cc, forWork: x.forWork };
         };
         return {
           id: e.src, src: e.src, srcType: e.srcType, nm: e.nm, sup: e.sup,
-          kind: e.kind, unit: '%', rate: Math.round(value / 100),
+          kind: e.kind, raised: e.raised, unit: '%', rate: Math.round(value / 100),
           code: e.code, ccs: e.ccs,
           cc: e.ccs.length === 1 ? e.ccs[0] : e.ccs.length + ' cost centres',
           value: value,
@@ -13117,10 +13181,13 @@ var VDATA = (function () {
         };
       }
 
+      var allCost = e.deliveries.reduce(function (a, x) { return a + x.cost; }, 0);
+      var blended = e.totalQty ? Math.round(allCost / e.totalQty) : e.rate;
+
       return {
         id: e.src, src: e.src, srcType: e.srcType, nm: e.nm, sup: e.sup,
-        kind: e.kind,
-        unit: e.unit, rate: e.rate, code: e.code,
+        kind: e.kind, raised: e.raised,
+        unit: e.unit, rateUnit: e.rateUnit || e.unit, rate: blended, code: e.code,
         /* an order can feed several cost centres, so the row says how many and
            each docket below says which */
         ccs: e.ccs,
@@ -13144,7 +13211,7 @@ var VDATA = (function () {
   /* One lookup across both, so the build-up panel does not need to know which
      table the line was clicked in. */
   function trackerLine(src, iso) {
-    return orderTracker(['material', 'misc', 'sub'], iso)
+    return orderTracker(['material', 'misc', 'sub', 'labour'], iso)
       .filter(function (r) { return r.src === src; })[0] || null;
   }
 
@@ -13711,7 +13778,24 @@ var VDATA = (function () {
         rows.push({
           cat: 'labour', cc: cc, cost: amt, resource: w.nm,
           meta: hrs + ' hrs @ $' + w.rate + '/hr',
-          detail: { kind: 'labour', worker: w, hrs: hrs, rate: w.rate }
+          detail: {
+            kind: 'labour', worker: w, hrs: hrs, rate: w.rate,
+            /* labour either way; the engagement is what differs */
+            abn: w.abn, po: w.po,
+            /* A contractor is engaged on an order, so the order is a real one:
+               their timesheets draw down against it and their invoices land on
+               it, the same way dockets and bills land on a supply PO. An
+               employee has no order — they are on the books. */
+            nm: w.abn ? w.nm + ' — ABN contract' : null,
+            sup: w.nm, unit: 'hrs', rateUnit: 'hr', qty: hrs, rate2: w.rate,
+            src: w.po, srcType: w.abn ? 'PO' : null, raised: true,
+            docket: w.abn
+              ? (state === 'actual' ? 'INV-' + (700 + (seed(key + w.id) % 90))
+                                    : 'TS-' + (4000 + (seed(key + w.id) % 900)))
+              : null,
+            doc: state === 'actual' ? 'Invoice' : 'Timesheet',
+            forWork: cc
+          }
         });
       });
     } else if (cat === 'plant') {
@@ -13750,19 +13834,20 @@ var VDATA = (function () {
         /* The order is raised once and delivered against over many days, so
            its reference is stable per (line, supplier, state). The docket is
            the reference for THIS day's delivery against it. */
-        /* Keyed by material, supplier and state — not by cost centre. One
-           order of road base is drawn down by more than one cost centre, and
-           that is exactly why a docket has to say which one it landed on. */
-        var srcSeed = seed(material + sup + state + unit);
-        var srcRef = (state === 'actual' ? 'BILL-' : 'PO-') + (1000 + (srcSeed % 900));
+        /* Keyed by material, supplier and unit — not by cost centre and not by
+           cost state. One order of road base is drawn down by more than one
+           cost centre, which is why a docket has to say which one it landed on;
+           and the same order is both docketed and billed over its life. */
+        var ord = orderFor(material + sup + unit, 'material');
+        var ev = eventFor(key + material, state, ord);
         rows.push({
           cat: 'material', cc: cc, cost: amt, resource: material,
           meta: qty + ' ' + unit + ' @ $' + fmtRate(rate) + '/' + unit + ' · ' + sup +
                 (line ? ' · ' + line.desc : ''),
           detail: {
             kind: 'material', nm: material, sup: sup, unit: unit, rate: rate, qty: qty,
-            src: srcRef, srcType: state === 'actual' ? 'Bill' : 'PO',
-            docket: 'DKT-' + (1000 + (seed(key + 'dkt') % 9000)),
+            src: ord.src, srcType: ord.srcType, raised: ord.raised,
+            docket: ev.ref, doc: ev.doc,
             /* the work the delivery was for, kept for the build-up */
             forWork: line ? line.desc : cc,
             code: line ? line.code : null
@@ -13775,7 +13860,8 @@ var VDATA = (function () {
          it, exactly as a docket does against a PO. So the line is described by
          the work package, the subcontractor is the supplier, and the claims
          stack up underneath instead of each standing alone. */
-      var subSeed = seed(sub + cc + state);
+      var subOrd = orderFor(sub + cc, 'sub');
+      var subEv = eventFor(key + sub, state, subOrd);
       rows.push({
         cat: 'sub', cc: cc, cost: amount, resource: sub,
         meta: cc + ' — progress claim · ' + sub,
@@ -13785,9 +13871,11 @@ var VDATA = (function () {
              total into percent of the contract */
           unit: '%', rate: 1, qty: amount,
           /* the subcontract order, never the claim against it */
-          src: (state === 'actual' ? 'BILL-' : 'PO-') + (3000 + (subSeed % 900)),
-          srcType: state === 'actual' ? 'Bill' : 'PO',
-          docket: 'CLM-' + (100 + (seed(key + 'b') % 90)),
+          src: subOrd.src, srcType: subOrd.srcType, raised: subOrd.raised,
+          /* a claim while it is tracked; the bill once it is paid */
+          docket: state === 'actual' ? subEv.ref
+                                     : 'CLM-' + (100 + (seed(key + 'b') % 90)),
+          doc: state === 'actual' ? 'Bill' : 'Claim',
           forWork: cc + ' — progress claim'
         }
       });
@@ -13805,16 +13893,16 @@ var VDATA = (function () {
       var sup2 = supplierFor(cc, 'dkt');
       /* Keyed on the item, the supplier and the state — not the day — so the
          same arrangement is one line that grows, not a new line every day. */
-      var mSeed = seed(m2.nm + sup2 + state);
+      var mOrd = orderFor(m2.nm + sup2, 'misc');
+      var mEv = eventFor(key + m2.nm, state, mOrd);
       rows.push({
         cat: 'misc', cc: cc, cost: amount, resource: m2.nm,
         meta: m2.nm + ' · ' + sup2,
         detail: {
           kind: 'misc', nm: m2.nm, sup: sup2, unit: m2.unit, rate: m2.rate,
           qty: qtyOf(amount, m2.rate),
-          src: (state === 'actual' ? 'BILL-' : 'PO-') + (3300 + (mSeed % 90)),
-          srcType: state === 'actual' ? 'Bill' : 'PO',
-          docket: 'DKT-' + (1000 + (seed(key + 'mx') % 9000)),
+          src: mOrd.src, srcType: mOrd.srcType, raised: mOrd.raised,
+          docket: mEv.ref, doc: mEv.doc,
           forWork: cc
         }
       });
@@ -13995,7 +14083,9 @@ function vdataDiaryRows() {
         in: t.inAt, out: t.outAt, brk: String(t.brk), hrs: t.hours,
         alloc: t.alloc,
         status: t.approved ? 'app' : 'pend',
-        cost: r.cost
+        cost: r.cost,
+        /* how they are engaged, and for a contractor the order they sit on */
+        abn: dt.abn, po: dt.po
       });
     } else if (dt.kind === 'plant') {
       /* plant comes from the roster below, so every machine appears */
@@ -14054,6 +14144,10 @@ function sdSetRatesView(on) {
   }
   var pg = document.getElementById('pageSiteDiary');
   if (pg) pg.classList.toggle('sd-no-rates', !on);
+
+  var dr = document.getElementById('buDrawer');
+  if (dr && dr.classList.contains('show') && BU_OPEN) sdOpenBuildUp(BU_OPEN);
+  else if (dr) { document.getElementById('buBody').innerHTML = ''; BU_OPEN = null; }
   rows.plant = vdataDiaryRows().plant;
   renderAll();
 }
@@ -14062,10 +14156,14 @@ function sdSetRatesView(on) {
    A delivered figure is only useful if you can see what makes it up: the
    order, every docket that has landed against it as at the day being viewed,
    and what is still to come after it. */
+/* which order the panel is showing, so a change of view can re-render it */
+var BU_OPEN = null;
+
 function sdOpenBuildUp(src) {
   var iso = VDATA.diaryDate();
   var r = VDATA.trackerLine(src, iso);
   if (!r) return;
+  BU_OPEN = src;
   var m = function (v) {
     return SDVIEW.rates ? '$' + Math.round(v || 0).toLocaleString('en-AU') : sdMasked();
   };
@@ -14081,34 +14179,45 @@ function sdOpenBuildUp(src) {
   /* A subcontract is claimed against, not delivered against. The panel is the
      same; the words are the trade's. */
   var sub = r.kind === 'sub';
-  var drawn = sub ? 'Claimed' : 'Delivered';
-  var tileOrdered = sub ? 'Subcontract' : 'Ordered';
-  var tileLeft = sub ? 'Left to claim' : 'To deliver';
+  var drawn = sub ? 'Claimed' : r.kind === 'labour' ? 'Worked' : 'Delivered';
+  var tileOrdered = !r.raised ? 'Supplied in total'
+    : sub ? 'Subcontract' : r.kind === 'labour' ? 'Engaged' : 'Ordered';
+  var tileLeft = sub ? 'Left to claim' : r.kind === 'labour' ? 'Left on order' : 'To deliver';
 
   document.getElementById('buTitle').textContent = r.nm;
   document.getElementById('buSub').textContent =
     r.sup + ' · ' + r.src + (r.cc ? ' · ' + r.cc : '');
   document.getElementById('buBody').innerHTML =
     '<div class="bu-sum">' +
-      '<div class="bu-tile"><span>' + tileOrdered + '</span><b>' + q(r.ordered) + ' ' + r.unit + '</b></div>' +
-      '<div class="bu-tile"><span>' + drawn + '</span><b>' + q(r.delivered) + ' ' + r.unit + '</b></div>' +
-      '<div class="bu-tile"><span>' + tileLeft + '</span><b>' + q(r.remaining) + ' ' + r.unit + '</b></div>' +
+      '<div class="bu-tile"><span>' + tileOrdered + '</span><b>' + q(r.ordered) +
+        ' ' + r.unit + '</b></div>' +
+      '<div class="bu-tile"><span>' + drawn + '</span><b>' + q(r.delivered) +
+        ' ' + r.unit + '</b></div>' +
+      /* nothing was ordered, so there is nothing still to come */
+      (r.raised
+        ? '<div class="bu-tile"><span>' + tileLeft + '</span><b>' +
+            q(r.remaining) + ' ' + r.unit + '</b></div>'
+        : '') +
     '</div>' +
-    '<p class="bu-sec">' + (sub ? 'The subcontract' : 'The order') + '</p>' +
+    '<p class="bu-sec">' +
+      (!r.raised ? 'No order was raised' : sub ? 'The subcontract' : 'The order') +
+    '</p>' +
     '<div class="bu-line"><span class="bu-date">Raised</span>' +
       '<span class="bu-ref">' + r.src + '</span>' +
-      '<span>' + (sub ? 'Lump sum' : q(r.ordered) + ' ' + r.unit +
-        (SDVIEW.rates ? ' @ $' + r.rate + '/' + r.unit : '')) + '</span>' +
+      '<span>' + (!r.raised ? 'Billed direct \u2014 no purchase order'
+        : sub ? 'Lump sum'
+        : q(r.ordered) + ' ' + r.unit +
+          (SDVIEW.rates ? ' @ $' + r.rate + '/' + (r.rateUnit || r.unit) : '')) + '</span>' +
       '<span class="bu-cost">' + m(sub ? r.value : r.ordered * r.rate) +
       '</span></div>' +
-    '<p class="bu-sec" style="margin-top:20px">' + drawn + ' against it, to ' +
-      dmy(iso) + '</p>' +
+    '<p class="bu-sec" style="margin-top:20px">' +
+      (r.raised ? drawn + ' against it, to ' : 'Billed, to ') + dmy(iso) + '</p>' +
     (landed.length
       ? landed.map(function (x) {
           return '<div class="bu-line"><span class="bu-date">' + dmy(x.date) + '</span>' +
             '<span class="bu-ref">' + x.docket + '</span>' +
             '<span class="src-tag ' + (x.state === 'actual' ? 'bill' : 'docket') + '">' +
-            (x.state === 'actual' ? 'Billed' : sub ? 'Claim' : 'Docket') + '</span>' +
+            (x.doc || 'Docket') + '</span>' +
             '<span class="bu-cc">' + (x.cc || '') +
               (x.forWork ? '<em>' + x.forWork + '</em>' : '') + '</span>' +
             '<span class="bu-qty">' + q(x.qty) + ' ' + r.unit + '</span>' +
@@ -14134,6 +14243,9 @@ function sdOpenBuildUp(src) {
 function sdCloseBuildUp() {
   document.getElementById('buScrim').classList.remove('show');
   document.getElementById('buDrawer').classList.remove('show');
+  /* the figures go with it — a closed panel holds nothing to read */
+  document.getElementById('buBody').innerHTML = '';
+  BU_OPEN = null;
 }
 
 /* Marking a machine stood down for the day. Named sd* so it sits with the
@@ -14537,7 +14649,8 @@ function renderLabour(){
     var costCell=r.rate?'<b style="color:var(--navy)">'+sdMoney((r.cost!=null?r.cost:(r.rate*hoursNum(r.hrs)+allow)*cnt))+'</b>':'—';
     var av=r.byType?'<div class="w-av" style="background:#0f766e">×'+cnt+'</div>':'<div class="w-av">'+initials(r.who)+'</div>';
     var typeChip=r.byType?'<span class="dkt-chip" style="background:#e0e7ff;color:#4338ca"><i class="fa-solid fa-users"></i>Resource type</span>':'';
-    b.innerHTML+='<tr><td><div class="w-cell">'+av+'<div><div class="w-name">'+r.who+typeChip+dktChip(r)+'</div><div class="w-role">'+r.role+'</div></div></div></td>'+
+    var abnChip=r.abn?'<span class="abn-chip" title="ABN contractor — labour, invoiced against an order">ABN'+(r.po?' <span class="abn-po" onclick="event.stopPropagation();sdOpenBuildUp(\''+r.po+'\')">'+r.po+'</span>':'')+'</span>':'';
+    b.innerHTML+='<tr><td><div class="w-cell">'+av+'<div><div class="w-name">'+r.who+typeChip+abnChip+dktChip(r)+'</div><div class="w-role">'+r.role+'</div></div></div></td>'+
     '<td>'+r.in+'</td><td>'+r.out+'</td><td>'+r.brk+'m</td><td class="hrs">'+r.hrs+'</td>'+
     '<td>'+rateCell+'</td><td>'+allowCell+'</td><td>'+costCell+'</td>'+
     '<td>'+allocChips(r.alloc)+'</td>'+

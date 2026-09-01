@@ -379,6 +379,22 @@ def build_site_diary():
         'has been drawn against it, as at the day shown. Click the order to see '
         'the dockets and claims behind it.')
 
+    # ── ABN contractors in the labour table ─────────────────────────────
+    # Labour either way. The chip says how someone is engaged, and a
+    # contractor's order opens the same build-up as any other order, because it
+    # is one: their invoices land against it.
+    old_chip = ("var typeChip=r.byType?'<span class=\"dkt-chip\" "
+                "style=\"background:#e0e7ff;color:#4338ca\">"
+                "<i class=\"fa-solid fa-users\"></i>Resource type</span>':'';")
+    if old_chip not in js:
+        raise SystemExit("FAIL: labour typeChip not found")
+    js = js.replace(old_chip, old_chip + ABN_CHIP, 1)
+
+    old_name = "+r.who+typeChip+dktChip(r)+"
+    if old_name not in js:
+        raise SystemExit("FAIL: labour name cell not found")
+    js = js.replace(old_name, "+r.who+typeChip+abnChip+dktChip(r)+", 1)
+
     # The diary's plant table becomes the day's roster: every machine on the
     # project, who is on it, and whether it is working, stood down or off site.
     old_head = ('<th>Operated by</th><th>Hours</th><th>Hire rate</th><th>Cost</th>')
@@ -570,6 +586,16 @@ MISC_ROW = (
     "  ' <span class=\"src-tag '+tag+'\">'+(r.srcType||'PO')+'</span></span></td>'+"
 )
 
+# An employee is on the books and goes through a timesheet; a contractor
+# invoices against an order. Both are labour, so both stay in this table.
+ABN_CHIP = (
+    "\n    var abnChip=r.abn"
+    "?'<span class=\"abn-chip\" title=\"ABN contractor \u2014 labour, invoiced "
+    "against an order\">ABN'+(r.po?' <span class=\"abn-po\" "
+    "onclick=\"event.stopPropagation();sdOpenBuildUp(\\''+r.po+'\\')\">'"
+    "+r.po+'</span>':'')+'</span>':'';"
+)
+
 PLANT_ROW = (
     "var st=r.status||'working';"
     "var stLabel=st==='working'?'Working':st==='standdown'?'Stood down':'Not on site';"
@@ -595,6 +621,14 @@ PLANT_ROW = (
 )
 
 SD_PALETTE = """
+/* ═══ how someone is engaged ═══ */
+#pageSiteDiary .abn-chip{display:inline-flex;align-items:center;gap:6px;margin-left:7px;
+  padding:1px 8px;border-radius:10px;background:#ede9fe;color:#6d28d9;font-size:10px;
+  font-weight:700;letter-spacing:.3px}
+#pageSiteDiary .abn-po{font-family:monospace;font-weight:600;font-size:10px;cursor:pointer;
+  border-bottom:1px dotted #a78bfa}
+#pageSiteDiary .abn-po:hover{color:#4c1d95}
+
 /* ═══ whose view is on screen ═══ */
 #pageSiteDiary .sd-view{display:inline-flex;border:1px solid #e2e8f0;border-radius:8px;
   overflow:hidden;background:#fff;margin-right:14px}

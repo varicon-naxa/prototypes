@@ -495,9 +495,8 @@ which covers figures nobody thought about, rather than relying on having remembe
 call site. Verified by walking every visible text node on the page: **zero money figures
 visible** in supervisor view, including inside the build-up panel.
 
-One limit worth stating: values already rendered into a *closed* drawer stay in the DOM
-until it re-renders. Nothing is on screen, but this is a view, not a security boundary —
-a real implementation withholds the numbers server-side.
+This is a view, not a security boundary — a real implementation withholds the numbers
+server-side. (The closed-drawer caveat noted here originally was fixed on 2026-09-01.)
 
 ## Miscellaneous, on the same logic — 2026-09-01
 
@@ -536,6 +535,50 @@ the subcontracted work claimed. Verified against the data: 72%.
 **Supervisor view** covers misc for free, because it masks at the one formatter rather than
 per call site. Verified across all four panels and with the build-up open: zero money
 figures visible.
+
+## A bill is not an order — 2026-09-01
+
+If a PO was raised, **the PO is the source** and the bill is one of the things that lands
+against it, alongside the dockets. A bill stands as the source only when nothing was
+ordered first — a direct purchase, a permit paid on the spot.
+
+That collapses the two lines every arrangement used to carry. Tracked and actual are still
+disjoint **at the money** — each event keeps its own state and nothing is counted twice —
+but they are one order on screen, which is what an order is. 34 lines where there were 45;
+24 POs each carrying both dockets and bills, 10 direct bills with no PO behind them.
+
+Whether an order was raised depends on what is bought, held in one function rather than
+sprinkled about: a subcontractor is never engaged without one, supply usually is ordered,
+sundries often are not.
+
+Where nothing was ordered the panel says so, the billed line **is** that same bill (not a
+second number under the first), and there is no "still to deliver" tile — nothing was
+ordered, so nothing is outstanding.
+
+Merging the two halves means the rows behind a line can carry different budget rates, so a
+line states the rate the order actually ran at: its money over its quantity.
+
+## ABN contractors are labour — 2026-09-01
+
+The base already says so: a contractor sits on a PO but their timesheet is the source of
+truth, and the cost is labour, not a subcontract. The diary was showing them as ordinary
+crew with nothing to distinguish them, so a foreman could not tell who is on the books and
+who is invoicing against an order.
+
+They stay in the labour table. What is added is an **ABN chip carrying their order**, and
+that order is a real one — their timesheets draw down against it while tracked, their
+invoices land on it once paid, and it opens the same build-up as any supply PO. 46% of
+labour cost runs through contractors in this data; J. Whitton's PO shows 270.1 hrs engaged,
+194.5 worked, 75.6 left, across 5 cost centres.
+
+An employee has no order, so the tracker skips them rather than inventing one.
+
+## The closed panel holds nothing — 2026-09-01
+
+The build-up renders when it opens, so a panel rendered before the view changed still held
+the old view's figures — off-screen, but in the DOM. It now re-renders if the view changes
+while open, and empties when closed. The caveat in the supervisor-view note above is gone:
+after opening all 34 orders and switching view, **zero** money figures anywhere.
 
 ## Verified
 
