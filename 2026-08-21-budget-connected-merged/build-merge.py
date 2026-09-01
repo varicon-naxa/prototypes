@@ -339,6 +339,46 @@ def build_site_diary():
         ":(r.srcType==='Manual')?'manual':'po';",
         "var tag=(r.srcType==='Bill')?'bill':'po';")
 
+    # Percentages do not add up: six subcontracts at 72% is not 432%. The unit
+    # summary skips them, and they are reported as one weighted figure — the
+    # share of the subcontracted work claimed, which is what a percentage of a
+    # lump sum means when you have several of them.
+    old_acc = ("doneByUnit[r.unit]=(doneByUnit[r.unit]||0)+r.delivered;\n"
+               "    toDoByUnit[r.unit]=(toDoByUnit[r.unit]||0)+remDeliver;")
+    if old_acc not in js:
+        raise SystemExit("FAIL: misc unit accumulator not found")
+    js = js.replace(old_acc,
+        "if(r.unit==='%'){subValue+=(r.value||0);subClaimed+=(r.cost||0);}"
+        "else{doneByUnit[r.unit]=(doneByUnit[r.unit]||0)+r.delivered;"
+        "toDoByUnit[r.unit]=(toDoByUnit[r.unit]||0)+remDeliver;}", 1)
+
+    js = js.replace("var doneByUnit={},toDoByUnit={},totalCost=0;",
+                    "var doneByUnit={},toDoByUnit={},totalCost=0,"
+                    "subValue=0,subClaimed=0;", 1)
+
+    old_sum = ("document.getElementById('sMiscDone').textContent=summarise(doneByUnit);\n"
+               "  document.getElementById('sMiscToDo').textContent=summarise(toDoByUnit);")
+    if old_sum not in js:
+        raise SystemExit("FAIL: misc summary assignment not found")
+    js = js.replace(old_sum,
+        "var subPc=subValue?Math.round(subClaimed/subValue*1000)/10:null;\n"
+        "  function withSubs(map,pc){var t=summarise(map);"
+        "var s=subPc===null?'':pc+'% of subcontracts';"
+        "return s?(t==='\u2014'?s:t+' \u00b7 '+s):t;}\n"
+        "  document.getElementById('sMiscDone').textContent="
+        "withSubs(doneByUnit,subPc);\n"
+        "  document.getElementById('sMiscToDo').textContent="
+        "withSubs(toDoByUnit,subPc===null?null:Math.round((100-subPc)*10)/10);", 1)
+
+    # The blurb still described a source that can be a site docket. It cannot.
+    html = html.replace(
+        'rolls up from its <b>source document</b> (PO, bill or site docket) and '
+        'tracks ordered \u2192 delivered with a rate. Click any line to edit it '
+        'directly.',
+        'rolls up from its <b>order</b> \u2014 a PO or a bill \u2014 and tracks what '
+        'has been drawn against it, as at the day shown. Click the order to see '
+        'the dockets and claims behind it.')
+
     # The diary's plant table becomes the day's roster: every machine on the
     # project, who is on it, and whether it is working, stood down or off site.
     old_head = ('<th>Operated by</th><th>Hours</th><th>Hire rate</th><th>Cost</th>')

@@ -2428,7 +2428,7 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
   <!-- MISC -->
   <div class="panel" id="panel-misc">
     <div class="panel-head"><div class="panel-title">Miscellaneous</div></div>
-    <div class="panel-sub">Anything else billable to the job — subcontractor visits, disposal, permits, sundry items. Like materials, each line rolls up from its <b>source document</b> (PO, bill or site docket) and tracks ordered → delivered with a rate. Click any line to edit it directly.</div>
+    <div class="panel-sub">Anything else billable to the job — subcontractor visits, disposal, permits, sundry items. Like materials, each line rolls up from its <b>order</b> — a PO or a bill — and tracks what has been drawn against it, as at the day shown. Click the order to see the dockets and claims behind it.</div>
     <div class="summary">
       <div class="s"><i class="fa-solid fa-file-invoice-dollar"></i><div><div class="v" id="sMiscCount">0</div><div class="k">Source lines</div></div></div>
       <div class="s"><i class="fa-solid fa-circle-check"></i><div><div class="v" id="sMiscDone">—</div><div class="k">Delivered to date</div></div></div>
@@ -14808,12 +14808,11 @@ function renderMisc(){
     document.getElementById('sMiscCount').textContent='0';document.getElementById('sMiscDone').textContent='—';
     document.getElementById('sMiscToDo').textContent='—';document.getElementById('sMiscCost').textContent='$0';return;
   }
-  var doneByUnit={},toDoByUnit={},totalCost=0;
+  var doneByUnit={},toDoByUnit={},totalCost=0,subValue=0,subClaimed=0;
   b.innerHTML='';
   rows.misc.forEach(function(r){
     var remDeliver=Math.max(0,r.ordered-r.delivered);
-    doneByUnit[r.unit]=(doneByUnit[r.unit]||0)+r.delivered;
-    toDoByUnit[r.unit]=(toDoByUnit[r.unit]||0)+remDeliver;
+    if(r.unit==='%'){subValue+=(r.value||0);subClaimed+=(r.cost||0);}else{doneByUnit[r.unit]=(doneByUnit[r.unit]||0)+r.delivered;toDoByUnit[r.unit]=(toDoByUnit[r.unit]||0)+remDeliver;}
     var delCost=(r.rate||0)*r.delivered;totalCost+=delCost;
     var tag=(r.srcType==='Bill')?'bill':'po';
     var rateCell=r.rate?sdMoney(r.rate)+'<span class="qty-unit">/'+r.unit+'</span>':'<span style="color:var(--muted)">—</span>';
@@ -14831,8 +14830,10 @@ function renderMisc(){
   document.getElementById('sMiscCount').textContent=rows.misc.length;
   var cx=document.getElementById('cMisc');if(cx)cx.textContent=rows.misc.length;
   function summarise(map){var parts=Object.keys(map).filter(function(u){return map[u]>0}).map(function(u){return map[u].toLocaleString('en-AU')+' '+u});return parts.length?parts.join(' · '):'—';}
-  document.getElementById('sMiscDone').textContent=summarise(doneByUnit);
-  document.getElementById('sMiscToDo').textContent=summarise(toDoByUnit);
+  var subPc=subValue?Math.round(subClaimed/subValue*1000)/10:null;
+  function withSubs(map,pc){var t=summarise(map);var s=subPc===null?'':pc+'% of subcontracts';return s?(t==='—'?s:t+' · '+s):t;}
+  document.getElementById('sMiscDone').textContent=withSubs(doneByUnit,subPc);
+  document.getElementById('sMiscToDo').textContent=withSubs(toDoByUnit,subPc===null?null:Math.round((100-subPc)*10)/10);
   document.getElementById('sMiscCost').textContent=sdMoney(totalCost);
 }
 function renderMiscEntries(){

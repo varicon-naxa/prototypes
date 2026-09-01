@@ -528,6 +528,11 @@ misc, once uncoded bills are excluded. The remaining difference is exactly the u
 amount ($4,002 material, $667 misc, $2,001 sub) — an uncoded bill has no cost centre yet,
 so it cannot sit on a line. That is the bill-coding gap doing its job.
 
+Percentages do not add up: six subcontracts at 72% is not 432%. The summary tiles total
+delivered quantity by unit, which is right for fills and loads and wrong for a percentage,
+so subcontracts are reported as **one figure weighted by contract value** — the share of
+the subcontracted work claimed. Verified against the data: 72%.
+
 **Supervisor view** covers misc for free, because it masks at the one formatter rather than
 per call site. Verified across all four panels and with the build-up open: zero money
 figures visible.
