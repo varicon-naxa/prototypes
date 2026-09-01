@@ -499,6 +499,39 @@ One limit worth stating: values already rendered into a *closed* drawer stay in 
 until it re-renders. Nothing is on screen, but this is a view, not a security boundary —
 a real implementation withholds the numbers server-side.
 
+## Miscellaneous, on the same logic — 2026-09-01
+
+Misc had the defect materials had, so it takes the same fix rather than a copy of it:
+`materialTracker` became `orderTracker(kinds, iso)` and both tables run it. Same three
+columns in the same order, the same rule that a source is only ever a **PO or a Bill**,
+the same click into the build-up, the same dated snapshot.
+
+Misc was one row per day at ordered 1, delivered 1 — nothing accumulated and there was
+nothing behind a line, because the source reference was keyed on the day. It is now keyed
+on item + supplier + state, so an arrangement is one line that grows. Misc items got real
+unit rates (a fill, a load, a visit) so a quantity means something; the money still comes
+from the ledger.
+
+**A subcontract is claimed as a percentage of its value.** The first cut showed
+"25 claims @ $113/claim" — a fabricated total, being the first claim's cost times a made-up
+claim count. A lump-sum subcontract has no unit rate: it has a value, and a progress claim
+draws a share of it. So the line reads 100% of contract, the share claimed to date, and a
+rate that is simply the value ÷ 100 — and every column then states something true. Verified:
+claimed cost ÷ contract value = the percentage shown, exactly.
+
+Misc is *not* drawn down on the 0.72 assumption materials use. A permit or a disposal run is
+bought and it is done; only things bought in bulk — materials, and a subcontract — have an
+order bigger than what has been taken from it.
+
+**Ties, as at 2026-09-01:** tracker lines against the ledger, $0 gap on both materials and
+misc, once uncoded bills are excluded. The remaining difference is exactly the uncoded
+amount ($4,002 material, $667 misc, $2,001 sub) — an uncoded bill has no cost centre yet,
+so it cannot sit on a line. That is the bill-coding gap doing its job.
+
+**Supervisor view** covers misc for free, because it masks at the one formatter rather than
+per call site. Verified across all four panels and with the build-up open: zero money
+figures visible.
+
 ## Verified
 
 Computed styles, visible-text length and element counts on both guest tabs were

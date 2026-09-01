@@ -316,6 +316,29 @@ def build_site_diary():
     r_end = js.index("'<td class=\"num\">'+fmtQty(r.ordered", r_start)
     js = js[:r_start] + "b.innerHTML+=\n" + TRACKER_ROW + "\n        " + js[r_end:]
 
+    # ── miscellaneous ───────────────────────────────────────────────────
+    # The same columns as the tracker above, because it is the same kind of
+    # thing: an order, who it is with, and what has been drawn against it.
+    old_mhead = ('<thead><tr><th>Source</th><th>Company</th><th class="num">Order qty</th>')
+    if old_mhead not in html:
+        raise SystemExit("FAIL: misc header not found")
+    html = html.replace(
+        old_mhead,
+        '<thead><tr><th>Description</th><th>Supplier</th><th>Source</th>'
+        '<th class="num">Order qty</th>', 1)
+
+    # Scoped to renderMisc: several renderers assign b.innerHTML this way.
+    x_fn = js.index("function renderMisc")
+    x_start = js.index("b.innerHTML+=", x_fn)
+    x_end = js.index("'<td class=\"num\">'+fmtQty(r.ordered", x_start)
+    js = js[:x_start] + "b.innerHTML+=\n" + MISC_ROW + "\n        " + js[x_end:]
+
+    # A claim or a docket is a draw-down, never the source of one.
+    js = js.replace(
+        "var tag=(r.srcType==='Bill')?'bill':(r.srcType==='Docket')?'docket'"
+        ":(r.srcType==='Manual')?'manual':'po';",
+        "var tag=(r.srcType==='Bill')?'bill':'po';")
+
     # The diary's plant table becomes the day's roster: every machine on the
     # project, who is on it, and whether it is working, stood down or off site.
     old_head = ('<th>Operated by</th><th>Hours</th><th>Hire rate</th><th>Cost</th>')
@@ -492,6 +515,18 @@ TRACKER_ROW = (
     "'<td>'+r.sup+'</td>'+"
     "'<td><span class=\"tk-src\" onclick=\"sdOpenBuildUp(\\''+r.src+'\\')\" "
     "  title=\"See the deliveries behind this\">'+r.src+"
+    "  ' <span class=\"src-tag '+tag+'\">'+(r.srcType||'PO')+'</span></span></td>'+"
+)
+
+# Identical in shape to TRACKER_ROW — the misc table answers the same question,
+# so it should not have to be read a different way.
+MISC_ROW = (
+    "'<tr class=\"tk-row\">'+"
+    "'<td><div class=\"po-cell\"><span class=\"po-mat tk-desc\">'+r.nm+'</span>'+"
+    "  (r.cc?'<span class=\"tk-cc\">'+r.cc+'</span>':'')+'</div></td>'+"
+    "'<td>'+r.sup+'</td>'+"
+    "'<td><span class=\"tk-src\" onclick=\"sdOpenBuildUp(\\''+r.src+'\\')\" "
+    "  title=\"See what has been drawn against this\">'+r.src+"
     "  ' <span class=\"src-tag '+tag+'\">'+(r.srcType||'PO')+'</span></span></td>'+"
 )
 

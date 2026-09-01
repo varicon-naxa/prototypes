@@ -407,15 +407,16 @@ var VDATA = (function () {
      against it up to and including the day being looked at. Open the diary on
      an earlier date and the row shows what had arrived by then, which is the
      whole point of a dated record. */
-  function materialTracker(iso) {
+  function orderTracker(kinds, iso) {
     var l = ledger(), bySrc = {};
 
     l.days.forEach(function (d) {
       (l.byDate[d] || []).forEach(function (r) {
-        if (r.uncoded || !r.detail || r.detail.kind !== 'material') return;
+        if (r.uncoded || !r.detail || kinds.indexOf(r.detail.kind) < 0) return;
         var dt = r.detail;
         var e = bySrc[dt.src] || (bySrc[dt.src] = {
           src: dt.src, srcType: dt.srcType, nm: dt.nm, sup: dt.sup,
+          kind: dt.kind,
           unit: dt.unit, rate: dt.rate, cc: r.cc, code: dt.code,
           ccs: [], totalQty: 0, deliveries: []
         });
@@ -433,15 +434,42 @@ var VDATA = (function () {
       /* The order is bigger than everything delivered in the period — a job
          that has taken every last unit of every order is not the normal case.
          Demo assumption, held in one place rather than sprinkled about. */
-      var ordered = Math.round(e.totalQty / 0.72 * 10) / 10;
+      var ordered = (e.kind === 'material' || e.kind === 'sub')
+        ? Math.round(e.totalQty / 0.72 * 10) / 10
+        : Math.round(e.totalQty * 10) / 10;
 
       var upTo = e.deliveries.filter(function (x) { return x.date <= iso; })
         .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
       var delivered = Math.round(upTo.reduce(function (a, x) { return a + x.qty; }, 0) * 10) / 10;
       var cost = upTo.reduce(function (a, x) { return a + x.cost; }, 0);
 
+      /* A subcontract is a lump sum claimed in stages, so it is stated in
+         percent: 100% of the contract, the share claimed to date, and the rate
+         is simply the contract value divided by a hundred. Each claim below is
+         restated the same way, so the panel and the row agree. */
+      if (e.kind === 'sub') {
+        var value = Math.max(1, Math.round(ordered));
+        var pc = function (v) { return Math.round(v / value * 1000) / 10; };
+        var asPc = function (x) {
+          return { date: x.date, docket: x.docket, qty: pc(x.qty), cost: x.cost,
+                   state: x.state, cc: x.cc, forWork: x.forWork };
+        };
+        return {
+          id: e.src, src: e.src, srcType: e.srcType, nm: e.nm, sup: e.sup,
+          kind: e.kind, unit: '%', rate: Math.round(value / 100),
+          code: e.code, ccs: e.ccs,
+          cc: e.ccs.length === 1 ? e.ccs[0] : e.ccs.length + ' cost centres',
+          value: value,
+          ordered: 100, delivered: pc(delivered),
+          remaining: Math.round((100 - pc(delivered)) * 10) / 10,
+          cost: cost, deliveries: upTo.map(asPc), asAt: iso,
+          allDeliveries: e.deliveries.map(asPc)
+        };
+      }
+
       return {
         id: e.src, src: e.src, srcType: e.srcType, nm: e.nm, sup: e.sup,
+        kind: e.kind,
         unit: e.unit, rate: e.rate, code: e.code,
         /* an order can feed several cost centres, so the row says how many and
            each docket below says which */
@@ -457,8 +485,17 @@ var VDATA = (function () {
     }).sort(function (a, b) { return a.nm < b.nm ? -1 : 1; });
   }
 
+  function materialTracker(iso) { return orderTracker(['material'], iso); }
+
+  /* Anything else billable to the job: subcontract claims, disposal, permits,
+     sundries. Same tracker, same dated snapshot, same build-up behind a line. */
+  function miscTracker(iso) { return orderTracker(['misc', 'sub'], iso); }
+
+  /* One lookup across both, so the build-up panel does not need to know which
+     table the line was clicked in. */
   function trackerLine(src, iso) {
-    return materialTracker(iso).filter(function (r) { return r.src === src; })[0] || null;
+    return orderTracker(['material', 'misc', 'sub'], iso)
+      .filter(function (r) { return r.src === src; })[0] || null;
   }
 
   /* ── suppliers ──────────────────────────────────────────────────────────
@@ -1084,29 +1121,51 @@ var VDATA = (function () {
       });
     } else if (cat === 'sub') {
       var sub = supplierFor(cc, 'po');
+      /* The subcontract is the order and each progress claim draws down against
+         it, exactly as a docket does against a PO. So the line is described by
+         the work package, the subcontractor is the supplier, and the claims
+         stack up underneath instead of each standing alone. */
+      var subSeed = seed(sub + cc + state);
       rows.push({
         cat: 'sub', cc: cc, cost: amount, resource: sub,
-        meta: cc + ' — progress claim',
+        meta: cc + ' — progress claim · ' + sub,
         detail: {
-          kind: 'sub', nm: sub, unit: 'claim', rate: amount, qty: 1,
-          src: srcPrefix + (3000 + (seed(key + 'b') % 900)), srcType: srcType
+          kind: 'sub', nm: cc + ' — subcontract', sup: sub,
+          /* the claim's quantity is its money; the tracker turns the running
+             total into percent of the contract */
+          unit: '%', rate: 1, qty: amount,
+          /* the subcontract order, never the claim against it */
+          src: (state === 'actual' ? 'BILL-' : 'PO-') + (3000 + (subSeed % 900)),
+          srcType: state === 'actual' ? 'Bill' : 'PO',
+          docket: 'CLM-' + (100 + (seed(key + 'b') % 90)),
+          forWork: cc + ' — progress claim'
         }
       });
     } else {
+      /* A unit rate rather than "1, at whatever it cost", so a quantity means
+         something and two disposal runs read as two loads. The rate is the going
+         one for the item; the money still comes from the ledger. */
       var MISC = [
-        { nm: 'Fuel & consumables', unit: 'fill' },
-        { nm: 'Spoil disposal', unit: 'loads' },
-        { nm: 'Survey set-out', unit: 'visit' },
-        { nm: 'Traffic control permit', unit: 'ea' }
+        { nm: 'Fuel & consumables', unit: 'fill', rate: 850 },
+        { nm: 'Spoil disposal', unit: 'loads', rate: 320 },
+        { nm: 'Survey set-out', unit: 'visit', rate: 1250 },
+        { nm: 'Traffic control permit', unit: 'ea', rate: 480 }
       ];
       var m2 = pick(MISC, key + 'x', 0);
       var sup2 = supplierFor(cc, 'dkt');
+      /* Keyed on the item, the supplier and the state — not the day — so the
+         same arrangement is one line that grows, not a new line every day. */
+      var mSeed = seed(m2.nm + sup2 + state);
       rows.push({
         cat: 'misc', cc: cc, cost: amount, resource: m2.nm,
         meta: m2.nm + ' · ' + sup2,
         detail: {
-          kind: 'misc', nm: m2.nm, sup: sup2, unit: m2.unit, rate: amount, qty: 1,
-          src: srcPrefix + (3300 + (seed(key + 'm') % 90)), srcType: srcType
+          kind: 'misc', nm: m2.nm, sup: sup2, unit: m2.unit, rate: m2.rate,
+          qty: qtyOf(amount, m2.rate),
+          src: (state === 'actual' ? 'BILL-' : 'PO-') + (3300 + (mSeed % 90)),
+          srcType: state === 'actual' ? 'Bill' : 'PO',
+          docket: 'DKT-' + (1000 + (seed(key + 'mx') % 9000)),
+          forWork: cc
         }
       });
     }
@@ -1215,7 +1274,8 @@ var VDATA = (function () {
     equipment: equipment, saveEquipment: saveEquipment,
     equipmentById: equipmentById, plantResources: plantResources,
     plantHours: plantHours, plantType: plantType, orgName: orgName,
-    materialTracker: materialTracker, trackerLine: trackerLine,
+    materialTracker: materialTracker, miscTracker: miscTracker,
+    trackerLine: trackerLine,
     plantRoster: plantRoster, isStoodDown: isStoodDown,
     setStoodDown: setStoodDown,
     purchaseOrders: purchaseOrders, plantPurchaseOrders: plantPurchaseOrders,
@@ -1298,19 +1358,18 @@ function vdataDiaryRows() {
         qty: dt.qty, unit: dt.unit
       });
     } else {
-      out.misc.push({
-        id: dt.src, srcType: dt.srcType, src: dt.src, nm: dt.nm,
-        sup: dt.sup || dt.nm, unit: dt.unit, rate: dt.rate, ordered: 1, delivered: 1,
-        cc: r.cc
-      });
+      /* the tracker rows come from miscTracker below, for the same reason the
+         material ones do — one line per order, not one per event */
       out.miscEntries.push({
-        time: ['09:30', '07:15', '15:05'][i % 3], mat: dt.nm, src: dt.src,
-        srcType: dt.srcType, sup: dt.sup || dt.nm, qty: 1, unit: dt.unit
+        time: ['09:30', '07:15', '15:05'][i % 3], mat: dt.nm,
+        src: dt.docket || dt.src, srcType: dt.docket ? 'Docket' : dt.srcType,
+        sup: dt.sup || dt.nm, qty: dt.qty || 1, unit: dt.unit
       });
     }
   });
   /* One row per order, delivered-to-date as at this day. */
   out.materials = VDATA.materialTracker(d);
+  out.misc = VDATA.miscTracker(d);
 
   /* Every machine on the project, not only the ones that worked. */
   out.plant = VDATA.plantRoster(d).map(function (p, i) {
@@ -1360,39 +1419,52 @@ function sdOpenBuildUp(src) {
   var m = function (v) {
     return SDVIEW.rates ? '$' + Math.round(v || 0).toLocaleString('en-AU') : sdMasked();
   };
-  var q = function (v) { return (+v).toLocaleString('en-AU', { maximumFractionDigits: 1 }); };
+  /* A small draw-down against a big unit is still a draw-down: showing 0.04 of
+     a fill as "0" reads as nothing delivered on a line that cost money. */
+  var q = function (v) {
+    return (+v).toLocaleString('en-AU',
+      { maximumFractionDigits: Math.abs(+v) < 1 ? 2 : 1 });
+  };
   var dmy = function (d) { var p = d.split('-'); return p[2] + '/' + p[1]; };
   var landed = r.deliveries;
   var later = r.allDeliveries.filter(function (x) { return x.date > iso; });
+  /* A subcontract is claimed against, not delivered against. The panel is the
+     same; the words are the trade's. */
+  var sub = r.kind === 'sub';
+  var drawn = sub ? 'Claimed' : 'Delivered';
+  var tileOrdered = sub ? 'Subcontract' : 'Ordered';
+  var tileLeft = sub ? 'Left to claim' : 'To deliver';
 
   document.getElementById('buTitle').textContent = r.nm;
   document.getElementById('buSub').textContent =
     r.sup + ' · ' + r.src + (r.cc ? ' · ' + r.cc : '');
   document.getElementById('buBody').innerHTML =
     '<div class="bu-sum">' +
-      '<div class="bu-tile"><span>Ordered</span><b>' + q(r.ordered) + ' ' + r.unit + '</b></div>' +
-      '<div class="bu-tile"><span>Delivered</span><b>' + q(r.delivered) + ' ' + r.unit + '</b></div>' +
-      '<div class="bu-tile"><span>To deliver</span><b>' + q(r.remaining) + ' ' + r.unit + '</b></div>' +
+      '<div class="bu-tile"><span>' + tileOrdered + '</span><b>' + q(r.ordered) + ' ' + r.unit + '</b></div>' +
+      '<div class="bu-tile"><span>' + drawn + '</span><b>' + q(r.delivered) + ' ' + r.unit + '</b></div>' +
+      '<div class="bu-tile"><span>' + tileLeft + '</span><b>' + q(r.remaining) + ' ' + r.unit + '</b></div>' +
     '</div>' +
-    '<p class="bu-sec">The order</p>' +
+    '<p class="bu-sec">' + (sub ? 'The subcontract' : 'The order') + '</p>' +
     '<div class="bu-line"><span class="bu-date">Raised</span>' +
       '<span class="bu-ref">' + r.src + '</span>' +
-      '<span>' + q(r.ordered) + ' ' + r.unit +
-        (SDVIEW.rates ? ' @ $' + r.rate + '/' + r.unit : '') + '</span>' +
-      '<span class="bu-cost">' + m(r.ordered * r.rate) + '</span></div>' +
-    '<p class="bu-sec" style="margin-top:20px">Delivered against it, to ' + dmy(iso) + '</p>' +
+      '<span>' + (sub ? 'Lump sum' : q(r.ordered) + ' ' + r.unit +
+        (SDVIEW.rates ? ' @ $' + r.rate + '/' + r.unit : '')) + '</span>' +
+      '<span class="bu-cost">' + m(sub ? r.value : r.ordered * r.rate) +
+      '</span></div>' +
+    '<p class="bu-sec" style="margin-top:20px">' + drawn + ' against it, to ' +
+      dmy(iso) + '</p>' +
     (landed.length
       ? landed.map(function (x) {
           return '<div class="bu-line"><span class="bu-date">' + dmy(x.date) + '</span>' +
             '<span class="bu-ref">' + x.docket + '</span>' +
             '<span class="src-tag ' + (x.state === 'actual' ? 'bill' : 'docket') + '">' +
-            (x.state === 'actual' ? 'Billed' : 'Docket') + '</span>' +
+            (x.state === 'actual' ? 'Billed' : sub ? 'Claim' : 'Docket') + '</span>' +
             '<span class="bu-cc">' + (x.cc || '') +
               (x.forWork ? '<em>' + x.forWork + '</em>' : '') + '</span>' +
             '<span class="bu-qty">' + q(x.qty) + ' ' + r.unit + '</span>' +
             '<span class="bu-cost">' + m(x.cost) + '</span></div>';
         }).join('')
-      : '<div class="bu-line" style="color:#94a3b8">Nothing delivered against this yet.</div>') +
+      : '<div class="bu-line" style="color:#94a3b8">Nothing ' + drawn.toLowerCase() + ' against this yet.</div>') +
     (later.length
       ? '<p class="bu-sec" style="margin-top:20px">Lands after this day</p>' +
         later.map(function (x) {
