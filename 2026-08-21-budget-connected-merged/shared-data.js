@@ -382,6 +382,60 @@ var VDATA = (function () {
     return (me && me.textContent.trim()) || 'Project manager';
   }
 
+  /* ── the delivery tracker, as at a date ─────────────────────────────────
+     One row per order — a PO or a Bill — with the deliveries that have landed
+     against it up to and including the day being looked at. Open the diary on
+     an earlier date and the row shows what had arrived by then, which is the
+     whole point of a dated record. */
+  function materialTracker(iso) {
+    var l = ledger(), bySrc = {};
+
+    l.days.forEach(function (d) {
+      (l.byDate[d] || []).forEach(function (r) {
+        if (r.uncoded || !r.detail || r.detail.kind !== 'material') return;
+        var dt = r.detail;
+        var e = bySrc[dt.src] || (bySrc[dt.src] = {
+          src: dt.src, srcType: dt.srcType, nm: dt.nm, sup: dt.sup,
+          unit: dt.unit, rate: dt.rate, cc: r.cc, code: dt.code,
+          totalQty: 0, deliveries: []
+        });
+        e.totalQty += dt.qty || 0;
+        e.deliveries.push({
+          date: d, docket: dt.docket, qty: dt.qty || 0, cost: r.cost || 0,
+          state: r.state
+        });
+      });
+    });
+
+    return Object.keys(bySrc).map(function (k) {
+      var e = bySrc[k];
+      /* The order is bigger than everything delivered in the period — a job
+         that has taken every last unit of every order is not the normal case.
+         Demo assumption, held in one place rather than sprinkled about. */
+      var ordered = Math.round(e.totalQty / 0.72 * 10) / 10;
+
+      var upTo = e.deliveries.filter(function (x) { return x.date <= iso; })
+        .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+      var delivered = Math.round(upTo.reduce(function (a, x) { return a + x.qty; }, 0) * 10) / 10;
+      var cost = upTo.reduce(function (a, x) { return a + x.cost; }, 0);
+
+      return {
+        id: e.src, src: e.src, srcType: e.srcType, nm: e.nm, sup: e.sup,
+        unit: e.unit, rate: e.rate, cc: e.cc, code: e.code,
+        ordered: ordered, delivered: delivered,
+        remaining: Math.round((ordered - delivered) * 10) / 10,
+        cost: cost, deliveries: upTo, asAt: iso,
+        /* everything that ever lands on this order, for the panel to show what
+           is still to come */
+        allDeliveries: e.deliveries.sort(function (a, b) { return a.date < b.date ? -1 : 1; })
+      };
+    }).sort(function (a, b) { return a.nm < b.nm ? -1 : 1; });
+  }
+
+  function trackerLine(src, iso) {
+    return materialTracker(iso).filter(function (r) { return r.src === src; })[0] || null;
+  }
+
   /* ── suppliers ──────────────────────────────────────────────────────────
      Every firm the budget names on a purchase order, a site docket, a bill or
      a cost-plus invoice. The list is therefore exactly who this job buys from,
@@ -979,12 +1033,18 @@ var VDATA = (function () {
                                          : supplierFor(cc, 'bill');
         var qty = qtyOf(amt, rate);
         var name = line ? line.desc : cc + ' materials';
+        /* The order is raised once and delivered against over many days, so
+           its reference is stable per (line, supplier, state). The docket is
+           the reference for THIS day's delivery against it. */
+        var srcSeed = seed(cc + name + sup + state);
+        var srcRef = (state === 'actual' ? 'BILL-' : 'PO-') + (1000 + (srcSeed % 900));
         rows.push({
           cat: 'material', cc: cc, cost: amt, resource: name,
           meta: qty + ' ' + unit + ' @ $' + fmtRate(rate) + '/' + unit + ' · ' + sup,
           detail: {
             kind: 'material', nm: name, sup: sup, unit: unit, rate: rate, qty: qty,
-            src: srcPrefix + (1000 + (seed(key + 'src') % 900)), srcType: srcType,
+            src: srcRef, srcType: state === 'actual' ? 'Bill' : 'PO',
+            docket: 'DKT-' + (1000 + (seed(key + 'dkt') % 9000)),
             code: line ? line.code : null
           }
         });
@@ -1122,6 +1182,7 @@ var VDATA = (function () {
     equipment: equipment, saveEquipment: saveEquipment,
     equipmentById: equipmentById, plantResources: plantResources,
     plantHours: plantHours, plantType: plantType, orgName: orgName,
+    materialTracker: materialTracker, trackerLine: trackerLine,
     plantRoster: plantRoster, isStoodDown: isStoodDown,
     setStoodDown: setStoodDown,
     purchaseOrders: purchaseOrders, plantPurchaseOrders: plantPurchaseOrders,
@@ -1196,14 +1257,12 @@ function vdataDiaryRows() {
     } else if (dt.kind === 'plant') {
       /* plant comes from the roster below, so every machine appears */
     } else if (dt.kind === 'material') {
-      out.materials.push({
-        id: dt.src, srcType: dt.srcType, src: dt.src, nm: dt.nm, sup: dt.sup,
-        unit: dt.unit, rate: dt.rate, ordered: Math.round(dt.qty * 2.5), delivered: dt.qty,
-        cc: r.cc
-      });
+      /* the tracker rows come from materialTracker below, so an order appears
+         once with its deliveries behind it rather than once per delivery */
       out.deliveries.push({
         time: ['08:10', '10:45', '13:20', '14:50'][i % 4], mat: dt.nm,
-        src: dt.src, srcType: dt.srcType, sup: dt.sup, qty: dt.qty, unit: dt.unit
+        src: dt.docket || dt.src, srcType: 'Docket', sup: dt.sup,
+        qty: dt.qty, unit: dt.unit
       });
     } else {
       out.misc.push({
@@ -1217,6 +1276,9 @@ function vdataDiaryRows() {
       });
     }
   });
+  /* One row per order, delivered-to-date as at this day. */
+  out.materials = VDATA.materialTracker(d);
+
   /* Every machine on the project, not only the ones that worked. */
   out.plant = VDATA.plantRoster(d).map(function (p, i) {
     var hrs = p.hrsDec
@@ -1231,6 +1293,65 @@ function vdataDiaryRows() {
   });
 
   return out;
+}
+
+/* ── the build-up behind an order ────────────────────────────────────────
+   A delivered figure is only useful if you can see what makes it up: the
+   order, every docket that has landed against it as at the day being viewed,
+   and what is still to come after it. */
+function sdOpenBuildUp(src) {
+  var iso = VDATA.diaryDate();
+  var r = VDATA.trackerLine(src, iso);
+  if (!r) return;
+  var m = function (v) { return '$' + Math.round(v || 0).toLocaleString('en-AU'); };
+  var q = function (v) { return (+v).toLocaleString('en-AU', { maximumFractionDigits: 1 }); };
+  var dmy = function (d) { var p = d.split('-'); return p[2] + '/' + p[1]; };
+  var landed = r.deliveries;
+  var later = r.allDeliveries.filter(function (x) { return x.date > iso; });
+
+  document.getElementById('buTitle').textContent = r.nm;
+  document.getElementById('buSub').textContent =
+    r.sup + ' · ' + r.src + (r.cc ? ' · ' + r.cc : '');
+  document.getElementById('buBody').innerHTML =
+    '<div class="bu-sum">' +
+      '<div class="bu-tile"><span>Ordered</span><b>' + q(r.ordered) + ' ' + r.unit + '</b></div>' +
+      '<div class="bu-tile"><span>Delivered</span><b>' + q(r.delivered) + ' ' + r.unit + '</b></div>' +
+      '<div class="bu-tile"><span>To deliver</span><b>' + q(r.remaining) + ' ' + r.unit + '</b></div>' +
+    '</div>' +
+    '<p class="bu-sec">The order</p>' +
+    '<div class="bu-line"><span class="bu-date">Raised</span>' +
+      '<span class="bu-ref">' + r.src + '</span>' +
+      '<span>' + q(r.ordered) + ' ' + r.unit + ' @ $' + r.rate + '/' + r.unit + '</span>' +
+      '<span class="bu-cost">' + m(r.ordered * r.rate) + '</span></div>' +
+    '<p class="bu-sec" style="margin-top:20px">Delivered against it, to ' + dmy(iso) + '</p>' +
+    (landed.length
+      ? landed.map(function (x) {
+          return '<div class="bu-line"><span class="bu-date">' + dmy(x.date) + '</span>' +
+            '<span class="bu-ref">' + x.docket + '</span>' +
+            '<span class="src-tag ' + (x.state === 'actual' ? 'bill' : 'docket') + '">' +
+            (x.state === 'actual' ? 'Billed' : 'Docket') + '</span>' +
+            '<span class="bu-qty">' + q(x.qty) + ' ' + r.unit + '</span>' +
+            '<span class="bu-cost">' + m(x.cost) + '</span></div>';
+        }).join('')
+      : '<div class="bu-line" style="color:#94a3b8">Nothing delivered against this yet.</div>') +
+    (later.length
+      ? '<p class="bu-sec" style="margin-top:20px">Lands after this day</p>' +
+        later.map(function (x) {
+          return '<div class="bu-line bu-future"><span class="bu-date">' + dmy(x.date) + '</span>' +
+            '<span class="bu-ref">' + x.docket + '</span>' +
+            '<span class="bu-qty">' + q(x.qty) + ' ' + r.unit + '</span>' +
+            '<span class="bu-cost">' + m(x.cost) + '</span></div>';
+        }).join('')
+      : '') +
+    '<p class="bu-note">This is the order as it stood on <b>' + dmy(iso) +
+    '</b>. Move the diary to another day and the delivered figure moves with it.</p>';
+
+  document.getElementById('buScrim').classList.add('show');
+  document.getElementById('buDrawer').classList.add('show');
+}
+function sdCloseBuildUp() {
+  document.getElementById('buScrim').classList.remove('show');
+  document.getElementById('buDrawer').classList.remove('show');
 }
 
 /* Marking a machine stood down for the day. Named sd* so it sits with the

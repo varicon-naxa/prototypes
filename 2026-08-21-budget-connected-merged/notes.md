@@ -435,6 +435,37 @@ Two bugs this surfaced:
   stand-down rate set" and the feature looked broken. An owned machine sitting in the rain
   still ties up capital, so the rule now applies whoever owns it.
 
+## The delivery tracker is a dated snapshot — 2026-09-01
+
+Columns now read **Description, Supplier, Source** — the description is what someone scans
+the list for, so it leads.
+
+**Source is only ever a PO or a Bill.** A docket was showing there, and a docket is not what
+was ordered — it is one delivery against the thing that was ordered. Dockets moved into the
+build-up where they belong.
+
+**Clicking the order opens the build-up**: the order itself, then every docket that has
+landed against it as at the day being viewed, and what lands after. That is where a
+delivered figure comes from, and it was previously nowhere.
+
+**The row is a snapshot of that day.** Delivered-to-date is cumulative, so the same order
+reads differently depending on which day the diary is open on:
+
+| As at | Ordered | Delivered | To deliver | Dockets |
+| --- | --- | --- | --- | --- |
+| 07 Aug | 25 m³ | 3 m³ | 22 m³ | 2 |
+| 17 Aug | 25 m³ | 9 m³ | 16 m³ | 4 |
+| 31 Aug | 25 m³ | 18 m³ | 7 m³ | 7 |
+
+Ordered holds steady, delivered only ever grows, remaining only ever shrinks.
+
+What made this possible: the source reference used to be generated **per day**, so one order
+appeared as a new line every day it was delivered against. It is now stable per line,
+supplier and cost state, with the day's docket hanging off it.
+
+Ordered quantity is a demo assumption — total delivered across the period ÷ 0.72, so a job
+is never shown as having taken every last unit of every order. Held in one place.
+
 ## Verified
 
 Computed styles, visible-text length and element counts on both guest tabs were
