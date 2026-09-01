@@ -287,7 +287,10 @@ def build_site_diary():
     # Locate the row's opening cells in the diary source rather than matching a
     # transcribed copy of them — a hand-copied anchor of this size is a
     # transcription bug waiting to happen.
-    r_start = js.index("b.innerHTML+=")
+    # Scoped to renderMaterials: renderPlant is defined first and also assigns
+    # b.innerHTML, so an unscoped search rewrites the wrong function.
+    m_fn = js.index("function renderMaterials")
+    r_start = js.index("b.innerHTML+=", m_fn)
     r_end = js.index("'<td class=\"num\">'+fmtQty(r.ordered", r_start)
     js = js[:r_start] + "b.innerHTML+=\n" + TRACKER_ROW + "\n        " + js[r_end:]
 
