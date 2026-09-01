@@ -382,6 +382,26 @@ var VDATA = (function () {
     return (me && me.textContent.trim()) || 'Project manager';
   }
 
+  /* What actually turns up on a truck, per cost centre. The named products are
+     ones the base already uses on its cost-plus invoices and budget lines; the
+     rest are the obvious equivalent for that kind of work, and are new data.
+
+     The unit and rate still come from the budget line, so the money ties — the
+     material is what is delivered, in the line's unit, at the line's rate. */
+  var MATERIALS = {
+    'Earthworks':          ['Imported select fill', 'Road base 20mm', 'Cracker dust'],
+    'Concrete':            ['N32 concrete', 'N40 concrete', 'Concrete kerb units'],
+    'Steel & Rebar':       ['N16 bar & mesh', 'SL82 mesh sheets', 'Reo bar chairs'],
+    'Formwork':            ['Formply sheets', 'Form oil & stripping agent', 'Timber bearers'],
+    'Drainage':            ['600mm RCP pipe', 'Geofabric', 'Precast junction pits'],
+    'Roadway':             ['Asphalt AC14', 'Road base 20mm', 'Concrete kerb units'],
+    'Overheads / Prelims': ['Site consumables', 'Temporary fencing', 'Signage & barriers']
+  };
+  function materialFor(cc, key) {
+    var list = MATERIALS[cc] || MATERIALS['Overheads / Prelims'];
+    return list[seed(key) % list.length];
+  }
+
   /* ── the delivery tracker, as at a date ─────────────────────────────────
      One row per order — a PO or a Bill — with the deliveries that have landed
      against it up to and including the day being looked at. Open the diary on
@@ -397,12 +417,13 @@ var VDATA = (function () {
         var e = bySrc[dt.src] || (bySrc[dt.src] = {
           src: dt.src, srcType: dt.srcType, nm: dt.nm, sup: dt.sup,
           unit: dt.unit, rate: dt.rate, cc: r.cc, code: dt.code,
-          totalQty: 0, deliveries: []
+          ccs: [], totalQty: 0, deliveries: []
         });
         e.totalQty += dt.qty || 0;
+        if (e.ccs.indexOf(r.cc) < 0) e.ccs.push(r.cc);
         e.deliveries.push({
           date: d, docket: dt.docket, qty: dt.qty || 0, cost: r.cost || 0,
-          state: r.state
+          state: r.state, cc: r.cc, forWork: dt.forWork || ''
         });
       });
     });
@@ -421,7 +442,11 @@ var VDATA = (function () {
 
       return {
         id: e.src, src: e.src, srcType: e.srcType, nm: e.nm, sup: e.sup,
-        unit: e.unit, rate: e.rate, cc: e.cc, code: e.code,
+        unit: e.unit, rate: e.rate, code: e.code,
+        /* an order can feed several cost centres, so the row says how many and
+           each docket below says which */
+        ccs: e.ccs,
+        cc: e.ccs.length === 1 ? e.ccs[0] : e.ccs.length + ' cost centres',
         ordered: ordered, delivered: delivered,
         remaining: Math.round((ordered - delivered) * 10) / 10,
         cost: cost, deliveries: upTo, asAt: iso,
@@ -1029,6 +1054,8 @@ var VDATA = (function () {
         var unit = line ? line.unit : 'ea';
         var rate = line ? line.rate : 100;
         if (!line) { unit = 'ea'; rate = Math.max(25, Math.round(amt / 4)); }
+        /* the material delivered, not the work it was bought for */
+        var material = materialFor(cc, cc + unit + i);
         var sup = line && line.suppliers ? (line.suppliers.bill || line.suppliers.po || 'Supplier')
                                          : supplierFor(cc, 'bill');
         var qty = qtyOf(amt, rate);
@@ -1036,15 +1063,21 @@ var VDATA = (function () {
         /* The order is raised once and delivered against over many days, so
            its reference is stable per (line, supplier, state). The docket is
            the reference for THIS day's delivery against it. */
-        var srcSeed = seed(cc + name + sup + state);
+        /* Keyed by material, supplier and state — not by cost centre. One
+           order of road base is drawn down by more than one cost centre, and
+           that is exactly why a docket has to say which one it landed on. */
+        var srcSeed = seed(material + sup + state + unit);
         var srcRef = (state === 'actual' ? 'BILL-' : 'PO-') + (1000 + (srcSeed % 900));
         rows.push({
-          cat: 'material', cc: cc, cost: amt, resource: name,
-          meta: qty + ' ' + unit + ' @ $' + fmtRate(rate) + '/' + unit + ' · ' + sup,
+          cat: 'material', cc: cc, cost: amt, resource: material,
+          meta: qty + ' ' + unit + ' @ $' + fmtRate(rate) + '/' + unit + ' · ' + sup +
+                (line ? ' · ' + line.desc : ''),
           detail: {
-            kind: 'material', nm: name, sup: sup, unit: unit, rate: rate, qty: qty,
+            kind: 'material', nm: material, sup: sup, unit: unit, rate: rate, qty: qty,
             src: srcRef, srcType: state === 'actual' ? 'Bill' : 'PO',
             docket: 'DKT-' + (1000 + (seed(key + 'dkt') % 9000)),
+            /* the work the delivery was for, kept for the build-up */
+            forWork: line ? line.desc : cc,
             code: line ? line.code : null
           }
         });
@@ -1295,6 +1328,27 @@ function vdataDiaryRows() {
   return out;
 }
 
+/* ── who is allowed to see money ─────────────────────────────────────────
+   A supervisor keeps the diary without necessarily being allowed to see pay
+   rates or plant costs. SDVIEW.rates says which view is on screen. */
+var SDVIEW = { rates: true };
+
+function sdMasked() { return '<span class="sd-masked" title="Hidden in this view">\u2014</span>'; }
+
+function sdSetRatesView(on) {
+  SDVIEW.rates = on;
+  var wrap = document.getElementById('sdViewToggle');
+  if (wrap) {
+    wrap.querySelectorAll('.sd-view-opt').forEach(function (b) {
+      b.classList.toggle('on', (b.getAttribute('data-rates') === '1') === on);
+    });
+  }
+  var pg = document.getElementById('pageSiteDiary');
+  if (pg) pg.classList.toggle('sd-no-rates', !on);
+  rows.plant = vdataDiaryRows().plant;
+  renderAll();
+}
+
 /* ── the build-up behind an order ────────────────────────────────────────
    A delivered figure is only useful if you can see what makes it up: the
    order, every docket that has landed against it as at the day being viewed,
@@ -1303,7 +1357,9 @@ function sdOpenBuildUp(src) {
   var iso = VDATA.diaryDate();
   var r = VDATA.trackerLine(src, iso);
   if (!r) return;
-  var m = function (v) { return '$' + Math.round(v || 0).toLocaleString('en-AU'); };
+  var m = function (v) {
+    return SDVIEW.rates ? '$' + Math.round(v || 0).toLocaleString('en-AU') : sdMasked();
+  };
   var q = function (v) { return (+v).toLocaleString('en-AU', { maximumFractionDigits: 1 }); };
   var dmy = function (d) { var p = d.split('-'); return p[2] + '/' + p[1]; };
   var landed = r.deliveries;
@@ -1321,7 +1377,8 @@ function sdOpenBuildUp(src) {
     '<p class="bu-sec">The order</p>' +
     '<div class="bu-line"><span class="bu-date">Raised</span>' +
       '<span class="bu-ref">' + r.src + '</span>' +
-      '<span>' + q(r.ordered) + ' ' + r.unit + ' @ $' + r.rate + '/' + r.unit + '</span>' +
+      '<span>' + q(r.ordered) + ' ' + r.unit +
+        (SDVIEW.rates ? ' @ $' + r.rate + '/' + r.unit : '') + '</span>' +
       '<span class="bu-cost">' + m(r.ordered * r.rate) + '</span></div>' +
     '<p class="bu-sec" style="margin-top:20px">Delivered against it, to ' + dmy(iso) + '</p>' +
     (landed.length
@@ -1330,6 +1387,8 @@ function sdOpenBuildUp(src) {
             '<span class="bu-ref">' + x.docket + '</span>' +
             '<span class="src-tag ' + (x.state === 'actual' ? 'bill' : 'docket') + '">' +
             (x.state === 'actual' ? 'Billed' : 'Docket') + '</span>' +
+            '<span class="bu-cc">' + (x.cc || '') +
+              (x.forWork ? '<em>' + x.forWork + '</em>' : '') + '</span>' +
             '<span class="bu-qty">' + q(x.qty) + ' ' + r.unit + '</span>' +
             '<span class="bu-cost">' + m(x.cost) + '</span></div>';
         }).join('')
@@ -1339,6 +1398,7 @@ function sdOpenBuildUp(src) {
         later.map(function (x) {
           return '<div class="bu-line bu-future"><span class="bu-date">' + dmy(x.date) + '</span>' +
             '<span class="bu-ref">' + x.docket + '</span>' +
+            '<span class="bu-cc">' + (x.cc || '') + '</span>' +
             '<span class="bu-qty">' + q(x.qty) + ' ' + r.unit + '</span>' +
             '<span class="bu-cost">' + m(x.cost) + '</span></div>';
         }).join('')

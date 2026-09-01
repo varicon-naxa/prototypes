@@ -466,6 +466,39 @@ supplier and cost state, with the day's docket hanging off it.
 Ordered quantity is a demo assumption — total delivered across the period ÷ 0.72, so a job
 is never shown as having taken every last unit of every order. Held in one place.
 
+## The description is the material — 2026-09-01
+
+The tracker described the **work** — "Bulk Earthworks — Cut to Fill" — where what turns up
+on a truck is select fill or road base. A delivery tracker that names the work item cannot
+say what was delivered, which is the one thing it exists for.
+
+Material names are the ones the base already uses on its cost-plus invoices and budget
+lines: road base 20mm, N16 bar & mesh, geofabric, RCP pipe, concrete kerb units, select
+fill. The gaps are filled with the obvious equivalent per cost centre — that part is new
+data, like the chart of accounts. Unit and rate still come from the budget line, so the
+money ties: the material is what is delivered, in the line's unit, at the line's rate.
+
+The work the delivery was for is kept and shown under the cost centre in the build-up, so
+nothing is lost by leading with the material.
+
+**Each docket names its cost centre**, beside the docket reference, with the work under it.
+
+## Two views: with rates and without — 2026-09-01
+
+A supervisor keeps the diary without necessarily being allowed to see pay rates or plant
+costs. **Full view / Supervisor** switches the whole diary between them.
+
+Masking is all-or-nothing by construction. Hide the rate but leave cost and quantity and
+the rate is cost ÷ quantity; hide the cost but leave the rate and it is rate × hours. So
+every money figure in the diary goes through **one** formatter, and that formatter masks —
+which covers figures nobody thought about, rather than relying on having remembered each
+call site. Verified by walking every visible text node on the page: **zero money figures
+visible** in supervisor view, including inside the build-up panel.
+
+One limit worth stating: values already rendered into a *closed* drawer stay in the DOM
+until it re-renders. Nothing is on screen, but this is a view, not a security boundary —
+a real implementation withholds the numbers server-side.
+
 ## Verified
 
 Computed styles, visible-text length and element counts on both guest tabs were

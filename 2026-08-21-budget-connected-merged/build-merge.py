@@ -272,6 +272,28 @@ def build_site_diary():
     js = replace_decl(js, "var WORKERS=", "var WORKERS=[];", "SD WORKERS")
     js = replace_decl(js, "var PLANTITEMS=", "var PLANTITEMS=[];", "SD PLANTITEMS")
     js = replace_decl(js, "var ALLOC_OPTIONS=", "var ALLOC_OPTIONS=[];", "SD ALLOC_OPTIONS")
+    # Every money figure in the diary is formatted by one function, so that
+    # function is where the masking goes. Masking at each call site would mean
+    # remembering every one of them, and the one forgotten is the leak.
+    # Matched on the body, not the name: money() has already been renamed to
+    # sdMoney by this point.
+    old_money = ("{return '$'+n.toLocaleString('en-AU',"
+                 "{minimumFractionDigits:0,maximumFractionDigits:0});}")
+    if old_money not in js:
+        raise SystemExit("FAIL: diary money() body not found")
+    js = js.replace(
+        old_money,
+        "{if(typeof SDVIEW!=='undefined'&&!SDVIEW.rates)return sdMasked();"
+        "return '$'+n.toLocaleString('en-AU',"
+        "{minimumFractionDigits:0,maximumFractionDigits:0});}", 1)
+
+    # The view switch, in the diary header where the rest of the day's controls
+    # live.
+    old_help = '<span class="need-help">'
+    if old_help not in html:
+        raise SystemExit("FAIL: diary header anchor not found")
+    html = html.replace(old_help, VIEW_TOGGLE + '<span class="need-help">', 1)
+
     # ── the delivery tracker ────────────────────────────────────────────
     # Description first: it is what someone scans the list for. Source is the
     # order, and only ever a PO or a Bill — a docket is one delivery against an
@@ -451,6 +473,18 @@ BUILDUP_HTML = """
 </aside>
 """
 
+
+# Two named views rather than a bare on/off: the label should say whose view it
+# is, because that is the question being answered.
+VIEW_TOGGLE = (
+    '<span class="sd-view" id="sdViewToggle">'
+    '<span class="sd-view-opt on" data-rates="1" onclick="sdSetRatesView(true)">'
+    'Full view</span>'
+    '<span class="sd-view-opt" data-rates="0" onclick="sdSetRatesView(false)">'
+    'Supervisor</span>'
+    '</span>'
+)
+
 TRACKER_ROW = (
     "'<tr class=\"tk-row\">'+"
     "'<td><div class=\"po-cell\"><span class=\"po-mat tk-desc\">'+r.nm+'</span>'+"
@@ -486,6 +520,17 @@ PLANT_ROW = (
 )
 
 SD_PALETTE = """
+/* ═══ whose view is on screen ═══ */
+#pageSiteDiary .sd-view{display:inline-flex;border:1px solid #e2e8f0;border-radius:8px;
+  overflow:hidden;background:#fff;margin-right:14px}
+#pageSiteDiary .sd-view-opt{padding:6px 13px;font-size:12px;font-weight:600;color:#64748b;
+  cursor:pointer;user-select:none}
+#pageSiteDiary .sd-view-opt:hover{background:#f8fafc;color:#1b2a4a}
+#pageSiteDiary .sd-view-opt.on{background:#1b2a4a;color:#fff}
+#pageSiteDiary .sd-masked{color:#cbd5e1;letter-spacing:1px}
+/* the rate and cost headings go with the figures under them */
+#pageSiteDiary.sd-no-rates .sd-rate-col{opacity:.35}
+
 /* ═══ the delivery tracker ═══ */
 #pageSiteDiary .tk-row td{vertical-align:top}
 #pageSiteDiary .tk-desc{font-weight:600;color:#1b2a4a}
@@ -524,6 +569,10 @@ SD_PALETTE = """
 #pageSiteDiary .bu-date{width:92px;flex-shrink:0;color:#64748b;font-size:12px}
 #pageSiteDiary .bu-ref{width:104px;flex-shrink:0;font-family:monospace;font-size:12px;
   color:#1b2a4a}
+/* the cost centre a docket landed on, with the work under it */
+#pageSiteDiary .bu-cc{font-size:12px;color:#1b2a4a;min-width:150px}
+#pageSiteDiary .bu-cc em{display:block;font-style:normal;font-size:11px;color:#94a3b8;
+  margin-top:2px}
 #pageSiteDiary .bu-qty{margin-left:auto;font-weight:600;color:#1b2a4a}
 #pageSiteDiary .bu-cost{width:78px;text-align:right;color:#64748b}
 #pageSiteDiary .bu-future{opacity:.45}
