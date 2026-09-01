@@ -121,6 +121,9 @@
   .fld label{font-size:12px;font-weight:600;color:#4b5563}
   .fld input,.fld select,.fld textarea{width:100%;min-width:0}
   .fld .hint{font-size:11px;color:#9ca3af}
+  .inline-chk{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;color:#374151;cursor:pointer;margin-top:2px}
+  .inline-chk input{width:auto;accent-color:#f7941d;margin:0}
+  input:disabled{background:#f3f4f6;color:#9ca3af;cursor:not-allowed}
   .req:after{content:" *";color:#e11d48}
   .drop{border:1.5px dashed #d1d5db;border-radius:8px;padding:22px;text-align:center;font-size:12.5px;color:#9ca3af;background:#fff}
   .row-end{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
@@ -364,7 +367,7 @@
           </div>
         </div>
 
-        <div class="note ok" style="margin-top:14px"><b>Two buttons, one grammar.</b> <b>Add ticket</b> opens the standard right-hand side panel: one worker, then as many ticket types as they hold, each with its own number, dates, issuing body, state and certificate. Everything lands in <b>Draft</b> — the tab that already exists on this page — until a ticket has what its type requires. <b>Bulk upload</b> is the same fields as a spreadsheet. Nothing new to learn in either direction.</div>
+        <div class="note ok" style="margin-top:14px"><b>Two buttons, one grammar.</b> <b>Add ticket</b> opens the standard right-hand side panel, carrying the worker-drawer form with a Worker field on the front — same fields, same draft/publish, one implementation. One worker, one ticket. The list stays behind it, so you can add several without losing your place. <b>Bulk upload</b> is that form's columns as a spreadsheet, and where a whole crew is concerned it is the right tool. Nothing new to learn in either direction.</div>
 
         <div class="tiles" id="tiles"></div>
 
@@ -699,7 +702,12 @@
 
           <div class="grid2" style="margin-top:14px">
             <div class="fld"><label>Issued date</label><input type="date" id="f-iss"></div>
-            <div class="fld"><label>Expiry date</label><input type="date" id="f-exp"><div class="hint" id="expHint">Leave blank to use the ticket type's expiry rule.</div></div>
+            <div class="fld">
+              <label>Expiry date</label>
+              <input type="date" id="f-exp">
+              <label class="inline-chk"><input type="checkbox" id="f-noexp"> This ticket has no expiry</label>
+              <div class="hint" id="expHint">Pick a ticket type first.</div>
+            </div>
           </div>
           <div class="grid2" style="margin-top:14px">
             <div class="fld"><label>Issuing body</label><input type="text" id="f-body" placeholder="e.g. SafeWork NSW"></div>
@@ -897,17 +905,42 @@ wsearch.onblur =()=>{chips.classList.remove('focus');setTimeout(()=>wmenu.classL
 wsearch.oninput=renderMenu;
 wsearch.onkeydown=e=>{if(e.key==='Backspace'&&!wsearch.value&&picked){picked=null;renderChips();renderMenu();}};
 
+function syncExpiry(){
+  const t=TYPES.find(x=>x.code===document.getElementById('f-type').value);
+  const no=document.getElementById('f-noexp'), exp=document.getElementById('f-exp'),
+        iss=document.getElementById('f-iss').value, hint=document.getElementById('expHint');
+  exp.disabled = no.checked;
+  if(no.checked){ exp.value=''; hint.textContent = t && t.exp
+      ? 'This type normally expires after '+(t.exp/12)+' year'+(t.exp>12?'s':'')+'. You have said this one does not.'
+      : 'No expiry. This type carries no expiry rule.'; return; }
+  if(t && t.exp && iss && !exp.dataset.touched){
+    const d=new Date(iss+'T00:00:00'); d.setMonth(d.getMonth()+t.exp);
+    exp.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    hint.textContent='Filled in from this type’s '+(t.exp/12)+' year rule. Change it if the card says otherwise.';
+  } else if(t && t.exp){
+    hint.textContent='This type expires after '+(t.exp/12)+' year'+(t.exp>12?'s':'')+' — add an issued date and we’ll fill this in.';
+  } else {
+    hint.textContent='Required, unless you tick the box.';
+  }
+}
+document.getElementById('f-exp').oninput=function(){this.dataset.touched='1';};
+document.getElementById('f-iss').onchange=syncExpiry;
+document.getElementById('f-noexp').onchange=syncExpiry;
 document.getElementById('f-type').onchange=function(){
   const t=TYPES.find(x=>x.code===this.value);
-  document.getElementById('expHint').textContent = !t ? 'Leave blank to use the ticket type’s expiry rule.'
-    : t.exp ? 'Leave blank and we’ll set it to '+(t.exp/12)+' years from the issued date, this type’s rule.'
-            : 'This type carries no expiry. Leave blank.';
+  const no=document.getElementById('f-noexp');
+  if(t) no.checked = !t.exp;                 // the type proposes; the person decides
+  document.getElementById('f-exp').dataset.touched='';
+  syncExpiry();
   document.getElementById('docHint').textContent = t && t.doc
     ? 'This type requires a document. Publish without one and it stays a draft flagged “document missing”.'
     : 'Optional here. Publishing without it leaves the ticket flagged as unverified.';
 };
 function resetForm(){
   picked=null;renderChips();
+  const no=document.getElementById('f-noexp'); if(no) no.checked=false;
+  const ex=document.getElementById('f-exp'); if(ex){ ex.disabled=false; ex.dataset.touched=''; }
+  document.getElementById('expHint').textContent='Pick a ticket type first.';
   ['f-num','f-iss','f-exp','f-body'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('f-type').value='';document.getElementById('f-state').value='';
   document.getElementById('addErr').style.display='none';
@@ -920,11 +953,7 @@ function submitAdd(draft){
   }
   const ty=TYPES.find(x=>x.code===document.getElementById('f-type').value);
   const iss=document.getElementById('f-iss').value;
-  let exp=document.getElementById('f-exp').value;
-  if(!exp && ty.exp && iss){
-    const d=new Date(iss+'T00:00:00'); d.setMonth(d.getMonth()+ty.exp);
-    exp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  }
+  const exp = document.getElementById('f-noexp').checked ? '' : document.getElementById('f-exp').value;
   const _id='T'+Math.random().toString(36).slice(2,8);
   flashIds=[_id];
   const wk=WORKERS.find(x=>x.id===picked);

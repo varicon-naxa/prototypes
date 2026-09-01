@@ -235,3 +235,36 @@ the five remaining dropdowns repointed to their shifted columns — `delete_cols
 not the validation ranges, so every dropdown would otherwise have silently validated the wrong
 field. The `_Tickets` lookup sheet stays, because it still feeds the TICKETS sheet's Ticket Type
 dropdown.
+
+---
+
+## Expiry is a toggle, not a blank field (2 Sep 2026)
+
+The hint under the expiry date read *"Leave blank to use the ticket type's expiry rule."* Alec:
+*"what does this mean? we should just have a toggle to select if an expiry date is needed or not."*
+
+He is right, and the problem is worse than the wording. A blank field was doing two different
+jobs — *this ticket never expires* and *I do not know the date* — and then quietly inventing a
+value on save. The date stored was never a date anybody had seen.
+
+Replaced with a checkbox, **"This ticket has no expiry"**:
+
+- The ticket type sets its initial state — a type with no expiry rule starts ticked — but the
+  person can override it, because the card in their hand beats the catalogue.
+- Toggle off, issued date entered: the expiry is **filled into the visible field** from the type's
+  rule and can be typed over. Nothing is derived on save; what you see is what is stored. A typed
+  override survives a later change to the issued date.
+- Toggle on: the field is disabled and cleared.
+
+This delivers the no-expiry checkbox already asked for in **VDP-2236**.
+
+**The same principle had to be settled for import,** where there is no toggle — recorded as a
+comment on VDP-2401. Blank expiry with a type that has no rule is genuinely no expiry. Blank
+expiry with a type that *does* have a rule imports as a **Draft flagged expiry missing**, rather
+than silently applying the rule: a first aid certificate with no date on the row is missing data,
+not a permanent certificate, and inventing a date puts a wrong figure into the one column the
+register exists to report on.
+
+Also fixed here: the green note on the Add ticket tab still described the multi-ticket-type panel
+that had been reverted, the same way two rules on the Rules tab did. Prose drifts from the build
+when a design is walked back — worth reading the copy against the code after any revert.
