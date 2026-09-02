@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Bills: on-charge status</title>
+<!--
+  VDP-2427 / CQ-2861. Mango Earthmoving, via Full Circle Bookkeeping.
+
+  Problem: contractors who on-charge subcontractor and supplier costs to their own
+  customers have no way in Varicon to tell which bills have been on-charged. Daywork
+  Dockets have "mark as invoiced". Bills do not. So they assign a Xero Project to each
+  bill purely to track it — double handling, and the direct cause of the "lines
+  associated to a Project" sync failures they keep hitting.
+
+  The customer asked for a flag. This prototype argues for something slightly different,
+  and shows why rather than saying so: a flag drifts the moment a claim is revised, and
+  a drifted flag is worse than no flag because people trust it.
+
+  Three views: the workaround today, flag-only, and the flag derived from a bill→claim
+  link with the manual tick kept as an override.
+
+  Chrome is approximated from the 2026-03-24 bills-list prototype, not from a production
+  screenshot — column set and statuses should be checked against the real screen.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; font-size: 13px; }
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar { width: 40px; background: #1a1a2e; flex-shrink: 0; padding-top: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .sidebar .s-logo { width: 28px; height: 28px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 14px; margin-bottom: 8px; }
+  .sidebar .s-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 13px; border-radius: 6px; color: #888; cursor: pointer; }
+  .sidebar .s-icon.active { background: #f7941d; color: #fff; }
+
+  .main { flex: 1; min-width: 0; }
+
+  .viewbar { background: #1a1a2e; color: #fff; padding: 10px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .viewbar .vb-title { font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: rgba(255,255,255,.45); }
+  .viewbar .vb-tabs { display: flex; gap: 4px; background: rgba(255,255,255,.08); border-radius: 8px; padding: 3px; flex-wrap: wrap; }
+  .viewbar .vb-tab { padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; color: rgba(255,255,255,.6); }
+  .viewbar .vb-tab:hover { color: #fff; }
+  .viewbar .vb-tab.active { background: #f7941d; color: #fff; }
+  .viewbar .vb-note { font-size: 11px; color: rgba(255,255,255,.4); margin-left: auto; }
+
+  .proj-header { padding: 10px 24px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 10px; }
+  .proj-header h2 { font-size: 15px; font-weight: 600; }
+  .proj-header .crumb { color: #999; font-size: 13px; }
+
+  .content { padding: 18px 24px 70px; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  h3.sec { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  p.sec-sub { font-size: 12.5px; color: #888; margin-bottom: 16px; line-height: 1.6; max-width: 900px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .tile { background: #fff; border: 1px solid #e4e4e4; border-radius: 10px; padding: 13px 16px; }
+  .tile .t-label { font-size: 11px; color: #7a7a7a; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+  .tile .t-value { font-size: 20px; font-weight: 700; margin-top: 5px; letter-spacing: -.4px; font-variant-numeric: tabular-nums; }
+  .tile .t-sub { font-size: 11.5px; color: #999; margin-top: 4px; line-height: 1.5; }
+  .tile.dark { background: #1a1a2e; border-color: #1a1a2e; }
+  .tile.dark .t-label { color: rgba(255,255,255,.55); }
+  .tile.dark .t-value { color: #fff; }
+  .tile.dark .t-sub { color: rgba(255,255,255,.5); }
+  .tile.bad .t-value { color: #c0392b; }
+
+  .panel { background: #fff; border: 1px solid #e4e4e4; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+  .panel-head { padding: 13px 18px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .panel-head h4 { font-size: 13.5px; font-weight: 700; }
+  .panel-head .ph-sub { font-size: 12px; color: #8a8a8a; margin-top: 3px; }
+  .panel-body { padding: 16px 18px; }
+
+  .filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 12px 18px; background: #fafafa; border-bottom: 1px solid #f0f0f0; }
+  .filters select, .filters input { padding: 6px 10px; border: 1px solid #d5d5d5; border-radius: 5px; font-size: 12px; background: #fff; color: #444; }
+  .filters .fl-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #999; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  thead th { background: #f0f2f4; color: #43535f; padding: 9px 12px; text-align: left; font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .3px; white-space: nowrap; }
+  thead th.r { text-align: right; }
+  tbody td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+  tbody td.r { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:hover { background: #fcfcfc; }
+  tbody tr.flash { background: #fff6e8 !important; }
+  .supp { font-weight: 600; color: #1a1a2e; }
+  .muted { color: #aaa; }
+  .tiny { font-size: 11px; color: #999; margin-top: 2px; line-height: 1.45; }
+
+  .pill { display: inline-block; padding: 3px 9px; border-radius: 11px; font-size: 10.5px; font-weight: 700; letter-spacing: .2px; white-space: nowrap; }
+  .p-none   { background: #eceff1; color: #66787f; }
+  .p-excl   { background: #ede7f6; color: #5e46a1; }
+  .p-ready  { background: #fff3e0; color: #b3701a; }
+  .p-part   { background: #fff8e1; color: #8d6a00; }
+  .p-done   { background: #e6f4ea; color: #1e7e46; }
+  .p-stale  { background: #fde8e8; color: #c62828; }
+  .pill-ovr { background: #1a1a2e; color: #fff; margin-left: 5px; }
+
+  .btn { padding: 7px 14px; border: 1px solid #d5d5d5; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #555; cursor: pointer; }
+  .btn:hover { border-color: #f7941d; color: #f7941d; }
+  .btn.primary { background: #f7941d; border-color: #f7941d; color: #fff; }
+  .btn.primary:hover { background: #e0850f; color: #fff; }
+  .btn.dark { background: #1a1a2e; border-color: #1a1a2e; color: #fff; }
+  .btn.dark:hover { background: #2a2a45; color: #fff; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.sm { padding: 4px 10px; font-size: 11px; }
+
+  .callout { border-left: 3px solid #f7941d; background: #fff; padding: 14px 18px; font-size: 13px; line-height: 1.7; border-radius: 0 8px 8px 0; box-shadow: 0 1px 3px rgba(0,0,0,.05); margin-bottom: 16px; }
+  .callout.bad { border-left-color: #e53935; }
+  .callout.good { border-left-color: #2e9e5b; }
+  .callout h4 { font-size: 13px; margin-bottom: 7px; }
+  .callout.bad h4 { color: #c62828; }
+  .callout.good h4 { color: #1e7e46; }
+  .callout ul, .callout ol { margin: 6px 0 0 18px; }
+  .callout li { margin-bottom: 5px; }
+  .callout code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+  .drift-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: #1a1a2e; color: #fff; border-radius: 10px; padding: 13px 18px; margin-bottom: 16px; }
+  .drift-bar .db-text { font-size: 12.5px; line-height: 1.6; flex: 1; min-width: 260px; color: rgba(255,255,255,.8); }
+  .drift-bar .db-text b { color: #fff; }
+
+  .ledger { font-size: 13px; }
+  .ledger .lg-row { display: grid; grid-template-columns: 1fr auto; gap: 14px; padding: 8px 0; border-bottom: 1px dashed #eee; align-items: baseline; }
+  .ledger .lg-row:last-child { border-bottom: none; }
+  .ledger .lg-why { font-size: 11.5px; color: #999; margin-top: 2px; }
+  .ledger .lg-amt { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+  .ledger .lg-row.total { border-top: 2px solid #1a1a2e; margin-top: 6px; padding-top: 11px; border-bottom: none; }
+  .ledger .lg-row.total .lg-amt, .ledger .lg-row.total b { font-size: 15px; font-weight: 800; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 1000px) { .two-col { grid-template-columns: 1fr; } }
+
+  .rule { padding: 13px 0; border-bottom: 1px solid #f0f0f0; }
+  .rule:last-child { border-bottom: none; }
+  .rule .r-head { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .rule .r-body { font-size: 12.5px; color: #666; line-height: 1.65; }
+  .rule .r-num { display: inline-block; width: 20px; color: #f7941d; font-weight: 800; }
+  .q { padding: 11px 0; border-bottom: 1px solid #f0f0f0; font-size: 12.5px; line-height: 1.65; }
+  .q:last-child { border-bottom: none; }
+  .q b { display: block; margin-bottom: 3px; font-size: 13px; color: #1a1a2e; }
+
+  .drawer-mask { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 50; }
+  .drawer-mask.open { display: block; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 460px; max-width: 94vw; background: #fff; z-index: 51; transform: translateX(100%); transition: transform .18s ease; display: flex; flex-direction: column; box-shadow: -4px 0 24px rgba(0,0,0,.12); }
+  .drawer.open { transform: translateX(0); }
+  .drawer-head { padding: 16px 20px; border-bottom: 1px solid #eee; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .drawer-head h4 { font-size: 15px; font-weight: 700; }
+  .drawer-head .x { background: none; border: none; font-size: 20px; color: #999; cursor: pointer; line-height: 1; }
+  .drawer-body { padding: 18px 20px; overflow-y: auto; flex: 1; }
+  .drawer-foot { padding: 14px 20px; border-top: 1px solid #eee; display: flex; gap: 8px; justify-content: flex-end; }
+  .fgroup { margin-bottom: 18px; }
+  .fgroup > label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #999; margin-bottom: 7px; }
+  .opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid #e2e2e2; border-radius: 8px; margin-bottom: 7px; cursor: pointer; }
+  .opt:hover { border-color: #f7941d; }
+  .opt.sel { border-color: #f7941d; background: #fffaf3; }
+  .opt input { margin-top: 2px; }
+  .opt .o-name { font-weight: 600; font-size: 12.5px; }
+  .opt .o-why { font-size: 11.5px; color: #999; margin-top: 2px; line-height: 1.5; }
+  .evbox { background: #f8f9fa; border: 1px solid #eceff1; border-radius: 8px; padding: 12px 14px; font-size: 12.5px; line-height: 1.7; }
+  .evbox .ev-row { display: flex; justify-content: space-between; gap: 14px; padding: 3px 0; }
+  .evbox .ev-row span:last-child { font-variant-numeric: tabular-nums; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="s-logo">V</div>
+    <div class="s-icon">▤</div>
+    <div class="s-icon active">$</div>
+    <div class="s-icon">▦</div>
+    <div class="s-icon">⚙</div>
+  </div>
+
+  <div class="main">
+    <div class="viewbar">
+      <span class="vb-title">Bills — on-charge</span>
+      <div class="vb-tabs">
+        <div class="vb-tab" data-v="today">1 · Today</div>
+        <div class="vb-tab active" data-v="flag">2 · Flag only</div>
+        <div class="vb-tab" data-v="linked">3 · Flag + link</div>
+        <div class="vb-tab" data-v="rules">Rules &amp; questions</div>
+      </div>
+      <span class="vb-note">VDP-2427 · CQ-2861 · prototype 2026-09-03</span>
+    </div>
+
+    <div class="proj-header">
+      <span class="crumb">Accounts Payable ›</span>
+      <h2>Bills</h2>
+    </div>
+
+    <div class="content">
+
+      <!-- ============ VIEW 1 — TODAY ============ -->
+      <div class="view" id="v-today">
+        <h3 class="sec">What Mango Earthmoving does today</h3>
+        <p class="sec-sub">
+          There is no on-charge field on a bill, so the recovery side is invisible. To track which
+          subcontractor bills get passed on to their customers, they assign a <b>Xero Project</b> to
+          the bill — a field that exists for something else entirely, used as a marker.
+        </p>
+
+        <div class="callout bad">
+          <h4>The workaround has a cost, and it is not the double handling</h4>
+          Assigning a Xero Project is what triggers the <code>lines associated to a Project</code> sync
+          failures they keep raising. So the missing feature is not just an inconvenience — it is
+          actively generating support tickets against the Xero integration. They have already confirmed
+          Xero <b>Tracking Categories do not meet the need</b>, which is why they fall back to Projects.
+          <br><br>
+          <b>Which means shipping this feature closes two things:</b> the on-charge gap, and a class of
+          sync failure whose root cause is a field being used for a purpose it was not built for.
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h4>Bills — as the screen looks now</h4>
+              <div class="ph-sub">No on-charge column. Nothing here says whether a cost was recovered.</div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Supplier</th><th>Ref.</th><th>Project</th><th>Type</th>
+                  <th class="r">Amount</th><th>Status</th><th>Xero Project <span style="color:#c62828">(the workaround)</span></th>
+                </tr>
+              </thead>
+              <tbody id="tbodyToday"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="callout">
+          <h4>What they actually want to know</h4>
+          Two questions, and the flag only answers the first:
+          <ol>
+            <li><b>Which of these have I passed on to my customer?</b> — a marker is enough.</li>
+            <li><b>Did I recover all of it?</b> — a marker cannot answer this, and it is the question
+              that costs money when it goes wrong.</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- ============ VIEW 2 — FLAG ONLY ============ -->
+      <div class="view active" id="v-flag">
+        <h3 class="sec">Option 1 — the flag, exactly as asked for</h3>
+        <p class="sec-sub">
+          A status on the bill: <b>Not on-charged → Ready for invoicing → Invoiced</b>, set by hand,
+          mirroring the Daywork Docket "mark as invoiced" flow. Filterable from the list. Nothing
+          required in Xero. This is buildable quickly and it does answer the literal ask.
+        </p>
+
+        <div class="tiles" id="tilesFlag"></div>
+
+        <div class="drift-bar">
+          <div class="db-text">
+            <b>The problem is not day one — it is day ninety.</b> The flag is a second, hand-maintained
+            record of what was recovered, sitting next to the claims that actually recovered it.
+            Press the button: Claim #4 on Little Collins gets revised down, as claims routinely are.
+          </div>
+          <button class="btn primary" id="btnDrift" onclick="runDrift()">Revise Claim #4 →</button>
+          <button class="btn" id="btnReset" onclick="resetDrift()" style="display:none">Reset</button>
+        </div>
+
+        <div id="driftResult"></div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h4>Bills — with a manual on-charge flag</h4>
+              <div class="ph-sub">Click any status to change it. Nothing checks it against reality.</div>
+            </div>
+          </div>
+          <div class="filters">
+            <span class="fl-label">On-charge</span>
+            <select id="filterFlag" onchange="renderFlag()">
+              <option value="all">All</option>
+              <option value="none">Not on-charged</option>
+              <option value="ready">Ready for invoicing</option>
+              <option value="done">Invoiced</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Supplier</th><th>Ref.</th><th>Project</th><th>Type</th>
+                  <th class="r">Amount</th><th>On-charge status</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyFlag"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ VIEW 3 — FLAG + LINK ============ -->
+      <div class="view" id="v-linked">
+        <h3 class="sec">Option 2 — same screen, status derived from what was actually claimed</h3>
+        <p class="sec-sub">
+          Identical UI for the user. The difference is underneath: the bill carries a <b>link to the
+          claim or invoice line that recovered it</b>, and the status is computed from that link.
+          The manual tick still exists — it becomes an <b>override</b>, and it is labelled as one, so
+          you can always tell a judgement from a fact.
+        </p>
+
+        <div class="tiles" id="tilesLinked"></div>
+
+        <div class="drift-bar">
+          <div class="db-text">
+            <b>Same revision, same bill.</b> Claim #4 drops from $45,600 to $30,000. Watch what the
+            status does on its own.
+          </div>
+          <button class="btn primary" id="btnDrift2" onclick="runDrift()">Revise Claim #4 →</button>
+          <button class="btn" id="btnReset2" onclick="resetDrift()" style="display:none">Reset</button>
+        </div>
+
+        <div id="driftResult2"></div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h4>Bills — on-charge derived from recovery</h4>
+              <div class="ph-sub">Click a row to open the on-charge panel and see the evidence behind the status.</div>
+            </div>
+            <button class="btn sm" onclick="alert('Prototype — would export the on-charge register to XLSX.')">Export register</button>
+          </div>
+          <div class="filters">
+            <span class="fl-label">On-charge</span>
+            <select id="filterLinked" onchange="renderLinked()">
+              <option value="all">All</option>
+              <option value="none">Not on-charged</option>
+              <option value="excluded">Excluded — own cost</option>
+              <option value="ready">Ready for invoicing</option>
+              <option value="part">Partially on-charged</option>
+              <option value="done">On-charged</option>
+            </select>
+            <span class="fl-label" style="margin-left:10px">Recovered to</span>
+            <select id="filterCust" onchange="renderLinked()">
+              <option value="all">All customers</option>
+              <option value="Ausgrid">Ausgrid</option>
+              <option value="City of Melbourne">City of Melbourne</option>
+              <option value="Transport for NSW">Transport for NSW</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Supplier</th><th>Ref.</th><th>Project</th>
+                  <th class="r">Bill</th><th class="r">Recovered</th><th class="r">Shortfall</th>
+                  <th>On-charge status</th><th>Recovered via</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyLinked"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-head"><div><h4>What the link buys you</h4></div></div>
+            <div class="panel-body">
+              <div class="ledger">
+                <div class="lg-row"><div><b>The status stops lying</b><div class="lg-why">Revise a claim and the bill follows. No one has to remember.</div></div></div>
+                <div class="lg-row"><div><b>"On-charged to whom" is free</b><div class="lg-why">The claim already knows the customer and project. The flag never could.</div></div></div>
+                <div class="lg-row"><div><b>Shortfall becomes visible</b><div class="lg-why">Cost passed on at less than it cost you is the number this whole feature is really about.</div></div></div>
+                <div class="lg-row"><div><b>Override is still there</b><div class="lg-why">Recovered outside Varicon, or a commercial decision — tick it, and it shows as a human call.</div></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div><h4>What it costs</h4><div class="ph-sub">Being straight about the trade</div></div></div>
+            <div class="panel-body">
+              <div class="ledger">
+                <div class="lg-row"><div><b>A link table, and a rule for setting it</b><div class="lg-why">Bill line → claim line. Manual first; suggested matches later.</div></div></div>
+                <div class="lg-row"><div><b>Recompute on claim revision</b><div class="lg-why">Claims move. Status has to move with them, which means an event, not a stored value.</div></div></div>
+                <div class="lg-row"><div><b>A first cut that is honestly partial</b><div class="lg-why">Day one, most links are set by hand — no worse than the flag, and it accumulates truth instead of drift.</div></div></div>
+                <div class="lg-row total"><div><b>Same screen for the customer</b><div class="lg-why">Mango cannot tell the two options apart on day one. That is the point.</div></div><div class="lg-amt"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ VIEW 4 — RULES ============ -->
+      <div class="view" id="v-rules">
+        <h3 class="sec">Rules this prototype commits to</h3>
+        <p class="sec-sub">The arguable ones are first. Everything here is a proposal, not a decision.</p>
+
+        <div class="panel"><div class="panel-body">
+          <div class="rule"><div class="r-head"><span class="r-num">1</span>"Not on-charged" and "never on-charging this" are different states.</div>
+            <div class="r-body">A single blank status means both <i>not yet</i> and <i>this is our own cost</i> — so the list can never be worked to zero, because you cannot tell what is outstanding from what is finished. <b>Excluded — own cost</b> is an explicit state, set deliberately. Same principle as the ticket-expiry checkbox: a blank field must not carry a decision.</div></div>
+
+          <div class="rule"><div class="r-head"><span class="r-num">2</span>The status is derived; the tick is an override, and it is labelled.</div>
+            <div class="r-body">Where a bill is linked to a claim line, the status is computed. Where a person overrides it, the row says so. Two things that can disagree must never look identical — the whole failure mode here is a number nobody can adjudicate.</div></div>
+
+          <div class="rule"><div class="r-head"><span class="r-num">3</span>Partial recovery is a first-class state, not a rounding error.</div>
+            <div class="r-body">On-charging at less than cost is normal and often deliberate. A binary flag forces a lie in both directions. <b>Partially on-charged</b> with a shortfall figure is the honest answer.</div></div>
+
+          <div class="rule"><div class="r-head"><span class="r-num">4</span>Terminology matches Daywork Dockets exactly.</div>
+            <div class="r-body">Dockets already say "mark as invoiced". If Bills say something else for the same concept, that is a support cost forever. If the docket wording is wrong, change both — but do not add a second vocabulary.</div></div>
+
+          <div class="rule"><div class="r-head"><span class="r-num">5</span>Nothing about on-charge status touches Xero.</div>
+            <div class="r-body">The whole point is to stop the Xero Project workaround. If any part of this writes to Xero, the sync-failure class survives and the feature has not paid for itself.</div></div>
+
+          <div class="rule"><div class="r-head"><span class="r-num">6</span>On-charge status never alters cost.</div>
+            <div class="r-body">Committed, tracked and actual stay disjoint. An on-charged bill is still a cost — recovery is revenue, recorded on the claim. Netting the two on the cost side is how you get a $175,100 bill reported as $350,200.</div></div>
+
+          <div class="rule"><div class="r-head"><span class="r-num">7</span>Bulk setting from the list, not one bill at a time.</div>
+            <div class="r-body">A bookkeeper works a month of bills in one sitting. If marking twenty bills takes twenty drawers, they will keep using Xero. Same lesson as the construction-tickets page.</div></div>
+
+          <div class="rule"><div class="r-head"><span class="r-num">8</span>Status changes are audited.</div>
+            <div class="r-body">Who marked it, when, and whether the system or a person set it. This is money movement between a cost and a customer — it needs a trail.</div></div>
+        </div></div>
+
+        <h3 class="sec" style="margin-top:26px">Open questions — these need a call before build</h3>
+        <p class="sec-sub">Ordered by how much rework the wrong answer causes.</p>
+        <div class="panel"><div class="panel-body">
+          <div class="q"><b>Is the link bill→claim <i>line</i>, or bill→claim?</b>
+            Line-level gives real shortfall figures and is what makes the whole thing worth building. Header-level is much cheaper and gives roughly nothing beyond the flag. This is the decision that determines whether option 2 is worth doing at all.</div>
+          <div class="q"><b>Does a bill split across multiple claims need to be modelled on day one?</b>
+            Real for long-running subcontracts. If yes, the link is many-to-many from the start and the data model must allow it — retrofitting that is expensive.</div>
+          <div class="q"><b>Who sets the link — the person coding the bill, or the person building the claim?</b>
+            Different people, different weeks, different habits. Whoever it is, the prompt has to sit in their existing flow or it will not happen.</div>
+          <div class="q"><b>Does an unrecovered on-charge bill need to chase someone?</b>
+            "Ready for invoicing" sitting untouched for six weeks is money nobody has billed. A flag is passive; this would make it active. Out of scope for the first cut, but it changes whether this is a bookkeeping marker or a revenue control.</div>
+          <div class="q"><b>Does on-charge status belong in the daily cost tracking view and the reporting epic (VDP-2425)?</b>
+            Likely yes for the register export. Confirm before building a second export path.</div>
+        </div></div>
+
+        <div class="callout" style="margin-top:20px">
+          <h4>Recommendation</h4>
+          <b>Build the option 2 shape, ship the option 1 experience.</b> Mango gets the mark-as-invoiced
+          control they asked for and stop assigning Xero Projects. Underneath, the status is a computed
+          field with a manual override, and the bill→claim link starts as a nullable column that is set
+          by hand. Nothing in the first cut requires the matching logic to be clever — it just has to be
+          possible later without a rebuild, and without asking the customer to re-enter a year of history.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Drawer -->
+<div class="drawer-mask" id="mask" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <div>
+      <h4 id="dTitle">Bill</h4>
+      <div class="tiny" id="dSub"></div>
+    </div>
+    <button class="x" onclick="closeDrawer()">×</button>
+  </div>
+  <div class="drawer-body" id="dBody"></div>
+  <div class="drawer-foot">
+    <button class="btn" onclick="closeDrawer()">Cancel</button>
+    <button class="btn primary" onclick="saveDrawer()">Save</button>
+  </div>
+</div>
+
+<script>
+// ---------- data ----------
+const CUSTOMERS = { VAR006: 'Ausgrid', VAR004: 'City of Melbourne', VAR001: 'Transport for NSW', VAR005: 'City of Melbourne' };
+
+function seed() {
+  return [
+    { id:1, supp:'BGC Contracting',      ref:'BGC-7712',  pj:'VAR006', pjName:'Little Collins', type:'Subcontractor', amt:45600, xero:'Little Collins — on-charge', flag:'done',  rec:45600, via:'Claim #4', ovr:false },
+    { id:2, supp:'A1 Asphalting Pty Ltd', ref:'A1-3390',  pj:'VAR004', pjName:'Bourke St',      type:'Subcontractor', amt:22000, xero:'Bourke St — on-charge',      flag:'done',  rec:22000, via:'Claim #7', ovr:false },
+    { id:3, supp:'Fulton Hogan',          ref:'FH-2245',  pj:'VAR004', pjName:'Bourke St',      type:'Subcontractor', amt:31200, xero:'Bourke St — on-charge',      flag:'done',  rec:24000, via:'Claim #7', ovr:false },
+    { id:4, supp:'Coates Hire',           ref:'CH-90455', pj:'VAR004', pjName:'Bourke St',      type:'Plant hire',    amt:4100,  xero:'Bourke St — on-charge',      flag:'ready', rec:0,     via:null,      ovr:false },
+    { id:5, supp:'Downer Group',          ref:'DG-9981',  pj:'VAR005', pjName:'Bar Beach',      type:'Subcontractor', amt:18900, xero:'—',                          flag:'ready', rec:0,     via:null,      ovr:false },
+    { id:6, supp:'Boral Concrete',        ref:'INV-8841', pj:'VAR004', pjName:'Bourke St',      type:'Materials',     amt:12500, xero:'—',                          flag:'none',  rec:0,     via:null,      ovr:false, own:true },
+    { id:7, supp:'Kennards Hire',         ref:'KH-44821', pj:'VAR001', pjName:'Swanston St',    type:'Plant hire',    amt:3850,  xero:'—',                          flag:'none',  rec:0,     via:null,      ovr:false, own:true },
+    { id:8, supp:'Holcim Australia',      ref:'HOL-6632', pj:'VAR001', pjName:'Swanston St',    type:'Materials',     amt:9440,  xero:'—',                          flag:'none',  rec:0,     via:null,      ovr:false },
+    { id:9, supp:'Alex Fraser Group',     ref:'AF-5567',  pj:'VAR006', pjName:'Little Collins', type:'Subcontractor', amt:6300,  xero:'Little Collins — on-charge', flag:'done',  rec:6300,  via:'Claim #4', ovr:false }
+  ];
+}
+let bills = seed();
+let drifted = false;
+let openId = null;
+
+const money = n => '$ ' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Derived status — what option 2 computes. Manual override wins but is labelled.
+function derived(b) {
+  if (b.ovr) return { k:'done', label:'On-charged', ovr:true };
+  if (b.own) return { k:'excluded', label:'Excluded — own cost' };
+  if (b.rec <= 0) return b.flag === 'ready' ? { k:'ready', label:'Ready for invoicing' } : { k:'none', label:'Not on-charged' };
+  if (b.rec >= b.amt) return { k:'done', label:'On-charged' };
+  return { k:'part', label:'Partially on-charged' };
+}
+const PILL = { none:'p-none', excluded:'p-excl', ready:'p-ready', part:'p-part', done:'p-done' };
+const FLAGLABEL = { none:'Not on-charged', ready:'Ready for invoicing', done:'Invoiced' };
+
+// ---------- view switching ----------
+document.querySelectorAll('.vb-tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.vb-tab').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('v-' + t.dataset.v).classList.add('active');
+});
+
+// ---------- view 1 ----------
+function renderToday() {
+  document.getElementById('tbodyToday').innerHTML = bills.map(b => `
+    <tr>
+      <td class="supp">${b.supp}</td><td>${b.ref}</td><td>(${b.pj}) ${b.pjName}</td><td>${b.type}</td>
+      <td class="r">${money(b.amt)}</td>
+      <td><span class="pill p-none">Awaiting Payment</span></td>
+      <td>${b.xero === '—' ? '<span class="muted">—</span>' : '<span style="color:#c62828;font-weight:600">' + b.xero + '</span>'}</td>
+    </tr>`).join('');
+}
+
+// ---------- view 2 : flag only ----------
+function renderFlag() {
+  const f = document.getElementById('filterFlag').value;
+  const rows = bills.filter(b => f === 'all' || b.flag === f);
+  document.getElementById('tbodyFlag').innerHTML = rows.map(b => `
+    <tr id="fr-${b.id}">
+      <td class="supp">${b.supp}</td><td>${b.ref}</td><td>(${b.pj}) ${b.pjName}</td><td>${b.type}</td>
+      <td class="r">${money(b.amt)}</td>
+      <td><span class="pill ${b.flag==='done'?'p-done':b.flag==='ready'?'p-ready':'p-none'}"
+            style="cursor:pointer" onclick="cycleFlag(${b.id})">${FLAGLABEL[b.flag]}</span></td>
+    </tr>`).join('');
+
+  const marked = bills.filter(b => b.flag === 'done');
+  const sum = marked.reduce((a, b) => a + b.amt, 0);
+  const wrong = drifted ? marked.filter(b => b.rec < b.amt).reduce((a, b) => a + (b.amt - b.rec), 0) : 0;
+  document.getElementById('tilesFlag').innerHTML = `
+    <div class="tile"><div class="t-label">Bills</div><div class="t-value">${bills.length}</div><div class="t-sub">in this period</div></div>
+    <div class="tile"><div class="t-label">Marked invoiced</div><div class="t-value">${marked.length}</div><div class="t-sub">by hand</div></div>
+    <div class="tile dark"><div class="t-label">Value marked invoiced</div><div class="t-value">${money(sum)}</div><div class="t-sub">what the flag claims was recovered</div></div>
+    <div class="tile ${wrong ? 'bad' : ''}"><div class="t-label">Actually unrecovered</div><div class="t-value">${wrong ? money(wrong) : '—'}</div><div class="t-sub">${wrong ? 'the flag cannot see this' : 'nothing has moved yet'}</div></div>`;
+}
+function cycleFlag(id) {
+  const b = bills.find(x => x.id === id);
+  b.flag = b.flag === 'none' ? 'ready' : b.flag === 'ready' ? 'done' : 'none';
+  if (b.flag === 'done' && b.rec === 0) { b.ovr = true; }
+  if (b.flag !== 'done') { b.ovr = false; }
+  renderAll();
+}
+
+// ---------- view 3 : linked ----------
+function renderLinked() {
+  const f = document.getElementById('filterLinked').value;
+  const c = document.getElementById('filterCust').value;
+  const rows = bills.filter(b => {
+    const d = derived(b);
+    if (f !== 'all' && d.k !== f) return false;
+    if (c !== 'all' && (b.rec <= 0 || CUSTOMERS[b.pj] !== c)) return false;
+    return true;
+  });
+  document.getElementById('tbodyLinked').innerHTML = rows.map(b => {
+    const d = derived(b);
+    const short = Math.max(0, b.amt - b.rec);
+    const showShort = d.k === 'part';
+    return `
+    <tr id="lr-${b.id}" style="cursor:pointer" onclick="openDrawer(${b.id})">
+      <td class="supp">${b.supp}</td><td>${b.ref}</td><td>(${b.pj}) ${b.pjName}</td>
+      <td class="r">${money(b.amt)}</td>
+      <td class="r">${b.rec > 0 ? money(b.rec) : '<span class="muted">—</span>'}</td>
+      <td class="r">${showShort ? '<span style="color:#c62828;font-weight:700">' + money(short) + '</span>' : '<span class="muted">—</span>'}</td>
+      <td><span class="pill ${PILL[d.k]}">${d.label}</span>${d.ovr ? '<span class="pill pill-ovr">SET BY HAND</span>' : ''}</td>
+      <td>${b.via ? b.via + '<div class="tiny">' + CUSTOMERS[b.pj] + '</div>' : '<span class="muted">—</span>'}</td>
+    </tr>`; }).join('');
+
+  const rec = bills.reduce((a, b) => a + b.rec, 0);
+  const shortAll = bills.filter(b => derived(b).k === 'part').reduce((a, b) => a + (b.amt - b.rec), 0);
+  const ready = bills.filter(b => derived(b).k === 'ready');
+  document.getElementById('tilesLinked').innerHTML = `
+    <div class="tile"><div class="t-label">Recovered</div><div class="t-value">${money(rec)}</div><div class="t-sub">evidenced by a claim line</div></div>
+    <div class="tile ${shortAll ? 'bad' : ''}"><div class="t-label">Shortfall</div><div class="t-value">${shortAll ? money(shortAll) : money(0)}</div><div class="t-sub">on-charged for less than it cost</div></div>
+    <div class="tile"><div class="t-label">Ready, not yet claimed</div><div class="t-value">${money(ready.reduce((a,b)=>a+b.amt,0))}</div><div class="t-sub">${ready.length} bill${ready.length===1?'':'s'} awaiting a claim</div></div>
+    <div class="tile dark"><div class="t-label">Excluded — own cost</div><div class="t-value">${bills.filter(b=>derived(b).k==='excluded').length}</div><div class="t-sub">deliberately never on-charged</div></div>`;
+}
+
+// ---------- drift ----------
+function runDrift() {
+  if (drifted) return;
+  drifted = true;
+  const b = bills.find(x => x.id === 1);
+  b.rec = 30000;                     // claim revised down; the manual flag does not move
+  ['btnDrift','btnDrift2'].forEach(i => document.getElementById(i).disabled = true);
+  ['btnReset','btnReset2'].forEach(i => document.getElementById(i).style.display = 'inline-block');
+
+  document.getElementById('driftResult').innerHTML = `
+    <div class="callout bad">
+      <h4>The flag still says Invoiced. It is now wrong by $15,600.</h4>
+      Claim #4 was revised — only <b>$30,000</b> of the <b>$45,600</b> BGC Contracting bill was actually
+      claimed. Nobody went back to the bill, because nothing asked them to. The Bills list still reports
+      $45,600 recovered.
+      <br><br>
+      Nothing in the product is broken. The flag did exactly what it was built to do: hold whatever a
+      person last typed. That is the problem — <b>it is a number that looks like a fact and is a memory.</b>
+      This is the same shape as VDP-936 (export vs reporting hours) and VDP-2100 (dashboard totals
+      contradicting their records), moved into the AP ledger.
+    </div>`;
+  document.getElementById('driftResult2').innerHTML = `
+    <div class="callout good">
+      <h4>The status moved on its own — Partially on-charged, $15,600 short.</h4>
+      Same revision. Nobody touched the bill. Because the status is computed from the claim line that
+      recovered it, revising the claim revised the bill's on-charge state, and the shortfall column now
+      shows the $15,600 that was never passed on.
+      <br><br>
+      <b>That $15,600 is the reason to build this shape.</b> Under the flag it is invisible; here it is a
+      column you can filter and total. This is the number the customer was really reaching for when they
+      asked to "track exactly what bills have been on-charged".
+    </div>`;
+  renderAll();
+  ['fr-1','lr-1'].forEach(i => { const el = document.getElementById(i); if (el) { el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 2200); } });
+}
+function resetDrift() {
+  bills = seed(); drifted = false;
+  ['btnDrift','btnDrift2'].forEach(i => document.getElementById(i).disabled = false);
+  ['btnReset','btnReset2'].forEach(i => document.getElementById(i).style.display = 'none');
+  document.getElementById('driftResult').innerHTML = '';
+  document.getElementById('driftResult2').innerHTML = '';
+  renderAll();
+}
+
+// ---------- drawer ----------
+function openDrawer(id) {
+  openId = id;
+  const b = bills.find(x => x.id === id);
+  const d = derived(b);
+  document.getElementById('dTitle').textContent = b.supp + ' · ' + b.ref;
+  document.getElementById('dSub').textContent = '(' + b.pj + ') ' + b.pjName + ' · ' + money(b.amt);
+
+  const opts = [
+    ['auto',     'Derived from recovery', 'Status follows the claim lines linked to this bill. Recommended — it cannot go stale.'],
+    ['ready',    'Ready for invoicing',   'Intended for on-charge, not yet on a claim. Shows in the ready-to-claim total.'],
+    ['excluded', 'Excluded — own cost',   'This cost is never being passed on. Deliberate, so the list can be worked to zero.'],
+    ['ovr',      'On-charged — set by hand', 'Recovered outside Varicon, or a commercial call. Recorded as a human override, with your name on it.']
+  ];
+  const cur = b.ovr ? 'ovr' : b.own ? 'excluded' : (b.rec <= 0 && b.flag === 'ready') ? 'ready' : 'auto';
+
+  document.getElementById('dBody').innerHTML = `
+    <div class="fgroup">
+      <label>On-charge</label>
+      ${opts.map(([k, n, w]) => `
+        <label class="opt ${cur === k ? 'sel' : ''}">
+          <input type="radio" name="oc" value="${k}" ${cur === k ? 'checked' : ''}>
+          <span><span class="o-name">${n}</span><span class="o-why">${w}</span></span>
+        </label>`).join('')}
+    </div>
+    <div class="fgroup">
+      <label>Evidence</label>
+      <div class="evbox">
+        ${b.via ? `
+          <div class="ev-row"><span>Linked to</span><span>${b.via} — ${CUSTOMERS[b.pj]}</span></div>
+          <div class="ev-row"><span>Bill amount</span><span>${money(b.amt)}</span></div>
+          <div class="ev-row"><span>Recovered on that claim</span><span>${money(b.rec)}</span></div>
+          ${b.rec < b.amt ? `<div class="ev-row" style="color:#c62828"><span>Shortfall</span><span>${money(b.amt - b.rec)}</span></div>` : ''}
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e4e7e9;font-size:11.5px;color:#888;line-height:1.6">
+            Computed status: <b>${d.label}</b>. Revise the claim and this recomputes.
+          </div>`
+        : `<div style="color:#999;line-height:1.6">No claim line linked yet.<br>
+             <span style="font-size:11.5px">Link one from the claim, or set the status by hand above — an override is recorded as a judgement, not a fact.</span></div>`}
+      </div>
+    </div>
+    <div class="fgroup" style="margin-bottom:0">
+      <label>Audit</label>
+      <div class="tiny" style="line-height:1.7">
+        ${b.ovr ? 'Set by hand — Alec Neill, 3 Sep 2026' : 'Set by the system from ' + (b.via || 'no linked claim') + '.'}<br>
+        Every change to this field is recorded with who and when.
+      </div>
+    </div>`;
+
+  document.querySelectorAll('.opt').forEach(o => o.onclick = () => {
+    document.querySelectorAll('.opt').forEach(x => x.classList.remove('sel'));
+    o.classList.add('sel'); o.querySelector('input').checked = true;
+  });
+  document.getElementById('mask').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+}
+function closeDrawer() {
+  document.getElementById('mask').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+  openId = null;
+}
+function saveDrawer() {
+  const b = bills.find(x => x.id === openId);
+  const sel = document.querySelector('input[name="oc"]:checked');
+  if (b && sel) {
+    const v = sel.value;
+    b.ovr = (v === 'ovr');
+    b.own = (v === 'excluded');
+    b.flag = (v === 'ready') ? 'ready' : (v === 'ovr' ? 'done' : b.rec >= b.amt && b.rec > 0 ? 'done' : 'none');
+  }
+  closeDrawer();
+  renderAll();
+}
+
+function renderAll() { renderToday(); renderFlag(); renderLinked(); }
+renderAll();
+</script>
+</body>
+</html>
