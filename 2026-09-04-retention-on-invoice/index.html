@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Retention on the invoice</title>
+<!--
+  One fix. VDP-2251: when a claim withholds retention, the invoice Varicon sends
+  asks for the gross. The claim says $312,000 is owed and the invoice asks for
+  $340,000 — over by exactly the retention withheld.
+
+  VDP-2282 is the setting that follows from it. This prototype covers the defect,
+  the fix, the one setting, and the invoices already sent. Nothing else.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+  .sidebar { width: 40px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .sidebar .s-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: pointer; border-radius: 6px; color: #888; }
+  .sidebar .s-icon.active { background: #f7941d; color: #fff; }
+  .sidebar .s-logo { width: 28px; height: 28px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 14px; margin-bottom: 8px; }
+  .main { flex: 1; overflow-x: hidden; }
+
+  .viewbar { background: #1a1a2e; color: #fff; padding: 10px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .viewbar .vb-title { font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: rgba(255,255,255,.45); }
+  .viewbar .vb-tabs { display: flex; gap: 4px; background: rgba(255,255,255,.08); border-radius: 8px; padding: 3px; }
+  .viewbar .vb-tab { padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; color: rgba(255,255,255,.6); }
+  .viewbar .vb-tab:hover { color: #fff; }
+  .viewbar .vb-tab.active { background: #f7941d; color: #fff; }
+  .viewbar .vb-note { font-size: 11px; color: rgba(255,255,255,.4); margin-left: auto; }
+
+  .content { padding: 20px 24px 70px; max-width: 1180px; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .intro { background: #fff; border: 1px solid #e4e4e4; border-left: 3px solid #f7941d; border-radius: 0 10px 10px 0; padding: 15px 18px; margin-bottom: 20px; font-size: 13px; line-height: 1.7; }
+  .intro.red { border-left-color: #e53935; }
+  .intro b { color: #1a1a2e; }
+  .intro .tag { display: inline-block; background: #1a1a2e; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .6px; padding: 2px 7px; border-radius: 3px; margin-right: 7px; vertical-align: middle; }
+
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 940px) { .pair { grid-template-columns: 1fr; } }
+
+  /* --- document --- */
+  .doc { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+  .doc.bad { border-color: #f0b4b1; }
+  .doc.good { border-color: #a8d8bd; }
+  .doc-flag { padding: 8px 18px; font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
+  .doc-flag.bad { background: #fdeceb; color: #b3261e; }
+  .doc-flag.good { background: #e9f6ef; color: #1a5c38; }
+  .doc-flag.neutral { background: #eef1f5; color: #44546a; }
+  .doc-head { padding: 16px 18px 14px; border-bottom: 1px solid #f0f0f0; }
+  .doc-head .d-kind { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: #a0a0a0; text-transform: uppercase; }
+  .doc-head h3 { font-size: 17px; font-weight: 700; margin-top: 3px; }
+  .doc-head .d-meta { font-size: 11.5px; color: #999; margin-top: 5px; line-height: 1.6; }
+  table.dl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.dl td { padding: 9px 18px; border-bottom: 1px solid #f4f4f4; }
+  table.dl td.r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.dl .lbl { color: #555; }
+  table.dl .lbl small { display: block; color: #a8a8a8; font-size: 11px; margin-top: 2px; line-height: 1.5; }
+  table.dl tr.sub td { background: #fafafa; font-weight: 600; }
+  table.dl tr.tot td { background: #1a1a2e; color: #fff; font-weight: 700; font-size: 14px; padding-top: 12px; padding-bottom: 12px; }
+  table.dl tr.tot small { color: rgba(255,255,255,.5); font-weight: 400; display: block; margin-top: 2px; font-size: 11px; }
+  table.dl tr.hit td { background: #fdeceb; }
+  table.dl tr.hit td.r { color: #b3261e; font-weight: 700; }
+  table.dl tr.fixed td { background: #e9f6ef; }
+  table.dl tr.fixed td.r { color: #1a5c38; font-weight: 700; }
+  table.dl tr.miss td { color: #c0c0c0; font-style: italic; }
+
+  .gap { margin: 18px 0 4px; background: #fff; border: 1px solid #f0b4b1; border-left: 3px solid #e53935; border-radius: 0 10px 10px 0; padding: 16px 20px; }
+  .gap .g-num { font-size: 27px; font-weight: 800; color: #b3261e; letter-spacing: -.5px; }
+  .gap .g-txt { font-size: 13px; line-height: 1.7; margin-top: 6px; color: #444; }
+  .gap .g-txt b { color: #1a1a2e; }
+
+  .panel { background: #fff; border: 1px solid #e4e4e4; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+  .panel-head { padding: 14px 18px; border-bottom: 1px solid #f0f0f0; }
+  .panel-head h4 { font-size: 14px; font-weight: 700; }
+  .panel-head .ph-sub { font-size: 12px; color: #8a8a8a; margin-top: 3px; line-height: 1.6; }
+  .panel-body { padding: 16px 18px; }
+
+  .tgl-row { display: flex; align-items: flex-start; gap: 13px; }
+  .tgl-row .tt-name { font-size: 13.5px; font-weight: 600; }
+  .tgl-row .tt-sub { font-size: 12px; color: #888; line-height: 1.65; margin-top: 4px; }
+  .switch { width: 40px; height: 22px; border-radius: 11px; background: #ccc; position: relative; cursor: pointer; flex-shrink: 0; transition: background .15s; margin-top: 2px; }
+  .switch::after { content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: left .15s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  .switch.on { background: #f7941d; }
+  .switch.on::after { left: 20px; }
+
+  .stamp { font-family: 'SF Mono', Consolas, monospace; font-size: 11.5px; background: #1a1a2e; color: #cfe3d4; border-radius: 8px; padding: 14px 16px; line-height: 1.85; overflow-x: auto; }
+  .stamp .k { color: #8fa4bb; }
+  .stamp .v { color: #f7c98b; }
+  .stamp .c { color: #6b7f95; font-style: italic; }
+
+  .warn { background: #fdf2e2; border-radius: 7px; padding: 12px 15px; font-size: 12.5px; color: #7a5518; line-height: 1.7; margin-top: 13px; }
+  .warn b { color: #5e400f; }
+  .note-open { background: #f3f6fa; border-left: 3px solid #1b4b7d; border-radius: 0 7px 7px 0; padding: 12px 15px; font-size: 12.5px; color: #33475b; line-height: 1.7; margin-top: 13px; }
+  .note-open .q-tag { display: inline-block; background: #1b4b7d; color: #fff; font-size: 9.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin-right: 7px; }
+
+  table.aff { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.aff thead th { background: #eef1f5; color: #2b3a45; padding: 10px 14px; text-align: left; font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .4px; }
+  table.aff thead th.r { text-align: right; }
+  table.aff td { padding: 11px 14px; border-bottom: 1px solid #f2f2f2; }
+  table.aff td.r { text-align: right; font-variant-numeric: tabular-nums; }
+  table.aff tr.tot td { font-weight: 700; background: #fafafa; border-top: 2px solid #e0e0e0; }
+  table.aff .over { color: #b3261e; font-weight: 700; }
+  .pill { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .pill.paid { background: #fdeceb; color: #b3261e; }
+  .pill.open { background: #fdf2e2; color: #7a5518; }
+
+  .steps { counter-reset: s; }
+  .steps .step { display: flex; gap: 13px; padding: 13px 0; border-bottom: 1px solid #f2f2f2; }
+  .steps .step:last-child { border-bottom: none; }
+  .steps .step .n { width: 23px; height: 23px; border-radius: 50%; background: #1a1a2e; color: #fff; font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .steps .step .s-txt { font-size: 12.5px; line-height: 1.7; color: #444; }
+  .steps .step .s-txt b { color: #1a1a2e; }
+  .tickets { font-size: 12px; color: #888; margin-top: 16px; line-height: 1.85; }
+  .tickets b { color: #444; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="s-logo">V</div>
+    <div class="s-icon">&#9776;</div><div class="s-icon active">&#128209;</div><div class="s-icon">&#128188;</div><div class="s-icon">&#9881;</div>
+  </div>
+
+  <div class="main">
+    <div class="viewbar">
+      <span class="vb-title">Retention on the invoice</span>
+      <div class="vb-tabs">
+        <div class="vb-tab active" data-v="defect">The defect</div>
+        <div class="vb-tab" data-v="fix">The fix</div>
+        <div class="vb-tab" data-v="sent">Already sent</div>
+      </div>
+      <span class="vb-note">VDP-2251 &middot; VDP-2282 &middot; 4 Sep 2026</span>
+    </div>
+
+    <div class="content">
+
+      <!-- ================= DEFECT ================= -->
+      <div class="view active" id="v-defect">
+        <div class="intro red">
+          <span class="tag">VDP-2251</span>
+          When a claim withholds retention, the two documents Varicon produces from it <b>disagree about how much money
+          is owed</b>. The claim deducts the retention. The invoice does not. The client is asked to pay the gross.
+        </div>
+
+        <div class="pair">
+          <div class="doc">
+            <div class="doc-flag neutral">What the claim says</div>
+            <div class="doc-head">
+              <div class="d-kind">Progress claim</div>
+              <h3>Claim #4</h3>
+              <div class="d-meta">Period to 31 Aug 2026 &middot; 10% retention to a 5% cap &middot; $124,000 maximum</div>
+            </div>
+            <table class="dl"><tbody>
+              <tr><td class="lbl">Work completed this period</td><td class="r">$340,000.00</td></tr>
+              <tr><td class="lbl">Less retention withheld<small>Cap binds &mdash; 10% would take $34,000</small></td><td class="r">&minus; $28,000.00</td></tr>
+              <tr class="sub"><td class="lbl">Payable this claim</td><td class="r">$312,000.00</td></tr>
+              <tr><td class="lbl">GST at 10%</td><td class="r">+ $34,000.00</td></tr>
+              <tr class="tot"><td>Due to the contractor<small>What the claim certifies is owed</small></td><td class="r">$346,000.00</td></tr>
+            </tbody></table>
+          </div>
+
+          <div class="doc bad">
+            <div class="doc-flag bad">What Varicon actually sends</div>
+            <div class="doc-head">
+              <div class="d-kind">Tax invoice</div>
+              <h3>INV-1184</h3>
+              <div class="d-meta">Raised from Claim #4 &middot; synced to Xero &middot; 1 Sep 2026</div>
+            </div>
+            <table class="dl"><tbody>
+              <tr><td class="lbl">Work completed this period</td><td class="r">$340,000.00</td></tr>
+              <tr class="miss"><td class="lbl">Less retention withheld</td><td class="r">line not written</td></tr>
+              <tr class="sub"><td class="lbl">Subtotal</td><td class="r">$340,000.00</td></tr>
+              <tr><td class="lbl">GST at 10%</td><td class="r">+ $34,000.00</td></tr>
+              <tr class="hit"><td class="lbl">Amount due<small>What the client is asked to pay</small></td><td class="r">$374,000.00</td></tr>
+            </tbody></table>
+          </div>
+        </div>
+
+        <div class="gap">
+          <div class="g-num">$28,000.00</div>
+          <div class="g-txt">
+            The invoice asks for <b>exactly the retention</b> more than the claim says is owed. It is not a rounding
+            error or a rate mismatch &mdash; the deduction line is simply never written onto the invoice, so retention
+            accrues on the claim <i>and</i> stays in the amount billed. The contractor is asking their client for money
+            the contract says the client keeps.<br><br>
+            It fails in the direction that gets noticed by the person paying, not the person sending. Every one of these
+            is a client of our client querying an invoice.
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:18px">
+          <div class="panel-head">
+            <h4>Why it has not been caught more often</h4>
+            <div class="ph-sub">Three things have to line up before anyone sees it, which is why this reads as rare and is not.</div>
+          </div>
+          <div class="panel-body">
+            <div class="steps">
+              <div class="step"><div class="n">1</div><div class="s-txt">
+                <b>The claim screen is right.</b> Anyone checking the numbers in Varicon sees the correct $312,000 and has
+                no reason to open the invoice.</div></div>
+              <div class="step"><div class="n">2</div><div class="s-txt">
+                <b>The invoice is arithmetically consistent with itself.</b> $340,000 plus GST is $374,000. Nothing in
+                Xero flags it &mdash; it is only wrong against a document Xero never sees.</div></div>
+              <div class="step"><div class="n">3</div><div class="s-txt">
+                <b>It only bites on retention-bearing contracts.</b> On everything else the gross and the net are the
+                same number, and the missing line changes nothing.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= FIX ================= -->
+      <div class="view" id="v-fix">
+        <div class="intro">
+          <span class="tag">VDP-2282</span>
+          Write the deduction line onto the invoice. Then make it a setting, because a minority of contracts genuinely
+          bill gross &mdash; the client withholds retention at their end. <b>Default on.</b> Flip the toggle below and
+          the invoice redraws.
+        </div>
+
+        <div class="pair">
+          <div class="doc good" id="fixdoc">
+            <div class="doc-flag good" id="fixflag">Fixed</div>
+            <div class="doc-head">
+              <div class="d-kind">Tax invoice</div>
+              <h3>INV-1184</h3>
+              <div class="d-meta">Raised from Claim #4 &middot; retention shown as a line the client can read</div>
+            </div>
+            <table class="dl"><tbody id="fixlines"></tbody></table>
+          </div>
+
+          <div>
+            <div class="panel">
+              <div class="panel-head">
+                <h4>The setting</h4>
+                <div class="ph-sub">Lives with the project's retention terms, alongside the rate and the cap.</div>
+              </div>
+              <div class="panel-body">
+                <div class="tgl-row">
+                  <div class="switch on" id="t-deduct"></div>
+                  <div>
+                    <div class="tt-name">Deduct retention from the invoice</div>
+                    <div class="tt-sub" id="s-deduct"></div>
+                  </div>
+                </div>
+                <div id="warnslot"></div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h4>The position is stamped on the claim, not read from settings</h4>
+                <div class="ph-sub">Recorded when the invoice is raised. Changing the setting later must never alter an
+                  invoice already sent.</div>
+              </div>
+              <div class="panel-body">
+                <div class="stamp" id="stamp"></div>
+                <div class="warn">
+                  <b>This is the part that is easy to get wrong.</b> If the invoice renders by reading the current
+                  setting, then turning the toggle off next month silently rewrites what INV-1184 says &mdash; and it
+                  will no longer match the PDF the client is holding. The claim has to carry its own answer.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:2px">
+          <div class="panel-head"><h4>What this fix does not decide</h4></div>
+          <div class="panel-body">
+            <div class="note-open"><span class="q-tag">Dependency</span>
+              <b>GST.</b> This prototype puts GST on the full claim &mdash; the supply is the whole $340,000 and
+              retention is money withheld from payment, not a reduction in what was supplied. That is the treatment that
+              keeps the invoice total at $346,000 and matches the claim. <b>It is a read, not advice</b>, and it needs
+              confirming with an accountant and against what Xero does on the ACCREC before this is specced. If GST
+              instead sits on the net, the invoice is $343,200 and every corrected figure moves.
+            </div>
+            <div class="note-open" style="border-left-color:#7a5518;background:#fdf9f2;color:#5e400f">
+              <span class="q-tag" style="background:#7a5518">Sequencing</span>
+              The <b>toggle</b> must not ship ahead of the <b>deduction line</b>. Until invoices deduct by default there
+              is no correct default to build a setting against, and gross invoicing stops being a bug and becomes a
+              setting nobody chose. Fix first, then expose the exception.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= ALREADY SENT ================= -->
+      <div class="view" id="v-sent">
+        <div class="intro red">
+          A fix that only changes future behaviour leaves the wrong invoices where they are. Some are paid.
+          <b>We do not need to wait for clients to tell us which ones</b> &mdash; every claim with retention withheld and
+          an invoice raised gross is a query we can run against our own data today.
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h4>Affected claims &mdash; shape of the query</h4>
+            <div class="ph-sub">Illustrative rows showing the columns the real query returns. The rule is
+              <code>retention_withheld &gt; 0</code> and <code>invoice_total = claim_gross + GST</code>. Project
+              references are placeholders &mdash; the actual list comes from production.</div>
+          </div>
+          <div class="panel-body" style="padding:0">
+            <table class="aff">
+              <thead><tr>
+                <th>Project</th><th>Claim</th><th>Invoice</th><th class="r">Should have been</th>
+                <th class="r">Was invoiced</th><th class="r">Over by</th><th>Status</th>
+              </tr></thead>
+              <tbody>
+                <tr><td>Project A</td><td>#4</td><td>INV-1184</td><td class="r">$346,000.00</td><td class="r">$374,000.00</td><td class="r over">$28,000.00</td><td><span class="pill open">Awaiting payment</span></td></tr>
+                <tr><td>Project A</td><td>#3</td><td>INV-1152</td><td class="r">$268,400.00</td><td class="r">$296,400.00</td><td class="r over">$28,000.00</td><td><span class="pill paid">Paid</span></td></tr>
+                <tr><td>Project B</td><td>#7</td><td>INV-1149</td><td class="r">$92,730.00</td><td class="r">$97,130.00</td><td class="r over">$4,400.00</td><td><span class="pill paid">Paid</span></td></tr>
+                <tr><td>Project C</td><td>#2</td><td>INV-1131</td><td class="r">$511,500.00</td><td class="r">$556,500.00</td><td class="r over">$45,000.00</td><td><span class="pill open">Awaiting payment</span></td></tr>
+                <tr><td>Project D</td><td>#11</td><td>INV-1108</td><td class="r">$44,880.00</td><td class="r">$46,530.00</td><td class="r over">$1,650.00</td><td><span class="pill paid">Paid</span></td></tr>
+                <tr class="tot"><td colspan="5">Total over-invoiced across the affected claims</td><td class="r over">$107,050.00</td><td></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h4>What we do about each one</h4>
+            <div class="ph-sub">Two states, two different conversations. Neither of them starts with the client noticing.</div>
+          </div>
+          <div class="panel-body">
+            <div class="steps">
+              <div class="step"><div class="n">1</div><div class="s-txt">
+                <b>Run the query and own the number.</b> Before anyone is contacted we should know exactly how many
+                claims, across how many tenants, and for how much. That figure decides whether this is a quiet fix or a
+                disclosure.</div></div>
+              <div class="step"><div class="n">2</div><div class="s-txt">
+                <b>Unpaid invoices</b> &mdash; reissue at the corrected amount. The client has not moved money, so this
+                is a corrected document and a sentence of explanation.</div></div>
+              <div class="step"><div class="n">3</div><div class="s-txt">
+                <b>Paid invoices</b> &mdash; the contractor has been overpaid and the retention was never withheld in
+                cash. Credit note, or an adjustment on the next claim. <b>Which of the two is the contractor's call, not
+                ours</b> &mdash; it changes their cash position and their client's.</div></div>
+              <div class="step"><div class="n">4</div><div class="s-txt">
+                <b>Tell the beta group before they find it.</b> The claim&rarr;invoice&rarr;Xero beta drafts already
+                disclose this defect. Anyone already invoicing out of Varicon on a retention contract needs the same
+                notice, and it should come from us.</div></div>
+            </div>
+            <div class="note-open"><span class="q-tag">Needs a decision</span>
+              <b>Does the correction reach Xero automatically?</b> These invoices are synced. A credit note raised in
+              Varicon that does not flow through leaves the two systems disagreeing, which is the same class of defect
+              one layer along. Not scoped here.
+            </div>
+          </div>
+        </div>
+
+        <div class="tickets">
+          <b>VDP-2251</b> &mdash; production over-invoices retention-bearing claims (the defect, and the remediation).<br>
+          <b>VDP-2282</b> &mdash; the setting, blocked by VDP-2251.<br>
+          <b>Related prototypes:</b>
+          <a href="../2026-08-24-claim-retention-wording/" style="color:#f7941d">Claim retention &mdash; clearer wording</a> (24 Aug 2026)
+          &middot;
+          <a href="../2026-09-04-retention-settings/" style="color:#f7941d">Retention settings</a> (4 Sep 2026, the wider settings rebuild).
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+var CLAIM = 340000, RET = 28000, GSTPCT = 10;
+var deduct = true;
+
+function money(n) { return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+function render() {
+  var net = CLAIM - (deduct ? RET : 0);
+  var gst = CLAIM * GSTPCT / 100;          /* on the gross — see the dependency note */
+  var total = net + gst;
+
+  document.getElementById('fixlines').innerHTML =
+    '<tr><td class="lbl">Work completed this period</td><td class="r">' + money(CLAIM) + '</td></tr>' +
+    (deduct
+      ? '<tr class="fixed"><td class="lbl">Less retention withheld<small>10% of the claim, capped at 5% of the contract sum</small></td><td class="r">&minus; ' + money(RET) + '</td></tr>'
+      : '<tr class="miss"><td class="lbl">Less retention withheld<small>Not deducted &mdash; this contract bills gross</small></td><td class="r">&mdash;</td></tr>') +
+    '<tr class="sub"><td class="lbl">Subtotal</td><td class="r">' + money(net) + '</td></tr>' +
+    '<tr><td class="lbl">GST at ' + GSTPCT + '%<small>On the full claim of ' + money(CLAIM) + '</small></td><td class="r">+ ' + money(gst) + '</td></tr>' +
+    '<tr class="tot"><td>Amount due<small>' + (deduct ? 'Matches the claim' : 'Client withholds the retention at their end') +
+      '</small></td><td class="r">' + money(total) + '</td></tr>';
+
+  document.getElementById('fixdoc').className = 'doc ' + (deduct ? 'good' : '');
+  document.getElementById('fixflag').className = 'doc-flag ' + (deduct ? 'good' : 'neutral');
+  document.getElementById('fixflag').textContent = deduct ? 'Fixed — default' : 'Exception — gross billing';
+
+  document.getElementById('s-deduct').innerHTML = deduct
+    ? 'The retention withheld on the claim is written onto the invoice as its own line, and the amount due matches what ' +
+      'the claim certifies. <b>This is what should happen on every retention contract unless someone says otherwise.</b>'
+    : 'The invoice asks for the full ' + money(CLAIM) + ' and retention is not deducted. It still accrues on the claim ' +
+      'and still releases on its milestones &mdash; the client simply withholds it themselves.';
+
+  document.getElementById('warnslot').innerHTML = deduct ? '' :
+    '<div class="warn"><b>Only correct where the contract says the client withholds retention.</b> Otherwise this ' +
+    'reproduces VDP-2251 deliberately: the invoice asks for ' + money(RET) + ' more than the claim says is owed. ' +
+    'Worth an explicit confirmation when it is turned on, because the failure is silent and lands on the client\'s client.</div>';
+
+  document.getElementById('stamp').innerHTML =
+    '<span class="c">// written when the invoice is raised, never re-read from settings</span><br>' +
+    '<span class="k">claim_id</span>: <span class="v">4821</span><br>' +
+    '<span class="k">invoice_no</span>: <span class="v">"INV-1184"</span><br>' +
+    '<span class="k">retention_withheld</span>: <span class="v">' + RET.toFixed(2) + '</span><br>' +
+    '<span class="k">retention_deducted_from_invoice</span>: <span class="v">' + deduct + '</span><br>' +
+    '<span class="k">gst_basis</span>: <span class="v">"gross_claim"</span><br>' +
+    '<span class="k">invoice_total</span>: <span class="v">' + (CLAIM - (deduct ? RET : 0) + CLAIM * GSTPCT / 100).toFixed(2) + '</span><br>' +
+    '<span class="k">issued_at</span>: <span class="v">"2026-09-01T09:14:22+10:00"</span>';
+}
+
+document.getElementById('t-deduct').addEventListener('click', function () {
+  deduct = !deduct; this.classList.toggle('on', deduct); render();
+});
+
+document.querySelectorAll('.vb-tab').forEach(function (tab) {
+  tab.addEventListener('click', function () {
+    document.querySelectorAll('.vb-tab').forEach(function (t) { t.classList.remove('active'); });
+    document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('active'); });
+    this.classList.add('active');
+    document.getElementById('v-' + this.dataset.v).classList.add('active');
+    window.scrollTo(0, 0);
+  });
+});
+
+render();
+</script>
+</body>
+</html>
