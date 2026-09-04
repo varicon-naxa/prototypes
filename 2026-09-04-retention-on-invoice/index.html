@@ -3,226 +3,148 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Varicon — Retention on the invoice</title>
+<title>Varicon — Retention Settings</title>
 <!--
-  One toggle, at the moment the claim is submitted: is retention deducted from the
-  invoice, or is the client invoiced the gross?
-
-  Deliberately not a setting screen. The choice is made per claim, at submit, so the
-  claim record carries its own answer and nothing changes an invoice already sent.
+  The existing Retention Settings modal with one row added:
+  "Deduct Retention from Invoice". Everything else is unchanged.
 -->
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
-  .layout { display: flex; min-height: 100vh; }
-  .sidebar { width: 40px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-  .sidebar .s-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 13px; border-radius: 6px; color: #888; }
-  .sidebar .s-icon.active { background: #f7941d; color: #fff; }
-  .sidebar .s-logo { width: 28px; height: 28px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 14px; margin-bottom: 8px; }
-  .main { flex: 1; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+         background: #6b6b6b; min-height: 100vh; display: flex; align-items: flex-start;
+         justify-content: center; padding: 34px 16px; }
 
-  .topbar { background: #1a1a2e; color: #fff; padding: 11px 24px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-  .topbar .t-title { font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: rgba(255,255,255,.45); }
-  .topbar .t-note { font-size: 11px; color: rgba(255,255,255,.4); margin-left: auto; }
+  .modal { width: 100%; max-width: 640px; background: #fff; border-radius: 5px;
+           box-shadow: 0 8px 34px rgba(0,0,0,.30); overflow: hidden; }
 
-  .proj-header { padding: 10px 24px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 10px; }
-  .proj-header h2 { font-size: 15px; font-weight: 600; }
-  .proj-header .crumb { font-size: 12px; color: #999; }
+  .m-head { padding: 18px 24px; border-bottom: 1px solid #eee; display: flex;
+            align-items: center; justify-content: space-between; }
+  .m-head h1 { font-size: 19px; font-weight: 500; color: #1b4b7d; }
+  .m-head .x { color: #8d8d8d; font-size: 21px; cursor: pointer; line-height: 1; }
 
-  .content { padding: 22px 24px 70px; max-width: 1000px; }
-  .intro { background: #fff; border: 1px solid #e4e4e4; border-left: 3px solid #f7941d; border-radius: 0 10px 10px 0; padding: 14px 18px; margin-bottom: 20px; font-size: 13px; line-height: 1.7; }
-  .intro b { color: #1a1a2e; }
+  .m-body { padding: 20px 24px 24px; }
 
-  .pair { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 18px; align-items: start; }
-  @media (max-width: 860px) { .pair { grid-template-columns: 1fr; } }
+  .blk { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+  .blk h2 { font-size: 15px; font-weight: 600; color: #1b4b7d; }
+  .blk .desc { font-size: 13.5px; color: #666; line-height: 1.5; margin-top: 4px; max-width: 340px; }
+  .enable { display: flex; align-items: center; gap: 11px; flex-shrink: 0; padding-top: 2px; }
+  .enable span { font-size: 15px; color: #333; }
 
-  .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
-  .card-head { padding: 15px 18px; border-bottom: 1px solid #f0f0f0; }
-  .card-head .c-kind { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: #a0a0a0; text-transform: uppercase; }
-  .card-head h3 { font-size: 16px; font-weight: 700; margin-top: 3px; }
-  .card-head .c-meta { font-size: 11.5px; color: #999; margin-top: 5px; line-height: 1.6; }
-  .card-body { padding: 16px 18px; }
-
-  table.lines { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  table.lines td { padding: 9px 18px; border-bottom: 1px solid #f4f4f4; }
-  table.lines td.r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  table.lines .lbl { color: #555; }
-  table.lines .lbl small { display: block; color: #a8a8a8; font-size: 11px; margin-top: 2px; line-height: 1.5; }
-  table.lines tr.sub td { background: #fafafa; font-weight: 600; }
-  table.lines tr.tot td { background: #1a1a2e; color: #fff; font-weight: 700; font-size: 14.5px; padding-top: 13px; padding-bottom: 13px; }
-  table.lines tr.tot small { color: rgba(255,255,255,.5); font-weight: 400; display: block; margin-top: 2px; font-size: 11px; }
-  table.lines tr.cut td { background: #e9f6ef; }
-  table.lines tr.cut td.r { color: #1a5c38; font-weight: 700; }
-  table.lines tr.off td { color: #b8b8b8; font-style: italic; }
-
-  .tgl-box { border: 1px solid #e2e2e2; border-radius: 9px; padding: 15px 16px; }
-  .tgl-box.on { border-color: #f7941d; background: #fffaf3; }
-  .tgl-row { display: flex; align-items: flex-start; gap: 13px; }
-  .tgl-row .tt-name { font-size: 14px; font-weight: 600; }
-  .tgl-row .tt-sub { font-size: 12.5px; color: #777; line-height: 1.65; margin-top: 5px; }
-  .tgl-row .tt-sub b { color: #1a1a2e; }
-  .switch { width: 42px; height: 23px; border-radius: 12px; background: #ccc; position: relative; cursor: pointer; flex-shrink: 0; transition: background .15s; margin-top: 1px; }
-  .switch::after { content: ''; position: absolute; width: 19px; height: 19px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: left .15s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  .switch { width: 44px; height: 24px; border-radius: 12px; background: #d5d8dc; position: relative;
+            cursor: pointer; flex-shrink: 0; transition: background .15s; }
+  .switch::after { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%;
+                   background: #fff; top: 2px; left: 2px; transition: left .15s;
+                   box-shadow: 0 1px 3px rgba(0,0,0,.35); }
   .switch.on { background: #f7941d; }
-  .switch.on::after { left: 21px; }
+  .switch.on::after { left: 22px; }
 
-  .amounts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
-  .amt { border: 1px solid #e6e6e6; border-radius: 7px; padding: 10px 12px; }
-  .amt.sel { border-color: #1a1a2e; background: #1a1a2e; }
-  .amt .a-lbl { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #9a9a9a; }
-  .amt .a-val { font-size: 17px; font-weight: 700; margin-top: 4px; letter-spacing: -.3px; }
-  .amt.sel .a-lbl { color: rgba(255,255,255,.55); }
-  .amt.sel .a-val { color: #fff; }
+  .lbl { font-size: 14px; color: #333; margin: 20px 0 7px; }
+  .in { width: 100%; padding: 11px 12px; border: 1px solid #ccc; border-radius: 3px;
+        font-size: 14px; color: #333; background: #fff; font-family: inherit; }
+  select.in { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' stroke='%231b4b7d' stroke-width='2' fill='none'/></svg>");
+              background-repeat: no-repeat; background-position: right 13px center; padding-right: 34px; }
+  .half { max-width: 300px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .pct { position: relative; }
+  .pct .sign { position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+               font-size: 14px; color: #777; pointer-events: none; }
+  .pct .in { padding-left: 32px; }
 
-  .warn { background: #fdf2e2; border-radius: 7px; padding: 12px 14px; font-size: 12.5px; color: #7a5518; line-height: 1.7; margin-top: 14px; }
-  .warn b { color: #5e400f; }
-  .foot { padding: 13px 18px; border-top: 1px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 10px; background: #fcfcfc; }
-  .btn { padding: 9px 20px; border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
-  .btn-cancel { background: #fff; border-color: #d5d5d5; color: #1b4b7d; }
+  .chk { display: flex; align-items: center; gap: 12px; margin: 24px 0 4px; }
+  .chk .box { width: 18px; height: 18px; border: 2px solid #f7941d; border-radius: 2px; flex-shrink: 0; }
+  .chk .t { font-size: 14.5px; color: #333; }
+  .chk .i { color: #e53935; font-size: 14px; }
+
+  hr.sep { border: none; border-top: 1px solid #eee; margin: 26px 0 6px; }
+
+  .new-tag { display: inline-block; background: #2e7d55; color: #fff; font-size: 9.5px;
+             font-weight: 700; letter-spacing: .6px; padding: 2px 7px; border-radius: 3px;
+             margin-left: 9px; vertical-align: 3px; }
+
+  .m-foot { padding: 16px 24px; border-top: 1px solid #eee; display: flex;
+            justify-content: flex-end; gap: 12px; }
+  .btn { padding: 11px 30px; border-radius: 4px; font-size: 15px; font-weight: 500;
+         cursor: pointer; border: 1px solid transparent; }
+  .btn-cancel { background: #fff; border-color: #cfd4da; color: #1b4b7d; }
   .btn-save { background: #f7941d; color: #fff; }
-
-  .why { margin-top: 20px; background: #fff; border: 1px solid #e4e4e4; border-radius: 10px; padding: 16px 18px; font-size: 12.5px; line-height: 1.75; color: #555; }
-  .why h4 { font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 8px; }
-  .why b { color: #1a1a2e; }
-  .why ul { margin: 8px 0 0 18px; }
-  .why li { margin-bottom: 6px; }
-  .why .tick { display: inline-block; background: #f4f4f4; border-radius: 3px; padding: 1px 6px; font-size: 11.5px; font-weight: 700; color: #555; }
 </style>
 </head>
 <body>
-<div class="layout">
-  <div class="sidebar">
-    <div class="s-logo">V</div>
-    <div class="s-icon">&#9776;</div><div class="s-icon active">&#128209;</div><div class="s-icon">&#128188;</div>
+
+<div class="modal">
+  <div class="m-head">
+    <h1>Retention Settings</h1>
+    <span class="x">&#10005;</span>
   </div>
 
-  <div class="main">
-    <div class="topbar">
-      <span class="t-title">Retention on the invoice</span>
-      <span class="t-note">VDP-2251 &middot; VDP-2282 &middot; 4 Sep 2026</span>
-    </div>
-    <div class="proj-header">
-      <h2>(24-006) Little Collins Roadworks</h2>
-      <span class="crumb">&rsaquo;&nbsp; Claims &nbsp;&rsaquo;&nbsp; Claim #4 &nbsp;&rsaquo;&nbsp; Submit</span>
-    </div>
+  <div class="m-body">
 
-    <div class="content">
-      <div class="intro">
-        One toggle, at the moment the claim is submitted. <b>Flip it and the invoice redraws.</b>
+    <div class="blk">
+      <div>
+        <h2>Merge Retention</h2>
+        <div class="desc">Combine Retention Settings for contract and variation into single setting</div>
       </div>
+      <div class="enable"><div class="switch"></div><span>Enable</span></div>
+    </div>
 
-      <div class="pair">
-        <!-- ---------- submit ---------- -->
-        <div class="card">
-          <div class="card-head">
-            <div class="c-kind">Submit claim</div>
-            <h3>Claim #4</h3>
-            <div class="c-meta">Period to 31 Aug 2026 &middot; $340,000.00 claimed &middot; $28,000.00 retention withheld</div>
-          </div>
-          <div class="card-body">
-            <div class="tgl-box on" id="tglbox">
-              <div class="tgl-row">
-                <div class="switch on" id="t-deduct"></div>
-                <div>
-                  <div class="tt-name">Deduct retention from the invoice</div>
-                  <div class="tt-sub" id="s-deduct"></div>
-                </div>
-              </div>
-              <div class="amounts">
-                <div class="amt" id="amt-off">
-                  <div class="a-lbl">Not deducted</div>
-                  <div class="a-val">$374,000.00</div>
-                </div>
-                <div class="amt sel" id="amt-on">
-                  <div class="a-lbl">Deducted</div>
-                  <div class="a-val">$346,000.00</div>
-                </div>
-              </div>
-            </div>
-            <div id="warnslot"></div>
-          </div>
-          <div class="foot">
-            <button class="btn btn-cancel">Back</button>
-            <button class="btn btn-save" id="submitbtn">Submit claim</button>
-          </div>
-        </div>
+    <hr class="sep">
 
-        <!-- ---------- invoice ---------- -->
-        <div class="card">
-          <div class="card-head">
-            <div class="c-kind">Invoice the client will receive</div>
-            <h3>INV-1184</h3>
-            <div class="c-meta" id="invmeta"></div>
-          </div>
-          <table class="lines"><tbody id="invlines"></tbody></table>
-        </div>
+    <div class="blk" style="margin-top:20px">
+      <div>
+        <h2>Deduct Retention from Invoice<span class="new-tag">New</span></h2>
+        <div class="desc">Retention withheld on a claim is deducted from the invoice sent to the client</div>
       </div>
+      <div class="enable"><div class="switch on" id="sw-deduct"></div><span>Enable</span></div>
+    </div>
 
-      <div class="why">
-        <h4>Two things worth keeping when this is specced</h4>
-        <ul>
-          <li><b>The label says "deduct", not "include".</b> <span class="tick">Include retention</span> reads both ways
-            &mdash; include the deduction, or include the money in what we bill. Both amounts are shown next to the
-            toggle so the choice cannot be misread either way.</li>
-          <li><b>The answer is stored on the claim, not read back from a setting.</b> Because the choice is made here, at
-            submit, the claim carries it &mdash; so nothing later can change what an invoice already sent says.</li>
-        </ul>
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0">
-          GST is calculated on the full claim of $340,000 in both states &mdash; the supply is the whole claim and
-          retention is money withheld from payment. <b>That is a read, not advice</b>, and wants confirming with an
-          accountant before build. If GST goes on the net instead, the deducted invoice is $343,200 rather than $346,000.
-        </div>
+    <hr class="sep">
+
+    <div class="lbl">Contract Retention Basis</div>
+    <select class="in half"><option>Percent</option></select>
+
+    <div class="grid2">
+      <div>
+        <div class="lbl">Contract Max Retention</div>
+        <div class="pct"><span class="sign">%</span><input class="in" value="5"></div>
+      </div>
+      <div>
+        <div class="lbl">Contract Retention Rate</div>
+        <div class="pct"><span class="sign">%</span><input class="in" value="10"></div>
       </div>
     </div>
+
+    <div class="chk">
+      <div class="box"></div><span class="t">Enable Manual Contract Retention</span><span class="i">&#9432;</span>
+    </div>
+
+    <hr class="sep">
+
+    <div class="lbl">Variation Retention Basis</div>
+    <select class="in half"><option>Percent</option></select>
+
+    <div class="grid2">
+      <div>
+        <div class="lbl">Variation Max Retention</div>
+        <div class="pct"><span class="sign">%</span><input class="in" value="5"></div>
+      </div>
+      <div>
+        <div class="lbl">Variation Retention Rate</div>
+        <div class="pct"><span class="sign">%</span><input class="in" value="10"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="m-foot">
+    <button class="btn btn-cancel">Cancel</button>
+    <button class="btn btn-save">Save</button>
   </div>
 </div>
 
 <script>
-var CLAIM = 340000, RET = 28000, GSTPCT = 10;
-var deduct = true;
-
-function money(n) { return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-
-function render() {
-  var net = CLAIM - (deduct ? RET : 0);
-  var gst = CLAIM * GSTPCT / 100;      /* on the gross claim — see the note on the page */
-  var total = net + gst;
-
-  document.getElementById('s-deduct').innerHTML = deduct
-    ? 'The client is invoiced <b>' + money(total) + '</b> &mdash; the claim less the ' + money(RET) +
-      ' held this period. This matches what the claim says is owed.'
-    : 'The client is invoiced the full <b>' + money(total) + '</b>. Retention still accrues on the claim and still ' +
-      'releases on its milestones &mdash; it is just not taken off what you ask for.';
-
-  document.getElementById('tglbox').className = 'tgl-box' + (deduct ? ' on' : '');
-  document.getElementById('amt-on').className = 'amt' + (deduct ? ' sel' : '');
-  document.getElementById('amt-off').className = 'amt' + (deduct ? '' : ' sel');
-
-  document.getElementById('warnslot').innerHTML = deduct ? '' :
-    '<div class="warn"><b>Only correct where the contract says the client withholds retention at their end.</b> ' +
-    'Otherwise the invoice asks for ' + money(RET) + ' more than this claim says is owed.</div>';
-
-  document.getElementById('invmeta').innerHTML = 'Raised from Claim #4 &middot; ' +
-    (deduct ? 'retention shown as its own line' : 'billed gross &mdash; no retention line');
-
-  document.getElementById('invlines').innerHTML =
-    '<tr><td class="lbl">Work completed this period</td><td class="r">' + money(CLAIM) + '</td></tr>' +
-    (deduct
-      ? '<tr class="cut"><td class="lbl">Less retention withheld<small>Held under the contract, released at PC and end of defects</small></td><td class="r">&minus; ' + money(RET) + '</td></tr>'
-      : '<tr class="off"><td class="lbl">Less retention withheld<small>Not deducted on this claim</small></td><td class="r">&mdash;</td></tr>') +
-    '<tr class="sub"><td class="lbl">Subtotal</td><td class="r">' + money(net) + '</td></tr>' +
-    '<tr><td class="lbl">GST at ' + GSTPCT + '%<small>On the full claim of ' + money(CLAIM) + '</small></td><td class="r">+ ' + money(gst) + '</td></tr>' +
-    '<tr class="tot"><td>Amount due<small>' + (deduct ? 'Matches the claim' : 'Client withholds the retention themselves') +
-      '</small></td><td class="r">' + money(total) + '</td></tr>';
-
-  document.getElementById('submitbtn').textContent = 'Submit and invoice ' + money(total);
-}
-
-document.getElementById('t-deduct').addEventListener('click', function () {
-  deduct = !deduct; this.classList.toggle('on', deduct); render();
+document.querySelectorAll('.switch').forEach(function (s) {
+  s.addEventListener('click', function () { this.classList.toggle('on'); });
 });
-
-render();
 </script>
 </body>
 </html>
