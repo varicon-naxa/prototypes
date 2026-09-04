@@ -399,6 +399,15 @@ def build_site_diary():
         raise SystemExit("FAIL: labour name cell not found")
     js = js.replace(old_name, "+r.who+typeChip+abnChip+dktChip(r)+", 1)
 
+    # ── one allocation method, decided by the project ───────────────────
+    # The diary's toggle previews a structure, so it has to actually change the
+    # project's structure. Setting only its own MODE left the labels and the
+    # data disagreeing.
+    old_mode = "function setMode(m){\n  MODE=m;"
+    if old_mode not in js:
+        raise SystemExit("FAIL: setMode not found")
+    js = js.replace(old_mode, "function setMode(m){\n  MODE=m;" + MODE_SYNC, 1)
+
     # The diary's plant table becomes the day's roster: every machine on the
     # project, who is on it, and whether it is working, stood down or off site.
     old_head = ('<th>Operated by</th><th>Hours</th><th>Hire rate</th><th>Cost</th>')
@@ -616,6 +625,28 @@ STAND_DOWN_HTML = """
   </div>
 </div>
 """
+
+# Changing the allocation method changes what an allocation IS, so the rows are
+# rebuilt from the data layer rather than relabelled. The base's own chrome is
+# kept in step so the budget page does not contradict the diary, but its view is
+# only switched if the current one is not valid for the new structure — the
+# toggle is in the diary, and it should not move the page out from under anyone.
+MODE_SYNC = (
+    "\n  var want=(m==='wbs')?'wbs':'cc';"
+    "\n  if(typeof projectType!=='undefined'&&VDATA.structure()!==want){"
+    "\n    projectType=want;"
+    "\n    try{"
+    "\n      var cfg=PROJECT_TYPES[projectType];"
+    "\n      document.querySelectorAll('#projectTypeToggle span').forEach(function(s){"
+    "\n        s.classList.toggle('active',s.dataset.ptype===projectType);});"
+    "\n      var nt=document.getElementById('projectTypeNote');"
+    "\n      if(nt)nt.textContent=cfg.note;"
+    "\n      applyStructureChrome();"
+    "\n      if(cfg.views.indexOf(currentView)<0)switchView(cfg.defaultView);"
+    "\n    }catch(e){}"
+    "\n    rows=vdataDiaryRows();"
+    "\n  }"
+)
 
 PLANT_ROW = (
     "var st=r.status||'working';"
@@ -839,7 +870,10 @@ function sdSyncData() {
   rows          = vdataDiaryRows();
   var lbl = document.getElementById('sdDiaryDate');
   if (lbl) lbl.textContent = vdataDiaryDateLabel();
-  setMode(MODE);
+  /* The project's structure decides the allocation method, not a switch the
+     diary keeps to itself — otherwise the header can say WBS while the chips
+     say cost centre, which is what it did. */
+  setMode(VDATA.structure());
   _sdVersion = VDATA.version();
 }
 function sdSyncIfStale() { if (_sdVersion !== VDATA.version()) sdSyncData(); }
