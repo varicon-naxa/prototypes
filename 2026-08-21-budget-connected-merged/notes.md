@@ -621,6 +621,25 @@ resolved to the **base's** formatter, which knows nothing about who may see rate
 its own masking formatter now. Verified: $392 in full view, masked in supervisor view, zero
 figures anywhere on the page, and the panel is fully usable without them.
 
+## One allocation method, decided by the project — 2026-09-04
+
+The plant table's header read **Allocation (WBS)** while every chip under it read
+**CC-100 Overheads / Prelims**. Two things were deciding the same question: the diary kept
+its own `MODE`, defaulting to WBS, and the base's `projectType` defaulted to cost centre.
+The header and the chip renderer followed `MODE`; what an allocation actually *was* followed
+`projectType`. They had never agreed.
+
+The project decides. `sdSyncData` now takes the method from `VDATA.structure()` instead of
+re-applying whatever the diary already had, and the diary's toggle sets the project's
+structure rather than shadowing it — so switching it rebuilds the rows from the data layer
+rather than relabelling them, and the base's own chrome moves with it. Its view is only
+switched if the current one is invalid for the new structure; a toggle in the diary should
+not move the budget page out from under anyone.
+
+Verified in all three positions: on load, and after each toggle, `MODE`, `projectType`,
+`VDATA.structure()`, the banner, the column header and the chips all agree — and no row
+falls back to a cost centre under a WBS header.
+
 ## Verified
 
 Computed styles, visible-text length and element counts on both guest tabs were

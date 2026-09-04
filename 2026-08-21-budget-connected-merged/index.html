@@ -14883,6 +14883,20 @@ var DKT_SEQ=6; // next docket number = DKT-000(7)
 /* ---------------- MODE ---------------- */
 function setMode(m){
   MODE=m;
+  var want=(m==='wbs')?'wbs':'cc';
+  if(typeof projectType!=='undefined'&&VDATA.structure()!==want){
+    projectType=want;
+    try{
+      var cfg=PROJECT_TYPES[projectType];
+      document.querySelectorAll('#projectTypeToggle span').forEach(function(s){
+        s.classList.toggle('active',s.dataset.ptype===projectType);});
+      var nt=document.getElementById('projectTypeNote');
+      if(nt)nt.textContent=cfg.note;
+      applyStructureChrome();
+      if(cfg.views.indexOf(currentView)<0)switchView(cfg.defaultView);
+    }catch(e){}
+    rows=vdataDiaryRows();
+  }
   document.getElementById('btnWbs').classList.toggle('on',m==='wbs');
   document.getElementById('btnCc').classList.toggle('on',m==='cc');
   var pill=document.getElementById('modePill');
@@ -15558,7 +15572,10 @@ function sdSyncData() {
   rows          = vdataDiaryRows();
   var lbl = document.getElementById('sdDiaryDate');
   if (lbl) lbl.textContent = vdataDiaryDateLabel();
-  setMode(MODE);
+  /* The project's structure decides the allocation method, not a switch the
+     diary keeps to itself — otherwise the header can say WBS while the chips
+     say cost centre, which is what it did. */
+  setMode(VDATA.structure());
   _sdVersion = VDATA.version();
 }
 function sdSyncIfStale() { if (_sdVersion !== VDATA.version()) sdSyncData(); }
