@@ -839,6 +839,8 @@ var VDATA = (function () {
     var rate = chargeRate(e);
 
     if (stoodDown && e.standDown) {
+      /* the share the day was recorded at, falling back to the register's */
+      var pct = (stoodDown && stoodDown.pct) || e.standDownPct || 0;
       /* Stand-down is a fact about a DAY — the machine sat on site and did not
          work — so it is a share of the day rate whatever basis the job is
          charged on. Taking a percentage of the hourly rate would price a
@@ -846,10 +848,10 @@ var VDATA = (function () {
       var dayRate = e.owned
         ? (e.unit === 'hr' ? e.rate * 8 : e.unit === 'day' ? e.rate : e.rate / 5)
         : hireDayRate(e.hireRate, e.hirePeriod);
-      var sd = dayRate * ((e.standDownPct || 0) / 100);
+      var sd = dayRate * (pct / 100);
       return { amount: Math.round(sd), rule: 'stand-down',
-               note: (e.standDownPct || 0) + '% of the ' + Math.round(dayRate) +
-                     ' day rate — on site, not worked' };
+               note: pct + '% of the ' + Math.round(dayRate) +
+                     ' day rate \u2014 on site, not worked' };
     }
     if (basis === 'day') {
       /* a day is a day: any work at all takes the day rate */
@@ -873,8 +875,49 @@ var VDATA = (function () {
   var _stoodDown = {};
   function standDownKey(iso, id) { return iso + '|' + id; }
   function isStoodDown(iso, id) { return !!_stoodDown[standDownKey(iso, id)]; }
-  function setStoodDown(iso, id, on) {
-    if (on) _stoodDown[standDownKey(iso, id)] = 1;
+  function standDownOf(iso, id) { return _stoodDown[standDownKey(iso, id)] || null; }
+
+  /* Why a machine sat. Kept as a fixed list because a stand-down reason is
+     what gets argued about later — a rained-off day is claimable against the
+     client on most contracts, a breakdown is the hire company's problem, and
+     "no work available" is the job's own. Free text cannot be counted. */
+  var STAND_DOWN_REASONS = [
+    { k: 'weather',   l: 'Weather',            hint: 'Rained off — usually claimable' },
+    { k: 'breakdown', l: 'Breakdown',          hint: 'Machine unserviceable' },
+    { k: 'nowork',    l: 'No work available',  hint: 'Nothing for it to do' },
+    { k: 'access',    l: 'Access blocked',     hint: 'Could not get to the work' }
+  ];
+
+  /* How much of the day is charged. The register holds the default; a
+     particular day can be less. */
+  function standDownBases(e) {
+    var pct = e && e.standDownPct ? e.standDownPct : 50;
+    var out = [{ k: 'full', l: 'Full day', pct: 100 },
+               { k: 'half', l: 'Half day', pct: 50 }];
+    if (!out.some(function (o) { return o.pct === pct; })) {
+      out.push({ k: 'set', l: 'As registered', pct: pct });
+    }
+    out.push({ k: 'min', l: 'Minimum only', pct: 25 });
+    return out;
+  }
+
+  /* Where the machine last worked, up to and including this day. A stand-down
+     nearly always belongs to whatever it was doing before it stopped, so that
+     is what the form opens on — visible and correctable, not resolved on save. */
+  function lastWorkedCc(iso, id) {
+    var l = ledger(), found = null;
+    l.days.forEach(function (d) {
+      if (d > iso) return;
+      (l.byDate[d] || []).forEach(function (r) {
+        if (r.uncoded || !r.detail || r.detail.kind !== 'plant') return;
+        if ((r.detail.plant.id || r.detail.plant.no) === id) found = r.cc;
+      });
+    });
+    return found;
+  }
+
+  function setStoodDown(iso, id, rec) {
+    if (rec) _stoodDown[standDownKey(iso, id)] = rec;
     else delete _stoodDown[standDownKey(iso, id)];
   }
 
@@ -894,11 +937,11 @@ var VDATA = (function () {
 
     return equipment().map(function (e) {
       var b = booked[e.id];
-      var down = isStoodDown(iso, e.id);
+      var down = standDownOf(iso, e.id);
       var charge = null;
       if (!b && down) {
         /* priced by the register's own rule, so the two cannot disagree */
-        charge = dayCharge(e, 0, true);
+        charge = dayCharge(e, 0, down);
       }
       return {
         eqId: e.id, nm: e.name, no: e.id, sup: e.owned ? e.company : e.company,
@@ -912,9 +955,15 @@ var VDATA = (function () {
         by: b ? b.by.join(', ') : '',
         hrsDec: b ? Math.round(b.hrs * 10) / 10 : 0,
         cost: b ? b.cost : (charge ? charge.amount : 0),
-        cc: b ? b.cc : '',
+        /* A stand-down is charged to what it was recorded against. Unallocated
+           is a state of its own — the day is still recorded, and flagged. */
+        cc: b ? b.cc : (down ? (down.cc || '') : ''),
         status: b ? 'working' : (down ? 'standdown' : 'offsite'),
         standDownSet: !!e.standDown,
+        standDown: down,
+        standDownReason: down ? down.reasonLabel : '',
+        standDownAlloc: down ? down.allocLabel : '',
+        unallocated: !!(down && !down.cc),
         standDownNote: charge ? charge.note : ''
       };
     });
@@ -1357,7 +1406,9 @@ var VDATA = (function () {
     materialTracker: materialTracker, miscTracker: miscTracker,
     trackerLine: trackerLine,
     plantRoster: plantRoster, isStoodDown: isStoodDown,
-    setStoodDown: setStoodDown,
+    setStoodDown: setStoodDown, standDownOf: standDownOf,
+    standDownReasons: STAND_DOWN_REASONS, standDownBases: standDownBases,
+    lastWorkedCc: lastWorkedCc,
     purchaseOrders: purchaseOrders, plantPurchaseOrders: plantPurchaseOrders,
     chargeRate: chargeRate, dayCharge: dayCharge,
     hireDayRate: hireDayRate, hireHourRate: hireHourRate,
@@ -1462,7 +1513,9 @@ function vdataDiaryRows() {
       eqId: p.eqId, nm: p.nm, no: p.no, sup: p.sup, rate: p.rate,
       by: p.by, hrs: hrs, cost: p.cost, status: p.status,
       standDownSet: p.standDownSet, standDownNote: p.standDownNote,
-      alloc: p.cc ? VDATA.allocFor(p.cc, d + 'p' + i, i) : []
+      alloc: p.cc ? VDATA.allocFor(p.cc, d + 'p' + i, i) : [],
+      standDownReason: p.standDownReason, standDownAlloc: p.standDownAlloc,
+      unallocated: p.unallocated
     };
   });
 
@@ -1490,6 +1543,10 @@ function sdSetRatesView(on) {
   var dr = document.getElementById('buDrawer');
   if (dr && dr.classList.contains('show') && BU_OPEN) sdOpenBuildUp(BU_OPEN);
   else if (dr) { document.getElementById('buBody').innerHTML = ''; BU_OPEN = null; }
+
+  var sdn = document.getElementById('sdnDrawer');
+  if (sdn && sdn.classList.contains('show') && SDOWN.eq) sdRenderStandDown();
+  else if (sdn) document.getElementById('sdnBody').innerHTML = '';
   rows.plant = vdataDiaryRows().plant;
   renderAll();
 }
@@ -1590,11 +1647,155 @@ function sdCloseBuildUp() {
   BU_OPEN = null;
 }
 
-/* Marking a machine stood down for the day. Named sd* so it sits with the
-   diary's own functions, which the merge prefixes that way. */
-function sdToggleStandDown(eqId) {
-  var d = VDATA.diaryDate();
-  VDATA.setStoodDown(d, eqId, !VDATA.isStoodDown(d, eqId));
+/* ── standing a machine down ─────────────────────────────────────────────
+   One panel, because there are only three things to say. It opens with the
+   allocation already filled in from where the machine last worked — the
+   answer nearly every time — so the common case is read it and confirm.
+
+   Nothing here blocks. If the allocation is cleared the stand-down is still
+   recorded and carries an "unallocated" flag, the same way an uncoded bill
+   does: the day happened whether or not anyone knows yet what it belongs to,
+   and losing the fact is worse than holding it with a flag on it. */
+var SDOWN = { eq: null, reason: 'weather', basis: null, cc: null, q: '' };
+
+function sdOpenStandDown(eqId) {
+  var iso = VDATA.diaryDate();
+  var e = VDATA.equipment().filter(function (x) { return x.id === eqId; })[0];
+  if (!e) return;
+  var existing = VDATA.standDownOf(iso, eqId);
+  var bases = VDATA.standDownBases(e);
+  SDOWN = {
+    eq: e,
+    reason: existing ? existing.reason : 'weather',
+    basis: existing ? existing.basis
+                    : (bases.filter(function (b) { return b.pct === e.standDownPct; })[0]
+                       || bases[1]).k,
+    /* pre-filled, and visible — not resolved after the panel closes */
+    cc: existing ? existing.cc : VDATA.lastWorkedCc(iso, eqId),
+    q: ''
+  };
+  sdRenderStandDown();
+  document.getElementById('sdnScrim').classList.add('show');
+  document.getElementById('sdnDrawer').classList.add('show');
+}
+
+function sdCloseStandDown() {
+  document.getElementById('sdnScrim').classList.remove('show');
+  document.getElementById('sdnDrawer').classList.remove('show');
+  document.getElementById('sdnBody').innerHTML = '';
+}
+
+function sdnMoney(v) {
+  if (typeof SDVIEW !== 'undefined' && !SDVIEW.rates) return sdMasked();
+  return '$' + Math.round(v || 0).toLocaleString('en-AU');
+}
+
+function sdnSet(field, value) { SDOWN[field] = value; sdRenderStandDown(); }
+function sdnSearch(v) { SDOWN.q = v; sdRenderStandDown(true); }
+
+function sdnCharge() {
+  var e = SDOWN.eq;
+  if (!e || !e.standDown) return null;
+  var b = VDATA.standDownBases(e).filter(function (x) { return x.k === SDOWN.basis; })[0];
+  return VDATA.dayCharge(e, 0, { pct: b ? b.pct : 0 });
+}
+
+function sdRenderStandDown(keepFocus) {
+  var e = SDOWN.eq;
+  if (!e) return;
+  var targets = VDATA.allocTargets();
+  var word = VDATA.structureLabel();
+  var q = (SDOWN.q || '').toLowerCase();
+  var shown = q
+    ? targets.filter(function (t) {
+        return (t.label + ' ' + (t.sub || '')).toLowerCase().indexOf(q) >= 0;
+      })
+    : targets;
+  var charge = sdnCharge();
+  var chosen = targets.filter(function (t) { return t.cc === SDOWN.cc; })[0];
+
+  document.getElementById('sdnTitle').textContent = 'Stand down ' + e.name;
+  document.getElementById('sdnSub').textContent =
+    e.id + ' \u00b7 ' + e.company + ' \u00b7 ' + vdataDiaryDateLabel();
+
+  document.getElementById('sdnBody').innerHTML =
+    '<p class="sdn-sec">Why did it not work?</p>' +
+    '<div class="sdn-chips">' +
+      VDATA.standDownReasons.map(function (r) {
+        return '<span class="sdn-chip' + (SDOWN.reason === r.k ? ' on' : '') +
+          '" onclick="sdnSet(\'reason\',\'' + r.k + '\')" title="' + r.hint + '">' +
+          r.l + '</span>';
+      }).join('') +
+    '</div>' +
+
+    '<p class="sdn-sec">How much of the day is charged?</p>' +
+    (e.standDown
+      ? '<div class="sdn-chips">' +
+          VDATA.standDownBases(e).map(function (b) {
+            return '<span class="sdn-chip' + (SDOWN.basis === b.k ? ' on' : '') +
+              '" onclick="sdnSet(\'basis\',\'' + b.k + '\')">' + b.l +
+              ' <em>' + b.pct + '%</em></span>';
+          }).join('') +
+        '</div>' +
+        '<div class="sdn-cost"><span>Charged for the day</span>' +
+          '<b>' + sdnMoney(charge ? charge.amount : 0) + '</b>' +
+          '<em>' + (charge && SDVIEW.rates ? charge.note : '') + '</em></div>'
+      : '<div class="sdn-warn">No stand-down rate is set for this machine in the ' +
+        'register, so the day records at nothing. Set one against ' + e.id +
+        ' to charge it.</div>') +
+
+    '<p class="sdn-sec">What is it charged to? <span class="sdn-req">' + word +
+      '</span></p>' +
+    '<div class="sdn-pick">' +
+      '<input id="sdnSearch" class="sdn-search" placeholder="Search ' +
+        word.toLowerCase() + '" value="' + (SDOWN.q || '').replace(/"/g, '&quot;') +
+        '" oninput="sdnSearch(this.value)">' +
+      '<div class="sdn-list">' +
+        (shown.length
+          ? shown.map(function (t) {
+              return '<div class="sdn-opt' + (t.cc === SDOWN.cc ? ' on' : '') +
+                '" onclick="sdnSet(\'cc\',\'' + t.cc.replace(/'/g, "\\'") + '\')">' +
+                '<b>' + t.label + '</b>' +
+                (t.sub ? '<em>' + t.sub + '</em>' : '') + '</div>';
+            }).join('')
+          : '<div class="sdn-none">Nothing matches \u201c' + SDOWN.q + '\u201d.</div>') +
+      '</div>' +
+    '</div>' +
+    (SDOWN.cc
+      ? '<div class="sdn-chosen">Charging to <b>' +
+          (chosen ? chosen.label : SDOWN.cc) + '</b>' +
+          '<span class="sdn-clear" onclick="sdnSet(\'cc\',null)">Clear</span></div>'
+      : '<div class="sdn-warn">Nothing chosen. The stand-down will be recorded ' +
+        'and flagged <b>unallocated</b> \u2014 the day is not lost, but the cost ' +
+        'has nowhere to sit until someone says where.</div>');
+
+  if (keepFocus) {
+    var el = document.getElementById('sdnSearch');
+    if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  }
+}
+
+function sdConfirmStandDown() {
+  var e = SDOWN.eq;
+  if (!e) return;
+  var iso = VDATA.diaryDate();
+  var b = VDATA.standDownBases(e).filter(function (x) { return x.k === SDOWN.basis; })[0];
+  var r = VDATA.standDownReasons.filter(function (x) { return x.k === SDOWN.reason; })[0];
+  var t = VDATA.allocTargets().filter(function (x) { return x.cc === SDOWN.cc; })[0];
+  VDATA.setStoodDown(iso, e.id, {
+    reason: SDOWN.reason, reasonLabel: r ? r.l : SDOWN.reason,
+    basis: SDOWN.basis, pct: b ? b.pct : 0,
+    cc: SDOWN.cc || null, allocLabel: t ? t.label : ''
+  });
+  sdCloseStandDown();
+  rows.plant = vdataDiaryRows().plant;
+  renderPlant();
+  toast(e.name + ' stood down' + (SDOWN.cc ? '' : ' \u2014 unallocated'));
+}
+
+/* Putting a machine back to work clears the record with it. */
+function sdClearStandDown(eqId) {
+  VDATA.setStoodDown(VDATA.diaryDate(), eqId, null);
   rows.plant = vdataDiaryRows().plant;
   renderPlant();
 }

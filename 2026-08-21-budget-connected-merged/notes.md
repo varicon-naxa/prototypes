@@ -580,6 +580,47 @@ the old view's figures — off-screen, but in the DOM. It now re-renders if the 
 while open, and empties when closed. The caveat in the supervisor-view note above is gone:
 after opening all 34 orders and switching view, **zero** money figures anywhere.
 
+## Standing a machine down is a cost, so it lands somewhere — 2026-09-04
+
+The toggle was a bare boolean. The machine went to "stood down", the register priced the
+day, and the cost sat there with **no cost centre against it** — the one thing the budget
+exists to prevent.
+
+It is now a short flow, one panel rather than a wizard, asking the three things a
+stand-down actually needs:
+
+- **Why** — weather, breakdown, no work available, access blocked. A fixed list, because
+  the reason is what gets argued over later: a rained-off day is claimable against the
+  client on most contracts, a breakdown is the hire company's problem, and "no work
+  available" is the job's own. Free text cannot be counted.
+- **How much of the day** — full, half, minimum, defaulting to the machine's registered
+  stand-down rate. The charge updates as you choose: half day $392, full day $784.
+- **What it is charged to** — searchable, and in the project's own terms. A cost-centre
+  project gets cost centres; a WBS project gets tasks. Both flows come from `allocTargets()`
+  and needed no new code.
+
+Two rules from [[a-blank-field-should-not-carry-a-decision]]:
+
+**The allocation is computed into the visible field, not resolved on save.** It opens
+pre-filled with where the machine last worked — nearly always the answer — so the common
+case is read it and confirm. A blank box would otherwise mean both "overheads" and "nobody
+has said yet".
+
+**Nothing blocks.** Clear the allocation and the stand-down is still recorded, flagged
+**unallocated**, with an *Allocate* control in the row — the same shape as an uncoded bill.
+The day happened whether or not anyone knows yet what it belongs to, and losing the fact
+because a field was empty is worse than holding it with a flag on it.
+
+**One limit worth stating:** the stand-down is recorded and priced, but it does not post
+into the ledger. The ledger is derived from the budget, so injecting cost would break the
+$0 tie the whole prototype rests on. In production this posts to the allocated cost centre
+as tracked cost.
+
+Masking caught a real bug: this panel lives in `shared-data.js`, so a bare `money()` here
+resolved to the **base's** formatter, which knows nothing about who may see rates. It has
+its own masking formatter now. Verified: $392 in full view, masked in supervisor view, zero
+figures anywhere on the page, and the panel is fully usable without them.
+
 ## Verified
 
 Computed styles, visible-text length and element counts on both guest tabs were

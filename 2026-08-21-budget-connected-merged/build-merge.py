@@ -294,6 +294,10 @@ def build_site_diary():
         raise SystemExit("FAIL: diary header anchor not found")
     html = html.replace(old_help, VIEW_TOGGLE + '<span class="need-help">', 1)
 
+    # The stand-down panel lives beside the build-up panel, at the end of the
+    # diary page so it is fixed to the page rather than to a table.
+    html = html.rstrip() + STAND_DOWN_HTML
+
     # ── the delivery tracker ────────────────────────────────────────────
     # Description first: it is what someone scans the list for. Source is the
     # order, and only ever a PO or a Bill — a docket is one delivery against an
@@ -596,14 +600,35 @@ ABN_CHIP = (
     "+r.po+'</span>':'')+'</span>':'';"
 )
 
+STAND_DOWN_HTML = """
+<div class="bu-scrim" id="sdnScrim" onclick="sdCloseStandDown()"></div>
+<div class="bu-drawer sdn-drawer" id="sdnDrawer">
+  <div class="bu-head">
+    <h2 id="sdnTitle">Stand down</h2>
+    <p id="sdnSub"></p>
+    <button class="bu-close" onclick="sdCloseStandDown()">
+      <i class="fa-solid fa-xmark"></i></button>
+  </div>
+  <div class="bu-body" id="sdnBody"></div>
+  <div class="sdn-foot">
+    <button class="sdn-cancel" onclick="sdCloseStandDown()">Cancel</button>
+    <button class="sdn-ok" onclick="sdConfirmStandDown()">Record stand-down</button>
+  </div>
+</div>
+"""
+
 PLANT_ROW = (
     "var st=r.status||'working';"
     "var stLabel=st==='working'?'Working':st==='standdown'?'Stood down':'Not on site';"
     "var stClass=st==='working'?'pl-working':st==='standdown'?'pl-down':'pl-off';"
     "var canToggle=st!=='working';"
     "var statusCell='<span class=\"pl-chip '+stClass+'\"'+"
-    "  (canToggle?' onclick=\"sdToggleStandDown(\\''+r.eqId+'\\')\" title=\"Mark stood down\"':'')+"
-    "  '>'+stLabel+'</span>';"
+    "  (canToggle?' onclick=\"sdOpenStandDown(\\''+r.eqId+'\\')\" title=\"'"
+    "    +(st==='standdown'?'Edit this stand-down':'Stand this machine down')+'\"':'')+"
+    "  '>'+stLabel+'</span>'+"
+    "  (st==='standdown'?'<span class=\"pl-why\">'+(r.standDownReason||'')+"
+    "    (r.unallocated?'<span class=\"pl-unalloc\" title=\"Recorded, but nothing "
+    "to charge it to yet\">unallocated</span>':'')+'</span>':'');"
     "var hrsCell=r.hrs?r.hrs:'<span style=\"color:var(--border)\">—</span>';"
     "var byCell=r.by?r.by:'<span style=\"color:var(--border)\">—</span>';"
     "var cCell=st==='working'?costCell"
@@ -616,11 +641,69 @@ PLANT_ROW = (
     "<td><span style=\"font-family:monospace;font-size:12px;color:var(--muted)\">'+r.no+'</span></td>"
     "<td>'+r.sup+'</td><td>'+byCell+'</td><td>'+statusCell+'</td>"
     "<td class=\"hrs\">'+hrsCell+'</td><td>'+rateCell+'</td><td>'+cCell+'</td>"
-    "<td>'+allocChips(r.alloc)+'</td>"
+    "<td>'+(st==='standdown'&&r.unallocated"
+    "  ?'<span class=\"pl-unalloc-cell\" onclick=\"sdOpenStandDown(\\''+r.eqId+'\\')\">"
+    "Allocate</span>'"
+    "  :allocChips(r.alloc))+'</td>"
     "<td><span class=\"row-act\"><i class=\"fa-solid fa-pen\"></i></span></td></tr>';"
 )
 
 SD_PALETTE = """
+/* ═══ standing a machine down ═══ */
+#pageSiteDiary .pl-why{display:block;font-size:11px;color:#94a3b8;margin-top:3px}
+#pageSiteDiary .pl-unalloc{display:inline-block;margin-left:6px;padding:0 6px;
+  border-radius:8px;background:#fef3c7;color:#b45309;font-size:10px;font-weight:700}
+#pageSiteDiary .pl-unalloc-cell{display:inline-block;padding:3px 10px;border-radius:6px;
+  border:1px dashed #f5a623;color:#b45309;font-size:12px;font-weight:600;cursor:pointer}
+#pageSiteDiary .pl-unalloc-cell:hover{background:#fffbf3}
+.sdn-drawer{width:520px}
+#pageSiteDiary .sdn-sec{font-size:11px;font-weight:700;letter-spacing:.4px;
+  text-transform:uppercase;color:#64748b;margin:0 0 10px}
+#pageSiteDiary .sdn-sec:not(:first-child){margin-top:22px}
+#pageSiteDiary .sdn-req{color:#b45309;text-transform:none;letter-spacing:0;
+  font-size:11px}
+#pageSiteDiary .sdn-chips{display:flex;flex-wrap:wrap;gap:8px}
+#pageSiteDiary .sdn-chip{padding:8px 14px;border:1px solid #e2e8f0;border-radius:8px;
+  background:#fff;font-size:13px;color:#475569;cursor:pointer;user-select:none}
+#pageSiteDiary .sdn-chip:hover{border-color:#cbd5e1;background:#f8fafc}
+#pageSiteDiary .sdn-chip.on{border-color:#f5a623;background:#fffbf3;color:#1b2a4a;
+  font-weight:600}
+#pageSiteDiary .sdn-chip em{font-style:normal;color:#94a3b8;font-size:11px;
+  margin-left:4px}
+#pageSiteDiary .sdn-cost{display:flex;align-items:baseline;gap:10px;margin-top:14px;
+  padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px}
+#pageSiteDiary .sdn-cost span{font-size:12px;color:#64748b}
+#pageSiteDiary .sdn-cost b{font-size:18px;color:#b45309}
+#pageSiteDiary .sdn-cost em{font-style:normal;font-size:11px;color:#94a3b8;
+  margin-left:auto;text-align:right}
+#pageSiteDiary .sdn-warn{margin-top:12px;padding:11px 14px;font-size:12px;color:#92400e;
+  background:#fffbeb;border-left:3px solid #f5a623;border-radius:0 6px 6px 0}
+#pageSiteDiary .sdn-search{width:100%;padding:9px 12px;border:1px solid #e2e8f0;
+  border-radius:6px;font-family:inherit;font-size:13px;color:#1b2a4a}
+#pageSiteDiary .sdn-search:focus{outline:none;border-color:#f5a623}
+#pageSiteDiary .sdn-list{max-height:210px;overflow-y:auto;border:1px solid #e2e8f0;
+  border-top:none;border-radius:0 0 6px 6px}
+#pageSiteDiary .sdn-opt{padding:9px 13px;border-bottom:1px solid #f1f5f9;cursor:pointer;
+  font-size:13px}
+#pageSiteDiary .sdn-opt:last-child{border-bottom:none}
+#pageSiteDiary .sdn-opt:hover{background:#f8fafc}
+#pageSiteDiary .sdn-opt.on{background:#fffbf3;box-shadow:inset 3px 0 0 #f5a623}
+#pageSiteDiary .sdn-opt b{display:block;font-weight:600;color:#1b2a4a}
+#pageSiteDiary .sdn-opt em{font-style:normal;font-size:11px;color:#94a3b8}
+#pageSiteDiary .sdn-none{padding:16px;text-align:center;color:#94a3b8;font-size:13px}
+#pageSiteDiary .sdn-chosen{display:flex;align-items:center;gap:10px;margin-top:12px;
+  padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;
+  font-size:13px;color:#166534}
+#pageSiteDiary .sdn-clear{margin-left:auto;color:#64748b;font-size:12px;cursor:pointer;
+  text-decoration:underline}
+#pageSiteDiary .sdn-foot{display:flex;gap:10px;justify-content:flex-end;padding:14px 24px;
+  border-top:1px solid #e2e8f0;background:#fff}
+#pageSiteDiary .sdn-cancel,#pageSiteDiary .sdn-ok{padding:9px 18px;border-radius:6px;
+  font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;border:1px solid #e2e8f0}
+#pageSiteDiary .sdn-cancel{background:#fff;color:#64748b}
+#pageSiteDiary .sdn-ok{background:#f5a623;border-color:#f5a623;color:#1b2a4a}
+#pageSiteDiary .sdn-ok:hover{background:#e69612}
+
 /* ═══ how someone is engaged ═══ */
 #pageSiteDiary .abn-chip{display:inline-flex;align-items:center;gap:6px;margin-left:7px;
   padding:1px 8px;border-radius:10px;background:#ede9fe;color:#6d28d9;font-size:10px;
