@@ -1,65 +1,38 @@
 # Retention on the invoice
 
-**Built** 4 Sep 2026. Scoped deliberately to **one fix** — whether retention is deducted from
-the invoice Varicon sends. The wider Retention Settings rebuild (units, dollar resolution,
-release terms, stepped bands, security in lieu) is a separate piece of work.
+**Built** 4 Sep 2026. One toggle, at the moment the claim is submitted: is retention deducted
+from the invoice, or is the client invoiced the gross?
 
-## The defect — VDP-2251
+Not a settings screen. The choice is made per claim, at submit, and both resulting amounts are
+shown next to the toggle so it redraws the invoice live.
 
-A claim that withholds retention produces two documents that disagree about how much money is
-owed. The claim deducts the retention; the invoice does not.
+## The toggle
 
-| | Claim #4 | INV-1184 |
-|---|---|---|
-| Work completed | $340,000 | $340,000 |
-| Less retention withheld | −$28,000 | *line not written* |
-| GST at 10% | +$34,000 | +$34,000 |
-| **Total** | **$346,000** | **$374,000** |
+**Deduct retention from the invoice** — default on.
 
-The invoice asks for **exactly the retention** more than the claim certifies. Not a rounding
-error or a rate mismatch — the deduction line is never written, so retention accrues on the
-claim *and* stays in the amount billed.
+- **On** — the client is invoiced $346,000: the $340,000 claim less the $28,000 held this
+  period, plus GST. Matches what the claim says is owed.
+- **Off** — the client is invoiced the full $374,000. Retention still accrues on the claim and
+  still releases on its milestones; it is just not taken off what you ask for. Warned inline,
+  because this is only correct where the contract says the client withholds retention at their
+  end (otherwise it is VDP-2251 on purpose).
 
-It fails in the direction noticed by the person paying rather than the person sending, so every
-occurrence is a client of our client querying an invoice.
+## Two things worth keeping when this is specced
 
-Three things mask it: the claim screen is correct, so nobody opens the invoice; the invoice is
-arithmetically consistent with itself, so Xero flags nothing; and it only bites on
-retention-bearing contracts.
+- **The label says "deduct", not "include".** *Include retention* reads both ways — include the
+  deduction, or include the money in what we bill. Both amounts sit next to the toggle so the
+  choice cannot be misread either way.
+- **The answer is stored on the claim, not read back from a setting.** Because the choice is made
+  at submit, the claim carries it, so nothing later can change what an invoice already sent says.
+  A settings-level default could sit behind this and pre-set the toggle, but the claim still has
+  to record the answer it was submitted under.
 
-## The fix — VDP-2282
+## One dependency
 
-Write the deduction line. Then make it a setting, because a minority of contracts genuinely bill
-gross (the client withholds retention at their end). **Default on.**
+GST is calculated on the full claim of $340,000 in both states — the supply is the whole claim
+and retention is money withheld from payment. **A read, not advice**; wants confirming with an
+accountant before build. If GST goes on the net instead, the deducted invoice is $343,200 rather
+than $346,000.
 
-**The position is stamped on the claim, not read from settings.** This is the part that is easy
-to get wrong: if the invoice renders by reading the current setting, flipping the toggle next
-month silently rewrites what INV-1184 says and it stops matching the PDF the client is holding.
-The claim carries its own `retention_deducted_from_invoice` and `gst_basis`.
-
-## Already sent
-
-A fix that only changes future behaviour leaves the wrong invoices where they are, and some are
-paid. **We do not need clients to tell us which** — `retention_withheld > 0` and
-`invoice_total = claim_gross + GST` is a query we can run today. The prototype shows the shape of
-that result with placeholder project references; the real list comes from production.
-
-Two states, two conversations: unpaid invoices get reissued at the corrected amount; paid ones
-mean the contractor has been overpaid and the retention was never withheld in cash, so it is a
-credit note or an adjustment on the next claim — **and which of the two is the contractor's call,
-not ours.**
-
-## Two things this does not decide
-
-- **GST.** The prototype puts GST on the full claim: the supply is the whole $340,000 and
-  retention is money withheld from payment, not a reduction in what was supplied. That keeps the
-  invoice at $346,000, matching the claim. **A read, not advice** — needs an accountant and a
-  check of what Xero does on the ACCREC. If GST sits on the net instead, the invoice is $343,200
-  and every corrected figure moves.
-- **Sequencing.** The toggle must not ship ahead of the deduction line. Until invoices deduct by
-  default there is no correct default to build a setting against, and gross invoicing stops being
-  a bug and becomes a setting nobody chose.
-
-Also unscoped: whether a correction flows through to **Xero** automatically. These invoices are
-synced, and a credit note that does not propagate leaves the two systems disagreeing — the same
-class of defect one layer along.
+Related: **VDP-2251** (production over-invoices retention-bearing claims) and **VDP-2282** (the
+setting, blocked by 2251).
