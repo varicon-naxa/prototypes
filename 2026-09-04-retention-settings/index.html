@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Retention Settings</title>
+<!--
+  Problem: Retention Settings is where six figures of cash flow get decided, and the
+  screen shows two numbers with no units. "Contract Max Retention 5" and "Contract
+  Retention Rate 10" are percentages of two different things — the contract sum and
+  each claim — and neither says so. No dollar figure appears anywhere.
+
+  And the setting that matters most is missing: whether retention comes off the
+  invoice. That is VDP-2282. Its absence is how VDP-2251 shipped — production
+  invoices retention-bearing claims gross, and nobody chose that.
+
+  This prototype rebuilds the modal around the money it moves: every field states
+  its denominator, every rule resolves to dollars as you type, and the invoice
+  question is asked out loud with the GST branch it depends on.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+  .layout { display: flex; min-height: 100vh; }
+
+  .sidebar { width: 40px; background: #1a1a2e; color: #ccc; flex-shrink: 0; padding-top: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .sidebar .s-icon { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: pointer; border-radius: 6px; color: #888; }
+  .sidebar .s-icon:hover { background: rgba(255,255,255,.1); }
+  .sidebar .s-icon.active { background: #f7941d; color: #fff; }
+  .sidebar .s-logo { width: 28px; height: 28px; background: linear-gradient(135deg, #f7941d, #f15a24); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 14px; margin-bottom: 8px; }
+  .main { flex: 1; overflow-x: hidden; }
+
+  .viewbar { background: #1a1a2e; color: #fff; padding: 10px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .viewbar .vb-title { font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: rgba(255,255,255,.45); }
+  .viewbar .vb-tabs { display: flex; gap: 4px; background: rgba(255,255,255,.08); border-radius: 8px; padding: 3px; }
+  .viewbar .vb-tab { padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; color: rgba(255,255,255,.6); }
+  .viewbar .vb-tab:hover { color: #fff; }
+  .viewbar .vb-tab.active { background: #f7941d; color: #fff; }
+  .viewbar .vb-note { font-size: 11px; color: rgba(255,255,255,.4); margin-left: auto; }
+
+  .proj-header { padding: 10px 24px; background: #fff; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; gap: 10px; }
+  .proj-header h2 { font-size: 15px; font-weight: 600; }
+  .proj-header .caret { color: #999; font-size: 11px; }
+  .proj-header .crumb { font-size: 12px; color: #999; margin-left: 6px; }
+  .content { padding: 18px 24px 70px; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ===== shared ===== */
+  .panel { background: #fff; border: 1px solid #e4e4e4; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+  .panel-head { padding: 14px 18px; border-bottom: 1px solid #f0f0f0; }
+  .panel-head h4 { font-size: 14px; font-weight: 700; }
+  .panel-head .ph-sub { font-size: 12px; color: #8a8a8a; margin-top: 3px; line-height: 1.55; }
+  .panel-body { padding: 16px 18px; }
+  .intro { background: #fff; border: 1px solid #e4e4e4; border-left: 3px solid #f7941d; border-radius: 0 10px 10px 0; padding: 15px 18px; margin-bottom: 18px; font-size: 13px; line-height: 1.7; }
+  .intro b { color: #1a1a2e; }
+  .intro .tick { display: inline-block; background: #f4f4f4; border-radius: 3px; padding: 1px 6px; font-size: 11.5px; font-weight: 700; color: #555; }
+
+  /* ===== proposed: two-column ===== */
+  .split { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr); gap: 18px; align-items: start; }
+  @media (max-width: 1080px) { .split { grid-template-columns: 1fr; } }
+
+  .modal { background: #fff; border: 1px solid #dcdcdc; border-radius: 10px; box-shadow: 0 6px 26px rgba(0,0,0,.10); overflow: hidden; }
+  .modal-head { padding: 15px 20px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; }
+  .modal-head h3 { font-size: 16px; font-weight: 600; color: #1b4b7d; }
+  .modal-head .x { color: #999; font-size: 18px; cursor: pointer; }
+  .modal-body { padding: 4px 20px 18px; }
+  .modal-foot { padding: 13px 20px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 10px; background: #fcfcfc; }
+  .btn { padding: 9px 20px; border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+  .btn-cancel { background: #fff; border-color: #d5d5d5; color: #1b4b7d; }
+  .btn-save { background: #f7941d; color: #fff; }
+
+  .sect { padding: 17px 0 4px; border-top: 1px solid #f0f0f0; }
+  .sect:first-child { border-top: none; }
+  .sect-h { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: #1a1a2e; margin-bottom: 3px; }
+  .sect-sub { font-size: 12px; color: #8d8d8d; line-height: 1.6; margin-bottom: 14px; }
+
+  .frow { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 13px; }
+  .frow.one { grid-template-columns: 1fr; }
+  .fld label { display: block; font-size: 12px; font-weight: 600; color: #444; margin-bottom: 4px; }
+  .fld .den { font-weight: 400; color: #8d8d8d; }
+  .fld select, .fld input[type=number], .fld input[type=text] { width: 100%; padding: 8px 10px; border: 1px solid #d5d5d5; border-radius: 4px; font-size: 13px; background: #fff; color: #333; font-family: inherit; }
+  .fld select:focus, .fld input:focus { outline: none; border-color: #f7941d; }
+  .fld .resolves { font-size: 11.5px; color: #2e7d55; margin-top: 5px; font-weight: 600; }
+  .fld .resolves.warn { color: #b26a00; }
+  .unit-wrap { position: relative; }
+  .unit-wrap .unit { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; color: #999; pointer-events: none; }
+  .unit-wrap input { padding-left: 26px !important; }
+
+  .tgl-row { display: flex; align-items: flex-start; gap: 13px; padding: 12px 0; }
+  .tgl-row .tgl-txt { flex: 1; }
+  .tgl-row .tgl-txt .tt-name { font-size: 13.5px; font-weight: 600; color: #222; }
+  .tgl-row .tgl-txt .tt-sub { font-size: 12px; color: #888; line-height: 1.6; margin-top: 3px; }
+  .switch { width: 40px; height: 22px; border-radius: 11px; background: #ccc; position: relative; cursor: pointer; flex-shrink: 0; transition: background .15s; margin-top: 2px; }
+  .switch::after { content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: left .15s; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  .switch.on { background: #f7941d; }
+  .switch.on::after { left: 20px; }
+
+  .radio-set { display: flex; flex-direction: column; gap: 9px; margin-top: 4px; }
+  .radio-opt { display: flex; gap: 10px; align-items: flex-start; padding: 11px 13px; border: 1px solid #e2e2e2; border-radius: 7px; cursor: pointer; }
+  .radio-opt:hover { border-color: #f7941d; }
+  .radio-opt.sel { border-color: #f7941d; background: #fffaf3; }
+  .radio-opt .dot { width: 15px; height: 15px; border-radius: 50%; border: 2px solid #c5c5c5; flex-shrink: 0; margin-top: 1px; }
+  .radio-opt.sel .dot { border-color: #f7941d; border-width: 5px; }
+  .radio-opt .r-name { font-size: 13px; font-weight: 600; }
+  .radio-opt .r-sub { font-size: 11.5px; color: #888; margin-top: 3px; line-height: 1.55; }
+  .radio-opt .r-amt { font-size: 12px; font-weight: 700; color: #1a1a2e; margin-top: 5px; }
+
+  .inline-warn { margin-top: 11px; background: #fdf2e2; border-radius: 6px; padding: 11px 13px; font-size: 12px; color: #7a5518; line-height: 1.65; }
+  .inline-warn b { color: #5e400f; }
+  .open-q { margin-top: 11px; background: #f3f6fa; border-left: 3px solid #1b4b7d; border-radius: 0 6px 6px 0; padding: 11px 13px; font-size: 12px; color: #33475b; line-height: 1.65; }
+  .open-q .q-tag { display: inline-block; background: #1b4b7d; color: #fff; font-size: 9.5px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; margin-right: 7px; }
+
+  /* ===== preview ===== */
+  .prev { position: sticky; top: 14px; }
+  .prev-head { padding: 13px 18px; background: #1a1a2e; color: #fff; border-radius: 10px 10px 0 0; }
+  .prev-head h4 { font-size: 13px; font-weight: 700; }
+  .prev-head .p-sub { font-size: 11.5px; color: rgba(255,255,255,.5); margin-top: 3px; line-height: 1.5; }
+  .prev-card { background: #fff; border: 1px solid #e4e4e4; border-top: none; border-radius: 0 0 10px 10px; }
+  .ledger { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .ledger td { padding: 9px 18px; border-bottom: 1px solid #f2f2f2; }
+  .ledger td.r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ledger .lbl { color: #555; }
+  .ledger .lbl small { display: block; color: #a0a0a0; font-size: 11px; margin-top: 2px; }
+  .ledger tr.sum td { font-weight: 700; background: #fafafa; }
+  .ledger tr.pay td { font-weight: 700; background: #1a1a2e; color: #fff; font-size: 13.5px; }
+  .ledger tr.pay td.r { color: #fff; }
+  .ledger tr.pay small { color: rgba(255,255,255,.5); font-weight: 400; }
+  .ledger tr.muted td { color: #aaa; }
+  .cap-wrap { padding: 13px 18px 15px; border-bottom: 1px solid #f2f2f2; }
+  .cap-bar { height: 7px; background: #eee; border-radius: 4px; overflow: hidden; display: flex; margin-bottom: 7px; }
+  .cap-bar .seg-prev { background: #2e9e5b; }
+  .cap-bar .seg-now { background: #f7941d; }
+  .cap-txt { font-size: 11.5px; color: #888; line-height: 1.55; }
+  .cap-txt b { color: #333; }
+  .sentence { padding: 14px 18px; border-bottom: 1px solid #f2f2f2; font-size: 13px; line-height: 1.75; color: #3a3a3a; }
+  .sentence b { color: #1a1a2e; }
+  .prev-foot { padding: 12px 18px; font-size: 11.5px; color: #999; line-height: 1.6; }
+
+  /* ===== today (recreation) ===== */
+  .today-wrap { display: grid; grid-template-columns: minmax(0,460px) minmax(0,1fr); gap: 22px; align-items: start; }
+  @media (max-width: 900px) { .today-wrap { grid-template-columns: 1fr; } }
+  .lg-modal { background: #fff; border: 1px solid #d0d0d0; border-radius: 4px; box-shadow: 0 4px 18px rgba(0,0,0,.14); position: relative; }
+  .lg-head { padding: 16px 18px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+  .lg-head h3 { font-size: 17px; color: #1b4b7d; font-weight: 500; }
+  .lg-body { padding: 16px 18px; max-height: 430px; overflow-y: auto; }
+  .lg-body h5 { font-size: 14px; color: #1b4b7d; font-weight: 600; }
+  .lg-body .lg-desc { font-size: 12.5px; color: #666; line-height: 1.5; margin-top: 3px; max-width: 300px; }
+  .lg-lbl { font-size: 13px; color: #444; margin: 15px 0 5px; }
+  .lg-in { width: 100%; padding: 9px 10px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px; color: #333; background: #fff; }
+  .lg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .lg-chk { display: flex; align-items: center; gap: 10px; margin: 18px 0 6px; }
+  .lg-chk .box { width: 17px; height: 17px; border: 2px solid #f7941d; border-radius: 2px; }
+  .lg-chk .txt { font-size: 13.5px; color: #333; }
+  .lg-chk .info { color: #e53935; font-size: 13px; }
+  .lg-hr { border-top: 1px solid #eee; margin: 20px 0 4px; }
+  .lg-foot { padding: 13px 18px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 10px; }
+  .mark { display: inline-flex; width: 17px; height: 17px; border-radius: 50%; background: #e53935; color: #fff; font-size: 10.5px; font-weight: 700; align-items: center; justify-content: center; vertical-align: middle; margin-left: 7px; flex-shrink: 0; }
+  .defects { background: #fff; border: 1px solid #e4e4e4; border-radius: 10px; padding: 6px 4px; }
+  .defects .d-row { display: flex; gap: 11px; padding: 12px 15px; border-bottom: 1px solid #f4f4f4; }
+  .defects .d-row:last-child { border-bottom: none; }
+  .defects .d-txt { font-size: 12.5px; line-height: 1.65; color: #444; }
+  .defects .d-txt b { color: #1a1a2e; }
+  .defects .d-txt code { background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 11.5px; }
+  .mark.grey { background: #8d8d8d; }
+
+  /* ===== changes table ===== */
+  table.chg { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; }
+  table.chg thead th { background: #1a1a2e; color: #fff; padding: 11px 14px; text-align: left; font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; }
+  table.chg td { padding: 12px 14px; border-bottom: 1px solid #f0f0f0; vertical-align: top; line-height: 1.6; }
+  table.chg .was { color: #b3261e; text-decoration: line-through; text-decoration-color: #e5a29d; }
+  table.chg .now { color: #1a5c38; font-weight: 600; }
+  table.chg .why { color: #666; }
+  table.chg tr.add td { background: #fcfcf7; }
+  table.chg .newtag { display: inline-block; background: #2e7d55; color: #fff; font-size: 9px; font-weight: 700; letter-spacing: .5px; padding: 2px 6px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+  .tickets { font-size: 12px; color: #888; margin-top: 14px; line-height: 1.8; }
+  .tickets b { color: #444; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="s-logo">V</div>
+    <div class="s-icon">&#9776;</div><div class="s-icon">&#128188;</div><div class="s-icon">&#128209;</div>
+    <div class="s-icon active">&#9881;</div><div class="s-icon">&#128100;</div>
+  </div>
+
+  <div class="main">
+    <div class="viewbar">
+      <span class="vb-title">Retention Settings</span>
+      <div class="vb-tabs">
+        <div class="vb-tab active" data-v="proposed">Proposed</div>
+        <div class="vb-tab" data-v="today">Screen today</div>
+        <div class="vb-tab" data-v="changes">What changed</div>
+      </div>
+      <span class="vb-note">Prototype &middot; 4 Sep 2026 &middot; every figure below is live &mdash; change a field and watch the money move</span>
+    </div>
+
+    <div class="proj-header">
+      <h2>(24-006) Little Collins Roadworks</h2><span class="caret">&#9662;</span>
+      <span class="crumb">Settings &nbsp;&rsaquo;&nbsp; Retention</span>
+    </div>
+
+    <div class="content">
+
+      <!-- ============ PROPOSED ============ -->
+      <div class="view active" id="v-proposed">
+        <div class="intro">
+          The screen today asks for <span class="tick">Max Retention 5</span> and <span class="tick">Retention Rate 10</span>
+          and never says <b>percent of what</b> &mdash; they are percentages of two different things, the contract sum and
+          each claim. No dollar amount appears anywhere. This version makes every field state its own denominator and
+          resolve to dollars as you type.<br><br>
+          The field that does not exist today is at the bottom: <b>whether retention comes off the invoice</b>. That is
+          VDP-2282. Its absence is how VDP-2251 shipped &mdash; production invoices retention-bearing claims gross, and
+          nobody chose that.
+        </div>
+
+        <div class="split">
+          <!-- ---------- the modal ---------- -->
+          <div class="modal">
+            <div class="modal-head"><h3>Retention Settings</h3><span class="x">&#10005;</span></div>
+            <div class="modal-body">
+
+              <div class="sect">
+                <div class="sect-h">Where these terms come from</div>
+                <div class="sect-sub">Retention terms belong to the contract form, so they are set up once and reused.
+                  What you change here applies to this project only.</div>
+                <div class="frow one">
+                  <div class="fld">
+                    <label>Retention profile</label>
+                    <select id="f-profile">
+                      <option value="as4000">AS 4000 &mdash; 10% to a 5% cap, half released at PC</option>
+                      <option value="custom">Project-specific terms (no profile)</option>
+                    </select>
+                    <div class="resolves" id="r-profile"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sect">
+                <div class="sect-h">What we hold back</div>
+                <div class="sect-sub">Two different percentages. The rate applies to each claim; the maximum applies to
+                  the whole contract and stops the rate once it is reached.</div>
+                <div class="frow">
+                  <div class="fld">
+                    <label>Held from each claim <span class="den">&mdash; % of the claim</span></label>
+                    <div class="unit-wrap"><span class="unit">%</span><input type="number" id="f-rate" value="10" min="0" max="100" step="0.25"></div>
+                    <div class="resolves" id="r-rate"></div>
+                  </div>
+                  <div class="fld">
+                    <label>Maximum ever held <span class="den">&mdash; % of the contract sum</span></label>
+                    <div class="unit-wrap"><span class="unit">%</span><input type="number" id="f-max" value="5" min="0" max="100" step="0.25"></div>
+                    <div class="resolves" id="r-max"></div>
+                  </div>
+                </div>
+                <div class="frow one">
+                  <div class="fld">
+                    <label>How retention is worked out</label>
+                    <select id="f-basis">
+                      <option value="percent">Percentage of each claim</option>
+                      <option value="amount">Fixed dollar amount per claim</option>
+                      <option value="stepped">Stepped by contract value (NZS 3910)</option>
+                    </select>
+                    <div class="resolves" id="r-basis"></div>
+                  </div>
+                </div>
+                <div class="tgl-row">
+                  <div class="switch on" id="t-merge"></div>
+                  <div class="tgl-txt">
+                    <div class="tt-name">Variations are retained on the same terms</div>
+                    <div class="tt-sub" id="s-merge"></div>
+                  </div>
+                </div>
+                <div id="varblock" style="display:none">
+                  <div class="frow">
+                    <div class="fld">
+                      <label>Held from each variation <span class="den">&mdash; % of the variation</span></label>
+                      <div class="unit-wrap"><span class="unit">%</span><input type="number" id="f-vrate" value="5" min="0" max="100" step="0.25"></div>
+                    </div>
+                    <div class="fld">
+                      <label>Maximum on variations <span class="den">&mdash; % of variations approved</span></label>
+                      <div class="unit-wrap"><span class="unit">%</span><input type="number" id="f-vmax" value="5" min="0" max="100" step="0.25"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="tgl-row">
+                  <div class="switch" id="t-manual"></div>
+                  <div class="tgl-txt">
+                    <div class="tt-name">Allow the calculated amount to be edited on a claim</div>
+                    <div class="tt-sub">Varicon keeps calculating retention either way. With this on, a user can overwrite
+                      the figure on an individual claim &mdash; the calculated amount stays visible beside it, and the
+                      change is recorded with who made it, when, and why.</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ---------- THE ASK ---------- -->
+              <div class="sect">
+                <div class="sect-h">On the invoice</div>
+                <div class="sect-sub">Retention is always tracked and always shown on the claim. This decides whether it
+                  is taken off what you ask the client to pay.</div>
+                <div class="tgl-row" style="padding-top:2px">
+                  <div class="switch on" id="t-deduct"></div>
+                  <div class="tgl-txt">
+                    <div class="tt-name">Deduct retention from the invoice</div>
+                    <div class="tt-sub" id="s-deduct"></div>
+                  </div>
+                </div>
+                <div id="deduct-warn"></div>
+
+                <div id="gstblock">
+                  <div style="font-size:12px;font-weight:600;color:#444;margin:14px 0 3px">GST is calculated on</div>
+                  <div class="radio-set">
+                    <div class="radio-opt sel" data-gst="gross">
+                      <div class="dot"></div>
+                      <div><div class="r-name">The full claim, before retention</div>
+                        <div class="r-sub">Retention is treated as money withheld from payment, not as a reduction in
+                          what was supplied. The deduction comes off after tax.</div>
+                        <div class="r-amt" id="a-gross"></div></div>
+                    </div>
+                    <div class="radio-opt" data-gst="net">
+                      <div class="dot"></div>
+                      <div><div class="r-name">The amount after retention</div>
+                        <div class="r-sub">Retention is treated as reducing the value of the supply for this claim.</div>
+                        <div class="r-amt" id="a-net"></div></div>
+                    </div>
+                  </div>
+                  <div class="open-q"><span class="q-tag">Open</span>
+                    <b>This branch is worth <span id="gst-diff"></span> on this claim alone and nobody has answered it.</b>
+                    My read is that the supply is the full claim and retention is a withholding, which puts GST on the
+                    gross &mdash; but that is a read, not advice, and it needs confirming with an accountant and against
+                    what Xero does on the ACCREC before this is specced. Get it wrong and clients under-remit.
+                  </div>
+                </div>
+              </div>
+
+              <div class="sect">
+                <div class="sect-h">Getting it back</div>
+                <div class="sect-sub">When the money we are holding stops being held.</div>
+                <div class="frow">
+                  <div class="fld">
+                    <label>Released at practical completion <span class="den">&mdash; % of the balance</span></label>
+                    <div class="unit-wrap"><span class="unit">%</span><input type="number" id="f-pc" value="50" min="0" max="100" step="5"></div>
+                    <div class="resolves" id="r-pc"></div>
+                  </div>
+                  <div class="fld">
+                    <label>Defects liability period <span class="den">&mdash; months after PC</span></label>
+                    <input type="number" id="f-dlp" value="12" min="0" max="60" step="1">
+                    <div class="resolves" id="r-dlp"></div>
+                  </div>
+                </div>
+                <div class="frow one">
+                  <div class="fld">
+                    <label>Security</label>
+                    <select id="f-sec">
+                      <option value="cash">Cash retention &mdash; withheld from each claim</option>
+                      <option value="bg">Bank guarantee in lieu &mdash; nothing withheld</option>
+                    </select>
+                    <div class="resolves" id="r-sec"></div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+            <div class="modal-foot">
+              <button class="btn btn-cancel">Cancel</button>
+              <button class="btn btn-save">Save</button>
+            </div>
+          </div>
+
+          <!-- ---------- live preview ---------- -->
+          <div class="prev">
+            <div class="prev-head">
+              <h4>What this does to Claim #4</h4>
+              <div class="p-sub">Same four-line ledger the claim screen shows, so the settings and the claim can never
+                disagree. Contract sum $2,480,000 &middot; $960,000 claimed before &middot; $340,000 this claim.</div>
+            </div>
+            <div class="prev-card">
+              <div class="sentence" id="p-sentence"></div>
+              <table class="ledger">
+                <tbody id="p-ledger"></tbody>
+              </table>
+              <div class="cap-wrap">
+                <div class="cap-bar"><div class="seg-prev" id="bar-prev"></div><div class="seg-now" id="bar-now"></div></div>
+                <div class="cap-txt" id="p-cap"></div>
+              </div>
+              <table class="ledger"><tbody id="p-invoice"></tbody></table>
+              <div class="prev-foot" id="p-foot"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ TODAY ============ -->
+      <div class="view" id="v-today">
+        <div class="intro">
+          Recreated from the production modal on <b>(24-006) Little Collins Roadworks</b>. The maths behind it is not in
+          question. What is missing is every unit, every dollar figure, and the invoice decision entirely.
+        </div>
+        <div class="today-wrap">
+          <div class="lg-modal">
+            <div class="lg-head"><h3>Retention Settings</h3><span style="color:#999;font-size:19px">&#10005;</span></div>
+            <div class="lg-body">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px">
+                <div>
+                  <h5>Merge Retention <span class="mark">4</span></h5>
+                  <div class="lg-desc">Combine Retention Settings for contract and variation into single setting</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:9px;flex-shrink:0">
+                  <div class="switch" style="background:#e0e0e0"></div><span style="font-size:14px;color:#333">Enable</span>
+                </div>
+              </div>
+              <div class="lg-lbl">Contract Retention Basis <span class="mark">6</span></div>
+              <select class="lg-in"><option>Percent</option></select>
+              <div class="lg-grid">
+                <div>
+                  <div class="lg-lbl">Contract Max Retention <span class="mark">1</span></div>
+                  <input class="lg-in" value="%  5">
+                </div>
+                <div>
+                  <div class="lg-lbl">Contract Retention Rate <span class="mark">2</span></div>
+                  <input class="lg-in" value="%  10">
+                </div>
+              </div>
+              <div class="lg-chk">
+                <div class="box"></div><span class="txt">Enable Manual Contract Retention</span><span class="info">&#9432;</span>
+                <span class="mark">5</span>
+              </div>
+              <div class="lg-hr"></div>
+              <div class="lg-lbl">Variation Retention Basis</div>
+              <select class="lg-in"><option>Percent</option></select>
+              <div class="lg-grid">
+                <div><div class="lg-lbl">Variation Max Retention</div><input class="lg-in" value="%  5"></div>
+                <div><div class="lg-lbl">Variation Retention Rate</div><input class="lg-in" value="%  10"></div>
+              </div>
+              <div style="height:40px"></div>
+            </div>
+            <div class="lg-foot">
+              <button class="btn btn-cancel">Cancel</button><button class="btn btn-save">Save</button>
+            </div>
+          </div>
+
+          <div class="defects">
+            <div class="d-row"><span class="mark">1</span><div class="d-txt">
+              <b>Percent of what?</b> Max Retention is a percentage of the <b>contract sum</b>. It renders as
+              <code>5</code> with no denominator and no dollar equivalent. On this project it is <b>$124,000</b> &mdash;
+              a figure the screen never shows while you are setting it.</div></div>
+            <div class="d-row"><span class="mark">2</span><div class="d-txt">
+              <b>A different denominator, identically labelled.</b> Retention Rate is a percentage of <b>each claim</b>,
+              not of the contract sum. Two adjacent fields, both reading <code>%</code>, measuring different things.</div></div>
+            <div class="d-row"><span class="mark">3</span><div class="d-txt">
+              <b>The rate is double the maximum and nothing explains why that is fine.</b> 10% comes off every claim
+              until the 5% cap is reached, then nothing more is held. Read cold, <code>Max 5 / Rate 10</code> looks like
+              someone typed the fields in the wrong order &mdash; and there is no way to tell from this screen that the
+              cap will bind on Claim #4.</div></div>
+            <div class="d-row"><span class="mark">4</span><div class="d-txt">
+              <b>"Merge Retention" names the control, not the outcome.</b> "Combine Retention Settings for contract and
+              variation into single setting" describes what the toggle does to the form. What the user wants to know is
+              whether <b>variations are retained on the same terms as the contract</b>.</div></div>
+            <div class="d-row"><span class="mark">5</span><div class="d-txt">
+              <b>The only explanation is inside an info icon.</b> Per VDP-1169 the intent is <i>we still calculate, but
+              let it be edited</i>. "Enable Manual Contract Retention" reads like it turns the calculation off. And there
+              is no visible variation equivalent.</div></div>
+            <div class="d-row"><span class="mark">6</span><div class="d-txt">
+              <b>A dropdown implying options the labels cannot survive.</b> If Basis is ever set to an amount, "Max
+              Retention&nbsp;%" and "Retention Rate&nbsp;%" are both wrong, and the <code>%</code> is hard-rendered
+              inside the field.</div></div>
+            <div class="d-row"><span class="mark grey">7</span><div class="d-txt">
+              <b>Half the form is below the fold with Save floating over the hidden half.</b> VDP-2250 was the
+              non-scrolling version of this; scrolling fixed the failure, not the shape.</div></div>
+            <div class="d-row"><span class="mark grey">8</span><div class="d-txt">
+              <b>Nothing here mentions the invoice.</b> The setting deciding whether the client is billed gross or net
+              does not exist &mdash; that is <b>VDP-2282</b>, and its absence is how <b>VDP-2251</b> shipped. Gross
+              invoicing is currently happening by accident rather than by choice.</div></div>
+            <div class="d-row"><span class="mark grey">9</span><div class="d-txt">
+              <b>No release terms, no bands, no security.</b> Release at PC and the defects period (VDP-111), the NZS
+              3910 stepped schedule (VDP-2034) and bank guarantees in lieu all need a home, and this is the screen they
+              belong on.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ CHANGES ============ -->
+      <div class="view" id="v-changes">
+        <div class="intro">
+          Nine renames and six additions. No calculation changes to what is already there &mdash; the same rate, the same
+          cap, the same merge behaviour. What changes is that each field says what it measures, and the decisions
+          currently made elsewhere (or not at all) get made here.
+        </div>
+        <div class="panel">
+          <table class="chg">
+            <thead><tr><th style="width:26%">Today</th><th style="width:31%">Proposed</th><th>Why</th></tr></thead>
+            <tbody>
+              <tr><td class="was">Contract Retention Rate</td><td class="now">Held from each claim &mdash; % of the claim</td>
+                <td class="why">Names the denominator in the label. A rate with no base is not a setting, it is a number.</td></tr>
+              <tr><td class="was">Contract Max Retention</td><td class="now">Maximum ever held &mdash; % of the contract sum</td>
+                <td class="why">Different base from the field beside it. Says so, and resolves to dollars underneath.</td></tr>
+              <tr><td class="was">(no dollar figures anywhere)</td><td class="now">Live resolution under every field</td>
+                <td class="why">You are configuring six figures of cash flow. 5% is not a quantity; $124,000 is.</td></tr>
+              <tr><td class="was">Merge Retention &mdash; "Combine Retention Settings for contract and variation into single setting"</td>
+                <td class="now">Variations are retained on the same terms</td>
+                <td class="why">States the outcome rather than the effect on the form.</td></tr>
+              <tr><td class="was">Enable Manual Contract Retention</td>
+                <td class="now">Allow the calculated amount to be edited on a claim</td>
+                <td class="why">VDP-1169's actual intent. The old label reads as switching the calculation off, which it does not.</td></tr>
+              <tr><td class="was">Contract Retention Basis: Percent</td><td class="now">How retention is worked out</td>
+                <td class="why">Options carry their own units, so the labels stay true when the basis is not a percentage.</td></tr>
+              <tr><td class="was">(Save over hidden fields)</td><td class="now">Sections with a visible order</td>
+                <td class="why">Hold &rarr; invoice &rarr; release, in the order the money actually moves.</td></tr>
+              <tr class="add"><td class="was">&mdash;</td>
+                <td class="now"><span class="newtag">New</span>Deduct retention from the invoice</td>
+                <td class="why"><b>VDP-2282.</b> The ask. Default on. Off is a deliberate choice for contracts where the client withholds retention themselves &mdash; and the position taken is stamped on the claim, so changing this later can never rewrite an invoice already sent.</td></tr>
+              <tr class="add"><td class="was">&mdash;</td>
+                <td class="now"><span class="newtag">New</span>GST is calculated on</td>
+                <td class="why">Unresolved, and the expensive half of the toggle. Worth $2,800 on this one claim. Shown as an open question rather than silently defaulted.</td></tr>
+              <tr class="add"><td class="was">&mdash;</td>
+                <td class="now"><span class="newtag">New</span>Released at practical completion / Defects liability period</td>
+                <td class="why"><b>VDP-111.</b> Release terms have no home today.</td></tr>
+              <tr class="add"><td class="was">&mdash;</td>
+                <td class="now"><span class="newtag">New</span>Stepped by contract value</td>
+                <td class="why"><b>VDP-2034.</b> Base Civil's NZS 3910 banding. A stepped schedule self-limits, so the maximum field is hidden when it is selected rather than left to contradict it.</td></tr>
+              <tr class="add"><td class="was">&mdash;</td>
+                <td class="now"><span class="newtag">New</span>Security: cash or bank guarantee in lieu</td>
+                <td class="why">No ticket exists anywhere in VDP for bank guarantees. Recommended on VDP-2034 as its own Feature, not yet filed.</td></tr>
+              <tr class="add"><td class="was">&mdash;</td>
+                <td class="now"><span class="newtag">New</span>Retention profile</td>
+                <td class="why">Terms belong to the contract form, not the job, so they are set once and reused. Settles where retention lives &mdash; profile for the form's properties, project for this job's facts.</td></tr>
+              <tr class="add"><td class="was">&mdash;</td>
+                <td class="now"><span class="newtag">New</span>Live claim preview</td>
+                <td class="why">The same ledger the claim screen renders. A setting you cannot see the effect of is indistinguishable from a bug when the number changes mid-contract.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="tickets">
+          <b>Tickets this touches:</b> VDP-2282 (invoice toggle, blocked by VDP-2251) &middot; VDP-2251 (production
+          invoices retention-bearing claims gross) &middot; VDP-111 / VDP-115 (PC date and retention release) &middot;
+          VDP-1169 (manual retention) &middot; VDP-2034 (stepped retention, Base Civil NZ) &middot; VDP-2250 (dialog
+          scroll).<br>
+          <b>Sequencing:</b> the toggle must not ship before VDP-2251. Until the net-of-retention fix lands there is no
+          correct default to build against, and gross invoicing stops being a bug and becomes a setting nobody chose.<br>
+          <b>Companion prototype:</b> <a href="../2026-08-24-claim-retention-wording/" style="color:#f7941d">Claim
+          Retention &mdash; clearer wording</a> (24 Aug 2026), which is the claim-side view of the same ledger.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---- the contract this modal is configuring ---- */
+var C = { sum: 2480000, prevClaimed: 960000, thisClaim: 340000, gstPct: 10 };
+
+var S = { profile: 'as4000', rate: 10, max: 5, basis: 'percent', merge: true, vrate: 5, vmax: 5,
+          manual: false, deduct: true, gst: 'gross', pc: 50, dlp: 12, sec: 'cash' };
+
+/* NZS 3910 default retentions schedule — marginal bands, same model as the claim prototype */
+var STEPS = [ { upper: 200000, pct: 10 }, { upper: 1000000, pct: 5 }, { upper: 20000000, pct: 1.75 }, { upper: Infinity, pct: 0 } ];
+
+function money(n) { return '$' + n.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function m0(n) { return '$' + Math.round(n).toLocaleString('en-AU'); }
+
+function stepped(value) {
+  var lower = 0, total = 0;
+  for (var i = 0; i < STEPS.length; i++) {
+    var s = STEPS[i], slice = Math.max(0, Math.min(value, s.upper) - lower);
+    total += slice * s.pct / 100; lower = s.upper;
+    if (value <= s.upper) break;
+  }
+  return total;
+}
+
+/* Retention held after a given amount has been claimed, under the current settings. */
+function heldAfter(claimed) {
+  if (S.sec === 'bg') return 0;
+  if (S.basis === 'stepped') return stepped(claimed);
+  if (S.basis === 'amount') return Math.min(S.rate * 1000, C.sum * S.max / 100);
+  return Math.min(claimed * S.rate / 100, C.sum * S.max / 100);
+}
+
+function calc() {
+  var cap        = S.basis === 'stepped' ? stepped(C.sum) : C.sum * S.max / 100;
+  var heldBefore = heldAfter(C.prevClaimed);
+  var heldTotal  = heldAfter(C.prevClaimed + C.thisClaim);
+  var holdNow    = heldTotal - heldBefore;
+  var uncapped   = S.basis === 'stepped' ? holdNow : C.thisClaim * S.rate / 100;
+  var capBinds   = uncapped - holdNow > 0.005;
+
+  var deducted   = S.deduct ? holdNow : 0;
+  var netClaim   = C.thisClaim - deducted;
+  var gstBase    = (S.gst === 'gross' || !S.deduct) ? C.thisClaim : netClaim;
+  var gst        = gstBase * C.gstPct / 100;
+  var invoice    = netClaim + gst;
+
+  return { cap: cap, heldBefore: heldBefore, holdNow: holdNow, heldTotal: heldTotal, uncapped: uncapped,
+           capBinds: capBinds, deducted: deducted, netClaim: netClaim, gst: gst, gstBase: gstBase, invoice: invoice };
+}
+
+function render() {
+  var k = calc();
+
+  /* ---- field resolutions ---- */
+  document.getElementById('r-profile').innerHTML = S.profile === 'as4000'
+    ? 'Shared with 6 other projects. Editing the profile edits them all; editing a field below overrides it here only.'
+    : 'These terms apply to this project alone and are not reusable.';
+  document.getElementById('r-profile').className = 'resolves' + (S.profile === 'as4000' ? '' : ' warn');
+
+  document.getElementById('r-rate').innerHTML = S.basis === 'stepped'
+    ? 'Set by the band schedule below'
+    : m0(C.thisClaim * S.rate / 100) + ' from this claim of ' + m0(C.thisClaim);
+  document.getElementById('r-max').innerHTML = S.basis === 'stepped'
+    ? 'The schedule self-limits at ' + m0(k.cap)
+    : m0(k.cap) + ' of the ' + m0(C.sum) + ' contract sum';
+  document.getElementById('f-max').disabled = (S.basis === 'stepped');
+
+  document.getElementById('r-basis').innerHTML = S.basis === 'stepped'
+    ? 'Marginal bands: 10% to $200k, 5% to $1m, 1.75% to $20m, then nil. Each rate applies only to the value inside its own band &mdash; this contract retains ' + m0(stepped(C.sum)) + ' in total.'
+    : (S.basis === 'amount' ? 'A flat sum per claim, still subject to the maximum above.'
+                            : 'The rate above comes off every claim until the maximum is reached.');
+
+  document.getElementById('s-merge').innerHTML = S.merge
+    ? 'Approved variations are retained at ' + S.rate + '% like everything else, and count toward the same ' + m0(k.cap) + ' maximum.'
+    : 'Variations are retained separately, at their own rate and against their own maximum.';
+  document.getElementById('varblock').style.display = S.merge ? 'none' : 'block';
+
+  /* ---- the invoice toggle ---- */
+  document.getElementById('s-deduct').innerHTML = S.deduct
+    ? 'The client is invoiced <b>' + m0(k.netClaim) + '</b> plus GST &mdash; the claim of ' + m0(C.thisClaim) +
+      ' less the ' + m0(k.holdNow) + ' held this period.'
+    : 'The client is invoiced the <b>full ' + m0(C.thisClaim) + '</b> plus GST. Retention still accrues, still shows on ' +
+      'the claim and still releases on the milestones below &mdash; it just is not taken off what you ask for.';
+
+  document.getElementById('deduct-warn').innerHTML = S.deduct ? '' :
+    '<div class="inline-warn"><b>Only correct where the client withholds retention themselves.</b> Otherwise this is ' +
+    'VDP-2251 by choice: the invoice asks for ' + m0(k.holdNow) + ' more than the claim says is owed. The position is ' +
+    'stamped on each claim as it is raised, so turning this back on later will not rewrite invoices already sent.</div>';
+
+  document.getElementById('gstblock').style.display = S.deduct ? 'block' : 'none';
+  var gGross = C.thisClaim * C.gstPct / 100, gNet = (C.thisClaim - k.holdNow) * C.gstPct / 100;
+  document.getElementById('a-gross').innerHTML = 'GST ' + m0(gGross) + ' &nbsp;&rarr;&nbsp; invoice ' + m0(C.thisClaim - k.holdNow + gGross);
+  document.getElementById('a-net').innerHTML   = 'GST ' + m0(gNet)   + ' &nbsp;&rarr;&nbsp; invoice ' + m0(C.thisClaim - k.holdNow + gNet);
+  document.getElementById('gst-diff').innerHTML = m0(gGross - gNet);
+
+  /* ---- release ---- */
+  document.getElementById('r-pc').innerHTML = m0(k.heldTotal * S.pc / 100) + ' of the ' + m0(k.heldTotal) + ' held so far';
+  document.getElementById('r-dlp').innerHTML = 'The remainder comes back ' + S.dlp + ' months after practical completion';
+  document.getElementById('r-sec').innerHTML = S.sec === 'cash'
+    ? 'Cash is withheld from each claim and returned on the milestones above.'
+    : 'Nothing is withheld from claims. Guarantees are lodged instead and discharged on the same milestones &mdash; so the invoice equals the claim.';
+  document.getElementById('r-sec').className = 'resolves' + (S.sec === 'cash' ? '' : ' warn');
+
+  /* ---- preview: the sentence ---- */
+  var sentence;
+  if (S.sec === 'bg') {
+    sentence = 'Nothing is withheld from this claim. The principal holds <b>bank guarantees</b> in lieu, discharged ' +
+               S.pc + '% at practical completion and the rest ' + S.dlp + ' months later.';
+  } else if (S.basis === 'stepped') {
+    sentence = 'Retention is <b>banded by contract value</b>, so this claim adds <b>' + m0(k.holdNow) +
+               '</b> to the ' + m0(k.heldBefore) + ' already held. The schedule can never hold more than <b>' + m0(k.cap) + '</b>.';
+  } else {
+    sentence = '<b>' + S.rate + '%</b> of everything claimed is held back, up to <b>' + m0(k.cap) + '</b> (' + S.max +
+               '% of the contract sum). <b>' + S.pc + '%</b> comes back at practical completion, the rest ' + S.dlp +
+               ' months later.';
+  }
+  document.getElementById('p-sentence').innerHTML = sentence;
+
+  /* ---- preview: the four-line ledger ---- */
+  var rows =
+    '<tr><td class="lbl">Held before this claim<small>Across 3 earlier claims</small></td><td class="r">' + money(k.heldBefore) + '</td></tr>' +
+    '<tr><td class="lbl">Held from this claim' +
+      (k.capBinds ? '<small>' + m0(k.uncapped) + ' at ' + S.rate + '%, cut to ' + m0(k.holdNow) + ' by the ' + m0(k.cap) + ' maximum</small>'
+                  : '<small>' + (S.sec === 'bg' ? 'Nothing withheld &mdash; guarantee in lieu' : S.rate + '% of ' + m0(C.thisClaim)) + '</small>') +
+      '</td><td class="r">' + (k.holdNow ? '+ ' + money(k.holdNow) : money(0)) + '</td></tr>' +
+    '<tr class="muted"><td class="lbl">Released back<small>Nothing falls due this period</small></td><td class="r">' + money(0) + '</td></tr>' +
+    '<tr class="sum"><td class="lbl">Held after this claim</td><td class="r">' + money(k.heldTotal) + '</td></tr>';
+  document.getElementById('p-ledger').innerHTML = rows;
+
+  /* ---- preview: the cap bar ---- */
+  var pctPrev = k.cap ? k.heldBefore / k.cap * 100 : 0, pctNow = k.cap ? k.holdNow / k.cap * 100 : 0;
+  document.getElementById('bar-prev').style.width = pctPrev + '%';
+  document.getElementById('bar-now').style.width = pctNow + '%';
+  document.getElementById('p-cap').innerHTML = S.sec === 'bg'
+    ? 'No cash retention on this contract.'
+    : '<b>' + Math.round((pctPrev + pctNow)) + '%</b> of the ' + m0(k.cap) + ' maximum is now held. ' +
+      (k.capBinds ? 'The cap binds on this claim &mdash; ' + m0(k.uncapped - k.holdNow) + ' that ' + S.rate +
+                    '% would have taken is not withheld.' : m0(k.cap - k.heldTotal) + ' of headroom left.');
+
+  /* ---- preview: the invoice ---- */
+  var inv =
+    '<tr><td class="lbl">This claim</td><td class="r">' + money(C.thisClaim) + '</td></tr>' +
+    '<tr><td class="lbl">' + (S.deduct ? 'Less retention held' : 'Retention held but not deducted') +
+      '<small>' + (S.deduct ? 'Taken off what the client is asked to pay' : 'Tracked on the claim, left on the invoice') + '</small></td>' +
+      '<td class="r">' + (S.deduct ? (k.holdNow ? '&minus; ' + money(k.holdNow) : money(0)) : money(0)) + '</td></tr>' +
+    '<tr><td class="lbl">GST at ' + C.gstPct + '%<small>On ' + m0(k.gstBase) +
+      ((S.deduct && S.gst === 'gross' && k.holdNow) ? ' &mdash; the full claim, before retention' : '') + '</small></td>' +
+      '<td class="r">+ ' + money(k.gst) + '</td></tr>' +
+    '<tr class="pay"><td>Invoiced to the client<small>' +
+      (S.deduct ? 'Net of retention' : 'Gross &mdash; the client withholds retention themselves') +
+      '</small></td><td class="r">' + money(k.invoice) + '</td></tr>';
+  document.getElementById('p-invoice').innerHTML = inv;
+
+  document.getElementById('p-foot').innerHTML = S.manual
+    ? 'A user may overwrite ' + m0(k.holdNow) + ' on this claim. The calculated figure stays beside it and the change is logged.'
+    : 'Retention on this claim is calculated and not editable.';
+}
+
+/* ---- wiring ---- */
+function bindNum(id, key) {
+  document.getElementById(id).addEventListener('input', function () {
+    var v = parseFloat(this.value); S[key] = isNaN(v) ? 0 : v; render();
+  });
+}
+bindNum('f-rate', 'rate'); bindNum('f-max', 'max'); bindNum('f-vrate', 'vrate');
+bindNum('f-vmax', 'vmax'); bindNum('f-pc', 'pc'); bindNum('f-dlp', 'dlp');
+
+['profile', 'basis', 'sec'].forEach(function (key) {
+  document.getElementById('f-' + key).addEventListener('change', function () { S[key] = this.value; render(); });
+});
+
+[['t-merge', 'merge'], ['t-manual', 'manual'], ['t-deduct', 'deduct']].forEach(function (pair) {
+  document.getElementById(pair[0]).addEventListener('click', function () {
+    S[pair[1]] = !S[pair[1]]; this.classList.toggle('on', S[pair[1]]); render();
+  });
+});
+
+document.querySelectorAll('.radio-opt').forEach(function (el) {
+  el.addEventListener('click', function () {
+    document.querySelectorAll('.radio-opt').forEach(function (o) { o.classList.remove('sel'); });
+    this.classList.add('sel'); S.gst = this.dataset.gst; render();
+  });
+});
+
+document.querySelectorAll('.vb-tab').forEach(function (tab) {
+  tab.addEventListener('click', function () {
+    document.querySelectorAll('.vb-tab').forEach(function (t) { t.classList.remove('active'); });
+    document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('active'); });
+    this.classList.add('active');
+    document.getElementById('v-' + this.dataset.v).classList.add('active');
+    window.scrollTo(0, 0);
+  });
+});
+
+render();
+</script>
+</body>
+</html>
