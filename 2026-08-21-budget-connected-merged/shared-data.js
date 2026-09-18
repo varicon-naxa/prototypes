@@ -1522,6 +1522,7 @@ function vdataDiaryRows() {
       : '';
     return {
       eqId: p.eqId, nm: p.nm, no: p.no, sup: p.sup, rate: p.rate,
+      basis: p.basis, chargedRate: p.chargedRate, dayRate: p.dayRate,
       by: p.by, hrs: hrs, cost: p.cost, status: p.status,
       standDownSet: p.standDownSet, standDownNote: p.standDownNote,
       alloc: p.cc ? VDATA.allocFor(p.cc, d + 'p' + i, i) : [],
