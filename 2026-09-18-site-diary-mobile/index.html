@@ -1088,139 +1088,269 @@ function saveStandDown(){
   toast(SDOWN.cc ? e.nm+' stood down — charged to '+allocLabel(SDOWN.cc) : e.nm+' stood down — flagged unallocated');
 }
 
-/* ── guided add: workers ──────────────────────────────────────────── */
-var ADD = null;
-function openAdd(){
-  ADD = {step:1, picked:[], start:'07:00', end:'15:30', brk:30, allocs:[{t:'',p:100}]};
-  drawAdd();
-}
-function addHrs(){ var m = toMin(ADD.end)-toMin(ADD.start)-(+ADD.brk||0); return Math.max(0,m)/60; }
-function drawAdd(){
-  var segs = [1,2,3].map(function(n){ return '<div class="seg2'+(n<=ADD.step?' on':'')+'"></div>' }).join('');
-  var b='', foot='';
+/* ══════════════════════════════════════════════════════════════════
+   THE DOCKET FLOW — the only way anything is added to the diary.
 
-  if(ADD.step===1){
+   A docket records what arrived, not what it is worth. The order it
+   lands against is what carries the rate, the supplier and the code,
+   so there is no rate field anywhere in here: type a number and you
+   have two prices for one thing, and they will disagree.
+
+   A docket with no order is still captured — flagged unmatched, with
+   no cost until someone says what it landed against. The delivery
+   happened whether or not the paperwork is in yet.
+   ══════════════════════════════════════════════════════════════════ */
+
+var DKT_SEQ = 7100;
+var DKT = null;
+
+function openDocketSheet(feed){
+  DKT = {
+    feed: feed || 'Material',
+    step: 1,
+    order: null,            /* index into ORDERS, or null = unmatched   */
+    no: 'DKT-' + (DKT_SEQ + 1),
+    date: ISO,
+    photo: false,
+    qty: '',                /* materials / misc / plant                 */
+    picked: [],             /* labour                                   */
+    start: '07:00', end: '15:30', brk: 30,
+    allocs: [{t:'', p:100}]
+  };
+  drawDocket();
+}
+function dktSteps(){
+  return DKT.feed==='Labour'
+    ? ['The docket','Who it covers','Time','Allocate & review']
+    : ['The docket','What arrived','Allocate & review'];
+}
+function dktOrder(){ return DKT.order===null ? null : ORDERS[DKT.order]; }
+function dktQty(){
+  if(DKT.feed==='Labour'){ var m = toMin(DKT.end)-toMin(DKT.start)-(+DKT.brk||0); return Math.max(0,m)/60 * DKT.picked.length; }
+  return +DKT.qty || 0;
+}
+function dktValue(){ var o = dktOrder(); return o ? dktQty()*o.rate : null; }
+function dktUnit(){ var o = dktOrder(); return o ? o.unit : (DKT.feed==='Labour'||DKT.feed==='Plant' ? 'hr' : 'ea'); }
+
+function drawDocket(){
+  var steps = dktSteps(), o = dktOrder();
+  var segs = steps.map(function(_,i){ return '<div class="seg2'+(i<DKT.step?' on':'')+'"></div>' }).join('');
+  var b = '', foot = '';
+
+  /* ── 1. the docket itself, and the order it lands against ───────── */
+  if(DKT.step===1){
+    b += '<div class="callout info"><i class="fa-solid fa-circle-info"></i><div>A docket is <b>one delivery against something that was ordered</b> — it is not the order itself. The order sets the rate, so there is nothing to price here.</div></div>';
+
+    b += '<div class="field"><label>This docket feeds</label><div class="presets">'+
+      ['Material','Labour','Plant','Misc'].map(function(k){
+        return '<span class="preset'+(DKT.feed===k?' on':'')+'" onclick="dktFeed(\''+k+'\')">'+k+'</span>';
+      }).join('')+'</div></div>';
+
+    b += '<div class="row3">'+
+      '<div class="field" style="flex:1.4"><label>Docket no.</label><input id="dkNo" value="'+DKT.no+'" onchange="DKT.no=this.value"></div>'+
+      '<div class="field"><label>Date</label><input type="date" value="'+DKT.date+'" onchange="DKT.date=this.value"></div></div>';
+
+    var cands = ordersFor(DKT.feed);
+    b += '<div class="field"><label>Against which order?</label>';
+    if(!cands.length){
+      b += '<div class="callout warn" style="margin:0"><i class="fa-solid fa-triangle-exclamation"></i><div>No open '+DKT.feed.toLowerCase()+' orders on this project. Capture the docket unmatched and code it when the order exists.</div></div>';
+    }
+    cands.forEach(function(c){
+      var i = ORDERS.indexOf(c), on = DKT.order===i;
+      var left = Math.max(0, c.ordered - delivered(c, DKT.date));
+      b += '<div class="pick'+(on?' sel':'')+'" onclick="dktPick('+i+')">'+
+        '<div class="chk"><i class="fa-solid fa-check"></i></div>'+
+        '<div style="min-width:0"><div class="nm">'+c.nm+'</div>'+
+        '<div class="meta"><span style="font-family:monospace;font-weight:700">'+c.ref+'</span> · '+c.sup+
+        ' · '+qty(left, c.unit)+' left · '+rateStr(c.rate, c.unit)+'</div></div></div>';
+    });
+    b += '<div class="pick'+(DKT.order===null?' sel':'')+'" onclick="dktPick(null)">'+
+      '<div class="chk"><i class="fa-solid fa-check"></i></div>'+
+      '<div><div class="nm">No order</div><div class="meta">Capture it unmatched — no rate, no cost, until it is matched</div></div></div>';
+    b += '</div>';
+
+    if(DKT.order===null){
+      b += '<div class="callout warn"><i class="fa-solid fa-triangle-exclamation"></i><div>This docket will be recorded with <b>quantity only</b> and flagged <b>unmatched</b>. Nothing is lost and nothing is blocked — but it carries no cost until someone says what it landed against.</div></div>';
+    }
+
+    b += '<div class="sig'+(DKT.photo?' signed':'')+'" onclick="DKT.photo=true;drawDocket()">'+
+      (DKT.photo ? '<i class="fa-solid fa-circle-check"></i> Docket photographed'
+                 : '<i class="fa-solid fa-camera"></i> Tap to photograph the docket')+'</div>';
+
+    foot = '<button class="btn-next" onclick="dktStep(2)">Continue</button>';
+  }
+
+  /* ── 2. what arrived (or who, for labour) ───────────────────────── */
+  if(DKT.step===2 && DKT.feed!=='Labour'){
+    b += dktOrderCard();
+    var u = dktUnit();
+    b += '<div class="field"><label>'+(DKT.feed==='Plant'?'Hours on the docket':'Quantity delivered')+' <span style="color:var(--muted);font-weight:400">('+u+')</span></label>'+
+         '<input type="number" step="any" value="'+DKT.qty+'" oninput="DKT.qty=this.value;dktLive()" placeholder="0"></div>';
+    b += '<div class="calc" id="dkLive">'+dktLiveHtml()+'</div>';
+    foot = '<button class="btn-back" onclick="dktStep(1)">Back</button>'+
+           '<button class="btn-next" onclick="dktStep(3)"'+(dktQty()>0?'':' disabled')+'>Continue</button>';
+  }
+
+  if(DKT.step===2 && DKT.feed==='Labour'){
+    b += dktOrderCard();
     b += '<div class="searchbar"><i class="fa-solid fa-magnifying-glass"></i><input id="pkSearch" placeholder="Search the crew…" oninput="filterPick()"></div>';
     CREW.forEach(function(w){
-      var on = ADD.picked.indexOf(w.id)>-1;
-      b += '<div class="pick'+(on?' sel':'')+'" data-nm="'+w.nm.toLowerCase()+'" onclick="togglePick(\''+w.id+'\')">'+
-           '<div class="chk"><i class="fa-solid fa-check"></i></div>'+
-           '<div><div class="nm">'+w.nm+(w.abn?'<span class="abn">ABN <span class="po">'+w.abn+'</span></span>':'')+'</div>'+
-           '<div class="meta">'+w.role+' · '+rateStr(w.rate,'hr')+'</div></div></div>';
+      var on = DKT.picked.indexOf(w.id)>-1;
+      b += '<div class="pick'+(on?' sel':'')+'" data-nm="'+w.nm.toLowerCase()+'" onclick="dktTogglePick(\''+w.id+'\')">'+
+        '<div class="chk"><i class="fa-solid fa-check"></i></div>'+
+        '<div><div class="nm">'+w.nm+(w.abn?'<span class="abn">ABN <span class="po">'+w.abn+'</span></span>':'')+'</div>'+
+        '<div class="meta">'+w.role+'</div></div></div>';
     });
-    foot = '<button class="btn-next" onclick="addStep(2)"'+(ADD.picked.length?'':' disabled')+'>Continue'+(ADD.picked.length?' · '+ADD.picked.length+' selected':'')+'</button>';
+    foot = '<button class="btn-back" onclick="dktStep(1)">Back</button>'+
+           '<button class="btn-next" onclick="dktStep(3)"'+(DKT.picked.length?'':' disabled')+'>Continue'+(DKT.picked.length?' · '+DKT.picked.length+' selected':'')+'</button>';
   }
 
-  if(ADD.step===2){
+  /* ── 3. time (labour only) ──────────────────────────────────────── */
+  if(DKT.step===3 && DKT.feed==='Labour'){
     b += '<div class="presets">'+
-      preset('Full day','07:00','15:30',30) + preset('Half AM','07:00','12:00',0) + preset('10 hour','07:00','17:30',30) + '</div>';
+      dktPreset('Full day','07:00','15:30',30) + dktPreset('Half AM','07:00','12:00',0) + dktPreset('10 hour','07:00','17:30',30) + '</div>';
     b += '<div class="row3">'+
-      '<div class="field"><label>Start</label><input type="time" id="aStart" value="'+ADD.start+'" onchange="setT(\'start\',this.value)"></div>'+
-      '<div class="field"><label>End</label><input type="time" id="aEnd" value="'+ADD.end+'" onchange="setT(\'end\',this.value)"></div>'+
-      '<div class="field"><label>Break</label><input type="number" id="aBrk" value="'+ADD.brk+'" onchange="setT(\'brk\',this.value)"></div></div>';
-    b += '<div class="calc"><div class="lbl">Hours worked</div><div class="big">'+hoursTxt(addHrs())+'</div>'+
+      '<div class="field"><label>Start</label><input type="time" value="'+DKT.start+'" onchange="dktSetT(\'start\',this.value)"></div>'+
+      '<div class="field"><label>End</label><input type="time" value="'+DKT.end+'" onchange="dktSetT(\'end\',this.value)"></div>'+
+      '<div class="field"><label>Break</label><input type="number" value="'+DKT.brk+'" onchange="dktSetT(\'brk\',this.value)"></div></div>';
+    var each = Math.max(0, toMin(DKT.end)-toMin(DKT.start)-(+DKT.brk||0))/60;
+    b += '<div class="calc"><div class="lbl">Hours each</div><div class="big">'+hoursTxt(each)+'</div>'+
          '<div class="feed"><i class="fa-solid fa-arrow-right-long"></i> Timesheet <i>and</i> labour cost, entered once</div></div>';
-    foot = '<button class="btn-back" onclick="addStep(1)">Back</button><button class="btn-next" onclick="addStep(3)">Continue</button>';
+    foot = '<button class="btn-back" onclick="dktStep(2)">Back</button><button class="btn-next" onclick="dktStep(4)">Continue</button>';
   }
 
-  if(ADD.step===3){
-    var many = ADD.allocs.length>1;
-    b += '<div style="font-size:11.5px;color:var(--muted);margin-bottom:10px;line-height:1.5">Allocating in the project\'s own terms — <b>'+(STRUCT==='wbs'?'WBS task › subtask':'cost centre')+'</b>.</div>';
-    ADD.allocs.forEach(function(a,i){
-      b += '<div class="arow">'+(many?'<i class="fa-solid fa-xmark rm" onclick="rmAlloc('+i+')"></i>':'')+
+  /* ── last. allocate and review ──────────────────────────────────── */
+  var lastStep = steps.length;
+  if(DKT.step===lastStep){
+    var many = DKT.allocs.length>1;
+    if(o) b += '<div class="callout"><i class="fa-solid fa-circle-check"></i><div>Pre-filled from <b>'+o.ref+'</b> — the order already says what this is charged to. Change it if this delivery went somewhere else.</div></div>';
+    DKT.allocs.forEach(function(a,i){
+      b += '<div class="arow">'+(many?'<i class="fa-solid fa-xmark rm" onclick="dktRmAlloc('+i+')"></i>':'')+
         '<div class="field" style="margin:0"><label>'+(STRUCT==='wbs'?'Task':'Cost centre')+'</label>'+
-        '<select onchange="setAllocT('+i+',this.value)"><option value="">Select…</option>'+
+        '<select onchange="dktSetAllocT('+i+',this.value)"><option value="">Select…</option>'+
         allocTargets().map(function(t){ return '<option'+(a.t===t?' selected':'')+'>'+t+'</option>' }).join('')+
         '</select></div>'+
-        (many?'<div class="asplit">Share <input type="number" value="'+a.p+'" onchange="setAllocP('+i+',this.value)"> %</div>':'')+
+        (many?'<div class="asplit">Share <input type="number" value="'+a.p+'" onchange="dktSetAllocP('+i+',this.value)"> %</div>':'')+
         '</div>';
     });
-    b += '<button class="add-alloc" onclick="addAlloc()"><i class="fa-solid fa-plus"></i> Split across another '+(STRUCT==='wbs'?'task':'cost centre')+'</button>';
-    var sum = ADD.allocs.reduce(function(t,a){return t+(+a.p||0)},0);
-    var all = ADD.allocs.every(function(a){ return a.t });
+    b += '<button class="add-alloc" onclick="dktAddAlloc()"><i class="fa-solid fa-plus"></i> Split across another '+(STRUCT==='wbs'?'task':'cost centre')+'</button>';
+    var sum = DKT.allocs.reduce(function(t,a){ return t+(+a.p||0) },0);
+    var all = DKT.allocs.every(function(a){ return a.t });
     if(many) b += '<div class="ssum '+(sum===100&&all?'ok':'bad')+'">'+(sum===100&&all?'<i class="fa-solid fa-check"></i> Splits total 100%':'Splits total '+sum+'% — must equal 100%')+'</div>';
 
     b += '<div class="blk" style="margin-top:14px"><h4><i class="fa-solid fa-list-check"></i> About to add</h4>';
-    ADD.picked.forEach(function(id){
-      var w = worker(id);
-      b += '<div class="rev"><div class="av">'+initials(w.nm)+'</div><div><div class="nm">'+w.nm+'</div>'+
-           '<div class="det">'+ADD.start+'–'+ADD.end+' · '+ADD.brk+'m break · <b>'+hoursTxt(addHrs())+'</b><br>'+
-           rateStr(w.rate,'hr')+' · labour cost '+money(addHrs()*w.rate)+'</div></div></div>';
-    });
+    b += kv('Docket', DKT.no) + kv('Date', human(DKT.date)) +
+         kv('Order', o ? o.ref+' · '+o.sup : 'Unmatched — no order');
+    if(DKT.feed==='Labour'){
+      var each2 = Math.max(0, toMin(DKT.end)-toMin(DKT.start)-(+DKT.brk||0))/60;
+      DKT.picked.forEach(function(id){
+        var w = worker(id);
+        b += '<div class="rev"><div class="av">'+initials(w.nm)+'</div><div><div class="nm">'+w.nm+'</div>'+
+             '<div class="det">'+DKT.start+'–'+DKT.end+' · '+DKT.brk+'m break · <b>'+hoursTxt(each2)+'</b><br>'+
+             (o ? rateStr(o.rate,'hr')+' from '+o.ref+' · '+money(each2*o.rate)
+                : '<span style="color:#b91c1c">no order — no rate, no cost</span>')+'</div></div></div>';
+      });
+    } else {
+      b += kv('Quantity', qty(dktQty(), dktUnit()));
+      b += kv('Rate', o ? rateStr(o.rate, o.unit)+' (from '+o.ref+')' : '— unmatched');
+      b += kv('Value', o ? money(dktValue()) : '—');
+    }
     b += '</div>';
-    foot = '<button class="btn-back" onclick="addStep(2)">Back</button>'+
-           '<button class="btn-next amber" onclick="commitAdd()"'+((all && (!many||sum===100))?'':' disabled')+'>Add '+ADD.picked.length+' to the diary</button>';
+
+    foot = '<button class="btn-back" onclick="dktStep('+(lastStep-1)+')">Back</button>'+
+           '<button class="btn-next amber" onclick="saveDocket()"'+((all && (!many||sum===100))?'':' disabled')+'>Save docket</button>';
   }
 
-  showSheet(['Add workers','Set the time','Allocate the hours'][ADD.step-1],
-            'Step '+ADD.step+' of 3', b, foot, segs, drawAdd);
+  showSheet(steps[DKT.step-1], 'Step '+DKT.step+' of '+steps.length+' · '+DKT.feed.toLowerCase()+' docket',
+            b, foot, segs, drawDocket);
 }
-function preset(nm,s,e,b){
-  var on = ADD.start===s && ADD.end===e && +ADD.brk===b;
-  return '<span class="preset'+(on?' on':'')+'" onclick="setPreset(\''+s+'\',\''+e+'\','+b+')">'+nm+'</span>';
+
+function dktOrderCard(){
+  var o = dktOrder();
+  if(!o) return '<div class="callout warn"><i class="fa-solid fa-triangle-exclamation"></i><div><b>Unmatched docket.</b> Quantity only — no rate and no cost until it is matched to an order.</div></div>';
+  var d = delivered(o, DKT.date);
+  return '<div class="blk"><h4><i class="fa-solid fa-file-invoice"></i> From the order</h4>'+
+    kv('Order', o.ref) + kv('Supplier', o.sup) + kv('Rate', rateStr(o.rate, o.unit)) +
+    kv('Charged to', allocLabel(o.cc)) +
+    kv('Still to deliver', qty(Math.max(0,o.ordered-d), o.unit)) +
+    '<div style="font-size:10.5px;color:var(--muted);margin-top:6px;line-height:1.5">These come from the order and cannot be typed here. One thing, one price.</div></div>';
 }
-function setPreset(s,e,b){ ADD.start=s; ADD.end=e; ADD.brk=b; drawAdd(); }
-function setT(k,v){ ADD[k]=v; drawAdd(); }
-function togglePick(id){ var i=ADD.picked.indexOf(id); if(i>-1) ADD.picked.splice(i,1); else ADD.picked.push(id); drawAdd(); }
+function dktLiveHtml(){
+  var o = dktOrder();
+  if(!o) return '<div class="lbl">Quantity recorded</div><div class="big">'+qty(dktQty(), dktUnit())+'</div><div class="feed" style="color:#b91c1c">Unmatched — no cost yet</div>';
+  return '<div class="lbl">Value of this docket</div><div class="big">'+money(dktValue())+'</div>'+
+         '<div class="feed"><i class="fa-solid fa-arrow-right-long"></i> '+qty(dktQty(),o.unit)+' × '+rateStr(o.rate,o.unit)+' from '+o.ref+'</div>';
+}
+function dktLive(){ var el=document.getElementById('dkLive'); if(el) el.innerHTML = dktLiveHtml(); }
+
+function dktFeed(k){
+  DKT.feed = k; DKT.order = null; DKT.picked = []; DKT.qty = '';
+  DKT.allocs = [{t:'',p:100}];
+  drawDocket();
+}
+function dktPick(i){
+  DKT.order = i;
+  var o = dktOrder();
+  /* the order already says what this is charged to — start from that */
+  DKT.allocs = [{t: o ? (STRUCT==='wbs' ? CC2WBS[o.cc] : ccName(o.cc)) : '', p:100}];
+  drawDocket();
+}
+function dktTogglePick(id){ var i=DKT.picked.indexOf(id); if(i>-1) DKT.picked.splice(i,1); else DKT.picked.push(id); drawDocket(); }
 function filterPick(){
-  var q=document.getElementById('pkSearch').value.toLowerCase();
+  var q = document.getElementById('pkSearch').value.toLowerCase();
   Array.prototype.forEach.call(document.querySelectorAll('.pick[data-nm]'), function(p){
     p.style.display = p.getAttribute('data-nm').indexOf(q)>-1 ? 'flex' : 'none';
   });
 }
-function addStep(n){ ADD.step=n; drawAdd(); }
-function setAllocT(i,v){ ADD.allocs[i].t=v; drawAdd(); }
-function setAllocP(i,v){ ADD.allocs[i].p=+v||0; drawAdd(); }
-function addAlloc(){
-  var n=ADD.allocs.length+1, ev=Math.floor(100/n);
-  ADD.allocs.forEach(function(a){ a.p=ev });
-  ADD.allocs.push({t:'',p:100-ev*(n-1)});
-  drawAdd();
+function dktStep(n){ DKT.step=n; drawDocket(); }
+function dktPreset(nm,s,e,b){
+  var on = DKT.start===s && DKT.end===e && +DKT.brk===b;
+  return '<span class="preset'+(on?' on':'')+'" onclick="dktSetPreset(\''+s+'\',\''+e+'\','+b+')">'+nm+'</span>';
 }
-function rmAlloc(i){ ADD.allocs.splice(i,1); if(ADD.allocs.length===1) ADD.allocs[0].p=100; drawAdd(); }
-function commitAdd(){
-  ADD.picked.forEach(function(id){
-    labour.push({
-      w:id, start:ADD.start, end:ADD.end, brk:+ADD.brk, status:'pend',
-      alloc: ADD.allocs.map(function(a){ return {cc:targetToCC(a.t), p:a.p} })
-    });
-  });
-  var n = ADD.picked.length;
-  closeSheet(); renderAll();
-  toast(n+' worker'+(n===1?'':'s')+' added — timesheet and cost in one entry');
+function dktSetPreset(s,e,b){ DKT.start=s; DKT.end=e; DKT.brk=b; drawDocket(); }
+function dktSetT(k,v){ DKT[k]=v; drawDocket(); }
+function dktSetAllocT(i,v){ DKT.allocs[i].t=v; drawDocket(); }
+function dktSetAllocP(i,v){ DKT.allocs[i].p=+v||0; drawDocket(); }
+function dktAddAlloc(){
+  var n=DKT.allocs.length+1, ev=Math.floor(100/n);
+  DKT.allocs.forEach(function(a){ a.p=ev });
+  DKT.allocs.push({t:'',p:100-ev*(n-1)});
+  drawDocket();
 }
+function dktRmAlloc(i){ DKT.allocs.splice(i,1); if(DKT.allocs.length===1) DKT.allocs[0].p=100; drawDocket(); }
 
-/* ── docket capture ───────────────────────────────────────────────── */
-var DKT_SEQ = 7100;
-function openDocketSheet(feeds){
-  var b = '';
-  b += '<div class="callout info" style="margin-bottom:12px"><i class="fa-solid fa-circle-info"></i><div>A docket is <b>one delivery against something that was ordered</b> — it is not the order itself. Saving it creates the line in the matching section and keeps the docket against it.</div></div>';
-  b += '<div class="field"><label>This docket feeds</label><select id="dkFeeds">'+
-       ['Material','Labour','Plant','Misc'].map(function(k){ return '<option'+(k===feeds?' selected':'')+'>'+k+'</option>' }).join('')+
-       '</select></div>';
-  b += '<div class="field"><label>Docket no.</label><input id="dkNo" value="DKT-'+(++DKT_SEQ)+'"></div>';
-  b += '<div class="field"><label>Supplier</label><input id="dkSup" placeholder="e.g. Delta Plant Hire"></div>';
-  b += '<div class="row3"><div class="field"><label>Qty</label><input type="number" id="dkQty" value="1" step="any"></div>'+
-       '<div class="field"><label>Unit</label><input id="dkUnit" value="ea"></div>'+
-       '<div class="field"><label>Rate</label><input type="number" id="dkRate" value="0" step="any"></div></div>';
-  b += '<div class="field"><label>Charged to</label><select id="dkCC">'+
-       allocTargets().map(function(t){ return '<option>'+t+'</option>' }).join('')+'</select></div>';
-  b += '<div class="sig" onclick="this.classList.add(\'signed\');this.innerHTML=\'<i class=&quot;fa-solid fa-camera&quot;></i> Docket photographed\'"><i class="fa-solid fa-camera"></i> Tap to photograph the docket</div>';
-  showSheet('Capture site docket', 'The paper in your hand becomes the line in the diary', b,
-    '<button class="btn-back" onclick="closeSheet()">Cancel</button><button class="btn-next amber" onclick="saveDocket()">Save docket</button>');
-}
 function saveDocket(){
-  var qtyV = +document.getElementById('dkQty').value || 0;
-  var rateV = +document.getElementById('dkRate').value || 0;
+  var o = dktOrder();
+  var alloc = DKT.allocs.map(function(a){ return {cc:targetToCC(a.t), p:a.p} });
+  DKT_SEQ++;
+
   dockets.push({
-    no: document.getElementById('dkNo').value,
-    feeds: document.getElementById('dkFeeds').value,
-    sup: document.getElementById('dkSup').value || 'Unnamed supplier',
-    value: qtyV*rateV,
-    cc: targetToCC(document.getElementById('dkCC').value)
+    no: DKT.no, date: DKT.date, feeds: DKT.feed,
+    sup: o ? o.sup : 'Unmatched',
+    order: o ? o.ref : null,
+    qty: dktQty(), unit: dktUnit(),
+    value: dktValue(),
+    cc: alloc[0].cc
   });
-  closeSheet(); go('dockets'); renderAll();
-  toast('Docket saved — it feeds the matching section');
+
+  if(DKT.feed==='Labour'){
+    DKT.picked.forEach(function(id){
+      labour.push({ w:id, start:DKT.start, end:DKT.end, brk:+DKT.brk, status:'pend',
+                    alloc:alloc, docket:DKT.no, order:o?o.ref:null, rate:o?o.rate:null });
+    });
+  }
+  /* A material or misc docket lands on its order, which is what moves the
+     delivered figure — the same rule the tracker already runs on. */
+  if(o && DKT.feed!=='Labour'){
+    o.events.push({d:DKT.date, ref:DKT.no, qty:dktQty(), kind:'docket'});
+    o.events.sort(function(a,b){ return d2i(a.d)-d2i(b.d) });
+  }
+
+  var feed = DKT.feed;
+  closeSheet();
+  go(feed==='Labour' ? 'labour' : feed==='Plant' ? 'plant' : feed==='Misc' ? 'misc' : 'materials');
+  renderAll();
+  toast(o ? 'Docket saved against '+o.ref : 'Docket saved — flagged unmatched');
 }
 
 /* ── notes ────────────────────────────────────────────────────────── */
