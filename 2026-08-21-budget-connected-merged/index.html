@@ -1884,6 +1884,8 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
 #pageSiteDiary .panel-title{font-size:18px;font-weight:700;color:var(--navy)}
 #pageSiteDiary .panel-sub{font-size:13px;color:var(--muted);margin-bottom:16px;max-width:680px;line-height:1.5}
 #pageSiteDiary .callout{display:flex;gap:10px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:12px 14px;font-size:13px;color:#065f46;margin-bottom:18px;line-height:1.5}
+#pageSiteDiary .callout.warn{background:#fffbeb;border-color:#fde68a;color:#92400e}
+#pageSiteDiary .field input[readonly]{background:#f6f7f9;color:#6b7280;cursor:not-allowed}
 #pageSiteDiary .callout i{color:#10b981;margin-top:2px;font-size:15px}
 #pageSiteDiary .callout b{color:#047857}
 #pageSiteDiary .summary{display:flex;gap:0;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px}
@@ -2683,6 +2685,10 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
       <div class="field"><label>Docket no.</label><input id="dkNo" placeholder="e.g. DKT-0007"></div>
       <div class="field"><label>Date</label><input type="date" id="dkDate"></div>
     </div>
+    <div class="field"><label>Against which order <span class="req">*</span></label>
+      <select id="dkOrder" onchange="dkSyncOrder()"></select>
+      <div class="callout" id="dkOrderInfo" style="margin-top:8px"><i class="fa-solid fa-file-invoice"></i><div></div></div>
+    </div>
     <div class="field"><label id="dkSupLbl">Supplier</label><input id="dkSup" placeholder="e.g. Boral" oninput="dkPreview()"></div>
 
     <!-- MATERIAL fields -->
@@ -2690,7 +2696,7 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
       <div class="field"><label>Material</label><input id="dkmName" placeholder="e.g. Class 2 Crushed Rock" oninput="dkPreview()"></div>
       <div class="row3">
         <div class="field"><label>Unit</label><input id="dkmUnit" placeholder="t / m / m³"></div>
-        <div class="field"><label>Rate ($ / unit)</label><input type="number" id="dkmRate" min="0" step="any" oninput="dkPreview()"></div>
+        <div class="field dk-rate"><label>Rate ($ / unit)</label><input type="number" id="dkmRate" min="0" step="any" readonly></div>
         <div class="field"><label>Delivered qty</label><input type="number" id="dkmDel" min="0" step="any" oninput="dkPreview()"></div>
       </div>
     </div>
@@ -2702,7 +2708,7 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
         <div class="field"><label>Role</label><input id="dklRole" placeholder="e.g. Labourer"></div>
       </div>
       <div class="row3">
-        <div class="field"><label>Rate ($ / hr)</label><input type="number" id="dklRate" min="0" step="any" oninput="dkPreview()"></div>
+        <div class="field dk-rate"><label>Rate ($ / hr)</label><input type="number" id="dklRate" min="0" step="any" readonly></div>
         <div class="field"><label>Allowance ($)</label><input type="number" id="dklAllow" min="0" step="any" value="0" oninput="dkPreview()"></div>
         <div class="field"><label>Hours</label><input type="number" id="dklHrs" min="0" step="any" placeholder="8" oninput="dkPreview()"></div>
       </div>
@@ -2715,7 +2721,7 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
         <div class="field"><label>Equipment no.</label><input id="dkpNo" placeholder="e.g. EX-3301"></div>
       </div>
       <div class="row3">
-        <div class="field"><label>Hire rate ($ / hr)</label><input type="number" id="dkpRate" min="0" step="any" oninput="dkPreview()"></div>
+        <div class="field dk-rate"><label>Hire rate ($ / hr)</label><input type="number" id="dkpRate" min="0" step="any" readonly></div>
         <div class="field"><label>Hours</label><input type="number" id="dkpHrs" min="0" step="any" placeholder="8" oninput="dkPreview()"></div>
         <div class="field"><label>Operated by</label><input id="dkpBy" placeholder="Operator"></div>
       </div>
@@ -2726,7 +2732,7 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
       <div class="field"><label>Item</label><input id="dkxName" placeholder="e.g. Lane closure permit" oninput="dkPreview()"></div>
       <div class="row3">
         <div class="field"><label>Unit</label><input id="dkxUnit" placeholder="ea / loads / visit"></div>
-        <div class="field"><label>Rate ($ / unit)</label><input type="number" id="dkxRate" min="0" step="any" oninput="dkPreview()"></div>
+        <div class="field dk-rate"><label>Rate ($ / unit)</label><input type="number" id="dkxRate" min="0" step="any" readonly></div>
         <div class="field"><label>Qty delivered</label><input type="number" id="dkxQty" min="0" step="any" value="1" oninput="dkPreview()"></div>
       </div>
     </div>
@@ -14923,7 +14929,7 @@ function dktChip(r){return r.srcDocket?'<span class="dkt-chip"><i class="fa-soli
 
 function renderLabour(){
   var b=document.getElementById('tbody-labour');b.innerHTML='';
-  if(!rows.labour.length){b.innerHTML='<tr><td colspan="11"><div class="empty"><i class="fa-solid fa-people-group"></i>No workers yet. Click “Add Workers”.</div></td></tr>';return;}
+  if(!rows.labour.length){b.innerHTML='<tr><td colspan="11"><div class="empty"><i class="fa-solid fa-people-group"></i>No labour yet. Capture a labour docket to add it.</div></td></tr>';return;}
   rows.labour.forEach(function(r){
     var allow=r.allow||0,cnt=r.count||1;
     var rateCell=r.rate?sdMoney(r.rate)+'<span style="color:var(--muted);font-size:12px">/hr</span>':'—';
@@ -15115,22 +15121,93 @@ function dkSyncType(){
   var t=document.getElementById('dkType').value;
   ['Material','Labour','Plant','Misc'].forEach(function(k){document.getElementById('dkg-'+k).style.display=(k===t)?'block':'none';});
   document.getElementById('dkSupLbl').textContent=DKT_TYPES[t].supLbl;
-  dkPreview();
+  dkFillOrders();
 }
 function dkVal(id){return parseFloat(document.getElementById(id).value)||0;}
+
+/* ══ A docket lands against an order ═══════════════════════════════════
+   The order carries the rate, the supplier and the code. Typing a rate on
+   the docket would give one thing two prices, and they would disagree —
+   so there is no rate to type here, only a quantity.
+
+   A docket with no order is still captured: quantity only, flagged
+   unmatched, priced when someone says what it landed against.
+   ═══════════════════════════════════════════════════════════════════════ */
+var DK_ORDERS=[];
+function dkOrders(t){
+  var out=[],seen={};
+  if(t==='Material'||t==='Misc'){
+    (t==='Material'?rows.materials:rows.misc).forEach(function(r){
+      if(r.srcType!=='PO'&&r.srcType!=='Bill')return;             /* a docket is never a source */
+      out.push({ref:r.src,nm:r.nm,sup:r.sup,unit:r.unit||'unit',rate:r.rate,alloc:(r.alloc&&r.alloc[0])||null});
+    });
+  }else if(t==='Labour'){
+    /* an ABN contractor's hours draw down against their own order */
+    rows.labour.forEach(function(r){
+      if(!r.po||seen[r.po])return;seen[r.po]=1;
+      out.push({ref:r.po,nm:r.who,sup:r.who,unit:'hr',rate:r.rate,alloc:(r.alloc&&r.alloc[0])||null});
+    });
+  }else if(t==='Plant'){
+    rows.plant.forEach(function(r){
+      var ref=r.src||r.po;if(!ref||seen[ref])return;seen[ref]=1;
+      out.push({ref:ref,nm:r.nm,no:r.no,sup:r.sup,unit:'hr',rate:r.rate,alloc:(r.alloc&&r.alloc[0])||null});
+    });
+  }
+  return out;
+}
+function dkOrderSel(){var v=document.getElementById('dkOrder').value;return v===''?null:DK_ORDERS[parseInt(v,10)];}
+function dkFillOrders(){
+  var t=document.getElementById('dkType').value;
+  DK_ORDERS=dkOrders(t);
+  var sel=document.getElementById('dkOrder');
+  sel.innerHTML='<option value="">— no order · capture it unmatched —</option>'+
+    DK_ORDERS.map(function(o,i){return '<option value="'+i+'">'+o.ref+'  ·  '+o.nm+'  ·  '+o.sup+'  ·  '+sdMoney(o.rate)+'/'+o.unit+'</option>';}).join('');
+  sel.value=DK_ORDERS.length?'0':'';
+  dkSyncOrder();
+}
+function dkSyncOrder(){
+  var t=document.getElementById('dkType').value,o=dkOrderSel();
+  var box=document.getElementById('dkOrderInfo'),info=box.querySelector('div');
+  /* the rate is shown, never typed — and only when there is an order to show */
+  Array.prototype.forEach.call(document.querySelectorAll('.dk-rate'),function(f){f.style.display=o?'':'none';});
+  if(o){
+    document.getElementById('dkSup').value=o.sup;
+    if(t==='Material'){document.getElementById('dkmName').value=o.nm;document.getElementById('dkmUnit').value=o.unit;document.getElementById('dkmRate').value=o.rate;}
+    if(t==='Misc'){document.getElementById('dkxName').value=o.nm;document.getElementById('dkxUnit').value=o.unit;document.getElementById('dkxRate').value=o.rate;}
+    if(t==='Labour'){document.getElementById('dklRate').value=o.rate;document.getElementById('dklName').value=o.nm;}
+    if(t==='Plant'){document.getElementById('dkpRate').value=o.rate;document.getElementById('dkpName').value=o.nm;if(o.no)document.getElementById('dkpNo').value=o.no;}
+    if(o.alloc){
+      var i=ALLOC_OPTIONS.map(function(x){return x.c}).indexOf(o.alloc.c);
+      if(i>-1)document.getElementById('dkAlloc').value=String(i);
+    }
+    box.className='callout';
+    info.innerHTML='Supplier, unit and <b>rate come from '+o.ref+'</b> — '+sdMoney(o.rate)+' / '+o.unit+
+      '. They are not typed here: one thing, one price.';
+  }else{
+    box.className='callout warn';
+    info.innerHTML='<b>No order.</b> The docket is captured with the quantity only and flagged <b>unmatched</b> — no rate and no cost until someone says what it landed against. Nothing is lost and nothing is blocked.';
+  }
+  dkPreview();
+}
 function dkComputeValue(t){
-  if(t==='Material')return dkVal('dkmRate')*dkVal('dkmDel');
-  if(t==='Labour')return dkVal('dklRate')*dkVal('dklHrs')+dkVal('dklAllow');
-  if(t==='Plant')return dkVal('dkpRate')*dkVal('dkpHrs');
-  if(t==='Misc')return dkVal('dkxRate')*dkVal('dkxQty');
-  return 0;
+  var o=dkOrderSel();
+  if(!o)return null;                                   /* unmatched carries no cost */
+  if(t==='Material')return o.rate*dkVal('dkmDel');
+  if(t==='Labour')return o.rate*dkVal('dklHrs')+dkVal('dklAllow');
+  if(t==='Plant')return o.rate*dkVal('dkpHrs');
+  if(t==='Misc')return o.rate*dkVal('dkxQty');
+  return null;
 }
 function dkPreview(){
-  var t=document.getElementById('dkType').value,v=dkComputeValue(t),html='';
-  if(t==='Material'){var u=document.getElementById('dkmUnit').value||'unit';html='Delivered cost <b>'+sdMoney(v)+'</b> ('+sdMoney(dkVal('dkmRate'))+'/'+u+' × '+dkVal('dkmDel').toLocaleString('en-AU')+') · feeds <b>Materials</b>';}
-  else if(t==='Labour'){html='Labour cost <b>'+sdMoney(v)+'</b> ('+sdMoney(dkVal('dklRate'))+'/hr × '+dkVal('dklHrs')+'h'+(dkVal('dklAllow')?' + '+sdMoney(dkVal('dklAllow'))+' allow':'')+') · feeds <b>Labour</b>';}
-  else if(t==='Plant'){html='Plant cost <b>'+sdMoney(v)+'</b> ('+sdMoney(dkVal('dkpRate'))+'/hr × '+dkVal('dkpHrs')+'h) · feeds <b>Plant</b>';}
-  else{var xu=document.getElementById('dkxUnit').value||'unit';html='Delivered cost <b>'+sdMoney(v)+'</b> ('+sdMoney(dkVal('dkxRate'))+'/'+xu+' × '+dkVal('dkxQty').toLocaleString('en-AU')+') · feeds <b>Misc</b>';}
+  var t=document.getElementById('dkType').value,o=dkOrderSel(),v=dkComputeValue(t),html='';
+  if(!o){
+    var q=(t==='Material')?dkVal('dkmDel'):(t==='Labour')?dkVal('dklHrs'):(t==='Plant')?dkVal('dkpHrs'):dkVal('dkxQty');
+    html='Quantity recorded <b>'+q.toLocaleString('en-AU')+'</b> · <b>unmatched</b> — no rate, so no cost until it is matched to an order';
+  }
+  else if(t==='Material'){html='Delivered cost <b>'+sdMoney(v)+'</b> ('+sdMoney(o.rate)+'/'+o.unit+' × '+dkVal('dkmDel').toLocaleString('en-AU')+' from <b>'+o.ref+'</b>) · feeds <b>Materials</b>';}
+  else if(t==='Labour'){html='Labour cost <b>'+sdMoney(v)+'</b> ('+sdMoney(o.rate)+'/hr × '+dkVal('dklHrs')+'h'+(dkVal('dklAllow')?' + '+sdMoney(dkVal('dklAllow'))+' allow':'')+' from <b>'+o.ref+'</b>) · feeds <b>Labour</b>';}
+  else if(t==='Plant'){html='Plant cost <b>'+sdMoney(v)+'</b> ('+sdMoney(o.rate)+'/hr × '+dkVal('dkpHrs')+'h from <b>'+o.ref+'</b>) · feeds <b>Plant</b>';}
+  else{html='Delivered cost <b>'+sdMoney(v)+'</b> ('+sdMoney(o.rate)+'/'+o.unit+' × '+dkVal('dkxQty').toLocaleString('en-AU')+' from <b>'+o.ref+'</b>) · feeds <b>Misc</b>';}
   document.querySelector('#dkPreview div').innerHTML=html;
 }
 function saveDocket(){
@@ -15139,29 +15216,30 @@ function saveDocket(){
   var date=document.getElementById('dkDate').value||'2026-06-05';
   var sup=document.getElementById('dkSup').value||'—';
   var alloc=[Object.assign({p:100},ALLOC_OPTIONS[parseInt(document.getElementById('dkAlloc').value,10)||0])];
+  var dkO=dkOrderSel(),dkRate=dkO?dkO.rate:null,dkRef=dkO?dkO.ref:null;
   var value=dkComputeValue(t),feedLabel='';
   if(t==='Material'){
     var nm=document.getElementById('dkmName').value;if(!nm){sdToast('Enter a material name');return;}
     var dq=dkVal('dkmDel'),dunit=document.getElementById('dkmUnit').value||'';
-    rows.materials.push({id:no,srcType:'Docket',src:no,nm:nm,sup:sup,unit:dunit,rate:dkVal('dkmRate'),ordered:dq,delivered:dq,srcDocket:no});
+    rows.materials.push({id:no,srcType:'Docket',src:no,nm:nm,sup:sup,unit:dunit,rate:dkRate,ordered:dq,delivered:dq,srcDocket:no,order:dkRef});
     if(dq>0)rows.deliveries.push({time:nowHHMM(),mat:nm,src:no,srcType:'Docket',sup:sup,qty:dq,unit:dunit});
     feedLabel=nm;renderMaterials();renderDeliveries();
   }else if(t==='Labour'){
     var who=document.getElementById('dklName').value;if(!who){sdToast('Enter a worker name');return;}
-    rows.labour.push({who:who,role:document.getElementById('dklRole').value||'—',rate:dkVal('dklRate'),allow:dkVal('dklAllow'),in:'—',out:'—',brk:'0',hrs:hrsStr(dkVal('dklHrs')),alloc:alloc,status:'pend',srcDocket:no});
+    rows.labour.push({who:who,role:document.getElementById('dklRole').value||'—',rate:dkRate,allow:dkVal('dklAllow'),in:'—',out:'—',brk:'0',hrs:hrsStr(dkVal('dklHrs')),alloc:alloc,status:'pend',srcDocket:no,po:dkRef});
     feedLabel=who;renderLabour();
   }else if(t==='Plant'){
     var pnm=document.getElementById('dkpName').value;if(!pnm){sdToast('Enter equipment');return;}
-    rows.plant.push({nm:pnm,no:document.getElementById('dkpNo').value||'—',sup:sup,rate:dkVal('dkpRate'),by:document.getElementById('dkpBy').value||'—',hrs:hrsStr(dkVal('dkpHrs')),alloc:alloc,srcDocket:no});
+    rows.plant.push({nm:pnm,no:document.getElementById('dkpNo').value||'—',sup:sup,rate:dkRate,by:document.getElementById('dkpBy').value||'—',hrs:hrsStr(dkVal('dkpHrs')),alloc:alloc,srcDocket:no,src:dkRef});
     feedLabel=pnm;renderPlant();
   }else{
     var xnm=document.getElementById('dkxName').value;if(!xnm){sdToast('Enter an item');return;}
     var xq=dkVal('dkxQty'),xu=document.getElementById('dkxUnit').value||'';
-    rows.misc.push({id:no,srcType:'Docket',src:no,nm:xnm,sup:sup,unit:xu,rate:dkVal('dkxRate'),ordered:xq,delivered:xq,srcDocket:no});
+    rows.misc.push({id:no,srcType:'Docket',src:no,nm:xnm,sup:sup,unit:xu,rate:dkRate,ordered:xq,delivered:xq,srcDocket:no,order:dkRef});
     if(xq>0)rows.miscEntries.push({time:nowHHMM(),mat:xnm,src:no,srcType:'Docket',sup:sup,qty:xq,unit:xu});
     feedLabel=xnm;renderMisc();renderMiscEntries();
   }
-  rows.dockets.push({no:no,type:t,sup:sup,date:date,feed:feedLabel,value:value});
+  rows.dockets.push({no:no,type:t,sup:sup,date:date,feed:feedLabel,value:value,order:dkRef});
   if(no.indexOf('DKT-')===0){var n=parseInt(no.slice(4),10);if(!isNaN(n)&&n>DKT_SEQ)DKT_SEQ=n;}
   closeDocket();renderDockets();sdToast(no+' added to '+DKT_TYPES[t].feed);
 }

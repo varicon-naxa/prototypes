@@ -667,3 +667,33 @@ all work, the base wizard still runs end to end, and the console is clean.
 
 The site diary's `mobile.html` has no tab of its own — it is a separate screen,
 not a view of the desktop diary. It stays in its original folder.
+
+## A docket has no rate — the order it lands against does — 2026-09-18
+
+Alec's call on 2026-09-18, applied to the diary source
+(`2026-06-02-site-diary-unified-workflow/index.html`) and mirrored in the new mobile
+diary (`2026-09-18-site-diary-mobile`).
+
+The docket drawer let you type a rate. That gives one thing two prices, and they will
+disagree — the tracker already says supplier, rate and ordered quantity come from the
+source, and the drawer contradicted it.
+
+The drawer now opens with **Against which order?**, listing the open orders for that kind
+of docket with what is left on each and at what rate:
+
+- **Material / Misc** — the source lines already held, PO or direct bill.
+- **Labour** — the ABN contractors' own POs, which is where their rate lives. In this
+  data that is PO-2859 (J. Whitton, $78/hr) and PO-2249 (T. Bui, $66/hr).
+- **Plant** — any hire order carried on the row.
+
+Picking one fills the supplier, item, unit and **rate**, pre-selects the allocation the
+order already carries, and the four rate inputs are hidden: the rate is shown, never
+typed. **A docket with no order is still captured** — quantity only, flagged unmatched,
+priced when someone says what it landed against. Nothing blocks.
+
+Masking needed no work: the drawer's figures go through the same `money()` the merge
+rewrites, so in supervisor view the order list reads `—/m³` and the drawer holds zero
+money figures.
+
+Also: labour's empty state said *Click "Add Workers"* for a button that had no caller.
+It now points at the docket, which is the only way labour is added.
