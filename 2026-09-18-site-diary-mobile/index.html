@@ -1334,6 +1334,34 @@ function dktAddAlloc(){
 }
 function dktRmAlloc(i){ DKT.allocs.splice(i,1); if(DKT.allocs.length===1) DKT.allocs[0].p=100; drawDocket(); }
 
+/* Matching an unmatched docket is the same question the capture asked, put
+   again later — so it is the same list, not a second screen with a rate on it. */
+function matchDocket(i){
+  var d = dockets[i];
+  var cands = ordersFor(d.feeds);
+  var b = '<div class="callout info"><i class="fa-solid fa-circle-info"></i><div><b>'+d.no+'</b> recorded '+qty(d.qty,d.unit)+' with no order behind it. Pick the order and the rate follows.</div></div>';
+  cands.forEach(function(c){
+    var j = ORDERS.indexOf(c);
+    b += '<div class="pick" onclick="doMatch('+i+','+j+')"><div class="chk"><i class="fa-solid fa-check"></i></div>'+
+      '<div><div class="nm">'+c.nm+'</div><div class="meta"><span style="font-family:monospace;font-weight:700">'+c.ref+
+      '</span> · '+c.sup+' · '+rateStr(c.rate,c.unit)+' → '+money(d.qty*c.rate)+'</div></div></div>';
+  });
+  if(!cands.length) b += '<div class="empty"><div class="p">No open '+d.feeds.toLowerCase()+' orders to match against yet.</div></div>';
+  showSheet('Match '+d.no, 'Pick the order this landed against', b,
+    '<button class="btn-next" onclick="closeSheet()">Cancel</button>');
+}
+function doMatch(i, j){
+  var d = dockets[i], o = ORDERS[j];
+  d.order = o.ref; d.sup = o.sup; d.value = d.qty*o.rate; d.unit = o.unit;
+  if(d.feeds==='Labour'){
+    labour.forEach(function(r){ if(r.docket===d.no){ r.order=o.ref; r.rate=o.rate; } });
+  } else {
+    o.events.push({d:d.date, ref:d.no, qty:d.qty, kind:'docket'});
+    o.events.sort(function(a,b){ return d2i(a.d)-d2i(b.d) });
+  }
+  closeSheet(); renderAll(); toast(d.no+' matched to '+o.ref);
+}
+
 function saveDocket(){
   var o = dktOrder();
   var alloc = DKT.allocs.map(function(a){ return {cc:targetToCC(a.t), p:a.p} });
