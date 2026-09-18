@@ -460,15 +460,49 @@ var CREW = [
 function worker(id){ return CREW.filter(function(w){return w.id===id})[0]; }
 
 /* Every machine on the project — the roster, not just the ones that worked.
+
+   A machine is charged on the basis in the hire agreement, and most of this
+   fleet is NOT hourly. Hours are what the machine did; the basis is what it
+   costs. They only multiply together when the basis is hourly — a day-hire
+   excavator that ran two hours still costs a day, and a water cart on weekly
+   hire costs its share of the week on a day nobody touched it.
+
    Stand-down is priced by the equipment register whoever owns the machine. */
+var HOURS_PER_DAY = 8, DAYS_PER_WEEK = 5;
 var FLEET = [
-  {id:'p04', nm:'20T Excavator',       no:'P-04', sup:"Cookie's Civil", owned:true,  rate:145, standDay:1160, lastCC:'CC-100'},
-  {id:'p11', nm:'5T Excavator',        no:'P-11', sup:"Cookie's Civil", owned:true,  rate:95,  standDay:760,  lastCC:'CC-300'},
-  {id:'p07', nm:'10T Tipper',          no:'P-07', sup:"Cookie's Civil", owned:true,  rate:110, standDay:880,  lastCC:'CC-100'},
-  {id:'p02', nm:'Bobcat / Skid Steer', no:'P-02', sup:"Cookie's Civil", owned:true,  rate:85,  standDay:680,  lastCC:'CC-300'},
-  {id:'p15', nm:'Smooth Drum Roller',  no:'P-15', sup:'Delta Plant Hire', owned:false, rate:98, standDay:784, lastCC:'CC-200'},
-  {id:'p09', nm:'Water Cart',          no:'P-09', sup:'Coates Hire',    owned:false, rate:87,  standDay:696, lastCC:'CC-200'}
+  {id:'p04', nm:'20T Excavator',       no:'P-04', sup:"Cookie's Civil",   owned:true,  basis:'day',  listRate:1160, lastCC:'CC-100'},
+  {id:'p11', nm:'5T Excavator',        no:'P-11', sup:"Cookie's Civil",   owned:true,  basis:'hr',   listRate:95,   lastCC:'CC-300'},
+  {id:'p07', nm:'10T Tipper',          no:'P-07', sup:"Cookie's Civil",   owned:true,  basis:'day',  listRate:880,  lastCC:'CC-100'},
+  {id:'p02', nm:'Bobcat / Skid Steer', no:'P-02', sup:"Cookie's Civil",   owned:true,  basis:'hr',   listRate:85,   lastCC:'CC-300'},
+  {id:'p15', nm:'Smooth Drum Roller',  no:'P-15', sup:'Delta Plant Hire', owned:false, basis:'day',  listRate:784,  onHire:true, lastCC:'CC-200'},
+  {id:'p09', nm:'Water Cart',          no:'P-09', sup:'Coates Hire',      owned:false, basis:'week', listRate:3300, onHire:true, lastCC:'CC-200'}
 ];
+
+/* One rate, converted only where a conversion is genuinely needed. */
+function dayRate(e){
+  return e.basis==='hr'  ? e.listRate * HOURS_PER_DAY
+       : e.basis==='day' ? e.listRate
+       : e.listRate / DAYS_PER_WEEK;
+}
+function basisLabel(e){ return e.basis==='week' ? 'wk' : e.basis; }
+/* The rate as the agreement writes it — never a derived hourly under an /hr
+   heading, which is what made a $1,160-a-day excavator read $145/hr. */
+function rateAsCharged(e){ return rateStr(e.listRate, basisLabel(e)); }
+
+/* What the machine costs today, on its own basis. */
+function plantCharge(e){
+  var st = plantStatus(e);
+  if(st==='standdown') return standDowns[e.id].charge;
+  if(st==='working'){
+    var h = plantDay[e.id].hrs;
+    return e.basis==='hr' ? h * e.listRate : dayRate(e);   /* a day is a day */
+  }
+  return e.onHire ? dayRate(e) : 0;      /* on hire and idle still costs */
+}
+function utilisation(e){
+  var d = plantDay[e.id];
+  return d ? Math.round(d.hrs / HOURS_PER_DAY * 100) : 0;
+}
 
 var STAND_REASONS = [
   {k:'weather',   nm:'Weather',           note:'Claimable against the client on most contracts'},
