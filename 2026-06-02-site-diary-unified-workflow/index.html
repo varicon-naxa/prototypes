@@ -1049,12 +1049,79 @@ function dkSyncType(){
   dkPreview();
 }
 function dkVal(id){return parseFloat(document.getElementById(id).value)||0;}
+
+/* ══ A docket lands against an order ═══════════════════════════════════
+   The order carries the rate, the supplier and the code. Typing a rate on
+   the docket would give one thing two prices, and they would disagree —
+   so there is no rate to type here, only a quantity.
+
+   A docket with no order is still captured: quantity only, flagged
+   unmatched, priced when someone says what it landed against.
+   ═══════════════════════════════════════════════════════════════════════ */
+var DK_ORDERS=[];
+function dkOrders(t){
+  var out=[],seen={};
+  if(t==='Material'||t==='Misc'){
+    (t==='Material'?rows.materials:rows.misc).forEach(function(r){
+      if(r.srcType!=='PO'&&r.srcType!=='Bill')return;             /* a docket is never a source */
+      out.push({ref:r.src,nm:r.nm,sup:r.sup,unit:r.unit||'unit',rate:r.rate,alloc:(r.alloc&&r.alloc[0])||null});
+    });
+  }else if(t==='Labour'){
+    /* an ABN contractor's hours draw down against their own order */
+    rows.labour.forEach(function(r){
+      if(!r.po||seen[r.po])return;seen[r.po]=1;
+      out.push({ref:r.po,nm:r.who,sup:r.who,unit:'hr',rate:r.rate,alloc:(r.alloc&&r.alloc[0])||null});
+    });
+  }else if(t==='Plant'){
+    rows.plant.forEach(function(r){
+      var ref=r.src||r.po;if(!ref||seen[ref])return;seen[ref]=1;
+      out.push({ref:ref,nm:r.nm,no:r.no,sup:r.sup,unit:'hr',rate:r.rate,alloc:(r.alloc&&r.alloc[0])||null});
+    });
+  }
+  return out;
+}
+function dkOrderSel(){var v=document.getElementById('dkOrder').value;return v===''?null:DK_ORDERS[parseInt(v,10)];}
+function dkFillOrders(){
+  var t=document.getElementById('dkType').value;
+  DK_ORDERS=dkOrders(t);
+  var sel=document.getElementById('dkOrder');
+  sel.innerHTML='<option value="">— no order · capture it unmatched —</option>'+
+    DK_ORDERS.map(function(o,i){return '<option value="'+i+'">'+o.ref+'  ·  '+o.nm+'  ·  '+o.sup+'  ·  '+money(o.rate)+'/'+o.unit+'</option>';}).join('');
+  sel.value=DK_ORDERS.length?'0':'';
+  dkSyncOrder();
+}
+function dkSyncOrder(){
+  var t=document.getElementById('dkType').value,o=dkOrderSel();
+  var box=document.getElementById('dkOrderInfo'),info=box.querySelector('div');
+  /* the rate is shown, never typed — and only when there is an order to show */
+  Array.prototype.forEach.call(document.querySelectorAll('.dk-rate'),function(f){f.style.display=o?'':'none';});
+  if(o){
+    document.getElementById('dkSup').value=o.sup;
+    if(t==='Material'){document.getElementById('dkmName').value=o.nm;document.getElementById('dkmUnit').value=o.unit;document.getElementById('dkmRate').value=o.rate;}
+    if(t==='Misc'){document.getElementById('dkxName').value=o.nm;document.getElementById('dkxUnit').value=o.unit;document.getElementById('dkxRate').value=o.rate;}
+    if(t==='Labour'){document.getElementById('dklRate').value=o.rate;document.getElementById('dklName').value=o.nm;}
+    if(t==='Plant'){document.getElementById('dkpRate').value=o.rate;document.getElementById('dkpName').value=o.nm;if(o.no)document.getElementById('dkpNo').value=o.no;}
+    if(o.alloc){
+      var i=ALLOC_OPTIONS.map(function(x){return x.c}).indexOf(o.alloc.c);
+      if(i>-1)document.getElementById('dkAlloc').value=String(i);
+    }
+    box.className='callout';
+    info.innerHTML='Supplier, unit and <b>rate come from '+o.ref+'</b> — '+money(o.rate)+' / '+o.unit+
+      '. They are not typed here: one thing, one price.';
+  }else{
+    box.className='callout warn';
+    info.innerHTML='<b>No order.</b> The docket is captured with the quantity only and flagged <b>unmatched</b> — no rate and no cost until someone says what it landed against. Nothing is lost and nothing is blocked.';
+  }
+  dkPreview();
+}
 function dkComputeValue(t){
-  if(t==='Material')return dkVal('dkmRate')*dkVal('dkmDel');
-  if(t==='Labour')return dkVal('dklRate')*dkVal('dklHrs')+dkVal('dklAllow');
-  if(t==='Plant')return dkVal('dkpRate')*dkVal('dkpHrs');
-  if(t==='Misc')return dkVal('dkxRate')*dkVal('dkxQty');
-  return 0;
+  var o=dkOrderSel();
+  if(!o)return null;                                   /* unmatched carries no cost */
+  if(t==='Material')return o.rate*dkVal('dkmDel');
+  if(t==='Labour')return o.rate*dkVal('dklHrs')+dkVal('dklAllow');
+  if(t==='Plant')return o.rate*dkVal('dkpHrs');
+  if(t==='Misc')return o.rate*dkVal('dkxQty');
+  return null;
 }
 function dkPreview(){
   var t=document.getElementById('dkType').value,v=dkComputeValue(t),html='';
