@@ -113,6 +113,7 @@ body{font-family:'Roboto',sans-serif;background:#e8eaf0;display:flex;justify-con
 .status-pill{font-size:9.5px;font-weight:700;border-radius:9px;padding:4px 9px;border:none;font-family:inherit;cursor:pointer;white-space:nowrap}
 .status-pill.working{background:#dcfce7;color:#15803d}
 .status-pill.standdown{background:#fef3c7;color:#92600a}
+.status-pill.idle{background:#ffedd5;color:#c2410c}
 .status-pill.offsite{background:#f1f5f9;color:#64748b}
 
 /* ── order build-up ─────────────────────────────────────── */
@@ -327,6 +328,7 @@ body{font-family:'Roboto',sans-serif;background:#e8eaf0;display:flex;justify-con
       <div class="ptitle">Plant &amp; Equipment</div>
       <div class="psub">Every machine on the project, and what it did today — worked, stood down, or never turned up.</div>
       <div class="callout info"><i class="fa-solid fa-circle-info"></i><div>An <b>idle machine still costs</b>, so the ones that did nothing are listed too. Tap a status to stand a machine down — the register prices it, the diary records it.</div></div>
+      <div class="callout warn"><i class="fa-solid fa-calendar-day"></i><div><b>Most of this fleet is not charged by the hour.</b> Hours are what the machine <i>did</i>; the rate beside it is how it is <i>charged</i>. They only multiply together on an hourly agreement — a day-hire machine costs a day whether it ran two hours or eight.</div></div>
       <div class="statgrid" id="plantStats"></div>
       <div class="addline"><button onclick="openDocketSheet('Plant')"><i class="fa-solid fa-receipt"></i> Add via docket</button></div>
       <div id="list-plant"></div>
@@ -847,41 +849,73 @@ function plantStatus(e){
 }
 var STATUS_LABEL = {working:'Working', standdown:'Stood down', idle:'On hire, not used', offsite:'Not on site'};
 function renderPlant(){
-  var working=0, down=0, hrs=0, cost=0;
+  var working=0, down=0, idle=0, hrs=0, charge=0;
   FLEET.forEach(function(e){
     var st = plantStatus(e);
-    if(st==='working'){ working++; hrs += plantDay[e.id].hrs; cost += plantDay[e.id].hrs*e.rate; }
-    if(st==='standdown'){ down++; cost += standDowns[e.id].charge; }
+    if(st==='working'){ working++; hrs += plantDay[e.id].hrs; }
+    if(st==='standdown') down++;
+    if(st==='idle') idle++;
+    charge += plantCharge(e);
   });
   document.getElementById('plantStats').innerHTML =
-    stat(FLEET.length,'equipment') + stat(working,'operating') + stat(down,'stand down') + stat(hoursTxt(hrs),'work hours');
+    stat(FLEET.length,'equipment') + stat(working,'operating') +
+    stat(down+idle,'idle / down') + stat(money(charge),'plant cost');
 
   var h='';
   FLEET.forEach(function(e){
     var st = plantStatus(e), d = plantDay[e.id], sd = standDowns[e.id];
+    var c = plantCharge(e);
     var pill = '<button class="status-pill '+st+'" onclick="event.stopPropagation();openStandDown(\''+e.id+'\')">'+
-               (st==='working'?'Working':st==='standdown'?'Stood down':'Not on site')+'</button>';
-    var right = st==='working' ? hoursTxt(d.hrs) : (st==='standdown' ? money(sd.charge) : '—');
-    var rightLbl = st==='working' ? 'operating' : (st==='standdown' ? sd.basisNm : 'no time');
+               STATUS_LABEL[st]+'</button>';
+
+    /* The headline figure is what the day costs. Hours sit beside it as what
+       the machine did — the two are different questions. */
+    var right = (st==='working' && e.basis==='hr') ? hoursTxt(d.hrs) : (c ? money(c) : '—');
+    var rightLbl = (st==='working' && e.basis==='hr') ? 'operating'
+                 : st==='standdown' ? sd.basisNm
+                 : st==='idle' ? 'on hire'
+                 : st==='working' ? 'day charged' : 'no charge';
 
     var allocs = '';
     if(st==='working') allocs = allocChip({cc:d.cc,p:100}, false);
     else if(st==='standdown') allocs = allocChip(sd.cc?{cc:sd.cc,p:100}:null, false) +
       (sd.cc?'':' <button class="preset" style="padding:4px 10px;font-size:10.5px" onclick="event.stopPropagation();openStandDown(\''+e.id+'\')">Allocate</button>');
+    else if(st==='idle') allocs = allocChip({cc:e.lastCC,p:100}, false);
 
-    var costline = '';
-    if(st==='working') costline = '<div class="costline"><i class="fa-solid fa-dollar-sign"></i> '+rateStr(e.rate,'hr')+' × '+hoursTxt(d.hrs)+' · cost <b>'+money(e.rate*d.hrs)+'</b></div>';
-    else if(st==='standdown') costline = '<div class="costline"><i class="fa-solid fa-circle-pause"></i> '+sd.reasonNm+' · '+sd.basisNm+' · charge <b>'+money(sd.charge)+'</b></div>';
-    else costline = '<div class="costline"><i class="fa-regular fa-circle"></i> Nothing recorded. Stand it down if it was here and idle.</div>';
+    /* How it is charged, said plainly — and only multiplied out where the
+       agreement is actually hourly. */
+    var costline;
+    if(st==='working' && e.basis==='hr'){
+      costline = '<i class="fa-solid fa-dollar-sign"></i> '+rateAsCharged(e)+' × '+hoursTxt(d.hrs)+' · cost <b>'+money(c)+'</b>';
+    } else if(st==='working' && e.basis==='day'){
+      costline = '<i class="fa-solid fa-calendar-day"></i> Day hire '+rateAsCharged(e)+' · <b>1 day</b> charged whether it ran '+hoursTxt(d.hrs)+' or eight';
+    } else if(st==='working' && e.basis==='week'){
+      costline = '<i class="fa-regular fa-calendar"></i> Weekly hire '+rateAsCharged(e)+' · <b>1 of '+DAYS_PER_WEEK+' days</b> = '+money(c);
+    } else if(st==='standdown'){
+      costline = '<i class="fa-solid fa-circle-pause"></i> '+sd.reasonNm+' · '+sd.basisNm+' of '+rateAsCharged(e)+' · charge <b>'+money(c)+'</b>';
+    } else if(st==='idle'){
+      costline = '<i class="fa-solid fa-triangle-exclamation" style="color:#d97706"></i> On hire at '+rateAsCharged(e)+' and <b>not used</b> — it costs '+money(c)+' today either way';
+    } else {
+      costline = '<i class="fa-regular fa-circle"></i> Owned and not used — no hire running. Stand it down if it was here and idle.';
+    }
+
+    /* Hours are utilisation once the charge is not hourly, so say so. */
+    var util = '';
+    if(st==='working' && e.basis!=='hr'){
+      util = '<span>Used <b>'+hoursTxt(d.hrs)+'</b> of '+HOURS_PER_DAY+'h · <b>'+utilisation(e)+'%</b></span>';
+    } else if(st==='working'){
+      util = '<span>Ran <b>'+hoursTxt(d.hrs)+'</b></span>';
+    }
 
     h += '<div class="ecard"><div class="row1">'+
       '<div class="av plant'+(st==='offsite'?' off':'')+'"><i class="fa-solid fa-truck-monster"></i></div>'+
       '<div><div class="nm">'+e.nm+'</div>'+
-      '<div class="sub"><span style="font-family:monospace">'+e.no+'</span> · '+e.sup+(e.owned?' (owned)':'')+'</div></div>'+
+      '<div class="sub"><span style="font-family:monospace">'+e.no+'</span> · '+e.sup+(e.owned?' (owned)':'')+
+      ' · <b style="color:var(--navy)">'+rateAsCharged(e)+'</b></div></div>'+
       '<div class="hrs"><div class="big">'+right+'</div><div class="lbl">'+rightLbl+'</div></div></div>'+
-      '<div class="timeline"><span>Operated by <b>'+(st==='working'? d.by.join(', ') : '—')+'</b></span>'+pill+'</div>'+
+      '<div class="timeline"><span>Operated by <b>'+(st==='working'? d.by.join(', ') : '—')+'</b></span>'+util+pill+'</div>'+
       (allocs?'<div class="allocs">'+allocs+'</div>':'')+
-      costline+'</div>';
+      '<div class="costline">'+costline+'</div></div>';
   });
   document.getElementById('list-plant').innerHTML = h;
 }
@@ -1085,9 +1119,9 @@ function openStandDown(id){
 }
 function standBases(e){
   return [
-    {k:'full', nm:'Full day',       amt:e.standDay},
-    {k:'half', nm:'Half day',       amt:e.standDay/2},
-    {k:'min',  nm:'Minimum charge', amt:e.standDay/4}
+    {k:'full', nm:'Full day',       amt:dayRate(e)},
+    {k:'half', nm:'Half day',       amt:dayRate(e)/2},
+    {k:'min',  nm:'Minimum charge', amt:dayRate(e)/4}
   ];
 }
 function drawStandDown(){
@@ -1123,7 +1157,7 @@ function drawStandDown(){
        '<div style="font-size:10.5px;color:var(--muted);margin-top:7px;line-height:1.5">Pre-filled with where <b>'+e.nm+'</b> last worked, because that is nearly always the answer. Clear it and the stand-down is still recorded — flagged unallocated, like an uncoded bill. The day happened either way.</div></div>';
 
   showSheet('Stand down '+e.nm,
-    e.no+' · '+e.sup+' · registered stand-down '+money(e.standDay)+'/day',
+    e.no+' · '+e.sup+' · charged '+rateAsCharged(e)+' · stand-down day '+money(dayRate(e)),
     b,
     '<button class="btn-back" onclick="closeSheet()">Cancel</button>'+
     '<button class="btn-next amber" id="sdSave" onclick="saveStandDown()"'+(SDOWN.reason?'':' disabled')+'>Record stand-down</button>',
