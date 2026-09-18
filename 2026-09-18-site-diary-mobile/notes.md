@@ -133,3 +133,58 @@ Two deliberate simplifications, stated rather than hidden:
   allowed here — the charge masks but the flow works.
 - Weather sits on the Diary panel as four read-only tiles. Production has it as its own
   rail item. Worth deciding which.
+
+## A rate needs its basis — most of this fleet is not hourly — 2026-09-18
+
+Alec looked at the plant page and asked whether those hire rates were really daily. They
+were. The register holds:
+
+| Machine | The agreement | The diary showed |
+| --- | --- | --- |
+| 20T Excavator P-04 | **$1,160 / day** | $145/hr |
+| 5T Excavator P-11 | $95 / hr | $95/hr |
+| 10T Tipper P-07 | **$880 / day** | $110/hr |
+| Bobcat P-02 | $85 / hr | $85/hr |
+| Smooth Drum Roller P-15 | **$784 / day** | $98/hr |
+| Water Cart P-09 | **$3,300 / week** | $87/hr |
+
+Four of six are not hourly. Every rate had been normalised to an hourly figure so it would
+sit next to an hours column — which fixed a label and created a worse problem: the page
+was quoting numbers nobody had agreed to, and multiplying them by hours.
+
+**The rate now states the agreement** — `$1,160/day`, `$3,300/wk` — and hours beside a
+period rate are shown as **utilisation** (`7h 12m of 8h · 90%`), because that is what they
+are once the charge is not hourly.
+
+**The charge follows the basis** (mobile, which owns its own data):
+
+- hourly → hours × rate, as before;
+- daily → **a day is a day**, charged whether it ran two hours or eight;
+- weekly → its share of the week, every day it is on hire.
+
+That last one adds a status the page did not have: **On hire, not used**. A hired machine
+that did nothing is not "not on site" — the hire is running. The Water Cart costs $660 on
+a day nobody started it, and until now the page said nothing at all.
+
+**What it was costing to get this wrong:** the day's plant cost reads **$4,270** on the
+basis rates against **$2,193** on the derived hourly ones — the diary was understating by
+**$2,077, 49% of the day**, on two day-hire machines charged pro-rata and two period-hire
+machines shown as free.
+
+It also settles an argument the panel was having with itself: stand-down already priced
+from the day rate (full / half / minimum) while working time priced by the hour. Both now
+come from one `dayRate()`.
+
+**On the desktop and merged prototypes, only the label half is done.** The rate column now
+reads *Rate as charged* with the real basis and a utilisation line, but the cost column is
+still the budget-derived ledger figure, because correcting it would break the $0 tie the
+merged prototype rests on. The rule is stated in a callout on the panel rather than
+silently applied. `dayCharge()` in `shared-data.js` already implements "a day is a day" —
+it is only called for stand-down.
+
+**Open, and Alec's to call:**
+
+- Does a part day on day hire charge a full day, always? Some agreements are pro-rata
+  below a half day.
+- Should period hire post cost on idle days, or only on days the machine is on site?
+- Minimum hire periods — a machine off-hired mid-week on a weekly rate.

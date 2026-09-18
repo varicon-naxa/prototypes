@@ -410,12 +410,12 @@ def build_site_diary():
 
     # The diary's plant table becomes the day's roster: every machine on the
     # project, who is on it, and whether it is working, stood down or off site.
-    old_head = ('<th>Operated by</th><th>Hours</th><th>Hire rate</th><th>Cost</th>')
+    old_head = ('<th>Operated by</th><th>Hours</th><th>Rate as charged</th><th>Cost</th>')
     if old_head not in html:
         raise SystemExit("FAIL: diary plant header not found")
     html = html.replace(
         old_head,
-        '<th>Operated by</th><th>Status</th><th>Hours</th><th>Hire rate</th><th>Cost</th>', 1)
+        '<th>Operated by</th><th>Status</th><th>Hours</th><th>Rate as charged</th><th>Cost</th>', 1)
 
     old_render = ("b.innerHTML+='<tr><td><b style=\"color:var(--navy)\">'+r.nm+'</b>'"
                   "+dktChip(r)+'</td><td><span style=\"font-family:monospace;font-size:12px;"

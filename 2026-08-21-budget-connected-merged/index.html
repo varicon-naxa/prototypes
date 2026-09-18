@@ -2438,6 +2438,7 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
   <div class="panel" id="panel-plant">
     <div class="panel-head"><div class="panel-title">Plant &amp; Equipment</div></div>
     <div class="panel-sub">Log equipment on site, operating vs stand-down time, and what it worked on.</div>
+    <div class="callout warn"><i class="fa-solid fa-calendar-day"></i><div><b>Most fleets are not charged by the hour.</b> The rate column states the agreement — per hour, per day, per week — and hours beside a period rate are <b>utilisation</b>, not a multiplier. A day-hire machine costs a day whether it ran two hours or eight, and a machine on weekly hire costs its share of the week on a day nobody started it. <b>Cost here is still the budget ledger's figure</b> — see notes.md: correcting it would break the $0 tie this prototype rests on, so the rule is stated and the money is not yet moved.</div></div>
     <div class="summary">
       <div class="s"><i class="fa-solid fa-truck-monster"></i><div><div class="v">2</div><div class="k">Equipment</div></div></div>
       <div class="s"><i class="fa-solid fa-gears"></i><div><div class="v">2</div><div class="k">Operating</div></div></div>
@@ -2450,7 +2451,7 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Equipment</th><th>Equipment No.</th><th>Supplier</th><th>Operated by</th><th>Status</th><th>Hours</th><th>Hire rate</th><th>Cost</th><th id="th-alloc-p">Allocation (WBS)</th><th></th></tr></thead>
+        <thead><tr><th>Equipment</th><th>Equipment No.</th><th>Supplier</th><th>Operated by</th><th>Status</th><th>Hours</th><th>Rate as charged</th><th>Cost</th><th id="th-alloc-p">Allocation (WBS)</th><th></th></tr></thead>
         <tbody id="tbody-plant"></tbody>
       </table>
     </div>
@@ -2721,7 +2722,7 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
         <div class="field"><label>Equipment no.</label><input id="dkpNo" placeholder="e.g. EX-3301"></div>
       </div>
       <div class="row3">
-        <div class="field dk-rate"><label>Hire rate ($ / hr)</label><input type="number" id="dkpRate" min="0" step="any" readonly></div>
+        <div class="field dk-rate"><label>Hire rate (from the order)</label><input type="number" id="dkpRate" min="0" step="any" readonly></div>
         <div class="field"><label>Hours</label><input type="number" id="dkpHrs" min="0" step="any" placeholder="8" oninput="dkPreview()"></div>
         <div class="field"><label>Operated by</label><input id="dkpBy" placeholder="Operator"></div>
       </div>
@@ -13683,6 +13684,17 @@ var VDATA = (function () {
         rate: Math.round(e.owned
           ? (e.unit === 'hr' ? e.rate : e.unit === 'day' ? e.rate / 8 : e.rate / 38)
           : hireHourRate(e.hireRate, e.hirePeriod)),
+        /* The rate as the agreement writes it, and the basis it is written on.
+           Normalising everything to an hourly rate made a $1,160-a-day
+           excavator read $145/hr, which is not a number anyone agreed to. Most
+           of this fleet is charged by the day or the week. */
+        basis: e.owned ? (e.unit === 'hr' ? 'hr' : e.unit === 'day' ? 'day' : 'week')
+                       : (e.hirePeriod || 'day'),
+        chargedRate: Math.round(e.owned ? (e.rate || 0)
+                                        : (e.hireRate || 0)),
+        dayRate: Math.round(e.owned
+          ? (e.unit === 'hr' ? e.rate * 8 : e.unit === 'day' ? e.rate : e.rate / 5)
+          : hireDayRate(e.hireRate, e.hirePeriod)),
         by: b ? b.by.join(', ') : '',
         hrsDec: b ? Math.round(b.hrs * 10) / 10 : 0,
         cost: b ? b.cost : (charge ? charge.amount : 0),
@@ -14242,6 +14254,7 @@ function vdataDiaryRows() {
       : '';
     return {
       eqId: p.eqId, nm: p.nm, no: p.no, sup: p.sup, rate: p.rate,
+      basis: p.basis, chargedRate: p.chargedRate, dayRate: p.dayRate,
       by: p.by, hrs: hrs, cost: p.cost, status: p.status,
       standDownSet: p.standDownSet, standDownNote: p.standDownNote,
       alloc: p.cc ? VDATA.allocFor(p.cc, d + 'p' + i, i) : [],
@@ -14953,8 +14966,18 @@ function sdMoney(n){if(typeof SDVIEW!=='undefined'&&!SDVIEW.rates)return sdMaske
 function renderPlant(){
   var b=document.getElementById('tbody-plant');b.innerHTML='';
   rows.plant.forEach(function(r){
-    var rateCell=r.rate?sdMoney(r.rate)+'<span style="color:var(--muted);font-size:12px">/hr</span>':'—';
+    /* The rate a machine is charged at is the one in the agreement, not an
+       hourly figure derived from it. Most fleets are written by the day or the
+       week, and hours beside such a rate are utilisation, not a multiplier. */
+    var basis=r.basis||'hr', charged=(r.chargedRate!=null?r.chargedRate:r.rate);
+    var basisLbl=basis==='week'?'/wk':basis==='month'?'/mth':basis==='day'?'/day':'/hr';
+    var rateCell=charged?sdMoney(charged)+'<span style="color:var(--muted);font-size:12px">'+basisLbl+'</span>':'—';
     var costCell=r.rate?'<b style="color:var(--navy)">'+sdMoney(r.cost!=null?r.cost:r.rate*hoursNum(r.hrs))+'</b>':'—';
+    if(basis!=='hr'&&r.hrs){
+      var used=hoursNum(r.hrs);
+      rateCell+='<div style="font-size:11px;color:var(--muted);margin-top:2px">'+
+        Math.round(used/8*100)+'% of a day used</div>';
+    }
     var st=r.status||'working';var stLabel=st==='working'?'Working':st==='standdown'?'Stood down':'Not on site';var stClass=st==='working'?'pl-working':st==='standdown'?'pl-down':'pl-off';var canToggle=st!=='working';var statusCell='<span class="pl-chip '+stClass+'"'+  (canToggle?' onclick="sdOpenStandDown(\''+r.eqId+'\')" title="'    +(st==='standdown'?'Edit this stand-down':'Stand this machine down')+'"':'')+  '>'+stLabel+'</span>'+  (st==='standdown'?'<span class="pl-why">'+(r.standDownReason||'')+    (r.unallocated?'<span class="pl-unalloc" title="Recorded, but nothing to charge it to yet">unallocated</span>':'')+'</span>':'');var hrsCell=r.hrs?r.hrs:'<span style="color:var(--border)">—</span>';var byCell=r.by?r.by:'<span style="color:var(--border)">—</span>';var cCell=st==='working'?costCell  :st==='standdown'?(r.standDownSet    ?'<b style="color:#b45309">'+money(r.cost)+'</b>'    :'<span class="pl-nostand">no stand-down rate set</span>')  :'<span style="color:var(--border)">—</span>';b.innerHTML+='<tr class="pl-row '+stClass+'"><td><b style="color:var(--navy)">'+r.nm+'</b>'+dktChip(r)+'</td><td><span style="font-family:monospace;font-size:12px;color:var(--muted)">'+r.no+'</span></td><td>'+r.sup+'</td><td>'+byCell+'</td><td>'+statusCell+'</td><td class="hrs">'+hrsCell+'</td><td>'+rateCell+'</td><td>'+cCell+'</td><td>'+(st==='standdown'&&r.unallocated  ?'<span class="pl-unalloc-cell" onclick="sdOpenStandDown(\''+r.eqId+'\')">Allocate</span>'  :allocChips(r.alloc))+'</td><td><span class="row-act"><i class="fa-solid fa-pen"></i></span></td></tr>';
   });
 }
