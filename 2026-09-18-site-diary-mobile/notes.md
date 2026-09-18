@@ -50,8 +50,54 @@ and the rule that the project decides the allocation method.
   every section is not.
 - **Empty states that say what to do.** Photos and Dockets explain what belongs there
   instead of *No data list found*.
-- **Guided add in three steps** — pick the crew, set the time once for all of them,
-  allocate (with splits that must total 100%) — against production's grid of empty cells.
+- **The labour docket is a guided four-step sheet** — the docket and its order, who it
+  covers, the time (set once for everyone on it), then allocate — against production's
+  grid of empty cells.
+
+## Everything is added on a docket, and every docket lands on an order — 2026-09-18
+
+Two rules, from Alec on 2026-09-18, applied to **both** this prototype and the desktop
+diary (`2026-06-02-site-diary-unified-workflow/index.html`, which is what the merged
+prototype is built from — re-run `build-merge.py` after changing it).
+
+**Labour is added on a docket, like everything else.** The standalone *Add workers*
+button is gone. The docket is the source document; the diary is not where a worker
+appears out of nowhere. (On the desktop the direct add was already unreachable — the
+drawer's `openDrawer()` had no caller — so this only had to be made true on mobile.)
+
+**A docket has no rate field.** Type a rate on the docket and one thing has two prices,
+which will disagree. The docket asks *what arrived*; the **order it lands against carries
+the rate**, the supplier, the unit and the code. So the flow now opens with *Against which
+order?* — the open orders for that kind of docket, each showing what is left on it and at
+what rate — and the rate is then shown, never typed:
+
+| Docket feeds | Orders offered |
+| --- | --- |
+| Material | the material POs and direct bills |
+| Misc | subcontracts, disposal, permits, sundries |
+| Plant | wet-hire orders |
+| Labour | the ABN contractors' own POs and the agency labour-hire order |
+
+A labour docket against `PO-2311` prices the crew on it at the agency's $62/hr, not at
+their payroll rate — which is the point of having the order decide.
+
+**A docket with no order is still captured.** Quantity only, flagged **unmatched**, with a
+*Match to order* control on the row; matching it later fills in the rate, the supplier and
+the code, and the cost appears. Same shape as an uncoded bill and an unallocated
+stand-down: the delivery happened whether or not the paperwork is in yet, and losing the
+fact because a field was empty is worse than holding it with a flag on it.
+
+**A material or misc docket lands on its order**, so saving one moves that order's
+delivered figure — the same dated-snapshot rule the tracker already runs on. Verified:
+12 m³ against PO-1425 moved delivered from 132.9 m³ to 144.9 m³ and appeared under
+*Landed today*.
+
+Verified on both prototypes, and in supervisor view: zero money figures visible anywhere
+in the docket flow, including the order list, which reads `—/m³` instead of a rate.
+
+*One pre-existing data oddity, not introduced here: in the merged prototype the order
+`PO-1737` lists its supplier as "Fuel & consumables", which is a cost centre. It comes
+from the shared data, not the docket flow.*
 
 ## Masking is all-or-nothing, by construction
 
