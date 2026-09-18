@@ -952,6 +952,17 @@ var VDATA = (function () {
         rate: Math.round(e.owned
           ? (e.unit === 'hr' ? e.rate : e.unit === 'day' ? e.rate / 8 : e.rate / 38)
           : hireHourRate(e.hireRate, e.hirePeriod)),
+        /* The rate as the agreement writes it, and the basis it is written on.
+           Normalising everything to an hourly rate made a $1,160-a-day
+           excavator read $145/hr, which is not a number anyone agreed to. Most
+           of this fleet is charged by the day or the week. */
+        basis: e.owned ? (e.unit === 'hr' ? 'hr' : e.unit === 'day' ? 'day' : 'week')
+                       : (e.hirePeriod || 'day'),
+        chargedRate: Math.round(e.owned ? (e.rate || 0)
+                                        : (e.hireRate || 0)),
+        dayRate: Math.round(e.owned
+          ? (e.unit === 'hr' ? e.rate * 8 : e.unit === 'day' ? e.rate : e.rate / 5)
+          : hireDayRate(e.hireRate, e.hirePeriod)),
         by: b ? b.by.join(', ') : '',
         hrsDec: b ? Math.round(b.hrs * 10) / 10 : 0,
         cost: b ? b.cost : (charge ? charge.amount : 0),
