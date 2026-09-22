@@ -185,16 +185,25 @@ It also settles an argument the panel was having with itself: stand-down already
 from the day rate (full / half / minimum) while working time priced by the hour. Both now
 come from one `dayRate()`.
 
-**On the desktop and merged prototypes, only the label half is done.** The rate column now
-reads *Rate as charged* with the real basis and a utilisation line, but the cost column is
-still the budget-derived ledger figure, because correcting it would break the $0 tie the
-merged prototype rests on. The rule is stated in a callout on the panel rather than
-silently applied. `dayCharge()` in `shared-data.js` already implements "a day is a day" —
-it is only called for stand-down.
+**The desktop and merged prototypes now charge the same way** (2026-09-23). Their plant
+rows price themselves from the register's basis rather than taking the ledger's figure:
+the 20T Excavator reads $1,160 where it read $1,050, the 10T Tipper $880 where it read
+$371. `build-merge.py` no longer rewrites the plant cost expression to prefer `r.cost`;
+stand-down still takes its price from the register, as it always did.
+
+**The consequence, stated rather than hidden:** the diary's plant cost no longer equals the
+budget-derived ledger's plant cost for the same day, so the merged prototype's $0 tie holds
+for labour, materials and misc but **not** for plant. The ledger spreads a budget pool by
+hours; a day rate does not work that way. Fixing it properly means the ledger generating
+plant cost on the register's basis too — worth doing, and larger than this change.
+
+`dayCharge()` in `shared-data.js` already implemented "a day is a day" and was only ever
+called for stand-down, so the panel had been arguing with itself: stand-down priced by the
+day, working time by the hour. One rule now.
 
 **Open, and Alec's to call:**
 
-- Does a part day on day hire charge a full day, always? Some agreements are pro-rata
-  below a half day.
 - Should period hire post cost on idle days, or only on days the machine is on site?
 - Minimum hire periods — a machine off-hired mid-week on a weekly rate.
+- Should the ledger itself price plant on the register's basis, so the calendar and the
+  diary agree again?
