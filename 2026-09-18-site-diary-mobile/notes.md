@@ -152,11 +152,21 @@ Four of six are not hourly. Every rate had been normalised to an hourly figure s
 sit next to an hours column — which fixed a label and created a worse problem: the page
 was quoting numbers nobody had agreed to, and multiplying them by hours.
 
-**The rate now states the agreement** — `$1,160/day`, `$3,300/wk` — and hours beside a
-period rate are shown as **utilisation** (`7h 12m of 8h · 90%`), because that is what they
-are once the charge is not hourly.
+**The rate now states the agreement** — `$1,160/day`, `$3,300/wk`.
 
-**The charge follows the basis** (mobile, which owns its own data):
+**Hours do not touch the charge on a period rate.** A first cut showed utilisation beside
+the rate — *41% of a day used* — and Alec's correction on 2026-09-23 was that this is the
+wrong idea entirely: on a day rate the machine is charged a full day whatever it ran, and
+**the only thing that reduces a day is a stand-down**. The percentage is gone. Hours are
+stated as a record of what the machine did (`Ran 3h 18m`) and nothing is inferred from
+them.
+
+**Cost is the main information on the row**, not hours — also Alec's call, 2026-09-23. On
+mobile every card leads with the day's cost and the basis under it (`$1,160 · DAY RATE`,
+`$276 · HOURLY`); hours moved into the detail line. On the desktop the **Cost** column
+moved ahead of rate and hours.
+
+**The charge follows the basis:**
 
 - hourly → hours × rate, as before;
 - daily → **a day is a day**, charged whether it ran two hours or eight;
