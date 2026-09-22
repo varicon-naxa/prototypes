@@ -410,17 +410,17 @@ def build_site_diary():
 
     # The diary's plant table becomes the day's roster: every machine on the
     # project, who is on it, and whether it is working, stood down or off site.
-    old_head = ('<th>Operated by</th><th>Hours</th><th>Rate as charged</th><th>Cost</th>')
+    old_head = ('<th>Operated by</th><th>Cost</th><th>Rate as charged</th><th>Hours</th>')
     if old_head not in html:
         raise SystemExit("FAIL: diary plant header not found")
     html = html.replace(
         old_head,
-        '<th>Operated by</th><th>Status</th><th>Hours</th><th>Rate as charged</th><th>Cost</th>', 1)
+        '<th>Operated by</th><th>Status</th><th>Cost</th><th>Rate as charged</th><th>Hours</th>', 1)
 
     old_render = ("b.innerHTML+='<tr><td><b style=\"color:var(--navy)\">'+r.nm+'</b>'"
                   "+dktChip(r)+'</td><td><span style=\"font-family:monospace;font-size:12px;"
                   "color:var(--muted)\">'+r.no+'</span></td><td>'+r.sup+'</td><td>'+r.by+"
-                  "'</td><td class=\"hrs\">'+r.hrs+'</td><td>'+rateCell+'</td><td>'+costCell+"
+                  "'</td><td>'+costCell+'</td><td>'+rateCell+'</td><td class=\"hrs\">'+r.hrs+"
                   "'</td><td>'+allocChips(r.alloc)+'</td>"
                   "<td><span class=\"row-act\"><i class=\"fa-solid fa-pen\"></i></span></td></tr>';")
     if old_render not in js:
@@ -444,8 +444,6 @@ def build_site_diary():
          "(r.cost!=null?r.cost:(r.rate*hoursNum(r.hrs)+allow)*cnt)"),
         ("s+(r.rate?(r.rate*hoursNum(r.hrs)+(r.allow||0))*(r.count||1):0)",
          "s+(r.cost!=null?r.cost:(r.rate?(r.rate*hoursNum(r.hrs)+(r.allow||0))*(r.count||1):0))"),
-        ("(r.rate*hoursNum(r.hrs))",
-         "(r.cost!=null?r.cost:r.rate*hoursNum(r.hrs))"),
     ]:
         if old not in js:
             raise SystemExit("FAIL: diary cost expression not found: %s" % old)
@@ -671,7 +669,7 @@ PLANT_ROW = (
     "<td><b style=\"color:var(--navy)\">'+r.nm+'</b>'+dktChip(r)+'</td>"
     "<td><span style=\"font-family:monospace;font-size:12px;color:var(--muted)\">'+r.no+'</span></td>"
     "<td>'+r.sup+'</td><td>'+byCell+'</td><td>'+statusCell+'</td>"
-    "<td class=\"hrs\">'+hrsCell+'</td><td>'+rateCell+'</td><td>'+cCell+'</td>"
+    "<td>'+cCell+'</td><td>'+rateCell+'</td><td class=\"hrs\">'+hrsCell+'</td>"
     "<td>'+(st==='standdown'&&r.unallocated"
     "  ?'<span class=\"pl-unalloc-cell\" onclick=\"sdOpenStandDown(\\''+r.eqId+'\\')\">"
     "Allocate</span>'"

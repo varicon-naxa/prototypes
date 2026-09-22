@@ -697,3 +697,27 @@ money figures.
 
 Also: labour's empty state said *Click "Add Workers"* for a button that had no caller.
 It now points at the docket, which is the only way labour is added.
+
+## A day rate is a day rate — hours do not scale it — 2026-09-23
+
+Alec's correction to the first cut, which had shown utilisation ("41% of a day used")
+beside the rate. That was the wrong idea: on a day rate the machine is charged a **full
+day whatever it ran**, and the only thing that reduces a day is a **stand-down**.
+
+Two changes to the plant table:
+
+- **Cost is the main information**, so the Cost column moved ahead of the rate and the
+  hours. Hours are a record of what the machine did, not a share of the charge.
+- **The row prices itself from the register's basis** instead of taking the ledger's
+  figure. The 20T Excavator reads $1,160 where it read $1,050; the 10T Tipper $880 where
+  it read $371. `build-merge.py` no longer rewrites the plant cost expression to prefer
+  `r.cost`; the stand-down branch still takes the register's price, as before.
+
+`dayCharge()` here already implemented this rule and was only ever called for stand-down,
+so the panel had been arguing with itself — stand-down priced by the day, working time by
+the hour. One rule now.
+
+**Known consequence:** the diary's plant cost no longer ties to the budget-derived ledger.
+The $0 tie holds for labour, materials and misc; plant is now priced by the register. The
+ledger spreads a budget pool by hours, which a day rate does not do — reconciling them
+means the ledger pricing plant on the basis too, which is a larger change than this one.

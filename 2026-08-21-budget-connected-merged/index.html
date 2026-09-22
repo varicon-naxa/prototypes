@@ -2451,7 +2451,7 @@ label.ts-toggle.off { opacity: .5; cursor: not-allowed; background: #f8fafc }
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Equipment</th><th>Equipment No.</th><th>Supplier</th><th>Operated by</th><th>Status</th><th>Hours</th><th>Rate as charged</th><th>Cost</th><th id="th-alloc-p">Allocation (WBS)</th><th></th></tr></thead>
+        <thead><tr><th>Equipment</th><th>Equipment No.</th><th>Supplier</th><th>Operated by</th><th>Status</th><th>Cost</th><th>Rate as charged</th><th>Hours</th><th id="th-alloc-p">Allocation (WBS)</th><th></th></tr></thead>
         <tbody id="tbody-plant"></tbody>
       </table>
     </div>
@@ -14963,22 +14963,41 @@ function renderLabour(){
 }
 function hoursNum(h){var m=(h||'').match(/(\d+)\s*h(?:\s*(\d+))?/);if(!m)return 0;return parseInt(m[1],10)+(m[2]?parseInt(m[2],10)/60:0);}
 function sdMoney(n){if(typeof SDVIEW!=='undefined'&&!SDVIEW.rates)return sdMasked();return '$'+n.toLocaleString('en-AU',{minimumFractionDigits:0,maximumFractionDigits:0});}
+/* ── what a machine costs for the day ───────────────────────────────────
+   The rate is the one in the agreement, and on a period rate the hours do
+   not scale it: a day is a day, whether the machine ran two hours or eight.
+   The only thing that changes the day's charge is a stand-down, and the
+   register prices that. So the cost is the main figure on the row; hours sit
+   beside it as a record of what the machine did, not as a multiplier. */
+function plantDayRate(r){
+  if(r.dayRate!=null)return r.dayRate;
+  var basis=r.basis||'hr',c=(r.chargedRate!=null?r.chargedRate:r.rate)||0;
+  return basis==='hr'?c*8:basis==='day'?c:c/5;
+}
+function plantCharge(r){
+  var basis=r.basis||'hr',c=(r.chargedRate!=null?r.chargedRate:r.rate)||0;
+  if(r.status==='standdown')return r.cost!=null?r.cost:0;
+  if(basis==='hr')return c*hoursNum(r.hrs);
+  if(hoursNum(r.hrs)>0)return plantDayRate(r);      /* a day is a day */
+  return r.onHire?plantDayRate(r):0;                /* on hire and idle still costs */
+}
+function plantChargeNote(r){
+  var basis=r.basis||'hr';
+  if(r.status==='standdown')return 'stood down — priced by the register';
+  if(basis==='hr')return r.hrs?('hourly · '+r.hrs):'no hours';
+  if(hoursNum(r.hrs)>0)return basis==='day'?'full day — hours do not change it'
+                                           :'1 of 5 days on the weekly rate';
+  return r.onHire?'on hire, not used':'not charged';
+}
 function renderPlant(){
   var b=document.getElementById('tbody-plant');b.innerHTML='';
   rows.plant.forEach(function(r){
-    /* The rate a machine is charged at is the one in the agreement, not an
-       hourly figure derived from it. Most fleets are written by the day or the
-       week, and hours beside such a rate are utilisation, not a multiplier. */
-    var basis=r.basis||'hr', charged=(r.chargedRate!=null?r.chargedRate:r.rate);
+    var basis=r.basis||'hr',charged=(r.chargedRate!=null?r.chargedRate:r.rate);
     var basisLbl=basis==='week'?'/wk':basis==='month'?'/mth':basis==='day'?'/day':'/hr';
     var rateCell=charged?sdMoney(charged)+'<span style="color:var(--muted);font-size:12px">'+basisLbl+'</span>':'—';
-    var costCell=r.rate?'<b style="color:var(--navy)">'+sdMoney(r.cost!=null?r.cost:r.rate*hoursNum(r.hrs))+'</b>':'—';
-    if(basis!=='hr'&&r.hrs){
-      var used=hoursNum(r.hrs);
-      rateCell+='<div style="font-size:11px;color:var(--muted);margin-top:2px">'+
-        Math.round(used/8*100)+'% of a day used</div>';
-    }
-    var st=r.status||'working';var stLabel=st==='working'?'Working':st==='standdown'?'Stood down':'Not on site';var stClass=st==='working'?'pl-working':st==='standdown'?'pl-down':'pl-off';var canToggle=st!=='working';var statusCell='<span class="pl-chip '+stClass+'"'+  (canToggle?' onclick="sdOpenStandDown(\''+r.eqId+'\')" title="'    +(st==='standdown'?'Edit this stand-down':'Stand this machine down')+'"':'')+  '>'+stLabel+'</span>'+  (st==='standdown'?'<span class="pl-why">'+(r.standDownReason||'')+    (r.unallocated?'<span class="pl-unalloc" title="Recorded, but nothing to charge it to yet">unallocated</span>':'')+'</span>':'');var hrsCell=r.hrs?r.hrs:'<span style="color:var(--border)">—</span>';var byCell=r.by?r.by:'<span style="color:var(--border)">—</span>';var cCell=st==='working'?costCell  :st==='standdown'?(r.standDownSet    ?'<b style="color:#b45309">'+money(r.cost)+'</b>'    :'<span class="pl-nostand">no stand-down rate set</span>')  :'<span style="color:var(--border)">—</span>';b.innerHTML+='<tr class="pl-row '+stClass+'"><td><b style="color:var(--navy)">'+r.nm+'</b>'+dktChip(r)+'</td><td><span style="font-family:monospace;font-size:12px;color:var(--muted)">'+r.no+'</span></td><td>'+r.sup+'</td><td>'+byCell+'</td><td>'+statusCell+'</td><td class="hrs">'+hrsCell+'</td><td>'+rateCell+'</td><td>'+cCell+'</td><td>'+(st==='standdown'&&r.unallocated  ?'<span class="pl-unalloc-cell" onclick="sdOpenStandDown(\''+r.eqId+'\')">Allocate</span>'  :allocChips(r.alloc))+'</td><td><span class="row-act"><i class="fa-solid fa-pen"></i></span></td></tr>';
+    var costCell=charged?'<b style="color:var(--navy);font-size:15px">'+sdMoney(plantCharge(r))+'</b>'+
+      '<div style="font-size:11px;color:var(--muted);margin-top:2px">'+plantChargeNote(r)+'</div>':'—';
+    var st=r.status||'working';var stLabel=st==='working'?'Working':st==='standdown'?'Stood down':'Not on site';var stClass=st==='working'?'pl-working':st==='standdown'?'pl-down':'pl-off';var canToggle=st!=='working';var statusCell='<span class="pl-chip '+stClass+'"'+  (canToggle?' onclick="sdOpenStandDown(\''+r.eqId+'\')" title="'    +(st==='standdown'?'Edit this stand-down':'Stand this machine down')+'"':'')+  '>'+stLabel+'</span>'+  (st==='standdown'?'<span class="pl-why">'+(r.standDownReason||'')+    (r.unallocated?'<span class="pl-unalloc" title="Recorded, but nothing to charge it to yet">unallocated</span>':'')+'</span>':'');var hrsCell=r.hrs?r.hrs:'<span style="color:var(--border)">—</span>';var byCell=r.by?r.by:'<span style="color:var(--border)">—</span>';var cCell=st==='working'?costCell  :st==='standdown'?(r.standDownSet    ?'<b style="color:#b45309">'+money(r.cost)+'</b>'    :'<span class="pl-nostand">no stand-down rate set</span>')  :'<span style="color:var(--border)">—</span>';b.innerHTML+='<tr class="pl-row '+stClass+'"><td><b style="color:var(--navy)">'+r.nm+'</b>'+dktChip(r)+'</td><td><span style="font-family:monospace;font-size:12px;color:var(--muted)">'+r.no+'</span></td><td>'+r.sup+'</td><td>'+byCell+'</td><td>'+statusCell+'</td><td>'+cCell+'</td><td>'+rateCell+'</td><td class="hrs">'+hrsCell+'</td><td>'+(st==='standdown'&&r.unallocated  ?'<span class="pl-unalloc-cell" onclick="sdOpenStandDown(\''+r.eqId+'\')">Allocate</span>'  :allocChips(r.alloc))+'</td><td><span class="row-act"><i class="fa-solid fa-pen"></i></span></td></tr>';
   });
 }
 function fmtQty(n,unit){return '<span class="qty-main">'+(+n).toLocaleString('en-AU',{maximumFractionDigits:1})+'</span><span class="qty-unit">'+unit+'</span>';}
