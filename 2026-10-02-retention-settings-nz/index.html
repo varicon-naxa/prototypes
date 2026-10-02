@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varicon — Retention Settings (NZ stepped + deduct from invoice)</title>
+<!--
+  The project Retention Settings modal, extended for two stories:
+    VAR-20740  Stepped (banded) retention — NZ tenants only, behind the NZ feature flag.
+    VAR-22037  Deduct retention from invoice — every tenant (AU and NZ), default on.
+  Switch the tenant at the top to see what an Australian vs an NZ tenant sees.
+  The preview under the modal runs the real band arithmetic and shows the
+  ex-GST invoice amount the deduct toggle produces. GST is added by Xero from
+  the account code; the rate shown is only illustrative.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+         background: #6b6b6b; min-height: 100vh; padding: 24px 16px 48px; color: #333; }
+  .wrap { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: minmax(0,640px) minmax(0,1fr); gap: 24px; align-items: start; }
+  @media (max-width: 1000px) { .wrap { grid-template-columns: 1fr; } }
+
+  .bar { max-width: 1120px; margin: 0 auto 18px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .bar .t { color: #fff; font-size: 13px; margin-right: 6px; }
+  .seg { display: inline-flex; background: #fff; border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; background: #fff; padding: 9px 16px; font-size: 13.5px; cursor: pointer; color: #1b4b7d; }
+  .seg button.on { background: #1b4b7d; color: #fff; }
+
+  .modal { width: 100%; background: #fff; border-radius: 5px; box-shadow: 0 8px 34px rgba(0,0,0,.30); overflow: hidden; }
+  .m-head { padding: 18px 24px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between; }
+  .m-head h1 { font-size: 19px; font-weight: 500; color: #1b4b7d; }
+  .m-head .x { color: #8d8d8d; font-size: 21px; line-height: 1; }
+  .m-body { padding: 20px 24px 24px; }
+
+  .blk { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+  .blk h2 { font-size: 15px; font-weight: 600; color: #1b4b7d; }
+  .blk .desc { font-size: 13.5px; color: #666; line-height: 1.5; margin-top: 4px; max-width: 360px; }
+  .enable { display: flex; align-items: center; gap: 11px; flex-shrink: 0; padding-top: 2px; }
+  .enable span { font-size: 15px; }
+  .switch { width: 44px; height: 24px; border-radius: 12px; background: #d5d8dc; position: relative; cursor: pointer; flex-shrink: 0; transition: background .15s; }
+  .switch::after { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: left .15s; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+  .switch.on { background: #f7941d; }
+  .switch.on::after { left: 22px; }
+  .switch.locked { cursor: not-allowed; opacity: .75; }
+
+  .lbl { font-size: 14px; margin: 20px 0 7px; }
+  .in { width: 100%; padding: 11px 12px; border: 1px solid #ccc; border-radius: 3px; font-size: 14px; color: #333; background: #fff; font-family: inherit; }
+  select.in { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8'><path d='M1 1l5 5 5-5' stroke='%231b4b7d' stroke-width='2' fill='none'/></svg>"); background-repeat: no-repeat; background-position: right 13px center; padding-right: 34px; }
+  .half { max-width: 300px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .pre { position: relative; }
+  .pre .sign { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; color: #777; pointer-events: none; }
+  .pre .in { padding-left: 30px; }
+
+  .chk { display: flex; align-items: center; gap: 12px; margin: 24px 0 4px; }
+  .chk .box { width: 18px; height: 18px; border: 2px solid #f7941d; border-radius: 2px; flex-shrink: 0; }
+  .chk .t { font-size: 14.5px; }
+  .chk .i { color: #e53935; font-size: 14px; }
+  hr.sep { border: none; border-top: 1px solid #eee; margin: 22px 0 6px; }
+
+  .tag { display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: .6px; padding: 2px 7px; border-radius: 3px; margin-left: 9px; vertical-align: 3px; color: #fff; }
+  .tag.new { background: #2e7d55; }
+  .tag.nz { background: #1b4b7d; }
+
+  .src { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 10px; gap: 10px; flex-wrap: wrap; }
+  .src .pill { font-size: 12.5px; padding: 4px 10px; border-radius: 12px; background: #e8f0f8; color: #1b4b7d; }
+  .src .pill.edited { background: #fff3e0; color: #8a4b00; }
+  .src a { font-size: 13px; color: #1b4b7d; cursor: pointer; text-decoration: underline; }
+  .bands { width: 100%; border-collapse: collapse; }
+  .bands th { text-align: left; font-size: 12.5px; color: #666; font-weight: 500; padding: 0 8px 6px 0; }
+  .bands td { padding: 4px 8px 4px 0; vertical-align: middle; }
+  .bands td.del { width: 28px; text-align: center; color: #b0b0b0; cursor: pointer; font-size: 16px; }
+  .bands .in { padding: 9px 10px; }
+  .add { font-size: 13px; color: #1b4b7d; cursor: pointer; margin-top: 6px; display: inline-block; }
+  .hint { font-size: 12.5px; color: #777; margin-top: 6px; line-height: 1.5; }
+  .err { font-size: 12.5px; color: #c62828; margin-top: 6px; }
+
+  .m-foot { padding: 16px 24px; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 12px; }
+  .btn { padding: 11px 30px; border-radius: 4px; font-size: 15px; font-weight: 500; cursor: pointer; border: 1px solid transparent; }
+  .btn-cancel { background: #fff; border-color: #cfd4da; color: #1b4b7d; }
+  .btn-save { background: #f7941d; color: #fff; }
+
+  .card { background: #fff; border-radius: 6px; padding: 18px 20px; margin-bottom: 18px; }
+  .card h3 { font-size: 15px; color: #1b4b7d; font-weight: 600; margin-bottom: 4px; }
+  .card .sub { font-size: 12.5px; color: #777; margin-bottom: 12px; line-height: 1.5; }
+  .row { display: flex; justify-content: space-between; font-size: 14px; padding: 6px 0; border-bottom: 1px solid #f2f2f2; gap: 12px; }
+  .row.tot { font-weight: 600; border-bottom: 0; border-top: 1px solid #ddd; margin-top: 4px; padding-top: 9px; }
+  .row .k { color: #555; }
+  .work { font-size: 12.5px; color: #666; line-height: 1.7; margin: 6px 0 10px; font-family: ui-monospace, Consolas, monospace; }
+  .note { font-size: 12.5px; color: #555; line-height: 1.6; }
+  .note b { color: #333; }
+  .cap { color: #8a4b00; }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <span class="t">Viewing as</span>
+  <div class="seg" id="tenant">
+    <button data-t="au">Australian tenant</button>
+    <button data-t="nz" class="on">NZ tenant (flag on)</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="modal">
+    <div class="m-head"><h1>Retention Settings</h1><span class="x">&#10005;</span></div>
+    <div class="m-body">
+
+      <div class="blk">
+        <div>
+          <h2>Merge Retention</h2>
+          <div class="desc" id="merge-desc">Combine Retention Settings for contract and variation into single setting</div>
+        </div>
+        <div class="enable"><div class="switch" id="sw-merge"></div><span>Enable</span></div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="blk" style="margin-top:20px">
+        <div>
+          <h2>Deduct Retention from Invoice<span class="tag new">NEW</span></h2>
+          <div class="desc" id="deduct-desc">Retention withheld on a claim is deducted from the invoice sent to the client</div>
+        </div>
+        <div class="enable"><div class="switch on" id="sw-deduct"></div><span>Enable</span></div>
+      </div>
+
+      <hr class="sep">
+
+      <div class="lbl" id="basis-lbl">Contract Retention Basis</div>
+      <select class="in half" id="basis"></select>
+
+      <!-- Percent (today's behaviour, unchanged) -->
+      <div id="pct">
+        <div class="grid2">
+          <div><div class="lbl">Contract Max Retention</div><div class="pre"><span class="sign">%</span><input class="in" id="c-max" value="5"></div></div>
+          <div><div class="lbl">Contract Retention Rate</div><div class="pre"><span class="sign">%</span><input class="in" id="c-rate" value="10"></div></div>
+        </div>
+        <div class="chk"><div class="box"></div><span class="t">Enable Manual Contract Retention</span><span class="i">&#9432;</span></div>
+        <div id="var-sec">
+          <hr class="sep">
+          <div class="lbl">Variation Retention Basis</div>
+          <select class="in half"><option>Percent</option></select>
+          <div class="grid2">
+            <div><div class="lbl">Variation Max Retention</div><div class="pre"><span class="sign">%</span><input class="in" value="5"></div></div>
+            <div><div class="lbl">Variation Retention Rate</div><div class="pre"><span class="sign">%</span><input class="in" value="10"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stepped by value (NZ only) -->
+      <div id="stp">
+        <div class="src">
+          <span class="pill" id="src">NZS 3910 default</span>
+          <a id="reset">Reset to NZS 3910 default</a>
+        </div>
+        <table class="bands">
+          <thead><tr><th>Value certified up to (ex GST)</th><th>Retention rate</th><th></th></tr></thead>
+          <tbody id="bands"></tbody>
+        </table>
+        <span class="add" id="add">+ Add band</span>
+        <div class="err" id="band-err"></div>
+        <div class="grid2">
+          <div><div class="lbl">Maximum Retention (ex GST)</div><div class="pre"><span class="sign">$</span><input class="in" id="cap" value="200,000"></div>
+            <div class="hint">Optional. Applied after the bands. Leave blank for no cap.</div></div>
+          <div><div class="lbl">Release at Practical Completion</div><div class="pre"><span class="sign">%</span><input class="in" id="pc" value="50"></div>
+            <div class="hint">Of retention held. The balance releases at the end of the defects period.</div></div>
+        </div>
+        <div class="chk"><div class="box"></div><span class="t">Enable Manual Contract Retention</span><span class="i">&#9432;</span></div>
+      </div>
+
+    </div>
+    <div class="m-foot"><button class="btn btn-cancel">Cancel</button><button class="btn btn-save">Save</button></div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h3>Preview: next claim</h3>
+      <div class="sub">Try the settings against a claim. All amounts ex GST.</div>
+      <div class="grid2" style="gap:14px">
+        <div><div class="lbl" style="margin-top:0">Certified before this claim</div><div class="pre"><span class="sign">$</span><input class="in" id="prev" value="400,000"></div></div>
+        <div><div class="lbl" style="margin-top:0">This claim</div><div class="pre"><span class="sign">$</span><input class="in" id="claim" value="150,000"></div></div>
+      </div>
+      <div class="work" id="work"></div>
+      <div class="row"><span class="k">Retention due to date</span><span id="due"></span></div>
+      <div class="row"><span class="k">Already held</span><span id="held"></span></div>
+      <div class="row"><span class="k">Withheld on this claim</span><span id="withheld"></span></div>
+    </div>
+
+    <div class="card">
+      <h3>Invoice raised in Xero</h3>
+      <div class="sub" id="inv-sub"></div>
+      <div class="row"><span class="k">Claim value</span><span id="i-claim"></span></div>
+      <div class="row" id="i-ret-row"><span class="k">Less retention</span><span id="i-ret"></span></div>
+      <div class="row tot"><span>Invoice amount (ex GST)</span><span id="i-tot"></span></div>
+      <div class="row"><span class="k">GST (added by Xero from the account code)</span><span id="i-gst"></span></div>
+      <div class="row tot"><span>Invoice total</span><span id="i-all"></span></div>
+      <p class="note" style="margin-top:10px" id="inv-note"></p>
+    </div>
+
+    <div class="card">
+      <h3>What's new here</h3>
+      <p class="note"><b>Deduct Retention from Invoice</b> (VAR-22037): every tenant, AU and NZ. On by default, which is today's behaviour. Turn it off on a project to invoice the full claim value. NZ customers usually do this so the principal can hold the retention in trust.</p>
+      <p class="note" style="margin-top:8px"><b>Stepped by value</b> (VAR-20740): NZ tenants only, behind the NZ feature flag. Prefilled with the NZS 3910 default, editable per project. Choosing it merges contract and variation retention into one schedule. Australian tenants see the modal exactly as today plus the deduct toggle.</p>
+      <p class="note" style="margin-top:8px">The NZS 3910 bands and $200,000 cap still need confirming against the published standard before build.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var DEFAULT = [[200000, 10], [1000000, 5], [null, 1.75]];
+  var DEFAULT_CAP = 200000;
+  var bands = DEFAULT.map(function (b) { return b.slice(); });
+  var tenant = 'nz', edited = false;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var num = function (s) { var x = parseFloat(String(s).replace(/[^0-9.]/g, '')); return isNaN(x) ? null : x; };
+  var cur = function () { return tenant === 'nz' ? 'NZ$' : 'A$'; };
+  var money = function (n) { return cur() + (Math.round(n * 100) / 100).toLocaleString('en-NZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  var thousands = function (n) { return Math.round(n).toLocaleString('en-NZ'); };
+
+  function stepped() { return tenant === 'nz' && $('basis').value === 'stepped'; }
+
+  function dueStepped(v) {
+    var lo = 0, t = 0, lines = [];
+    bands.forEach(function (b) {
+      var hi = b[0] === null ? Infinity : b[0], slice = Math.max(0, Math.min(v, hi) - lo);
+      if (slice > 0) { t += slice * b[1] / 100; lines.push(b[1] + '% × ' + thousands(slice) + ' = ' + thousands(slice * b[1] / 100)); }
+      lo = hi;
+    });
+    var cap = num($('cap').value);
+    return { raw: t, val: cap ? Math.min(t, cap) : t, capped: !!(cap && t > cap), cap: cap, lines: lines };
+  }
+  function duePercent(v, contractSum) {
+    var rate = num($('c-rate').value) || 0, max = num($('c-max').value) || 0;
+    var raw = v * rate / 100, capAmt = contractSum * max / 100;
+    return { raw: raw, val: Math.min(raw, capAmt), capped: raw > capAmt, cap: capAmt,
+             lines: [rate + '% × ' + thousands(v) + ' = ' + thousands(raw) + ', capped at ' + max + '% of a ' + thousands(contractSum) + ' contract'] };
+  }
+
+  function validate() {
+    var prev = 0, ok = true;
+    for (var i = 0; i < bands.length; i++) {
+      var hi = bands[i][0];
+      if (hi === null) { if (i !== bands.length - 1) ok = false; continue; }
+      if (hi <= prev) ok = false;
+      prev = hi;
+    }
+    $('band-err').textContent = ok ? '' : 'Cut-offs must go up from one band to the next, and only the last band can be open-ended.';
+  }
+
+  function drawBands() {
+    $('bands').innerHTML = bands.map(function (b, i) {
+      var last = b[0] === null;
+      return '<tr><td><div class="pre"><span class="sign">$</span><input class="in" data-i="' + i + '" data-k="0" value="' + (last ? '' : thousands(b[0])) + '" placeholder="Above previous band"' + (last ? ' disabled' : '') + '></div></td>' +
+             '<td><div class="pre"><span class="sign">%</span><input class="in" data-i="' + i + '" data-k="1" value="' + b[1] + '"></div></td>' +
+             '<td class="del" data-del="' + i + '" title="Delete band">&#128465;</td></tr>';
+    }).join('');
+    document.querySelectorAll('#bands input').forEach(function (el) {
+      el.addEventListener('input', function () {
+        var x = num(el.value); if (x === null) return;
+        bands[+el.dataset.i][+el.dataset.k] = x; markEdited(); validate(); calc();
+      });
+    });
+    document.querySelectorAll('#bands [data-del]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        if (bands.length <= 1) return;
+        var i = +el.dataset.del; bands.splice(i, 1);
+        if (bands[bands.length - 1][0] !== null) bands[bands.length - 1][0] = null;
+        markEdited(); drawBands(); validate(); calc();
+      });
+    });
+  }
+
+  function markEdited() { edited = true; $('src').textContent = 'NZS 3910 default, edited for this project'; $('src').classList.add('edited'); }
+
+  function render() {
+    document.querySelectorAll('#tenant button').forEach(function (b) { b.classList.toggle('on', b.dataset.t === tenant); });
+    var opts = tenant === 'nz'
+      ? '<option value="stepped">Stepped by value</option><option value="percent">Percent</option>'
+      : '<option value="percent">Percent</option>';
+    var keep = $('basis').value;
+    $('basis').innerHTML = opts;
+    $('basis').value = tenant === 'nz' ? (keep || 'stepped') : 'percent';
+    if (tenant === 'nz' && !keep) $('basis').value = 'stepped';
+    $('basis-lbl').innerHTML = stepped() ? 'Retention Basis<span class="tag nz">NZ</span>' : 'Contract Retention Basis';
+    $('stp').style.display = stepped() ? '' : 'none';
+    $('pct').style.display = stepped() ? 'none' : '';
+    var mg = $('sw-merge');
+    if (stepped()) { mg.classList.add('on', 'locked'); $('merge-desc').textContent = 'On for stepped retention. One schedule applies to contract and variations.'; }
+    else { mg.classList.remove('locked'); $('merge-desc').textContent = 'Combine Retention Settings for contract and variation into single setting'; }
+    $('var-sec').style.display = mg.classList.contains('on') ? 'none' : '';
+    calc();
+  }
+
+  function calc() {
+    var prev = num($('prev').value) || 0, claim = num($('claim').value) || 0, toDate = prev + claim;
+    var a, b;
+    if (stepped()) { a = dueStepped(toDate); b = dueStepped(prev); }
+    else { var cs = 2000000; a = duePercent(toDate, cs); b = duePercent(prev, cs); }
+    var withheld = Math.max(0, a.val - b.val);
+    $('work').innerHTML = 'On ' + thousands(toDate) + ' certified to date:<br>' + a.lines.join('<br>') +
+      (a.capped ? '<br><span class="cap">Bands give ' + thousands(a.raw) + ', capped at ' + thousands(a.cap) + '</span>' : '');
+    $('due').textContent = money(a.val); $('held').textContent = money(b.val); $('withheld').textContent = money(withheld);
+
+    var deduct = $('sw-deduct').classList.contains('on');
+    var ex = deduct ? claim - withheld : claim, gstRate = tenant === 'nz' ? 0.15 : 0.10;
+    $('i-claim').textContent = money(claim);
+    $('i-ret-row').style.display = deduct ? '' : 'none';
+    $('i-ret').textContent = '−' + money(withheld);
+    $('i-tot').textContent = money(ex);
+    $('i-gst').textContent = money(ex * gstRate);
+    $('i-all').textContent = money(ex * (1 + gstRate));
+    $('inv-sub').textContent = deduct ? 'Deduct Retention from Invoice: on. Retention comes off the invoice.' : 'Deduct Retention from Invoice: off. The invoice is the full claim value.';
+    $('inv-note').textContent = deduct
+      ? 'The retention movement goes to Xero as its own line, as today.'
+      : 'Retention is still withheld and recorded on the claim in Varicon. Only the invoice changes, so the principal can hold the ' + money(withheld) + ' in trust.';
+    $('inv-note').textContent += ' GST shown at ' + (gstRate * 100) + '% for illustration; Xero applies the rate on the account code chosen.';
+  }
+
+  document.querySelectorAll('#tenant button').forEach(function (b) {
+    b.addEventListener('click', function () { tenant = b.dataset.t; $('basis').value = ''; render(); });
+  });
+  $('basis').addEventListener('change', render);
+  $('sw-deduct').addEventListener('click', function () { this.classList.toggle('on'); calc(); });
+  $('sw-merge').addEventListener('click', function () { if (this.classList.contains('locked')) return; this.classList.toggle('on'); render(); });
+  $('add').addEventListener('click', function () {
+    var lastFixed = 0; bands.forEach(function (b) { if (b[0] !== null) lastFixed = b[0]; });
+    bands.splice(bands.length - 1, 0, [lastFixed ? lastFixed * 2 : 200000, 1]);
+    markEdited(); drawBands(); validate(); calc();
+  });
+  $('reset').addEventListener('click', function () {
+    bands = DEFAULT.map(function (b) { return b.slice(); }); $('cap').value = thousands(DEFAULT_CAP); $('pc').value = 50;
+    edited = false; $('src').textContent = 'NZS 3910 default'; $('src').classList.remove('edited'); drawBands(); validate(); calc();
+  });
+  ['cap'].forEach(function (id) { $(id).addEventListener('input', function () { markEdited(); calc(); }); });
+  ['prev', 'claim', 'c-rate', 'c-max'].forEach(function (id) { $(id).addEventListener('input', calc); });
+
+  drawBands(); render();
+})();
+</script>
+</body>
+</html>
