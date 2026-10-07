@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multi-signer forms — Varicon</title>
+<!--
+  Prototype for VAR-21153 — Forms: one form instance, many signers.
+  Built 2026-10-07. Assumes offline sign-on is a SUPERVISOR APP flow (Alec's call, 2026-10-07).
+  Screens: web "who has signed" record + assign flow + external link + instance QR;
+  supervisor app offline crew sign-on; public tokenised link page for a subcontractor.
+  All views share one record in memory: sign offline in the supervisor app, reconnect,
+  and the web record updates. Data is fictional.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--navy:#1b2a4a;--amber:#f5a623;--muted:#64748b;--line:#e2e8f0;--soft:#f8fafc;--green:#16a34a;--red:#dc2626;--blue:#2563eb}
+body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#333;min-height:100vh}
+button{font-family:inherit}
+
+/* prototype chrome */
+.proto-bar{background:var(--navy);color:#fff;padding:10px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:200}
+.proto-bar .pt{font-weight:700;font-size:14px}
+.proto-bar .pt small{display:block;font-weight:400;font-size:11px;opacity:.6}
+.views{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+.views button{background:rgba(255,255,255,.08);border:none;color:rgba(255,255,255,.75);font-size:12px;font-weight:600;padding:8px 12px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:7px}
+.views button.on{background:var(--amber);color:#fff}
+.views button .k{font-size:9.5px;opacity:.7;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.reset{background:none;border:1px solid rgba(255,255,255,.25);color:rgba(255,255,255,.8);font-size:11px;padding:6px 10px;border-radius:6px;cursor:pointer}
+.view{display:none}.view.on{display:block}
+
+/* ── WEB APP ─────────────────────────────────────────── */
+.web{display:flex;min-height:calc(100vh - 54px)}
+.side{width:220px;background:var(--navy);color:#fff;flex-shrink:0;padding-top:8px}
+.side .logo{display:flex;align-items:center;gap:10px;padding:10px 16px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.side .lg{width:30px;height:30px;background:linear-gradient(135deg,#f5a623,#f7c948);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--navy)}
+.side .nav{display:flex;align-items:center;gap:12px;padding:10px 16px;font-size:13.5px;color:rgba(255,255,255,.72)}
+.side .nav.on{background:var(--amber);color:#fff;font-weight:600;border-radius:0 6px 6px 0;margin-right:8px}
+.side .nav i{width:18px;text-align:center}
+.wmain{flex:1;min-width:0}
+.topbar{background:#fff;border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;gap:10px}
+.crumbs{font-size:12.5px;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.crumbs b{color:var(--navy)}
+.content{padding:18px 24px 60px;max-width:1240px}
+.rec-head{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 18px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.rec-ico{width:46px;height:46px;border-radius:10px;background:#ede9fe;color:#6d28d9;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.rec-t{font-size:16px;font-weight:700;color:var(--navy);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tag{font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.4px;background:#ddd6fe;color:#5b21b6}
+.tag.one{background:#e0f2fe;color:#075985}
+.rec-sub{font-size:12px;color:var(--muted);margin-top:3px}
+.rec-prog{margin-left:auto;min-width:240px}
+.rec-prog .n{font-size:13px;color:var(--navy);font-weight:700;display:flex;justify-content:space-between}
+.rec-prog .n span{color:var(--muted);font-weight:500}
+.bar{height:8px;background:#f1f5f9;border-radius:6px;margin-top:7px;overflow:hidden;display:flex}
+.bar i{display:block;height:100%}
+.legend{display:flex;gap:12px;font-size:11px;color:var(--muted);margin-top:7px;flex-wrap:wrap}
+.legend span::before{content:'';display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:0}
+.legend .l1::before{background:var(--green)}.legend .l2::before{background:#f59e0b}.legend .l3::before{background:#cbd5e1}
+
+.grid{display:grid;grid-template-columns:1fr 330px;gap:14px;align-items:start}
+@media(max-width:1100px){.grid{grid-template-columns:1fr}}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.card-h{padding:13px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.card-h h3{font-size:14px;color:var(--navy)}
+.card-h .sub{font-size:11.5px;color:var(--muted)}
+.card-h .r{margin-left:auto;display:flex;gap:6px}
+.btn{padding:8px 13px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--navy);display:inline-flex;align-items:center;gap:7px}
+.btn:hover{background:var(--soft)}
+.btn.pri{background:var(--amber);border-color:var(--amber);color:#fff}
+.btn.pri:hover{background:#e0951a}
+.btn.sm{padding:5px 9px;font-size:11.5px}
+.btn.ghost{border-color:transparent;color:var(--muted)}
+.btn.danger{color:var(--red);border-color:#fecaca}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;padding:9px 12px;background:var(--soft);border-bottom:1px solid var(--line)}
+td{padding:11px 12px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr.flash td{animation:fl 1.8s ease}
+@keyframes fl{0%{background:#fef3c7}100%{background:transparent}}
+.ord{width:24px;height:24px;border-radius:50%;background:#f1f5f9;color:var(--navy);font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.ord.done{background:#dcfce7;color:#166534}
+.who b{color:var(--navy);display:block;font-size:13px}
+.who span{color:var(--muted);font-size:11.5px}
+.route{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#334155;white-space:nowrap}
+.route i{color:var(--muted);width:14px;text-align:center}
+.st{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:4px 9px;border-radius:12px;white-space:nowrap}
+.st.signed{background:#dcfce7;color:#166534}
+.st.pending{background:#f1f5f9;color:#475569}
+.st.queued{background:#fef3c7;color:#92400e}
+.st.link{background:#dbeafe;color:#1e40af}
+.st.revoked,.st.expired{background:#fee2e2;color:#991b1b}
+.when{font-size:11.5px;color:#334155;white-space:nowrap}
+.when small{display:block;color:var(--muted);font-size:10.5px}
+.same{display:inline-block;margin-top:3px;font-size:10px;font-weight:700;color:#7c3aed;background:#f5f3ff;border-radius:4px;padding:1px 5px}
+.acts{text-align:right;white-space:nowrap}
+
+.note{display:flex;gap:10px;padding:11px 14px;font-size:12px;line-height:1.5;border-top:1px solid var(--line);background:#fffbeb;color:#78350f}
+.note i{margin-top:2px}
+.note.blue{background:#eff6ff;color:#1e3a8a}
+
+.add-list{padding:8px}
+.add{display:flex;gap:12px;padding:11px 10px;border-radius:8px;cursor:pointer;align-items:flex-start}
+.add:hover{background:var(--soft)}
+.add .ic{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.add b{font-size:13px;color:var(--navy);display:block}
+.add span{font-size:11.5px;color:var(--muted);line-height:1.4}
+.trail{padding:6px 16px 14px;max-height:360px;overflow:auto}
+.ev{display:flex;gap:10px;padding:8px 0;font-size:11.5px;border-bottom:1px dashed #eef2f7}
+.ev:last-child{border-bottom:none}
+.ev .t{color:var(--muted);width:44px;flex-shrink:0;font-variant-numeric:tabular-nums}
+.ev .d{color:#334155;line-height:1.45}
+.ev .d b{color:var(--navy)}
+
+.answers{padding:12px 16px;font-size:12px;color:#334155;display:grid;grid-template-columns:150px 1fr;gap:6px 12px}
+.answers dt{color:var(--muted)}
+.answers dd{font-weight:500}
+.lock{font-size:11px;color:var(--muted);padding:0 16px 12px;display:flex;gap:6px;align-items:center}
+
+/* modal */
+.scrim{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:300;padding:16px}
+.scrim.on{display:flex}
+.modal{background:#fff;border-radius:12px;width:560px;max-width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.m-h{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.m-h h3{font-size:15px;color:var(--navy)}
+.m-h .x{margin-left:auto;background:none;border:none;font-size:16px;color:var(--muted);cursor:pointer}
+.m-b{padding:16px 20px;font-size:13px;color:#334155}
+.m-f{padding:12px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
+.steps{display:flex;gap:6px;margin-bottom:14px}
+.steps span{flex:1;font-size:11px;font-weight:600;color:var(--muted);border-top:3px solid #e2e8f0;padding-top:6px}
+.steps span.on{color:var(--navy);border-color:var(--amber)}
+.steps span.done{color:#166534;border-color:var(--green)}
+.crew{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.crew label{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;font-size:13px}
+.crew label:last-child{border-bottom:none}
+.crew label.dis{opacity:.5;cursor:default}
+.crew .meta{color:var(--muted);font-size:11.5px;margin-left:auto}
+.chip{font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#dcfce7;color:#166534}
+.chip.g{background:#f1f5f9;color:#64748b}
+.fld{margin-bottom:12px}
+.fld label{display:block;font-size:11.5px;font-weight:600;color:var(--navy);margin-bottom:5px}
+.fld input,.fld select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:6px;font-family:inherit;font-size:13px}
+.opt{display:flex;gap:10px;border:1px solid var(--line);border-radius:8px;padding:11px 12px;margin-bottom:8px;cursor:pointer;align-items:flex-start}
+.opt.on{border-color:var(--amber);background:#fff7ed}
+.opt b{display:block;font-size:13px;color:var(--navy)}
+.opt span{font-size:11.5px;color:var(--muted)}
+.qr-wrap{display:flex;gap:18px;align-items:center}
+.qr-wrap svg{border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff;flex-shrink:0}
+
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--navy);color:#fff;font-size:13px;padding:11px 16px;border-radius:8px;opacity:0;transition:all .25s;z-index:400;pointer-events:none;max-width:90vw}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── PHONE ───────────────────────────────────────────── */
+.stage{display:flex;gap:28px;justify-content:center;align-items:flex-start;padding:24px 16px 60px;flex-wrap:wrap}
+.phone{width:375px;height:780px;background:#fff;border-radius:30px;box-shadow:0 14px 40px rgba(0,0,0,.2);overflow:hidden;display:flex;flex-direction:column;position:relative;flex-shrink:0;border:8px solid #111827}
+.ph-status{height:26px;background:var(--navy);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;flex-shrink:0}
+.ph-status .sig{display:flex;gap:6px;align-items:center}
+.ph-hdr{background:var(--navy);color:#fff;padding:10px 14px 12px;flex-shrink:0}
+.ph-hdr .row{display:flex;align-items:center;gap:10px}
+.ph-hdr .t{font-size:14px;font-weight:700;flex:1;line-height:1.25}
+.ph-hdr .t small{display:block;font-size:10.5px;font-weight:400;opacity:.65;margin-top:2px}
+.offline{background:#fef3c7;color:#78350f;font-size:11.5px;padding:9px 14px;display:flex;gap:9px;line-height:1.4;flex-shrink:0;border-bottom:1px solid #fde68a}
+.offline.ok{background:#dcfce7;color:#14532d;border-color:#bbf7d0}
+.ph-body{flex:1;overflow:auto;background:#f6f7f9}
+.ph-foot{padding:12px 14px;background:#fff;border-top:1px solid var(--line);flex-shrink:0}
+.pbtn{width:100%;padding:13px;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;background:var(--amber);color:#fff;display:flex;align-items:center;justify-content:center;gap:8px}
+.pbtn.sec{background:#fff;color:var(--navy);border:1px solid var(--line);margin-top:8px}
+.pbtn:disabled{background:#e2e8f0;color:#94a3b8;cursor:not-allowed}
+.psec{background:#fff;margin:10px;border-radius:10px;border:1px solid var(--line);overflow:hidden}
+.psec-h{padding:10px 12px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center}
+.psec-h .r{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:600;color:var(--navy)}
+.prow{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid #f1f5f9;font-size:13px}
+.prow:last-child{border-bottom:none}
+.prow .av{width:32px;height:32px;border-radius:50%;background:#e2e8f0;color:var(--navy);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.prow .nm{flex:1;min-width:0}
+.prow .nm b{display:block;color:var(--navy);font-size:13px}
+.prow .nm span{font-size:11px;color:var(--muted)}
+.prow .go{font-size:12px;font-weight:700;color:var(--amber);background:none;border:1px solid #fde68a;border-radius:7px;padding:6px 10px;cursor:pointer}
+.ico-ok{color:var(--green)}.ico-q{color:#d97706}
+.handover{padding:26px 22px;text-align:center}
+.handover .big{width:70px;height:70px;border-radius:50%;background:#fff7ed;color:var(--amber);font-size:28px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+.handover h2{font-size:19px;color:var(--navy);margin-bottom:6px}
+.handover p{font-size:13px;color:var(--muted);line-height:1.5}
+.haz{padding:10px 12px;font-size:12.5px;color:#334155;line-height:1.5}
+.haz li{margin:0 0 6px 16px}
+.ack{display:flex;gap:10px;padding:12px;font-size:12.5px;color:var(--navy);align-items:flex-start;cursor:pointer;line-height:1.45}
+.ack input{margin-top:3px;width:17px;height:17px;accent-color:var(--amber)}
+.pad-wrap{padding:10px 12px}
+.pad{width:100%;height:150px;border:1.5px dashed #cbd5e1;border-radius:8px;background:#fff;touch-action:none;display:block;cursor:crosshair}
+.pad-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:6px}
+.pad-meta button{background:none;border:none;color:var(--blue);font-size:11px;font-weight:600;cursor:pointer}
+.side-panel{width:340px;max-width:100%}
+.side-panel .card{margin-bottom:14px}
+.side-panel p{font-size:12.5px;color:#334155;line-height:1.55;padding:12px 16px}
+.side-panel p+p{padding-top:0}
+.sim{padding:12px 16px;display:flex;flex-direction:column;gap:8px}
+.q-count{font-size:12px;color:#92400e;background:#fef3c7;border-radius:6px;padding:8px 10px}
+.q-count.zero{background:#dcfce7;color:#166534}
+
+/* public link page */
+.pub-hdr{background:#fff;border-bottom:1px solid var(--line);padding:12px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.pub-hdr .lg{width:28px;height:28px;background:linear-gradient(135deg,#f5a623,#f7c948);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--navy);font-size:14px}
+.pub-hdr .u{font-size:10.5px;color:var(--muted);margin-left:auto;display:flex;align-items:center;gap:5px}
+.pub-intro{padding:16px 14px 6px}
+.pub-intro h2{font-size:17px;color:var(--navy);line-height:1.3}
+.pub-intro p{font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.5}
+.pub-done{padding:40px 22px;text-align:center}
+.pub-done .big{width:70px;height:70px;border-radius:50%;background:#dcfce7;color:var(--green);font-size:30px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+.pub-done.bad .big{background:#fee2e2;color:var(--red)}
+.pub-done h2{font-size:18px;color:var(--navy);margin-bottom:6px}
+.pub-done p{font-size:13px;color:var(--muted);line-height:1.55}
+.pf{padding:0 12px 10px}
+.pf label{display:block;font-size:11.5px;font-weight:600;color:var(--navy);margin:10px 0 5px}
+.pf input{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:7px;font-family:inherit;font-size:13px}
+
+/* notes */
+.notes{max-width:880px;margin:24px auto 60px;padding:0 16px}
+.notes .card{margin-bottom:14px}
+.notes .card-b{padding:14px 18px;font-size:13px;color:#334155;line-height:1.6}
+.notes .card-b li{margin:0 0 6px 18px}
+.notes .card-b p+p{margin-top:8px}
+.notes table td,.notes table th{font-size:12px}
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <div class="pt">Multi-signer forms <small>VAR-21153 · one form instance, many signers · prototype 2026-10-07</small></div>
+  <div class="views" id="views">
+    <button data-v="web" class="on"><span class="k">Web</span> Who has signed</button>
+    <button data-v="app"><span class="k">Supervisor app</span> Offline sign-on</button>
+    <button data-v="pub"><span class="k">Public link</span> Subcontractor</button>
+    <button data-v="notes"><i class="fa-regular fa-note-sticky"></i> Notes</button>
+  </div>
+  <button class="reset" onclick="resetAll()"><i class="fa-solid fa-rotate-left"></i> Reset</button>
+</div>
+
+<!-- ═════════ WEB ═════════ -->
+<section class="view on" id="v-web">
+<div class="web">
+  <aside class="side">
+    <div class="logo"><div class="lg">V</div><b>Varicon</b></div>
+    <div class="nav"><i class="fa-solid fa-gauge"></i>Dashboard</div>
+    <div class="nav"><i class="fa-solid fa-folder-open"></i>Projects</div>
+    <div class="nav"><i class="fa-solid fa-calendar-days"></i>Scheduler</div>
+    <div class="nav on"><i class="fa-solid fa-file-signature"></i>Forms</div>
+    <div class="nav"><i class="fa-solid fa-truck-monster"></i>Plant &amp; Equipment</div>
+    <div class="nav"><i class="fa-solid fa-gear"></i>Settings</div>
+  </aside>
+  <div class="wmain">
+    <div class="topbar">
+      <div class="crumbs">Forms <i class="fa-solid fa-chevron-right" style="font-size:9px;opacity:.5"></i> Project Forms <i class="fa-solid fa-chevron-right" style="font-size:9px;opacity:.5"></i> (26-031) Bulli Pass Resurfacing <i class="fa-solid fa-chevron-right" style="font-size:9px;opacity:.5"></i> <b>SWMS-0412</b></div>
+    </div>
+    <div class="content">
+      <div class="rec-head">
+        <div class="rec-ico"><i class="fa-solid fa-helmet-safety"></i></div>
+        <div>
+          <div class="rec-t">SWMS — Asphalt paving &amp; traffic control <span class="tag">SWMS</span> <span class="tag one"><i class="fa-solid fa-link"></i> One record</span></div>
+          <div class="rec-sub">SWMS-0412 · Rev 3 · (26-031) Bulli Pass Resurfacing · Submitted by Dean Harris, 07 Oct 2026 06:42 AEDT</div>
+        </div>
+        <div class="rec-prog">
+          <div class="n" id="prog-n"></div>
+          <div class="bar" id="prog-bar"></div>
+          <div class="legend"><span class="l1">Signed</span><span class="l2">Waiting to sync</span><span class="l3">Not signed yet</span></div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div>
+          <div class="card">
+            <div class="card-h">
+              <h3>Signatures</h3><span class="sub">In the order they were added to the record</span>
+              <div class="r"><button class="btn sm" onclick="remindAll()"><i class="fa-regular fa-bell"></i> Remind everyone not signed</button></div>
+            </div>
+            <table>
+              <thead><tr><th>#</th><th>Signer</th><th>How</th><th>Status</th><th>Signed</th><th></th></tr></thead>
+              <tbody id="sig-body"></tbody>
+            </table>
+            <div class="note blue"><i class="fa-solid fa-circle-info"></i><div>Every signature is added to <b>this</b> record. Nobody's signature creates a new submission, and signing never changes the answers below.</div></div>
+          </div>
+
+          <div class="card" style="margin-top:14px">
+            <div class="card-h"><h3>Answers</h3><span class="sub">Filled in by Dean Harris before the crew signed</span></div>
+            <dl class="answers">
+              <dt>Work activity</dt><dd>Asphalt paving, northbound lane, ch 1200–1850</dd>
+              <dt>Traffic control</dt><dd>Stop/slow, 2 controllers, TGS-14 (Coastline TM)</dd>
+              <dt>Key hazards</dt><dd>Moving plant, hot asphalt (160 °C), live traffic, fumes</dd>
+              <dt>Controls</dt><dd>Exclusion zone 3 m around paver, spotter on roller, PPE incl. long sleeves</dd>
+              <dt>Emergency point</dt><dd>Bulli Lookout car park</dd>
+            </dl>
+            <div class="lock"><i class="fa-solid fa-lock"></i> Answers locked when the first worker signed. (Open question — see Notes.)</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <div class="card-h"><h3>Add signers</h3></div>
+            <div class="add-list">
+              <div class="add" onclick="openAssign()"><div class="ic" style="background:#fff7ed;color:#d97706"><i class="fa-solid fa-users"></i></div><div><b>Assign crew</b><span>Pick workers on site today. Each signs on their own phone, or on yours if there's no reception.</span></div></div>
+              <div class="add" onclick="openLink()"><div class="ic" style="background:#eff6ff;color:var(--blue)"><i class="fa-solid fa-envelope-open-text"></i></div><div><b>Send a link to someone outside Varicon</b><span>A subcontractor signs from a link. No account needed.</span></div></div>
+              <div class="add" onclick="openQR()"><div class="ic" style="background:#f5f3ff;color:#7c3aed"><i class="fa-solid fa-qrcode"></i></div><div><b>Show QR for this record</b><span>Scanning opens SWMS-0412 for signing, not a blank form.</span></div></div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:14px">
+            <div class="card-h"><h3>Audit trail</h3><span class="sub">AEDT</span></div>
+            <div class="trail" id="trail"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═════════ SUPERVISOR APP ═════════ -->
+<section class="view" id="v-app">
+<div class="stage">
+  <div class="phone">
+    <div class="ph-status"><span>9:14</span><span class="sig" id="ph-sig"></span></div>
+    <div class="ph-hdr"><div class="row"><i class="fa-solid fa-chevron-left" id="ph-back" style="cursor:pointer"></i><div class="t" id="ph-title"></div><div style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.18);font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center">DH</div></div></div>
+    <div class="offline" id="ph-banner"></div>
+    <div class="ph-body" id="ph-body"></div>
+    <div class="ph-foot" id="ph-foot"></div>
+  </div>
+  <div class="side-panel">
+    <div class="card">
+      <div class="card-h"><h3>What this shows</h3></div>
+      <p><b>Dean is the supervisor.</b> His crew is on a section of the Bulli Pass with no reception. The SWMS is already on his phone, so he hands the phone to each worker in turn and they sign.</p>
+      <p>Signatures are kept on Dean's phone until it reconnects, then added to the same record SWMS-0412. The web view updates, and nothing is duplicated.</p>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Simulate</h3></div>
+      <div class="sim">
+        <div class="q-count" id="q-count"></div>
+        <button class="btn" id="btn-net" onclick="toggleNet()"></button>
+        <button class="btn" onclick="setView('web')"><i class="fa-solid fa-display"></i> Check the web record</button>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═════════ PUBLIC LINK ═════════ -->
+<section class="view" id="v-pub">
+<div class="stage">
+  <div class="phone">
+    <div class="ph-status" style="background:#fff;color:#111"><span>10:02</span><span class="sig"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i></span></div>
+    <div class="pub-hdr"><div class="lg">V</div><div style="font-size:12.5px;font-weight:600;color:var(--navy)">Varicon</div><div class="u"><i class="fa-solid fa-lock"></i> sign.varicon.com.au</div></div>
+    <div class="ph-body" id="pub-body" style="background:#fff"></div>
+    <div class="ph-foot" id="pub-foot"></div>
+  </div>
+  <div class="side-panel">
+    <div class="card">
+      <div class="card-h"><h3>What this shows</h3></div>
+      <p><b>Ben Carter</b> works for the traffic control subcontractor. He has no Varicon account. Dean sent him a link from the web record.</p>
+      <p>The link opens <b>this</b> SWMS record only. It expires after 7 days, can be revoked, and works once: after Ben signs, the link is spent.</p>
+      <p>This uses the same tokenised-link approach decided for external sign-off on ITPs (VAR-21146).</p>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Simulate</h3></div>
+      <div class="sim">
+        <button class="btn" onclick="pubState='form';renderPub()"><i class="fa-solid fa-envelope-open"></i> Open the link</button>
+        <button class="btn" onclick="pubState='expired';renderPub()"><i class="fa-regular fa-clock"></i> Open an expired / revoked link</button>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- ═════════ NOTES ═════════ -->
+<section class="view" id="v-notes">
+<div class="notes">
+  <div class="card"><div class="card-h"><h3>What this prototype is for</h3></div><div class="card-b">
+    <p>VAR-21153 needs three screens drawn before Tech Refinement: the supervisor's <b>who has signed</b> view, the <b>assign</b> flow, and the <b>offline sign-on</b> screen. This prototype draws those three. It also includes the subcontractor's link page and the QR for a single record, because both add signatures to the same record.</p>
+    <p>The core idea it has to make obvious: <b>one SWMS, one record, many signatures</b>, whichever way each person signed.</p>
+  </div></div>
+
+  <div class="card"><div class="card-h"><h3>Decisions assumed here</h3></div><div class="card-b">
+    <ul>
+      <li><b>Offline sign-on is a supervisor app flow</b> (Alec, 2026-10-07). The supervisor's phone holds the record and collects signatures while offline. VAR-21333 and VAR-21337 assumed different answers; this settles it for the prototype. The deciding fact: F &amp; J Bitumen's sites have no reception at all, so only one device needs to work offline.</li>
+      <li><b>Each signer reads before signing.</b> On the handed-over phone, the worker sees the key hazards and ticks "I've read and understood" before the pad unlocks. Without this, passing a phone around is the same as today's practice with extra steps.</li>
+      <li><b>Signature identity:</b> name, role or organisation, route (own phone / supervisor's phone / link / QR), device, and a UTC timestamp. The web shows local time with UTC beneath.</li>
+      <li><b>Two signatures in the same second are both kept</b> (Jack O'Brien and Liam Walsh, 06:51:12). Shown so the concurrency requirement is visible.</li>
+    </ul>
+  </div></div>
+
+  <div class="card"><div class="card-h"><h3>Still open — not decided by this prototype</h3></div><div class="card-b">
+    <ul>
+      <li><b>Do answers lock at the first signature?</b> The web view shows them locked (VAR-20749, field locking after signature). If they can still change, every earlier signature is on answers that moved.</li>
+      <li><b>Does an external signature carry the same weight</b> as a crew signature, or a separate trust level? The record marks the route but treats them the same.</li>
+      <li><b>Worker's own phone screen</b> (assign route, online) isn't drawn. Assumption: it's the existing form screen with a Sign button and the same read-and-acknowledge step.</li>
+      <li><b>Unlisted worker on the offline phone.</b> "Add someone not on the list" is shown; whether it needs supervisor confirmation is open.</li>
+    </ul>
+  </div></div>
+
+  <div class="card"><div class="card-h"><h3>Definition of done — where each item shows up</h3></div>
+    <table>
+      <thead><tr><th>VAR-21153 definition of done</th><th>Where to see it</th></tr></thead>
+      <tbody>
+        <tr><td>Supervisor pre-fills one SWMS, assigns three workers, each signs on their own device; one submission, three signatures in order</td><td>Web → Assign crew; signatures table</td></tr>
+        <tr><td>Adding a signature after submission doesn't create a submission or change answers</td><td>Web → "One record" tag, Answers card</td></tr>
+        <tr><td>Two workers signing at the same moment both appear once</td><td>Web → rows 3 and 4, "same second" marker</td></tr>
+        <tr><td>QR for a submitted record opens that record</td><td>Web → Show QR for this record</td></tr>
+        <tr><td>External subcontractor signs via a link with no account; expired or revoked link can't be used</td><td>Public link view; Web → Revoke</td></tr>
+        <tr><td>Offline, supervisor collects three signatures on one record; all three sync on reconnect</td><td>Supervisor app → sign Sione, Priya, Tom → Reconnect</td></tr>
+        <tr><td>Supervisor sees who has and hasn't signed</td><td>Web → progress bar and table; Supervisor app → crew list</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</section>
+
+<!-- modals -->
+<div class="scrim" id="scrim"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── shared record ─────────────────────────────────────────
+const CREW = [
+  {id:'dh', name:'Dean Harris',   role:'Supervisor',         onsite:true},
+  {id:'mt', name:'Mia Tran',      role:'Labourer',           onsite:true},
+  {id:'jo', name:"Jack O'Brien",  role:'Plant operator',     onsite:true},
+  {id:'lw', name:'Liam Walsh',    role:'Plant operator',     onsite:true},
+  {id:'sf', name:'Sione Fifita',  role:'Labourer',           onsite:true},
+  {id:'pn', name:'Priya Nair',    role:'Leading hand',       onsite:true},
+  {id:'tk', name:'Tom Kelly',     role:'Roller operator',    onsite:true},
+  {id:'al', name:'Ana Lopez',     role:'Labourer',           onsite:true},
+  {id:'rp', name:'Raj Patel',     role:'Truck driver',       onsite:false},
+];
+const ROUTES = {
+  own:{i:'fa-mobile-screen', t:'Own phone'},
+  sup:{i:'fa-hand-holding', t:"Dean's phone (offline)"},
+  link:{i:'fa-link', t:'Link (no account)'},
+  qr:{i:'fa-qrcode', t:'QR on site'},
+};
+let S;
+function initState(){
+  S = {
+    online:false,
+    signers:[
+      {id:'dh', name:'Dean Harris',  sub:'Supervisor · Southern Range Civil', route:'own', status:'signed', at:'06:42:03', utc:'19:42:03'},
+      {id:'mt', name:'Mia Tran',     sub:'Labourer · Southern Range Civil',   route:'own', status:'signed', at:'06:48:40', utc:'19:48:40'},
+      {id:'jo', name:"Jack O'Brien", sub:'Plant operator · Southern Range Civil', route:'own', status:'signed', at:'06:51:12', utc:'19:51:12', same:true},
+      {id:'lw', name:'Liam Walsh',   sub:'Plant operator · Southern Range Civil', route:'own', status:'signed', at:'06:51:12', utc:'19:51:12', same:true},
+      {id:'sf', name:'Sione Fifita', sub:'Labourer · Southern Range Civil',   route:'sup', status:'pending'},
+      {id:'pn', name:'Priya Nair',   sub:'Leading hand · Southern Range Civil', route:'sup', status:'pending'},
+      {id:'tk', name:'Tom Kelly',    sub:'Roller operator · Southern Range Civil', route:'sup', status:'pending'},
+      {id:'bc', name:'Ben Carter',   sub:'Traffic controller · Coastline Traffic Management', route:'link', status:'link', exp:'14 Oct'},
+    ],
+    trail:[
+      ['06:42','<b>Dean Harris</b> submitted SWMS-0412 and signed on his phone'],
+      ['06:44','<b>Dean Harris</b> assigned Mia Tran, Jack O\'Brien, Liam Walsh to sign on their own phones'],
+      ['06:45','<b>Dean Harris</b> sent a signing link to Ben Carter (Coastline Traffic Management), expires 14 Oct'],
+      ['06:48','<b>Mia Tran</b> signed on her own phone'],
+      ['06:51','<b>Jack O\'Brien</b> and <b>Liam Walsh</b> signed at the same second, on separate phones. Both kept.'],
+      ['07:02','<b>Dean Harris</b> set Sione Fifita, Priya Nair, Tom Kelly to sign on his phone (no reception at ch 1500)'],
+    ],
+  };
+  app = {screen:'list', who:null, ack:false, drawn:false};
+  pubState = 'form';
+}
+let app, pubState;
+const nowT = (()=>{let m=14; return ()=>{m+=1; return '09:'+String(m).padStart(2,'0')}})();
+
+// ── view switching ───────────────────────────────────────
+document.querySelectorAll('#views button').forEach(b=>b.onclick=()=>setView(b.dataset.v));
+function setView(v){
+  document.querySelectorAll('#views button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  document.querySelectorAll('.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
+  if(v==='web')renderWeb(); if(v==='app')renderApp(); if(v==='pub')renderPub();
+  window.scrollTo(0,0);
+}
+function toast(t){const e=document.getElementById('toast');e.textContent=t;e.classList.add('on');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('on'),2600)}
+
+// ── WEB ──────────────────────────────────────────────────
+let flashIds=[];
+function renderWeb(){
+  const sg=S.signers.filter(s=>!['revoked','expired'].includes(s.status));
+  const signed=sg.filter(s=>s.status==='signed').length, queued=sg.filter(s=>s.status==='queued').length, total=sg.length;
+  document.getElementById('prog-n').innerHTML=`${signed} of ${total} signed <span>${total-signed-queued} to go${queued?` · ${queued} waiting to sync`:''}</span>`;
+  document.getElementById('prog-bar').innerHTML=`<i style="width:${signed/total*100}%;background:var(--green)"></i><i style="width:${queued/total*100}%;background:#f59e0b"></i>`;
+  let n=0;
+  document.getElementById('sig-body').innerHTML=S.signers.map(s=>{
+    n++; const r=ROUTES[s.route];
+    const st={signed:['signed','<i class="fa-solid fa-check"></i> Signed'],pending:['pending','Not signed yet'],queued:['queued','<i class="fa-solid fa-cloud-arrow-up"></i> On Dean\'s phone, waiting to sync'],link:['link','<i class="fa-solid fa-paper-plane"></i> Link sent'],revoked:['revoked','Link revoked'],expired:['expired','Link expired']}[s.status];
+    const when=s.status==='signed'?`<div class="when">07 Oct, ${s.at} AEDT<small>06 Oct ${s.utc} UTC${s.dev?' · '+s.dev:''}</small>${s.same?'<span class="same">Same second — both kept</span>':''}</div>`
+      : s.status==='queued'?`<div class="when">Signed ${s.at} on device<small>Not on the record until Dean's phone syncs</small></div>`
+      : s.status==='link'?`<div class="when">—<small>Link expires ${s.exp}</small></div>`:'<div class="when">—</div>';
+    let act='';
+    if(s.status==='pending'&&s.route==='own')act=`<button class="btn sm" onclick="toast('Reminder sent to ${s.name.replace("'","\\'")}')"><i class="fa-regular fa-bell"></i> Remind</button>`;
+    if(s.status==='pending'&&s.route==='sup')act=`<span style="font-size:11px;color:var(--muted)">Signs on Dean's phone</span>`;
+    if(s.status==='link')act=`<button class="btn sm" onclick="toast('Link resent to Ben Carter')">Resend</button> <button class="btn sm danger" onclick="revoke('${s.id}')">Revoke</button>`;
+    return `<tr class="${flashIds.includes(s.id)?'flash':''}"><td><span class="ord ${s.status==='signed'?'done':''}">${n}</span></td>
+      <td class="who"><b>${s.name}</b><span>${s.sub}</span></td>
+      <td><span class="route"><i class="fa-solid ${r.i}"></i>${r.t}</span></td>
+      <td><span class="st ${st[0]}">${st[1]}</span></td><td>${when}</td><td class="acts">${act}</td></tr>`;
+  }).join('');
+  flashIds=[];
+  document.getElementById('trail').innerHTML=[...S.trail].reverse().map(e=>`<div class="ev"><div class="t">${e[0]}</div><div class="d">${e[1]}</div></div>`).join('');
+}
+function remindAll(){const p=S.signers.filter(s=>s.status==='pending'&&s.route==='own');toast(p.length?`Reminder sent to ${p.length} worker${p.length>1?'s':''}`:'Nobody to remind by phone — the rest sign on Dean\'s phone or by link')}
+function revoke(id){const s=S.signers.find(x=>x.id===id);s.status='revoked';S.trail.push([nowT(),`<b>Dean Harris</b> revoked the signing link for ${s.name}. The link no longer opens.`]);renderWeb();toast('Link revoked')}
+
+// modals
+function modal(html){document.getElementById('modal').innerHTML=html;document.getElementById('scrim').classList.add('on')}
+function closeM(){document.getElementById('scrim').classList.remove('on')}
+document.getElementById('scrim').onclick=e=>{if(e.target.id==='scrim')closeM()};
+
+let asg;
+function openAssign(){asg={step:1,pick:new Set(),route:'own'};drawAssign()}
+function drawAssign(){
+  const on=new Set(S.signers.map(s=>s.id));
+  const steps=['Answers','Choose crew','How they sign'].map((t,i)=>`<span class="${i+1<asg.step?'done':i+1===asg.step?'on':''}">${i+1}. ${t}</span>`).join('');
+  let body='';
+  if(asg.step===1)body=`<p style="margin-bottom:10px">You've filled in the answers. Crew sign against these; they don't fill the form in again.</p>
+    <dl class="answers" style="padding:0;border:1px solid var(--line);border-radius:8px;padding:12px"><dt>Work activity</dt><dd>Asphalt paving, ch 1200–1850</dd><dt>Key hazards</dt><dd>Moving plant, hot asphalt, live traffic, fumes</dd><dt>Controls</dt><dd>3 m exclusion zone, spotter, PPE</dd></dl>`;
+  if(asg.step===2)body=`<p style="margin-bottom:10px">Crew on (26-031) today, from timesheets and the scheduler.</p><div class="crew">${CREW.map(c=>{const already=on.has(c.id);return `<label class="${already?'dis':''}"><input type="checkbox" ${already?'checked disabled':asg.pick.has(c.id)?'checked':''} onchange="tog('${c.id}',this.checked)"> ${c.name}<span class="meta">${c.role} ${already?'<span class="chip g">Already on this record</span>':c.onsite?'<span class="chip">On site today</span>':'<span class="chip g">Not clocked in</span>'}</span></label>`}).join('')}</div>`;
+  if(asg.step===3)body=`<p style="margin-bottom:10px">${asg.pick.size} worker${asg.pick.size!==1?'s':''} selected.</p>
+    <div class="opt ${asg.route==='own'?'on':''}" onclick="asg.route='own';drawAssign()"><input type="radio" ${asg.route==='own'?'checked':''}><div><b>On their own phones</b><span>Each gets a notification and signs SWMS-0412 in the Varicon app. Needs reception.</span></div></div>
+    <div class="opt ${asg.route==='sup'?'on':''}" onclick="asg.route='sup';drawAssign()"><input type="radio" ${asg.route==='sup'?'checked':''}><div><b>On my phone — no reception</b><span>The record is saved to your supervisor app. Hand the phone to each worker; signatures sync when you're back in range.</span></div></div>`;
+  modal(`<div class="m-h"><h3>Assign crew to sign SWMS-0412</h3><button class="x" onclick="closeM()"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="m-b"><div class="steps">${steps}</div>${body}</div>
+    <div class="m-f">${asg.step>1?'<button class="btn" onclick="asg.step--;drawAssign()">Back</button>':''}
+    ${asg.step<3?`<button class="btn pri" ${asg.step===2&&!asg.pick.size?'disabled':''} onclick="asg.step++;drawAssign()">Next</button>`:'<button class="btn pri" onclick="doAssign()">Assign</button>'}</div>`);
+}
+function tog(id,v){v?asg.pick.add(id):asg.pick.delete(id);drawAssign()}
+function doAssign(){
+  const names=[];
+  asg.pick.forEach(id=>{const c=CREW.find(x=>x.id===id);names.push(c.name);S.signers.push({id,name:c.name,sub:c.role+' · Southern Range Civil',route:asg.route,status:'pending'});flashIds.push(id)});
+  S.trail.push([nowT(),`<b>Dean Harris</b> assigned ${names.join(', ')} to sign ${asg.route==='own'?'on their own phones':'on his phone (offline)'}`]);
+  closeM();renderWeb();toast(asg.route==='own'?`${names.length} worker${names.length>1?'s':''} notified`:`Added to Dean's phone for offline sign-on`);
+}
+function openLink(){
+  modal(`<div class="m-h"><h3>Send a signing link</h3><button class="x" onclick="closeM()"><i class="fa-solid fa-xmark"></i></button></div>
+  <div class="m-b"><p style="margin-bottom:12px">For someone without a Varicon account. The link opens SWMS-0412 only, works once, and can be revoked.</p>
+  <div class="fld"><label>Name</label><input id="ln" value="Kerry Moss"></div>
+  <div class="fld"><label>Organisation</label><input id="lo" value="Illawarra Line Marking"></div>
+  <div class="fld"><label>Email or mobile</label><input value="kerry@illawarralm.com.au"></div>
+  <div class="fld"><label>Link expires after</label><select><option>7 days</option><option>24 hours</option><option>14 days</option></select></div></div>
+  <div class="m-f"><button class="btn" onclick="closeM()">Cancel</button><button class="btn pri" onclick="doLink()"><i class="fa-solid fa-paper-plane"></i> Send link</button></div>`);
+}
+function doLink(){const n=document.getElementById('ln').value||'External signer',o=document.getElementById('lo').value||'';const id='x'+Date.now();S.signers.push({id,name:n,sub:'External · '+o,route:'link',status:'link',exp:'14 Oct'});flashIds.push(id);S.trail.push([nowT(),`<b>Dean Harris</b> sent a signing link to ${n}${o?' ('+o+')':''}, expires 14 Oct`]);closeM();renderWeb();toast('Link sent')}
+function openQR(){
+  let cells='';const N=25;let seed=412;const rnd=()=>{seed=(seed*9301+49297)%233280;return seed/233280};
+  const fin=(x,y)=>`<rect x="${x}" y="${y}" width="7" height="7" fill="#1b2a4a"/><rect x="${x+1}" y="${y+1}" width="5" height="5" fill="#fff"/><rect x="${x+2}" y="${y+2}" width="3" height="3" fill="#1b2a4a"/>`;
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){const inF=(x<8&&y<8)||(x>N-9&&y<8)||(x<8&&y>N-9);if(!inF&&rnd()>.52)cells+=`<rect x="${x}" y="${y}" width="1" height="1" fill="#1b2a4a"/>`}
+  modal(`<div class="m-h"><h3>QR for SWMS-0412</h3><button class="x" onclick="closeM()"><i class="fa-solid fa-xmark"></i></button></div>
+  <div class="m-b"><div class="qr-wrap"><svg width="170" height="170" viewBox="-1 -1 ${N+2} ${N+2}" shape-rendering="crispEdges">${cells}${fin(0,0)}${fin(N-7,0)}${fin(0,N-7)}</svg>
+  <div><p><b>Scanning opens this record for signing.</b> It doesn't start a new SWMS. Today's QR opens the blank template, so every scan makes a duplicate submission.</p>
+  <p style="margin-top:8px;color:var(--muted);font-size:12px">Crew with the app sign in it. Anyone else gets the same no-login page as a link. Needs reception — for no-reception sites use offline sign-on on your phone.</p></div></div></div>
+  <div class="m-f"><button class="btn" onclick="toast('QR sheet downloaded')"><i class="fa-solid fa-print"></i> Print for the site board</button><button class="btn pri" onclick="closeM()">Done</button></div>`);
+}
+
+// ── SUPERVISOR APP ───────────────────────────────────────
+const ini=n=>n.split(' ').map(p=>p[0]).join('').slice(0,2);
+function renderApp(){
+  const sig=document.getElementById('ph-sig'),ban=document.getElementById('ph-banner'),body=document.getElementById('ph-body'),foot=document.getElementById('ph-foot'),title=document.getElementById('ph-title'),back=document.getElementById('ph-back');
+  sig.innerHTML=S.online?'<i class="fa-solid fa-signal"></i> 4G':'<i class="fa-solid fa-signal" style="opacity:.3"></i> No service';
+  const q=S.signers.filter(s=>s.status==='queued');
+  ban.className='offline'+(S.online?' ok':'');
+  ban.innerHTML=S.online?`<i class="fa-solid fa-circle-check"></i><div>Back online. ${q.length?'Syncing…':'Every signature on this phone is on the record.'}</div>`:`<i class="fa-solid fa-plane-slash"></i><div><b>No reception.</b> Signatures are saved on this phone and added to SWMS-0412 when you're back in range.${q.length?` <b>${q.length} waiting.</b>`:''}</div>`;
+  const qc=document.getElementById('q-count');qc.className='q-count'+(q.length?'':' zero');qc.innerHTML=q.length?`<i class="fa-solid fa-cloud-arrow-up"></i> ${q.length} signature${q.length>1?'s':''} on Dean's phone, not on the record yet`:`<i class="fa-solid fa-check"></i> Nothing waiting on Dean's phone`;
+  document.getElementById('btn-net').innerHTML=S.online?'<i class="fa-solid fa-plane-slash"></i> Lose reception again':'<i class="fa-solid fa-tower-cell"></i> Reconnect (back in range)';
+  back.onclick=()=>{app.screen='list';app.ack=false;app.drawn=false;renderApp()};
+  back.style.visibility=app.screen==='list'?'hidden':'visible';
+
+  if(app.screen==='list'){
+    title.innerHTML='SWMS-0412 · Crew sign-on<small>Asphalt paving &amp; traffic control · Rev 3</small>';
+    const mine=S.signers.filter(s=>s.route==='sup');
+    const others=S.signers.filter(s=>s.route!=='sup');
+    const done=S.signers.filter(s=>['signed','queued'].includes(s.status)).length,tot=S.signers.filter(s=>!['revoked','expired'].includes(s.status)).length;
+    body.innerHTML=`<div class="psec"><div class="psec-h">Sign on this phone<span class="r">${mine.filter(s=>s.status!=='pending').length} of ${mine.length}</span></div>
+      ${mine.map(s=>`<div class="prow"><div class="av">${ini(s.name)}</div><div class="nm"><b>${s.name}</b><span>${s.sub.split(' · ')[0]}</span></div>${s.status==='pending'?`<button class="go" onclick="startSign('${s.id}')">Sign</button>`:s.status==='queued'?`<span style="font-size:11px;color:#92400e"><i class="fa-solid fa-cloud-arrow-up ico-q"></i> ${s.at.slice(0,5)}</span>`:`<span style="font-size:11px;color:#166534"><i class="fa-solid fa-check ico-ok"></i> On record</span>`}</div>`).join('')}
+      <div class="prow" style="color:var(--blue);font-size:12.5px;cursor:pointer" onclick="addUnlisted()"><i class="fa-solid fa-user-plus" style="width:32px;text-align:center"></i> Add someone not on the list</div></div>
+      <div class="psec"><div class="psec-h">Signing another way<span class="r">${done} of ${tot} overall</span></div>
+      ${others.map(s=>`<div class="prow"><div class="av" style="background:#f1f5f9">${ini(s.name)}</div><div class="nm"><b>${s.name}</b><span>${ROUTES[s.route].t}</span></div>${s.status==='signed'?'<i class="fa-solid fa-check ico-ok"></i>':`<span style="font-size:11px;color:var(--muted)">${s.status==='link'?'Link sent':s.status==='revoked'?'Revoked':'Not yet'}</span>`}</div>`).join('')}</div>
+      <p style="font-size:11px;color:var(--muted);padding:0 14px 14px;line-height:1.5">Statuses of people signing another way are as of the last sync${S.online?' (just now)':' at 07:02'}.</p>`;
+    const nxt=mine.find(s=>s.status==='pending');
+    foot.innerHTML=nxt?`<button class="pbtn" onclick="startSign('${nxt.id}')"><i class="fa-solid fa-hand-holding"></i> Hand phone to ${nxt.name.split(' ')[0]}</button>`:`<button class="pbtn sec" disabled style="margin:0">Everyone on this phone has signed</button>`;
+  }
+  if(app.screen==='hand'){
+    const s=S.signers.find(x=>x.id===app.who);
+    title.innerHTML=`Crew sign-on<small>SWMS-0412</small>`;
+    body.innerHTML=`<div class="handover"><div class="big"><i class="fa-solid fa-hand-holding"></i></div><h2>Hand the phone to ${s.name}</h2><p>${s.name.split(' ')[0]} reads the key points and signs. You'll get the phone back on the crew list.</p></div>`;
+    foot.innerHTML=`<button class="pbtn" onclick="app.screen='sign';renderApp()">I'm ${s.name.split(' ')[0]} — continue</button><button class="pbtn sec" onclick="app.screen='list';renderApp()">Not ${s.name.split(' ')[0]}? Go back</button>`;
+  }
+  if(app.screen==='sign'){
+    const s=S.signers.find(x=>x.id===app.who);
+    title.innerHTML=`${s.name}<small>Signing SWMS-0412 on Dean's phone</small>`;
+    body.innerHTML=`<div class="psec"><div class="psec-h">Before you sign</div><ul class="haz">
+      <li><b>Moving plant:</b> stay 3 m clear of the paver. Spotter on the roller.</li>
+      <li><b>Hot asphalt</b> at 160 °C. Long sleeves and gloves on.</li>
+      <li><b>Live traffic</b> on stop/slow. Stay inside the cones.</li>
+      <li><b>Emergency point:</b> Bulli Lookout car park.</li></ul>
+      <a style="display:block;font-size:12px;color:var(--blue);padding:0 12px 12px;cursor:pointer" onclick="toast('Opens the full SWMS, read-only')">Read the full SWMS (6 pages)</a></div>
+      <div class="psec"><label class="ack"><input type="checkbox" ${app.ack?'checked':''} onchange="app.ack=this.checked;renderApp()"> I've read the SWMS and understand the hazards and controls for today's work.</label></div>
+      <div class="psec" style="${app.ack?'':'opacity:.45;pointer-events:none'}"><div class="psec-h">Signature</div><div class="pad-wrap"><canvas class="pad" id="pad"></canvas>
+      <div class="pad-meta"><span>${s.name} · 07 Oct 2026</span><button onclick="clearPad()">Clear</button></div></div></div>`;
+    foot.innerHTML=`<button class="pbtn" id="sign-btn" ${app.ack&&app.drawn?'':'disabled'} onclick="doSign()"><i class="fa-solid fa-signature"></i> Sign as ${s.name}</button>`;
+    setupPad();
+  }
+}
+function startSign(id){app={screen:'hand',who:id,ack:false,drawn:false};renderApp()}
+function doSign(){
+  const s=S.signers.find(x=>x.id===app.who);const t=nowT();
+  s.at=t+':'+String(10+Math.floor(Math.random()*49)).padStart(2,'0');s.utc=String(+t.slice(0,2)+13-24).padStart(2,'0')+s.at.slice(2);s.dev="Dean's phone";
+  if(S.online){s.status='signed';S.trail.push([t,`<b>${s.name}</b> signed on Dean Harris's phone`]);flashIds.push(s.id)}
+  else{s.status='queued';s.trailPending=[t,`<b>${s.name}</b> signed on Dean Harris's phone at ${t} while offline (synced later)`]}
+  app={screen:'list',who:null,ack:false,drawn:false};renderApp();toast(S.online?`${s.name} signed — on the record`:`${s.name} signed — saved on this phone`);
+}
+function addUnlisted(){const id='u'+Date.now();S.signers.push({id,name:'Ana Lopez',sub:'Labourer · Southern Range Civil',route:'sup',status:'pending'});toast('Ana Lopez added — she wasn\'t on the assigned list');renderApp()}
+function toggleNet(){
+  S.online=!S.online;
+  if(S.online){
+    const q=S.signers.filter(s=>s.status==='queued');
+    renderApp();
+    setTimeout(()=>{q.forEach(s=>{s.status='signed';S.trail.push(s.trailPending);flashIds.push(s.id)});if(q.length)S.trail.push([nowT(),`Dean Harris's phone synced ${q.length} offline signature${q.length>1?'s':''} to SWMS-0412. No duplicates, answers unchanged.`]);renderApp();toast(q.length?`${q.length} signature${q.length>1?'s':''} added to SWMS-0412`:'Online — nothing to sync')},900);
+  } else renderApp();
+}
+let pctx,drawing=false;
+function setupPad(){
+  const c=document.getElementById('pad');if(!c)return;const r=c.getBoundingClientRect();c.width=r.width*2;c.height=r.height*2;pctx=c.getContext('2d');pctx.scale(2,2);pctx.lineWidth=2.2;pctx.lineCap='round';pctx.strokeStyle='#1b2a4a';
+  const p=e=>{const b=c.getBoundingClientRect();return[e.clientX-b.left,e.clientY-b.top]};
+  c.onpointerdown=e=>{drawing=true;pctx.beginPath();pctx.moveTo(...p(e));c.setPointerCapture(e.pointerId)};
+  c.onpointermove=e=>{if(!drawing)return;pctx.lineTo(...p(e));pctx.stroke();if(!app.drawn&&padTarget()){app.drawn=true;const b=document.getElementById('sign-btn')||document.getElementById('pub-sign');if(b&&(app.ack||padTarget()==='pub'?pubOk():true))b.disabled=!canSign()}};
+  c.onpointerup=()=>{drawing=false;const b=document.getElementById('sign-btn')||document.getElementById('pub-sign');if(b)b.disabled=!canSign()};
+}
+function padTarget(){return document.getElementById('v-pub').classList.contains('on')?'pub':'app'}
+function canSign(){return padTarget()==='pub'?pubOk()&&app.drawn:app.ack&&app.drawn}
+function clearPad(){const c=document.getElementById('pad');pctx.clearRect(0,0,c.width,c.height);app.drawn=false;const b=document.getElementById('sign-btn')||document.getElementById('pub-sign');if(b)b.disabled=true}
+
+// ── PUBLIC LINK ──────────────────────────────────────────
+let pubAck=false;
+function pubOk(){return pubAck}
+function renderPub(){
+  const body=document.getElementById('pub-body'),foot=document.getElementById('pub-foot');
+  const ben=S.signers.find(s=>s.id==='bc');
+  if(pubState==='form'&&ben.status==='revoked')pubState='expired';
+  if(pubState==='form'&&ben.status==='signed')pubState='done';
+  if(pubState==='expired'){body.innerHTML=`<div class="pub-done bad"><div class="big"><i class="fa-solid fa-link-slash"></i></div><h2>This link no longer works</h2><p>It has expired, been used, or been revoked by Southern Range Civil. Ask Dean Harris for a new link if you still need to sign.</p></div>`;foot.innerHTML='';return}
+  if(pubState==='done'){body.innerHTML=`<div class="pub-done"><div class="big"><i class="fa-solid fa-check"></i></div><h2>Signed. Thanks, Ben.</h2><p>Your signature was added to SWMS-0412 for Southern Range Civil at ${ben.at.slice(0,5)} AEDT.<br><br>This link has now been used and won't open again.</p></div>`;foot.innerHTML=`<button class="pbtn sec" style="margin:0" onclick="toast('PDF copy of your signed SWMS')"><i class="fa-solid fa-file-pdf"></i> Download a copy</button>`;return}
+  app.drawn=false;
+  body.innerHTML=`<div class="pub-intro"><h2>Southern Range Civil has asked you to sign a SWMS</h2><p>SWMS — Asphalt paving &amp; traffic control · (26-031) Bulli Pass Resurfacing · 07 Oct 2026. You don't need a Varicon account.</p></div>
+    <div class="psec"><div class="psec-h">Key points</div><ul class="haz"><li>Stop/slow traffic control to TGS-14, two controllers.</li><li>Paver exclusion zone 3 m. Hot asphalt 160 °C.</li><li>Emergency point: Bulli Lookout car park.</li></ul><a style="display:block;font-size:12px;color:var(--blue);padding:0 12px 12px;cursor:pointer" onclick="toast('Opens the full SWMS, read-only')">Read the full SWMS (6 pages)</a></div>
+    <div class="pf"><label>Your name</label><input value="Ben Carter"><label>Organisation</label><input value="Coastline Traffic Management"></div>
+    <div class="psec"><label class="ack"><input type="checkbox" ${pubAck?'checked':''} onchange="pubAck=this.checked;renderPub()"> I've read the SWMS and understand the hazards and controls.</label></div>
+    <div class="psec" style="${pubAck?'':'opacity:.45;pointer-events:none'}"><div class="psec-h">Signature</div><div class="pad-wrap"><canvas class="pad" id="pad"></canvas><div class="pad-meta"><span>Link expires 14 Oct</span><button onclick="clearPad()">Clear</button></div></div></div>`;
+  foot.innerHTML=`<button class="pbtn" id="pub-sign" disabled onclick="pubSign()"><i class="fa-solid fa-signature"></i> Sign</button>`;
+  setupPad();
+}
+function pubSign(){const ben=S.signers.find(s=>s.id==='bc');ben.status='signed';ben.at='10:02:37';ben.utc='23:02:37';ben.dev='Browser, no account';S.trail.push(['10:02','<b>Ben Carter</b> (Coastline Traffic Management) signed from the link. Link spent.']);flashIds.push('bc');pubState='done';renderPub();toast('Signed — added to SWMS-0412')}
+
+function resetAll(){initState();pubAck=false;renderWeb();renderApp();renderPub();toast('Prototype reset')}
+initState();renderWeb();renderApp();
+</script>
+</body>
+</html>
