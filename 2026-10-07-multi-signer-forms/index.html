@@ -596,7 +596,7 @@ function renderApp(){
       <li><b>Live traffic</b> on stop/slow. Stay inside the cones.</li>
       <li><b>Emergency point:</b> Bulli Lookout car park.</li></ul>
       <a style="display:block;font-size:12px;color:var(--blue);padding:0 12px 12px;cursor:pointer" onclick="toast('Opens the full SWMS, read-only')">Read the full SWMS (6 pages)</a></div>
-      <div class="psec"><label class="ack"><input type="checkbox" ${app.ack?'checked':''} onchange="app.ack=this.checked;renderApp()"> I've read the SWMS and understand the hazards and controls for today's work.</label></div>
+      <div class="psec"><label class="ack"><input type="checkbox" ${app.ack?'checked':''} onchange="app.ack=this.checked;app.drawn=false;renderApp()"> I've read the SWMS and understand the hazards and controls for today's work.</label></div>
       <div class="psec" style="${app.ack?'':'opacity:.45;pointer-events:none'}"><div class="psec-h">Signature</div><div class="pad-wrap"><canvas class="pad" id="pad"></canvas>
       <div class="pad-meta"><span>${s.name} · 07 Oct 2026</span><button onclick="clearPad()">Clear</button></div></div></div>`;
     foot.innerHTML=`<button class="pbtn" id="sign-btn" ${app.ack&&app.drawn?'':'disabled'} onclick="doSign()"><i class="fa-solid fa-signature"></i> Sign as ${s.name}</button>`;
@@ -606,7 +606,7 @@ function renderApp(){
 function startSign(id){app={screen:'hand',who:id,ack:false,drawn:false};renderApp()}
 function doSign(){
   const s=S.signers.find(x=>x.id===app.who);const t=nowT();
-  s.at=t+':'+String(10+Math.floor(Math.random()*49)).padStart(2,'0');s.utc=String(+t.slice(0,2)+13-24).padStart(2,'0')+s.at.slice(2);s.dev="Dean's phone";
+  s.at=t+':'+String(10+Math.floor(Math.random()*49)).padStart(2,'0');s.utc=String((+t.slice(0,2)+13)%24).padStart(2,'0')+s.at.slice(2);s.dev="Dean's phone";
   if(S.online){s.status='signed';S.trail.push([t,`<b>${s.name}</b> signed on Dean Harris's phone`]);flashIds.push(s.id)}
   else{s.status='queued';s.trailPending=[t,`<b>${s.name}</b> signed on Dean Harris's phone at ${t} while offline (synced later)`]}
   app={screen:'list',who:null,ack:false,drawn:false};renderApp();toast(S.online?`${s.name} signed — on the record`:`${s.name} signed — saved on this phone`);
@@ -625,7 +625,7 @@ function setupPad(){
   const c=document.getElementById('pad');if(!c)return;const r=c.getBoundingClientRect();c.width=r.width*2;c.height=r.height*2;pctx=c.getContext('2d');pctx.scale(2,2);pctx.lineWidth=2.2;pctx.lineCap='round';pctx.strokeStyle='#1b2a4a';
   const p=e=>{const b=c.getBoundingClientRect();return[e.clientX-b.left,e.clientY-b.top]};
   c.onpointerdown=e=>{drawing=true;pctx.beginPath();pctx.moveTo(...p(e));c.setPointerCapture(e.pointerId)};
-  c.onpointermove=e=>{if(!drawing)return;pctx.lineTo(...p(e));pctx.stroke();if(!app.drawn&&padTarget()){app.drawn=true;const b=document.getElementById('sign-btn')||document.getElementById('pub-sign');if(b&&(app.ack||padTarget()==='pub'?pubOk():true))b.disabled=!canSign()}};
+  c.onpointermove=e=>{if(!drawing)return;pctx.lineTo(...p(e));pctx.stroke();app.drawn=true};
   c.onpointerup=()=>{drawing=false;const b=document.getElementById('sign-btn')||document.getElementById('pub-sign');if(b)b.disabled=!canSign()};
 }
 function padTarget(){return document.getElementById('v-pub').classList.contains('on')?'pub':'app'}
