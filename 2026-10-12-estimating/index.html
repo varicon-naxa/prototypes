@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estimating - Cookie's Civil</title>
+<!--
+  Estimating prototype (2026-10-12)
+
+  The idea: the estimate is the budget's first version, not a separate tool.
+  An estimate is sections -> line items (the sell-side schedule) -> a resource
+  build-up per line (labour, plant, materials, subcontract, lump sums), driven
+  by crew productivity. Rates come from one library that is checked against
+  what completed jobs actually cost. Marking an estimate won creates the
+  contract schedule, the budget and the dayworks rate card with the same refs
+  and quantities, so nothing is re-keyed.
+
+  See notes.md for the scope and the decisions it forces.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#333;display:flex;min-height:100vh;font-size:14px}
+button,input,select{font-family:inherit}
+
+/* ── Sidebar (matches the app) ── */
+.sidebar{width:240px;background:#1b2a4a;color:#fff;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;overflow-y:auto}
+.sidebar-header{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,#f5a623,#f7c948);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#1b2a4a}
+.sidebar-collapse{color:rgba(255,255,255,.5);font-size:14px}
+.sidebar-org{padding:12px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.08)}
+.org-avatar{width:28px;height:28px;background:#3b5998;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.sidebar-org span{font-size:14px;font-weight:500}
+.sidebar-nav{padding:8px 0;flex:1}
+.nav-item{display:flex;align-items:center;gap:12px;padding:10px 16px;font-size:14px;color:rgba(255,255,255,.75);cursor:pointer;text-decoration:none}
+.nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-item.active{background:#f5a623;color:#fff;font-weight:600;border-radius:0 6px 6px 0;margin-right:8px}
+.nav-item i.nav-icon{width:20px;text-align:center;font-size:15px}
+.nav-item .newtag{background:#22c55e;color:#fff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;margin-left:auto}
+
+/* ── Main ── */
+.main{margin-left:240px;flex:1;display:flex;flex-direction:column;min-height:100vh;min-width:0}
+.topbar{background:#fff;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:50}
+.topbar-left{display:flex;align-items:center;gap:12px;min-width:0}
+.back-btn{color:#1b2a4a;font-size:18px;cursor:pointer;padding:4px}
+.topbar h1{font-size:18px;font-weight:600;color:#1b2a4a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar-right{display:flex;align-items:center;gap:16px}
+.search-btn{display:flex;align-items:center;gap:6px;border:2px solid #f5a623;color:#f5a623;background:transparent;padding:6px 16px;border-radius:20px;font-size:14px;font-weight:500}
+.user-avatar{width:34px;height:34px;background:#1b2a4a;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.page-content{padding:24px;flex:1;min-width:0}
+
+/* ── Tabs ── */
+.tabs{display:flex;background:#fff;border-bottom:2px solid #e2e8f0;margin:-24px -24px 20px;padding:0 24px;overflow-x:auto}
+.tab{padding:14px 20px;font-size:14px;font-weight:500;color:#64748b;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap}
+.tab:hover{color:#1b2a4a}
+.tab.active{color:#f5a623;border-bottom-color:#f5a623;font-weight:600}
+.tab .cnt{background:#fef3c7;color:#b45309;font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px;margin-left:6px}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid transparent;white-space:nowrap}
+.btn-primary{background:#f5a623;color:#fff}
+.btn-primary:hover{background:#e0951a}
+.btn-green{background:#16a34a;color:#fff}
+.btn-green:hover{background:#15803d}
+.btn-outline{background:#fff;border-color:#cbd5e1;color:#1b2a4a}
+.btn-outline:hover{border-color:#94a3b8}
+.btn-ghost{background:transparent;color:#64748b;padding:6px 10px}
+.btn-ghost:hover{color:#1b2a4a;background:#f1f5f9}
+.btn-sm{padding:5px 10px;font-size:12px;border-radius:6px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* ── Stat tiles ── */
+.stat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:#e2e8f0;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px}
+.stat{background:#fff;padding:14px 18px}
+.st-label{font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+.st-value{font-size:19px;font-weight:700;color:#1b2a4a;letter-spacing:-.3px}
+.st-sub{font-size:11px;color:#94a3b8;margin-top:3px;line-height:1.4}
+.st-value.green{color:#16a34a}.st-value.amber{color:#d97706}.st-value.purple{color:#7c3aed}.st-value.blue{color:#2563eb}
+.stat.warn{background:#fffbeb;box-shadow:inset 3px 0 0 #d97706;cursor:pointer}
+
+/* ── Cards & tables ── */
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:16px}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid #eef2f6;flex-wrap:wrap}
+.card-head h3{font-size:15px;font-weight:600;color:#1b2a4a}
+.card-head .sub{font-size:12px;color:#64748b;margin-top:2px}
+.card-body{padding:16px 18px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.3px;padding:10px 12px;background:#f8fafc;border-bottom:1px solid #e2e8f0;white-space:nowrap}
+.tbl td{padding:10px 12px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.tbl .r{text-align:right}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tbl tr.clickable{cursor:pointer}
+.tbl tr.clickable:hover td{background:#fafbfc}
+.tbl tr.sec td{background:#f8fafc;font-weight:600;color:#1b2a4a;border-bottom:1px solid #e2e8f0}
+.tbl tr.sec.ps td{background:#fffbeb}
+.tbl tr.open td{background:#fff8eb}
+.tbl tr.total td{font-weight:700;color:#1b2a4a;background:#f8fafc;border-top:2px solid #e2e8f0}
+.ref{font-weight:600;color:#1b2a4a;font-variant-numeric:tabular-nums}
+.muted{color:#94a3b8}
+.small{font-size:12px}
+
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:12px;white-space:nowrap}
+.pill.draft{background:#f1f5f9;color:#475569}
+.pill.submitted{background:#dbeafe;color:#1d4ed8}
+.pill.won{background:#dcfce7;color:#15803d}
+.pill.lost{background:#fee2e2;color:#b91c1c}
+.pill.type{background:#f1f5f9;color:#64748b;font-weight:500}
+.pill.type.ps{background:#fef3c7;color:#a16207}
+.pill.type.lump{background:#ede9fe;color:#6d28d9}
+
+.flag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:#b45309;background:#fef3c7;padding:2px 7px;border-radius:10px;white-space:nowrap}
+.flag.ok{color:#15803d;background:#dcfce7}
+
+/* ── Estimate header ── */
+.est-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+.est-title{font-size:20px;font-weight:700;color:#1b2a4a;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.est-meta{font-size:13px;color:#64748b;margin-top:6px;display:flex;gap:16px;flex-wrap:wrap}
+.est-actions{display:flex;gap:8px;flex-wrap:wrap}
+.revs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.rev{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:12px;color:#64748b}
+.rev b{color:#1b2a4a}
+.rev.cur{border-color:#f5a623;box-shadow:0 0 0 1px #f5a623}
+.lockbar{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+
+/* ── Build-up ── */
+.bu{background:#fffdf8;border:1px solid #fde7b0;border-radius:10px;padding:16px 18px;margin:4px 0 8px}
+.bu-row{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+.fld{display:flex;flex-direction:column;gap:4px}
+.fld label{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.3px}
+.in{border:1px solid #cbd5e1;border-radius:6px;padding:6px 8px;font-size:13px;background:#fff;color:#1b2a4a}
+.in:focus{outline:none;border-color:#f5a623;box-shadow:0 0 0 2px #fde7b0}
+.in:disabled{background:#f8fafc;color:#64748b}
+.in.n{width:90px;text-align:right}
+.in.w{width:340px;max-width:100%}
+.prod{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;margin-bottom:14px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.prod .eq{font-size:13px;color:#1b2a4a}
+.prod .eq b{font-size:15px}
+.hint{background:#fef3c7;color:#92400e;border-radius:6px;padding:6px 10px;font-size:12px;display:inline-flex;align-items:center;gap:8px}
+.hint.ok{background:#dcfce7;color:#166534}
+.bu .tbl td{padding:7px 10px;background:#fff}
+.bu .tbl th{background:#fff8eb}
+.rtype{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600}
+.rtype i{width:22px;height:22px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
+.t-labour i{background:#dbeafe;color:#1d4ed8}
+.t-plant i{background:#fef3c7;color:#b45309}
+.t-material i{background:#dcfce7;color:#15803d}
+.t-sub i{background:#ede9fe;color:#6d28d9}
+.t-lump i{background:#f1f5f9;color:#475569}
+.drv{font-size:12px;color:#64748b}
+.libnote{font-size:11px;color:#94a3b8}
+.bu-foot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:12px;flex-wrap:wrap}
+.bu-add{display:flex;gap:6px;flex-wrap:wrap}
+.bu-tot{font-size:13px;color:#64748b}
+.bu-tot b{color:#1b2a4a;font-size:15px}
+
+/* ── Summary ── */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.bridge{display:flex;flex-direction:column;gap:2px}
+.br{display:flex;justify-content:space-between;padding:8px 0;font-size:13px;border-bottom:1px dashed #eef2f6}
+.br.sum{font-weight:700;color:#1b2a4a;font-size:15px;border-bottom:none;border-top:2px solid #1b2a4a;margin-top:4px;padding-top:10px}
+.br .lbl{display:flex;align-items:center;gap:8px}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+.stack{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:6px 0 14px}
+.mk{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px;color:#334155}
+
+/* ── Modal ── */
+.overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:flex-start;justify-content:center;z-index:200;overflow-y:auto;padding:40px 16px}
+.overlay.show{display:flex}
+.modal{background:#fff;border-radius:12px;width:820px;max-width:100%;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.modal-head{padding:18px 22px;border-bottom:1px solid #eef2f6;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.modal-head h2{font-size:17px;color:#1b2a4a}
+.modal-head p{font-size:13px;color:#64748b;margin-top:4px}
+.modal-body{padding:18px 22px}
+.modal-foot{padding:14px 22px;border-top:1px solid #eef2f6;display:flex;justify-content:flex-end;gap:8px}
+.x{cursor:pointer;color:#94a3b8;font-size:18px}
+.outs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.out{border:1px solid #e2e8f0;border-radius:10px;padding:14px}
+.out h4{font-size:13px;color:#1b2a4a;display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.out .big{font-size:18px;font-weight:700;color:#1b2a4a}
+.out p{font-size:12px;color:#64748b;margin-top:6px;line-height:1.45}
+.rules{background:#f8fafc;border-radius:10px;padding:12px 16px;font-size:13px;color:#334155}
+.rules li{margin:6px 0 6px 18px;line-height:1.45}
+.opt{border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start}
+.opt i{font-size:20px;color:#f5a623;margin-top:2px}
+.opt h4{font-size:14px;color:#1b2a4a}
+.opt p{font-size:12px;color:#64748b;margin-top:4px;line-height:1.45}
+
+/* ── Project ── */
+.banner{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:13px}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1b2a4a;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:all .2s;z-index:300;pointer-events:none;max-width:90vw}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+.scroll{overflow-x:auto}
+@media (max-width:1100px){.stat-grid{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr}.outs{grid-template-columns:1fr}}
+@media (max-width:760px){.sidebar{display:none}.main{margin-left:0}.page-content{padding:16px}.tabs{margin:-16px -16px 16px}.user-name,.search-btn{display:none}}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="logo-icon">V</div>
+    <span class="sidebar-collapse"><i class="fas fa-angles-left"></i></span>
+  </div>
+  <div class="sidebar-org"><div class="org-avatar">C</div><span>Cookie's Civil</span></div>
+  <nav class="sidebar-nav">
+    <a class="nav-item" id="navProjects"><i class="fas fa-folder nav-icon"></i> Projects</a>
+    <a class="nav-item active" id="navEstimating" onclick="go('list')"><i class="fas fa-calculator nav-icon"></i> Estimating <span class="newtag">New</span></a>
+    <a class="nav-item"><i class="fas fa-th-large nav-icon"></i> Dashboard</a>
+    <a class="nav-item"><i class="far fa-clock nav-icon"></i> Timesheet</a>
+    <a class="nav-item"><i class="fas fa-clipboard-list nav-icon"></i> Daywork Docket</a>
+    <a class="nav-item"><i class="fas fa-cart-shopping nav-icon"></i> Purchase Order</a>
+    <a class="nav-item"><i class="fas fa-truck nav-icon"></i> Delivery Docket</a>
+    <a class="nav-item"><i class="fas fa-file-invoice-dollar nav-icon"></i> Bills</a>
+    <a class="nav-item"><i class="far fa-file-alt nav-icon"></i> Forms</a>
+    <a class="nav-item"><i class="fas fa-tools nav-icon"></i> Plant &amp; Equipment</a>
+    <a class="nav-item"><i class="far fa-comment-dots nav-icon"></i> Suppliers</a>
+    <a class="nav-item"><i class="fas fa-users-cog nav-icon"></i> User Management</a>
+  </nav>
+</aside>
+
+<div class="main">
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="back-btn" id="backBtn" onclick="go('list')" style="display:none"><i class="fas fa-arrow-left"></i></span>
+      <h1 id="pageTitle">Estimating</h1>
+    </div>
+    <div class="topbar-right">
+      <button class="search-btn"><i class="fas fa-wand-magic-sparkles"></i> Search</button>
+      <div class="user-avatar">AN</div>
+      <span class="user-name" style="font-size:14px;font-weight:500;color:#1b2a4a">Alec Neill</span>
+    </div>
+  </header>
+  <div class="page-content" id="page"></div>
+</div>
+
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   Rate library. One set of rates for estimating AND for costing actuals:
+   labour from worker roles, plant from the plant register, materials and
+   subcontract from supplier pricing, productivity from quantity done on
+   finished jobs. `actual` is what completed jobs really cost or achieved.
+   ══════════════════════════════════════════════════════════════════════ */
+const LIB = {
+  'L-OP': {type:'labour', name:'Plant operator',            unit:'hr', rate:78,   actual:81,   src:'Timesheets · 3 jobs · 2,140 hrs'},
+  'L-SK': {type:'labour', name:'Skilled labourer / pipelayer', unit:'hr', rate:66, actual:67,   src:'Timesheets · 3 jobs · 1,310 hrs'},
+  'L-GL': {type:'labour', name:'General labourer',          unit:'hr', rate:58,   actual:58,   src:'Timesheets · 3 jobs · 1,980 hrs'},
+  'L-FM': {type:'labour', name:'Site foreman',              unit:'hr', rate:92,   actual:96,   src:'Timesheets · 3 jobs · 1,420 hrs'},
+
+  'P-04': {type:'plant', name:'20T Excavator (owned)',      unit:'hr', rate:145,  actual:145,  src:'Plant register · internal rate'},
+  'P-11': {type:'plant', name:'5T Excavator (owned)',       unit:'hr', rate:95,   actual:95,   src:'Plant register · internal rate'},
+  'P-07': {type:'plant', name:'10T Tipper (wet hire)',      unit:'hr', rate:110,  actual:118,  src:'Hire bills · 46 dockets'},
+  'P-15': {type:'plant', name:'Smooth drum roller',         unit:'hr', rate:98,   actual:98,   src:'Plant register · internal rate'},
+  'P-20': {type:'plant', name:'D6 Dozer (dry hire)',        unit:'hr', rate:165,  actual:172,  src:'Hire bills · 12 dockets'},
+  'P-22': {type:'plant', name:'12H Grader (dry hire)',      unit:'hr', rate:175,  actual:175,  src:'Hire bills · 9 dockets'},
+  'P-25': {type:'plant', name:'Water cart (wet hire)',      unit:'hr', rate:95,   actual:102,  src:'Hire bills · 21 dockets'},
+
+  'M-SF':  {type:'material', name:'Select fill, delivered',    unit:'m³', rate:32,   actual:34.5, src:'Bills · 2 suppliers · 2,600 m³'},
+  'M-DGB': {type:'material', name:'DGB20 road base, delivered', unit:'t', rate:38,   actual:41.5, src:'Bills · 3 suppliers · 1,820 t'},
+  'M-RCP': {type:'material', name:'375mm RCP class 3',         unit:'m',  rate:142,  actual:139,  src:'Bills · 1 supplier · 380 m'},
+  'M-SND': {type:'material', name:'Bedding sand, delivered',   unit:'t',  rate:34,   actual:34,   src:'Bills · 2 suppliers · 210 t'},
+  'M-PIT': {type:'material', name:'Precast gully pit',         unit:'ea', rate:1850, actual:1910, src:'Bills · 1 supplier · 22 ea'},
+
+  'S-TC': {type:'sub', name:'Traffic control crew',         unit:'wk', rate:3200, actual:3450, src:'Subcontract claims · 2 jobs'},
+  'S-KC': {type:'sub', name:'Extruded kerb & channel',      unit:'m',  rate:68,   actual:68,   src:'Subcontract claims · 1 job'},
+  'S-AC': {type:'sub', name:'AC10 asphalt 40mm',            unit:'m²', rate:34,   actual:36.2, src:'Subcontract claims · 2 jobs'},
+  'S-SV': {type:'sub', name:'Survey & set-out',             unit:'LS', rate:14500, actual:null, src:'Quote · Coastline Surveying'},
+  'S-HW': {type:'sub', name:'Headwall, formed & poured',    unit:'ea', rate:6400, actual:null, src:'Quote · Formright Concrete'},
+
+  'PR-STRIP': {type:'prod', name:'Topsoil strip — dozer',               unit:'m²/hr', rate:220, actual:205,  src:'Northline · qty done ÷ dozer hrs'},
+  'PR-BULK':  {type:'prod', name:'Bulk cut to fill — 20T + 2 tippers',  unit:'m³/hr', rate:45,  actual:38,   src:'Northline, Ridgeview · 9,400 m³ ÷ 247 hrs'},
+  'PR-FILL':  {type:'prod', name:'Place & compact fill, 200mm layers',  unit:'m³/hr', rate:60,  actual:58,   src:'Northline · qty done ÷ roller hrs'},
+  'PR-IMP':   {type:'prod', name:'Place imported fill',                 unit:'m³/hr', rate:50,  actual:null, src:'No completed job yet'},
+  'PR-PIPE':  {type:'prod', name:'Lay 375 RCP incl. bedding',           unit:'m/hr',  rate:6,   actual:5.2,  src:'Ridgeview · 380 m ÷ 73 crew hrs'},
+  'PR-PIT':   {type:'prod', name:'Install precast gully pit',           unit:'ea/hr', rate:0.5, actual:0.45, src:'Ridgeview · 22 pits'},
+  'PR-TRIM':  {type:'prod', name:'Subgrade trim & proof roll',          unit:'m²/hr', rate:300, actual:310,  src:'Northline · qty done ÷ grader hrs'},
+  'PR-BASE':  {type:'prod', name:'Place & compact base course',         unit:'m²/hr', rate:90,  actual:84,   src:'Northline, Ridgeview · qty done ÷ crew hrs'}
+};
+const TYPES = {
+  labour:  {label:'Labour',      icon:'fa-hard-hat',       cls:'t-labour',   color:'#3b82f6'},
+  plant:   {label:'Plant',       icon:'fa-truck-monster',  cls:'t-plant',    color:'#f59e0b'},
+  material:{label:'Materials',   icon:'fa-cubes',          cls:'t-material', color:'#16a34a'},
+  sub:     {label:'Subcontract', icon:'fa-handshake',      cls:'t-sub',      color:'#7c3aed'},
+  lump:    {label:'Lump sum',    icon:'fa-receipt',        cls:'t-lump',     color:'#94a3b8'}
+};
+const UNITS = ['LS','m','m²','m³','t','ea','wk','hr','day'];
+
+/* ══════════════════════════════════════════════════════════════════════
+   The estimate. Resource rows have a basis:
+     crew — hours come from the line's productivity: qty ÷ rate × count
+     per  — quantity per unit of the line (e.g. 0.44 t base per m²)
+     lump — a fixed amount
+   ══════════════════════════════════════════════════════════════════════ */
+let _id = 0; const nid = () => 'x' + (++_id);
+function L(desc, type, unit, qty, crew, res) {
+  return {id:nid(), desc, type, unit, qty, crew:crew||null, prodOv:null,
+          res:res.map(r => Object.assign({id:nid(), rate:null}, r))};
+}
+const crew = (res, n) => ({res, basis:'crew', n:n||1});
+const per  = (res, p)  => ({res, basis:'per', per:p});
+const lump = (desc, amt) => ({res:null, basis:'lump', desc, amt});
+
+const EST = {
+  id:'EST-0142', name:'Hillcrest Rd Subdivision — Stage 2', client:'Moreton Bay Regional Council',
+  due:'24 Oct 2026', estimator:'Alec Neill', rev:'B', status:'draft',
+  oh:8, margin:10, psFace:true, dwMargin:15,
+  revs:[{rev:'A', status:'Submitted', date:'2 Oct 2026', total:null}],
+  sections:[
+    {name:'Preliminaries', ps:false, lines:[
+      L('Site establishment & disestablishment','lump','LS',1,null,[lump('Site sheds & amenities hire, 12 wks',6500), lump('Float plant to and from site',4800), per('L-GL',32)]),
+      L('Traffic management','measured','wk',12,null,[per('S-TC',1)]),
+      L('Site supervision','measured','wk',12,null,[per('L-FM',40)]),
+      L('Survey & set-out','lump','LS',1,null,[per('S-SV',1)])
+    ]},
+    {name:'Earthworks', ps:false, lines:[
+      L('Strip topsoil 150mm & stockpile on site','measured','m²',18500,'PR-STRIP',[crew('P-20'),crew('L-OP')]),
+      L('Bulk excavation, cut to fill','measured','m³',6800,'PR-BULK',[crew('P-04'),crew('L-OP'),crew('P-07',2)]),
+      L('Place & compact fill in 200mm layers','measured','m³',5900,'PR-FILL',[crew('P-15'),crew('L-OP'),crew('P-25'),crew('L-GL')]),
+      L('Import, place & compact select fill','measured','m³',900,'PR-IMP',[per('M-SF',1.25),crew('P-15'),crew('L-OP')])
+    ]},
+    {name:'Stormwater drainage', ps:false, lines:[
+      L('Supply & lay 375mm RCP incl. bedding','measured','m',420,'PR-PIPE',[per('M-RCP',1),per('M-SND',0.35),crew('P-04'),crew('L-OP'),crew('L-SK',2)]),
+      L('Supply & install precast gully pit','measured','ea',14,'PR-PIT',[per('M-PIT',1),crew('P-11'),crew('L-OP'),crew('L-SK')]),
+      L('Headwall, cast in situ','measured','ea',2,null,[per('S-HW',1)])
+    ]},
+    {name:'Pavements', ps:false, lines:[
+      L('Subgrade trim & proof roll','measured','m²',6200,'PR-TRIM',[crew('P-22'),crew('P-15'),crew('L-OP',2)]),
+      L('Supply, place & compact DGB20 base, 200mm','measured','m²',6200,'PR-BASE',[per('M-DGB',0.44),crew('P-22'),crew('P-15'),crew('P-25'),crew('L-OP',3),crew('L-GL',2)]),
+      L('Extruded kerb & channel','measured','m',1150,null,[per('S-KC',1)]),
+      L('AC10 asphalt wearing course, 40mm','measured','m²',6200,null,[per('S-AC',1)])
+    ]},
+    {name:'Provisional sums', ps:true, lines:[
+      L('Rock removal','ps','LS',1,null,[lump('Provisional allowance',25000)]),
+      L('Service relocations','ps','LS',1,null,[lump('Provisional allowance',15000)])
+    ]}
+  ]
+};
+
+const OTHERS = [
+  {id:'EST-0139', name:'Kingfisher Dr drainage upgrade', client:'City of Logan', due:'30 Sep 2026', rev:'A', status:'submitted', total:486200},
+  {id:'EST-0137', name:'Northline Industrial Estate — Stage 3', client:'Northline Developments', due:'12 Sep 2026', rev:'C', status:'won', total:2141800},
+  {id:'EST-0131', name:'Bayview car park reseal', client:'Bayview Shopping Centre', due:'22 Aug 2026', rev:'A', status:'lost', total:212400},
+  {id:'EST-0128', name:'Ridgeview Estate civil works', client:'Ridgeview Land Co.', due:'1 Aug 2026', rev:'B', status:'won', total:1384500},
+  {id:'EST-0122', name:'Cedar Ck culvert replacement', client:'Sunshine Coast Council', due:'14 Jul 2026', rev:'A', status:'lost', total:318900}
+];
+
+let VIEW = 'list', TAB = 'schedule', OPEN = null, PROJECT = null;
+
+/* ── maths ─────────────────────────────────────────────────────────── */
+const r2 = n => Math.round(n * 100) / 100;
+function libRate(id, ov) { return ov && id in ov ? ov[id] : LIB[id].rate; }
+function prodOf(line, ov) {
+  if (!line.crew) return 0;
+  if (ov && line.crew in ov) return ov[line.crew];
+  return line.prodOv != null ? line.prodOv : LIB[line.crew].rate;
+}
+function crewHours(line, ov) { const p = prodOf(line, ov); return p > 0 ? line.qty / p : 0; }
+function resType(r) { return r.basis === 'lump' ? 'lump' : LIB[r.res].type; }
+function resQty(line, r, ov) {
+  if (r.basis === 'crew') return crewHours(line, ov) * (r.n || 0);
+  if (r.basis === 'per')  return line.qty * (r.per || 0);
+  return 1;
+}
+function resRate(r, ov) {
+  if (r.basis === 'lump') return r.amt || 0;
+  if (ov && r.res in ov) return ov[r.res];
+  return r.rate != null ? r.rate : LIB[r.res].rate;
+}
+function resCost(line, r, ov) { return resQty(line, r, ov) * resRate(r, ov); }
+function lineCost(line, ov) { return line.res.reduce((s, r) => s + resCost(line, r, ov), 0); }
+function lineByType(line) {
+  const o = {labour:0, plant:0, material:0, sub:0, lump:0};
+  line.res.forEach(r => o[resType(r)] += resCost(line, r));
+  return o;
+}
+function mk(sec) { return sec.ps && EST.psFace ? 1 : (1 + EST.oh / 100) * (1 + EST.margin / 100); }
+function costRate(line) { return line.qty > 0 ? lineCost(line) / line.qty : 0; }
+function sellRate(line, sec) { return r2(costRate(line) * mk(sec)); }
+function sellTotal(line, sec) { return r2(line.qty * sellRate(line, sec)); }
+function each(fn) { EST.sections.forEach((s, si) => s.lines.forEach((l, li) => fn(l, s, si, li))); }
+function ref(si, li) { return (si + 1) + '.' + (li + 1); }
+function totals(ov) {
+  let cost = 0, sell = 0, psCost = 0, nonPs = 0;
+  each((l, s) => {
+    const c = lineCost(l, ov); cost += c;
+    if (s.ps) psCost += c; else nonPs += c;
+    sell += ov ? r2(l.qty * r2((l.qty > 0 ? c / l.qty : 0) * mk(s))) : sellTotal(l, s);
+  });
+  const ohAmt = nonPs * EST.oh / 100;
+  return {cost, sell, psCost, ohAmt, marginAmt: sell - cost - ohAmt};
+}
+function actualsOv() {
+  const o = {}; Object.keys(LIB).forEach(k => { if (LIB[k].actual != null) o[k] = LIB[k].actual; }); return o;
+}
+function lineVariance(line) { return lineCost(line, actualsOv()) - lineCost(line); }
+function usedIds() {
+  const u = new Set();
+  each(l => { if (l.crew) u.add(l.crew); l.res.forEach(r => r.res && u.add(r.res)); });
+  return u;
+}
+function exposureOf(id) {
+  if (LIB[id].actual == null) return 0;
+  return totals({[id]: LIB[id].actual}).cost - totals().cost;
+}
+function lightItems() {
+  return [...usedIds()].filter(id => exposureOf(id) > 50);
+}
+
+/* ── format ────────────────────────────────────────────────────────── */
+const $0 = n => (n < 0 ? '−$' : '$') + Math.round(Math.abs(n)).toLocaleString('en-AU');
+const $2 = n => '$' + (n || 0).toLocaleString('en-AU', {minimumFractionDigits:2, maximumFractionDigits:2});
+const nf = (n, d) => (n || 0).toLocaleString('en-AU', {maximumFractionDigits: d == null ? 2 : d});
+const pct = n => (Math.round(n * 10) / 10).toFixed(1) + '%';
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const locked = () => EST.status !== 'draft';
+const dis = () => locked() ? 'disabled' : '';
+
+function toast(msg) {
+  const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function statusPill(s) {
+  const lbl = {draft:'Draft', submitted:'Submitted', won:'Won', lost:'Lost'}[s];
+  return `<span class="pill ${s}">${lbl}</span>`;
+}
+
+/* ── routing ───────────────────────────────────────────────────────── */
+function go(v, tab) {
+  VIEW = v; if (tab) TAB = tab;
+  document.getElementById('navEstimating').classList.toggle('active', v !== 'project');
+  document.getElementById('navProjects').classList.toggle('active', v === 'project');
+  document.getElementById('backBtn').style.display = v === 'list' ? 'none' : '';
+  render(); window.scrollTo(0, 0);
+}
+function render() {
+  const t = document.getElementById('pageTitle');
+  if (VIEW === 'list') { t.textContent = 'Estimating'; renderList(); }
+  else if (VIEW === 'estimate') { t.textContent = EST.id + ' — ' + EST.name; renderEstimate(); }
+  else { t.textContent = 'Budget Overview — ' + PROJECT.name; renderProject(); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   1. Estimates list
+   ══════════════════════════════════════════════════════════════════════ */
+function renderList() {
+  const live = {id:EST.id, name:EST.name, client:EST.client, due:EST.due, rev:EST.rev, status:EST.status, total:totals().sell, live:true};
+  const all = [live, ...OTHERS];
+  const open = all.filter(e => e.status === 'draft' || e.status === 'submitted');
+  const decided = all.filter(e => e.status === 'won' || e.status === 'lost');
+  const won = decided.filter(e => e.status === 'won');
+  const wonVal = won.reduce((s, e) => s + e.total, 0), decVal = decided.reduce((s, e) => s + e.total, 0);
+  document.getElementById('page').innerHTML = `
+    <div class="est-head">
+      <div>
+        <div class="est-title">Estimates</div>
+        <div class="est-meta">Price the job here, and the winning estimate becomes the project's contract schedule, budget and dayworks rates.</div>
+      </div>
+      <div class="est-actions">
+        <button class="btn btn-outline" onclick="importModal()"><i class="fas fa-file-import"></i> Import estimate</button>
+        <button class="btn btn-primary" onclick="toast('Starts a blank estimate. Open EST-0142 to explore a full one.')"><i class="fas fa-plus"></i> New estimate</button>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat"><div class="st-label">Open pipeline</div><div class="st-value">${$0(open.reduce((s,e)=>s+e.total,0))}</div><div class="st-sub">${open.length} estimates in draft or submitted</div></div>
+      <div class="stat"><div class="st-label">Win rate · by count</div><div class="st-value green">${decided.length ? Math.round(won.length/decided.length*100) : 0}%</div><div class="st-sub">${won.length} of ${decided.length} decided</div></div>
+      <div class="stat"><div class="st-label">Win rate · by value</div><div class="st-value green">${decVal ? Math.round(wonVal/decVal*100) : 0}%</div><div class="st-sub">${$0(wonVal)} won of ${$0(decVal)}</div></div>
+      <div class="stat"><div class="st-label">Due in next 14 days</div><div class="st-value amber">1</div><div class="st-sub">EST-0142 · 24 Oct</div></div>
+      <div class="stat"><div class="st-label">Rates library</div><div class="st-value blue">${Object.keys(LIB).length}</div><div class="st-sub">${Object.values(LIB).filter(x=>x.actual!=null).length} checked against completed jobs</div></div>
+    </div>
+    <div class="card"><div class="scroll"><table class="tbl">
+      <thead><tr><th>Estimate</th><th>Name</th><th>Client</th><th>Due</th><th>Rev</th><th>Status</th><th class="r">Tender total</th><th></th></tr></thead>
+      <tbody>${all.map(e => `
+        <tr class="clickable" onclick="${e.live ? "go('estimate','schedule')" : `toast('Only EST-0142 is built out in this prototype')`}">
+          <td class="ref">${e.id}</td><td>${esc(e.name)}${e.live ? ' <span class="pill type">open me</span>' : ''}</td>
+          <td class="muted">${esc(e.client)}</td><td>${e.due}</td><td>Rev ${e.rev}</td><td>${statusPill(e.status)}</td>
+          <td class="num"><b>${$0(e.total)}</b></td>
+          <td class="r">${e.status === 'won' && !e.live ? '<span class="small muted"><i class="fas fa-link"></i> project</span>' : ''}${e.live && PROJECT ? '<span class="small" style="color:#16a34a"><i class="fas fa-link"></i> project</span>' : ''}</td>
+        </tr>`).join('')}</tbody>
+    </table></div></div>`;
+}
+
+function importModal() {
+  modal(`
+    <div class="modal-head"><div><h2>Import an estimate</h2><p>For teams that price in a dedicated tool. The import lands in the same sections, lines and build-up as an estimate priced here, so conversion to a project works the same way.</p></div><span class="x" onclick="closeModal()">&times;</span></div>
+    <div class="modal-body">
+      <div class="opt"><i class="fas fa-file-csv"></i><div><h4>Expert Estimator / Pronamics export</h4><p>BOQ plus the Direct Cost Summary. Parent/child items map to sections and lines, and resources map to the build-up. A mapped preview is shown before anything is created. This is what Gulf Civil, DMC and Red Dust need to do without us.</p></div></div>
+      <div class="opt"><i class="fas fa-file-excel"></i><div><h4>Excel template</h4><p>Ref, description, unit, qty and rate, with optional resource rows under each line.</p></div></div>
+      <div class="opt" style="background:#f8fafc"><i class="fas fa-circle-info" style="color:#94a3b8"></i><div><h4>Not built in this prototype</h4><p>It's here to show the import and native estimating share one data model. The mapping screen is the existing budget-upload work.</p></div></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline" onclick="closeModal()">Close</button></div>`);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   2. Estimate
+   ══════════════════════════════════════════════════════════════════════ */
+function renderEstimate() {
+  const T = totals(), light = lightItems();
+  const lightAmt = totals(actualsOv()).cost - T.cost;
+  if (EST.revs[0].total == null) EST.revs[0].total = Math.round(T.sell * 0.968 / 100) * 100;
+  const actions = {
+    draft: `<button class="btn btn-outline" onclick="submitRev()"><i class="fas fa-paper-plane"></i> Submit Rev ${EST.rev}</button>
+            <button class="btn btn-green" onclick="convertModal()"><i class="fas fa-trophy"></i> Mark as won</button>`,
+    submitted: `<button class="btn btn-outline" onclick="newRev()"><i class="fas fa-code-branch"></i> New revision</button>
+            <button class="btn btn-outline" onclick="markLost()"><i class="fas fa-xmark"></i> Mark as lost</button>
+            <button class="btn btn-green" onclick="convertModal()"><i class="fas fa-trophy"></i> Mark as won</button>`,
+    won: `<button class="btn btn-primary" onclick="go('project')"><i class="fas fa-folder-open"></i> Open project</button>`,
+    lost: `<button class="btn btn-outline" onclick="newRev()"><i class="fas fa-rotate-left"></i> Reopen as new revision</button>`
+  }[EST.status];
+
+  document.getElementById('page').innerHTML = `
+    <div class="tabs">
+      ${tabBtn('schedule','Schedule')}
+      ${tabBtn('rates','Rates &amp; productivity', light.length)}
+      ${tabBtn('summary','Summary &amp; markup')}
+      ${tabBtn('dayworks','Dayworks rates')}
+    </div>
+    <div class="est-head">
+      <div>
+        <div class="est-title">${esc(EST.name)} ${statusPill(EST.status)}</div>
+        <div class="est-meta"><span><i class="far fa-building"></i> ${esc(EST.client)}</span><span><i class="far fa-calendar"></i> Due ${EST.due}</span><span><i class="far fa-user"></i> ${EST.estimator}</span><span>${EST.id}</span></div>
+      </div>
+      <div class="est-actions">${actions}</div>
+    </div>
+    <div class="revs">
+      ${EST.revs.map(r => `<div class="rev"><b>Rev ${r.rev}</b> · ${r.status} ${r.date} · ${$0(r.total)}</div>`).join('')}
+      <div class="rev cur"><b>Rev ${EST.rev}</b> · ${{draft:'Draft',submitted:'Submitted',won:'Won',lost:'Lost'}[EST.status]} · ${$0(T.sell)}</div>
+    </div>
+    ${locked() ? `<div class="lockbar"><i class="fas fa-lock"></i> Rev ${EST.rev} is ${EST.status}, so it's locked. ${EST.status === 'won' ? 'It is the baseline the project budget was created from.' : 'Start a new revision to change prices.'}</div>` : ''}
+    <div class="stat-grid">
+      <div class="stat"><div class="st-label">Direct cost</div><div class="st-value">${$0(T.cost)}</div><div class="st-sub">incl. ${$0(T.psCost)} provisional sums</div></div>
+      <div class="stat"><div class="st-label">Overheads · ${EST.oh}%</div><div class="st-value">${$0(T.ohAmt)}</div><div class="st-sub">on non-provisional cost</div></div>
+      <div class="stat"><div class="st-label">Margin · ${EST.margin}%</div><div class="st-value purple">${$0(T.marginAmt)}</div><div class="st-sub">${pct(T.marginAmt / T.sell * 100)} of tender total</div></div>
+      <div class="stat"><div class="st-label">Tender total (ex GST)</div><div class="st-value green">${$0(T.sell)}</div><div class="st-sub">${countLines()} lines · ${EST.sections.length} sections</div></div>
+      ${light.length ? `<div class="stat warn" onclick="go('estimate','rates')"><div class="st-label" style="color:#b45309">Priced below your actuals</div><div class="st-value amber">${$0(lightAmt)}</div><div class="st-sub" style="color:#92400e">${light.length} rates. Your margin drops to ${pct((T.marginAmt - lightAmt) / T.sell * 100)} if actuals hold →</div></div>`
+        : `<div class="stat"><div class="st-label">Rate check</div><div class="st-value green"><i class="fas fa-check"></i></div><div class="st-sub">Priced at or above your actuals</div></div>`}
+    </div>
+    <div id="tabBody">${({schedule:schedule, rates:rates, summary:summary, dayworks:dayworks})[TAB]()}</div>`;
+}
+function tabBtn(k, label, n) {
+  return `<span class="tab ${TAB === k ? 'active' : ''}" onclick="go('estimate','${k}')">${label}${n ? `<span class="cnt">${n}</span>` : ''}</span>`;
+}
+function countLines() { let n = 0; each(() => n++); return n; }
+
+/* ── Schedule ───────────────────────────────────────────────────────── */
+function schedule() {
+  let rows = '';
+  EST.sections.forEach((s, si) => {
+    const sc = s.lines.reduce((a, l) => a + lineCost(l), 0), ss = s.lines.reduce((a, l) => a + sellTotal(l, s), 0);
+    rows += `<tr class="sec ${s.ps ? 'ps' : ''}"><td class="ref">${si + 1}</td><td colspan="5">${esc(s.name)}${s.ps ? ' <span class="pill type ps">Provisional — claimed only when authorised</span>' : ''}</td>
+      <td class="num">${$0(sc)}</td><td></td><td class="num">${$0(ss)}</td><td class="r">${locked() ? '' : `<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();addLine(${si})"><i class="fas fa-plus"></i> Line</button>`}</td></tr>`;
+    s.lines.forEach((l, li) => {
+      const v = lineVariance(l), isOpen = OPEN === l.id;
+      rows += `<tr class="clickable ${isOpen ? 'open' : ''}" onclick="toggle('${l.id}')">
+        <td class="ref">${ref(si, li)}</td>
+        <td><i class="fas fa-chevron-${isOpen ? 'down' : 'right'} muted small" style="width:14px"></i> ${esc(l.desc)}</td>
+        <td>${typePill(l.type)}</td>
+        <td>${l.unit}</td>
+        <td class="num">${nf(l.qty)}</td>
+        <td class="num">${$2(costRate(l))}</td>
+        <td class="num">${$0(lineCost(l))}</td>
+        <td class="num">${$2(sellRate(l, s))}</td>
+        <td class="num"><b>${$0(sellTotal(l, s))}</b></td>
+        <td class="r">${v > 50 ? `<span class="flag" title="Repriced at the actual rates from completed jobs"><i class="fas fa-triangle-exclamation"></i> +${$0(v)} at actuals</span>` : ''}</td>
+      </tr>`;
+      if (isOpen) rows += `<tr><td colspan="10" style="padding:0 12px;background:#fff">${buildup(l, s, si, li)}</td></tr>`;
+    });
+  });
+  const T = totals();
+  rows += `<tr class="total"><td></td><td colspan="5">Total</td><td class="num">${$0(T.cost)}</td><td></td><td class="num">${$0(T.sell)}</td><td></td></tr>`;
+  return `<div class="card">
+    <div class="card-head"><div><h3>Schedule of rates</h3><div class="sub">These refs, units and quantities become the contract schedule and the budget unchanged. Click a line to see how it's built up.</div></div>
+      <div class="small muted">Sell rate = cost rate × (1 + ${EST.oh}% OH) × (1 + ${EST.margin}% margin)</div></div>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th style="width:52px">Ref</th><th>Description</th><th>Type</th><th>Unit</th><th class="r">Qty</th><th class="r">Cost rate</th><th class="r">Cost</th><th class="r">Sell rate</th><th class="r">Sell total</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div></div>`;
+}
+function typePill(t) {
+  return {measured:'<span class="pill type">Measured</span>', lump:'<span class="pill type lump">Lump sum</span>', ps:'<span class="pill type ps">Prov. sum</span>'}[t];
+}
+
+function buildup(l, s, si, li) {
+  const P = l.crew ? LIB[l.crew] : null, hrs = crewHours(l), p = prodOf(l);
+  const prodBlock = l.crew ? `
+    <div class="prod">
+      <div class="fld"><label>Productivity</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input class="in n" type="number" step="any" value="${r2(p)}" ${dis()} onchange="setProd('${l.id}',this.value)"> <span class="small muted">${P.unit}</span>
+        </div>
+        <span class="libnote">${esc(P.name)} · library ${nf(P.rate)}${l.prodOv != null ? ' · <b style="color:#b45309">overridden on this line</b>' : ''}</span>
+      </div>
+      <div class="eq"><span class="muted">Crew hours =</span> ${nf(l.qty)} ${l.unit} ÷ ${nf(p)} ${P.unit} = <b>${nf(hrs, 1)} hrs</b></div>
+      ${P.actual != null ? (P.actual < p
+        ? `<span class="hint"><i class="fas fa-chart-line"></i> Your completed jobs averaged <b>${nf(P.actual)} ${P.unit}</b> (${esc(P.src)}). ${locked() ? '' : `<button class="btn btn-sm btn-outline" onclick="setProd('${l.id}',${P.actual})">Use ${nf(P.actual)}</button>`}</span>`
+        : `<span class="hint ok"><i class="fas fa-check"></i> At or below your actual of ${nf(P.actual)} ${P.unit}</span>`)
+        : `<span class="hint" style="background:#f1f5f9;color:#475569"><i class="fas fa-circle-info"></i> No completed job to check this against yet</span>`}
+    </div>` : '';
+  const rows = l.res.map(r => {
+    const t = resType(r), T = TYPES[t], q = resQty(l, r), rate = resRate(r), it = r.res ? LIB[r.res] : null;
+    let driver;
+    if (r.basis === 'crew') driver = `<input class="in n" style="width:56px" type="number" step="1" value="${r.n}" ${dis()} onchange="setRes('${l.id}','${r.id}','n',this.value)"> × ${nf(hrs,1)} crew hrs`;
+    else if (r.basis === 'per') driver = `<input class="in n" style="width:72px" type="number" step="any" value="${r.per}" ${dis()} onchange="setRes('${l.id}','${r.id}','per',this.value)"> ${it.unit} per ${l.unit}`;
+    else driver = '<span class="muted">fixed amount</span>';
+    const name = r.basis === 'lump'
+      ? `<input class="in" style="width:260px" value="${esc(r.desc)}" ${dis()} onchange="setRes('${l.id}','${r.id}','desc',this.value)">`
+      : `<select class="in" ${dis()} onchange="setRes('${l.id}','${r.id}','res',this.value)">${Object.keys(LIB).filter(k => LIB[k].type === t).map(k => `<option value="${k}" ${k === r.res ? 'selected' : ''}>${esc(LIB[k].name)}</option>`).join('')}</select>`;
+    const rateCell = r.basis === 'lump'
+      ? `<input class="in n" type="number" step="any" value="${r.amt}" ${dis()} onchange="setRes('${l.id}','${r.id}','amt',this.value)">`
+      : `<input class="in n" type="number" step="any" value="${rate}" ${dis()} onchange="setRes('${l.id}','${r.id}','rate',this.value)">
+         <div class="libnote">${r.rate != null ? `<b style="color:#b45309">override</b> · library ${$2(it.rate)}` : `library · /${it.unit}`}</div>`;
+    return `<tr>
+      <td><span class="rtype ${T.cls}"><i class="fas ${T.icon}"></i>${T.label}</span></td>
+      <td>${name}</td>
+      <td class="drv">${driver}</td>
+      <td class="num">${r.basis === 'lump' ? '1' : nf(q, 1) + ' ' + it.unit}</td>
+      <td class="num">${rateCell}</td>
+      <td class="num"><b>${$0(resCost(l, r))}</b></td>
+      <td class="r">${locked() ? '' : `<span class="x small" title="Remove" onclick="delRes('${l.id}','${r.id}')"><i class="far fa-trash-can"></i></span>`}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="bu">
+    <div class="bu-row">
+      <div class="fld"><label>Ref</label><div class="ref" style="padding:6px 0">${ref(si, li)}</div></div>
+      <div class="fld"><label>Description</label><input class="in w" value="${esc(l.desc)}" ${dis()} onchange="setLine('${l.id}','desc',this.value)"></div>
+      <div class="fld"><label>Type</label><select class="in" ${dis()} onchange="setLine('${l.id}','type',this.value)">
+        ${['measured','lump','ps'].map(t => `<option value="${t}" ${t === l.type ? 'selected' : ''}>${{measured:'Measured',lump:'Lump sum',ps:'Provisional sum'}[t]}</option>`).join('')}</select></div>
+      <div class="fld"><label>Unit</label><select class="in" ${dis()} onchange="setLine('${l.id}','unit',this.value)">${UNITS.map(u => `<option ${u === l.unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div>
+      <div class="fld"><label>Quantity</label><input class="in n" type="number" step="any" value="${l.qty}" ${dis()} onchange="setLine('${l.id}','qty',this.value)"></div>
+      <div class="fld"><label>Crew productivity</label><select class="in" ${dis()} onchange="setLine('${l.id}','crew',this.value)">
+        <option value="">None — no crew on this line</option>
+        ${Object.keys(LIB).filter(k => LIB[k].type === 'prod').map(k => `<option value="${k}" ${k === l.crew ? 'selected' : ''}>${esc(LIB[k].name)}</option>`).join('')}</select></div>
+    </div>
+    ${prodBlock}
+    <table class="tbl">
+      <thead><tr><th>Resource</th><th>Item</th><th>Driver</th><th class="r">Quantity</th><th class="r">Rate</th><th class="r">Cost</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="7" class="muted">No resources yet. Add one below.</td></tr>'}</tbody>
+    </table>
+    <div class="bu-foot">
+      <div class="bu-add">${locked() ? '' : ['labour','plant','material','sub','lump'].map(t => `<button class="btn btn-outline btn-sm" onclick="addRes('${l.id}','${t}')"><i class="fas fa-plus"></i> ${TYPES[t].label}</button>`).join('')}
+        ${locked() ? '' : `<button class="btn btn-ghost btn-sm" onclick="delLine('${l.id}')"><i class="far fa-trash-can"></i> Delete line</button>`}</div>
+      <div class="bu-tot">Line cost <b>${$0(lineCost(l))}</b> · ${$2(costRate(l))} per ${l.unit} → sell <b>${$2(sellRate(l, s))}</b> per ${l.unit}</div>
+    </div>
+  </div>`;
+}
+
+/* ── edits ──────────────────────────────────────────────────────────── */
+function findLine(id) { let f = null; each((l, s) => { if (l.id === id) f = {l, s}; }); return f; }
+function toggle(id) { OPEN = OPEN === id ? null : id; render(); }
+function setLine(id, k, v) {
+  const {l, s} = findLine(id);
+  if (k === 'qty') l.qty = Math.max(0, +v || 0);
+  else if (k === 'crew') {
+    l.crew = v || null; l.prodOv = null;
+    l.res.forEach(r => { if (!l.crew && r.basis === 'crew') { r.basis = 'per'; r.per = 0; } });
+  }
+  else l[k] = v;
+  render();
+}
+function setProd(id, v) {
+  const {l} = findLine(id); v = +v;
+  l.prodOv = v > 0 && v !== LIB[l.crew].rate ? v : null;
+  render(); toast('Productivity updated for this line');
+}
+function setRes(lid, rid, k, v) {
+  const {l} = findLine(lid), r = l.res.find(x => x.id === rid);
+  if (k === 'desc') r.desc = v;
+  else if (k === 'res') { r.res = v; r.rate = null; }
+  else if (k === 'rate') { v = +v; r.rate = v === LIB[r.res].rate ? null : v; }
+  else r[k] = +v || 0;
+  render();
+}
+function addRes(lid, t) {
+  const {l} = findLine(lid);
+  if (t === 'lump') l.res.push({id:nid(), res:null, basis:'lump', desc:'New item', amt:0, rate:null});
+  else {
+    const first = Object.keys(LIB).find(k => LIB[k].type === t);
+    const timed = t === 'labour' || t === 'plant';
+    l.res.push(timed && l.crew ? {id:nid(), res:first, basis:'crew', n:1, rate:null} : {id:nid(), res:first, basis:'per', per: timed ? 0 : 1, rate:null});
+  }
+  render();
+}
+function delRes(lid, rid) { const {l} = findLine(lid); l.res = l.res.filter(r => r.id !== rid); render(); }
+function addLine(si) {
+  const s = EST.sections[si];
+  const l = L('New line item', s.ps ? 'ps' : 'measured', s.ps ? 'LS' : 'm³', 1, null, []);
+  s.lines.push(l); OPEN = l.id; render();
+}
+function delLine(id) {
+  EST.sections.forEach(s => s.lines = s.lines.filter(l => l.id !== id));
+  OPEN = null; render(); toast('Line deleted. Refs below it renumber.');
+}
+
+/* ── Rates & productivity ───────────────────────────────────────────── */
+function rates() {
+  const used = usedIds();
+  const groups = [['prod','Productivity','How fast a crew gets through the work. Drives crew hours on every line that uses it.'],
+                  ['labour','Labour','From worker roles. Actual = timesheet cost on completed jobs.'],
+                  ['plant','Plant','From the plant register and hire bills.'],
+                  ['material','Materials','From supplier pricing. Actual = billed rate.'],
+                  ['sub','Subcontract','From subcontract claims and current quotes.']];
+  const allLight = totals(actualsOv()).cost - totals().cost;
+  return `
+    <div class="card"><div class="card-body" style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+      <div><b style="color:#1b2a4a">Is this estimate priced on what your jobs actually cost?</b>
+        <div class="small muted" style="margin-top:4px">Each rate is checked against timesheets, bills, hire dockets and quantity done on completed jobs. Rates used here are repriced at actuals: <b style="color:${allLight > 0 ? '#b45309' : '#16a34a'}">${allLight > 0 ? '+' : ''}${$0(allLight)}</b> on direct cost.</div></div>
+      ${locked() ? '' : `<button class="btn btn-outline" onclick="applyAll()" ${allLight === 0 ? 'disabled' : ''}><i class="fas fa-wand-magic-sparkles"></i> Use actuals where higher</button>`}
+    </div></div>
+    ${groups.map(([t, label, sub]) => `
+    <div class="card">
+      <div class="card-head"><div><h3>${label}</h3><div class="sub">${sub}</div></div></div>
+      <div class="scroll"><table class="tbl">
+        <thead><tr><th>Item</th><th>Unit</th><th class="r">Estimate rate</th><th class="r">Actual</th><th>Source</th><th class="r">Variance</th><th class="r">Effect on this estimate</th><th></th></tr></thead>
+        <tbody>${Object.keys(LIB).filter(k => LIB[k].type === t).map(k => {
+          const it = LIB[k], inUse = used.has(k);
+          const worse = it.actual != null && (t === 'prod' ? it.actual < it.rate : it.actual > it.rate);
+          const varPct = it.actual != null ? (it.actual - it.rate) / it.rate * 100 : null;
+          const exp = inUse ? exposureOf(k) : 0;
+          return `<tr>
+            <td>${esc(it.name)}${inUse ? '' : ' <span class="pill type">not used here</span>'}</td>
+            <td class="muted">${it.unit}</td>
+            <td class="num"><input class="in n" type="number" step="any" value="${it.rate}" ${dis()} onchange="setLib('${k}',this.value)"></td>
+            <td class="num">${it.actual != null ? (t === 'prod' ? nf(it.actual) : $2(it.actual)) : '<span class="muted">—</span>'}</td>
+            <td class="small muted">${esc(it.src)}</td>
+            <td class="num">${varPct == null ? '<span class="muted">—</span>' : `<span style="color:${worse ? '#b45309' : Math.abs(varPct) < .05 ? '#64748b' : '#16a34a'};font-weight:600">${varPct > 0 ? '+' : ''}${pct(varPct)}</span>`}</td>
+            <td class="num">${!inUse || it.actual == null ? '<span class="muted">—</span>' : Math.abs(exp) < 1 ? '<span class="flag ok">matches</span>' : exp > 0 ? `<span class="flag">+${$0(exp)} cost</span>` : `<span style="color:#16a34a;font-weight:600">${$0(exp)}</span>`}</td>
+            <td class="r">${worse && !locked() ? `<button class="btn btn-outline btn-sm" onclick="useActual('${k}')">Use actual</button>` : ''}</td>
+          </tr>`; }).join('')}</tbody>
+      </table></div>
+    </div>`).join('')}`;
+}
+function setLib(k, v) { LIB[k].rate = +v || 0; render(); toast('Library rate updated. It applies to every estimate that uses it.'); }
+function useActual(k) {
+  LIB[k].rate = LIB[k].actual;
+  each(l => { if (l.crew === k) l.prodOv = null; });
+  render(); toast(LIB[k].name + ' now priced at its actual');
+}
+function applyAll() {
+  Object.keys(LIB).forEach(k => {
+    const it = LIB[k]; if (it.actual == null) return;
+    const worse = it.type === 'prod' ? it.actual < it.rate : it.actual > it.rate;
+    if (worse) it.rate = it.actual;
+  });
+  each(l => l.prodOv = null);
+  render(); toast('Rates below your actuals were moved up to them');
+}
+
+/* ── Summary ───────────────────────────────────────────────────────── */
+function summary() {
+  const T = totals(), by = {labour:0, plant:0, material:0, sub:0, lump:0};
+  each(l => { const b = lineByType(l); Object.keys(b).forEach(k => by[k] += b[k]); });
+  const gst = T.sell * 0.1;
+  return `<div class="grid2">
+    <div>
+      <div class="card"><div class="card-head"><div><h3>Markup</h3><div class="sub">Applied to every line's cost rate, so the schedule's sell rates already carry it.</div></div></div>
+        <div class="card-body">
+          <div class="mk">
+            <div class="fld"><label>Overheads</label><div><input class="in n" type="number" step="0.5" value="${EST.oh}" ${dis()} onchange="setMk('oh',this.value)"> %</div></div>
+            <div class="fld"><label>Margin</label><div><input class="in n" type="number" step="0.5" value="${EST.margin}" ${dis()} onchange="setMk('margin',this.value)"> %</div></div>
+            <label class="chk"><input type="checkbox" ${EST.psFace ? 'checked' : ''} ${dis()} onchange="EST.psFace=this.checked;render()"> Carry provisional sums at face value (no markup)</label>
+          </div>
+        </div></div>
+      <div class="card"><div class="card-head"><h3>Cost to tender total</h3></div>
+        <div class="card-body">
+          <div class="stack">${Object.keys(by).filter(k => by[k] > 0).map(k => `<div style="width:${by[k]/T.cost*100}%;background:${TYPES[k].color}" title="${TYPES[k].label}"></div>`).join('')}</div>
+          <div class="bridge">
+            ${Object.keys(by).filter(k => by[k] > 0).map(k => `<div class="br"><span class="lbl"><span class="sw" style="background:${TYPES[k].color}"></span>${TYPES[k].label}</span><span>${$0(by[k])} <span class="muted small">· ${pct(by[k]/T.cost*100)}</span></span></div>`).join('')}
+            <div class="br" style="font-weight:600;color:#1b2a4a"><span>Direct cost</span><span>${$0(T.cost)}</span></div>
+            <div class="br"><span>+ Overheads ${EST.oh}%</span><span>${$0(T.ohAmt)}</span></div>
+            <div class="br"><span>+ Margin ${EST.margin}%</span><span>${$0(T.marginAmt)}</span></div>
+            <div class="br sum"><span>Tender total ex GST</span><span>${$0(T.sell)}</span></div>
+            <div class="br"><span class="muted">GST 10%</span><span class="muted">${$0(gst)}</span></div>
+            <div class="br"><span class="muted">Tender total inc GST</span><span class="muted">${$0(T.sell + gst)}</span></div>
+          </div>
+        </div></div>
+    </div>
+    <div>
+      <div class="card"><div class="card-head"><h3>By section</h3></div>
+        <div class="scroll"><table class="tbl">
+          <thead><tr><th>Section</th><th class="r">Cost</th><th class="r">Sell</th><th class="r">Margin</th><th class="r">Share</th></tr></thead>
+          <tbody>${EST.sections.map((s, si) => {
+            const c = s.lines.reduce((a, l) => a + lineCost(l), 0), v = s.lines.reduce((a, l) => a + sellTotal(l, s), 0);
+            return `<tr><td><span class="ref">${si + 1}</span> ${esc(s.name)}</td><td class="num">${$0(c)}</td><td class="num">${$0(v)}</td>
+              <td class="num">${s.ps && EST.psFace ? '<span class="muted">at cost</span>' : $0(v - c)}</td><td class="num">${pct(v / T.sell * 100)}</td></tr>`; }).join('')}
+            <tr class="total"><td>Total</td><td class="num">${$0(T.cost)}</td><td class="num">${$0(T.sell)}</td><td class="num">${$0(T.sell - T.cost)}</td><td class="num">100%</td></tr>
+          </tbody></table></div></div>
+      <div class="card"><div class="card-head"><h3>Labour &amp; plant hours</h3></div>
+        <div class="scroll"><table class="tbl">
+          <thead><tr><th>Resource</th><th class="r">Hours</th><th class="r">Cost</th></tr></thead>
+          <tbody>${hoursTable()}</tbody></table></div>
+        <div class="card-body small muted" style="border-top:1px solid #f1f5f9">These hours become the budget's planned hours, so timesheets and plant dockets track against them from day one.</div></div>
+    </div>
+  </div>`;
+}
+function hoursTable() {
+  const h = {};
+  each(l => l.res.forEach(r => {
+    if (!r.res) return; const t = LIB[r.res].type; if (t !== 'labour' && t !== 'plant') return;
+    h[r.res] = h[r.res] || {hrs:0, cost:0}; h[r.res].hrs += resQty(l, r); h[r.res].cost += resCost(l, r);
+  }));
+  return Object.keys(h).sort((a, b) => h[b].cost - h[a].cost).map(k =>
+    `<tr><td><span class="rtype ${TYPES[LIB[k].type].cls}"><i class="fas ${TYPES[LIB[k].type].icon}"></i></span> ${esc(LIB[k].name)}</td><td class="num">${nf(h[k].hrs, 0)}</td><td class="num">${$0(h[k].cost)}</td></tr>`).join('');
+}
+function setMk(k, v) { EST[k] = Math.max(0, +v || 0); render(); }
+
+/* ── Dayworks ──────────────────────────────────────────────────────── */
+function dwRates() {
+  return Object.keys(LIB).filter(k => LIB[k].type === 'labour' || LIB[k].type === 'plant')
+    .map(k => ({k, it:LIB[k], sell: r2(LIB[k].rate * (1 + EST.dwMargin / 100))}));
+}
+function dayworks() {
+  return `<div class="card">
+    <div class="card-head"><div><h3>Dayworks rate card</h3><div class="sub">Built from the same library rates as the estimate. When the estimate is won it becomes the project's dayworks rates, and daywork dockets price from it.</div></div>
+      <div class="fld"><label>Dayworks markup</label><div><input class="in n" type="number" step="0.5" value="${EST.dwMargin}" ${dis()} onchange="setMk('dwMargin',this.value)"> %</div></div></div>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Resource</th><th>Type</th><th>Unit</th><th class="r">Cost rate</th><th class="r">Dayworks rate</th></tr></thead>
+      <tbody>${dwRates().map(d => `<tr><td>${esc(d.it.name)}</td><td><span class="rtype ${TYPES[d.it.type].cls}"><i class="fas ${TYPES[d.it.type].icon}"></i>${TYPES[d.it.type].label}</span></td><td class="muted">${d.it.unit}</td><td class="num">${$2(d.it.rate)}</td><td class="num"><b>${$2(d.sell)}</b></td></tr>`).join('')}</tbody>
+    </table></div></div>`;
+}
+
+/* ── Status ────────────────────────────────────────────────────────── */
+function submitRev() { EST.status = 'submitted'; OPEN = null; render(); toast('Rev ' + EST.rev + ' submitted and locked'); }
+function newRev() {
+  EST.revs.push({rev:EST.rev, status: EST.status === 'lost' ? 'Lost' : 'Submitted', date:'12 Oct 2026', total: totals().sell});
+  EST.rev = String.fromCharCode(EST.rev.charCodeAt(0) + 1); EST.status = 'draft';
+  render(); toast('Rev ' + EST.rev + ' started from the last revision');
+}
+function markLost() { EST.status = 'lost'; render(); toast('Marked as lost. It still counts toward your win rate.'); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   3. Won → project
+   ══════════════════════════════════════════════════════════════════════ */
+function convertModal() {
+  const T = totals();
+  let n = 0, ps = 0, psVal = 0; each((l, s) => { n++; if (s.ps) { ps++; psVal += sellTotal(l, s); } });
+  const by = {labour:0, plant:0, material:0, sub:0, lump:0}; each(l => { const b = lineByType(l); Object.keys(b).forEach(k => by[k] += b[k]); });
+  modal(`
+    <div class="modal-head"><div><h2>Mark Rev ${EST.rev} as won and create the project</h2><p>One estimate becomes three things. Nothing is re-keyed or re-mapped.</p></div><span class="x" onclick="closeModal()">&times;</span></div>
+    <div class="modal-body">
+      <div class="bu-row">
+        <div class="fld"><label>Project name</label><input class="in w" id="pjName" value="${esc(EST.name)}"></div>
+        <div class="fld"><label>Start date</label><input class="in" type="date" value="2026-11-02"></div>
+      </div>
+      <div class="outs">
+        <div class="out"><h4><i class="fas fa-file-signature" style="color:#2563eb"></i> Contract schedule</h4><div class="big">${$0(T.sell)}</div>
+          <p>${n} lines at sell rates, the sell side for claims. Ref 2.2 in the estimate is 2.2 on every claim.</p></div>
+        <div class="out"><h4><i class="fas fa-wallet" style="color:#d97706"></i> Budget</h4><div class="big">${$0(T.cost)}</div>
+          <p>${EST.sections.length} cost centres, one per section. Each line keeps its quantity and its labour / plant / material / subcontract split.</p></div>
+        <div class="out"><h4><i class="fas fa-clipboard-list" style="color:#7c3aed"></i> Dayworks rates</h4><div class="big">${dwRates().length} rates</div>
+          <p>At ${EST.dwMargin}% markup on the library cost rates, ready for daywork dockets.</p></div>
+      </div>
+      <div class="rules"><b>What carries across</b><ul>
+        <li><b>Quantities.</b> Every budget line starts with quantity done at 0, so earned budget works from the first day.</li>
+        <li><b>Provisional sums</b> (${ps} lines, ${$0(psVal)}) are flagged as provisional. They're in the contract sum but claimed only against authorised work.</li>
+        <li><b>Planned hours</b> for labour and plant become the targets that timesheets and plant dockets are tracked against.</li>
+        <li><b>Rev ${EST.rev} locks</b> as the baseline. Variations are made in the project from here, not by editing the estimate.</li>
+      </ul></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-green" onclick="createProject()"><i class="fas fa-folder-plus"></i> Create project</button></div>`);
+}
+function createProject() {
+  const name = document.getElementById('pjName').value || EST.name;
+  const T = totals();
+  PROJECT = {name, rev:EST.rev, contract:T.sell, cost:T.cost, sections: EST.sections.map((s, si) => ({
+    name:s.name, ps:s.ps, lines:s.lines.map((l, li) => ({ref:ref(si, li), desc:l.desc, unit:l.unit, qty:l.qty, type:l.type,
+      sellRate:sellRate(l, s), sell:sellTotal(l, s), cost:lineCost(l), by:lineByType(l)}))}))};
+  EST.status = 'won'; closeModal(); go('project'); toast('Project created from ' + EST.id + ' Rev ' + EST.rev);
+}
+function renderProject() {
+  const P = PROJECT;
+  let rows = '';
+  P.sections.forEach((s, si) => {
+    const sc = s.lines.reduce((a, l) => a + l.cost, 0), ss = s.lines.reduce((a, l) => a + l.sell, 0);
+    rows += `<tr class="sec ${s.ps ? 'ps' : ''}"><td class="ref">${si + 1}</td><td colspan="4">${esc(s.name)} <span class="muted small" style="font-weight:400">· cost centre</span></td><td class="num">${$0(ss)}</td><td colspan="4"></td><td class="num">${$0(sc)}</td><td colspan="2"></td></tr>`;
+    s.lines.forEach(l => {
+      rows += `<tr><td class="ref">${l.ref}</td><td>${esc(l.desc)} ${l.type === 'ps' ? '<span class="pill type ps">Provisional</span>' : ''}</td><td>${l.unit}</td><td class="num">${nf(l.qty)}</td>
+        <td class="num">${$2(l.sellRate)}</td><td class="num">${$0(l.sell)}</td>
+        <td class="num">${l.by.labour ? $0(l.by.labour) : '<span class="muted">—</span>'}</td><td class="num">${l.by.plant ? $0(l.by.plant) : '<span class="muted">—</span>'}</td>
+        <td class="num">${l.by.material ? $0(l.by.material) : '<span class="muted">—</span>'}</td><td class="num">${l.by.sub + l.by.lump ? $0(l.by.sub + l.by.lump) : '<span class="muted">—</span>'}</td>
+        <td class="num"><b>${$0(l.cost)}</b></td><td class="num muted">0</td><td class="num muted">$0</td></tr>`;
+    });
+  });
+  const psVal = P.sections.filter(s => s.ps).reduce((a, s) => a + s.lines.reduce((b, l) => b + l.sell, 0), 0);
+  document.getElementById('page').innerHTML = `
+    <div class="tabs">
+      <span class="tab"><i class="fas fa-chevron-left" style="margin-right:4px"></i> Dashboard</span>
+      <span class="tab active">Budget Overview</span><span class="tab">Daily Cost Tracking</span><span class="tab">Claim</span>
+      <span class="tab">Variation Register</span><span class="tab">Daywork Docket</span><span class="tab">Site Diary</span>
+    </div>
+    <div class="banner"><span><i class="fas fa-circle-check"></i> Created from <b>${EST.id} Rev ${P.rev}</b>, the won estimate. The contract schedule, budget and ${dwRates().length} dayworks rates were all set up from it.</span>
+      <button class="btn btn-outline btn-sm" onclick="go('estimate','schedule')"><i class="fas fa-calculator"></i> View estimate</button></div>
+    <div class="stat-grid">
+      <div class="stat"><div class="st-label">Contract value</div><div class="st-value">${$0(P.contract)}</div><div class="st-sub">incl. ${$0(psVal)} provisional</div></div>
+      <div class="stat"><div class="st-label">Budget cost</div><div class="st-value amber">${$0(P.cost)}</div><div class="st-sub">baseline from the estimate</div></div>
+      <div class="stat"><div class="st-label">Planned margin</div><div class="st-value purple">${$0(P.contract - P.cost)}</div><div class="st-sub">${pct((P.contract - P.cost) / P.contract * 100)}</div></div>
+      <div class="stat"><div class="st-label">Actual to date</div><div class="st-value">$0</div><div class="st-sub">no timesheets or bills yet</div></div>
+      <div class="stat"><div class="st-label">Earned to date</div><div class="st-value green">$0</div><div class="st-sub">quantity done × budget rate</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><h3>Budget lines</h3><div class="sub">Same refs, units and quantities as the estimate. Cost split by resource type, with quantity done ready for earned budget.</div></div></div>
+      <div class="scroll"><table class="tbl">
+        <thead><tr><th>Ref</th><th>Description</th><th>Unit</th><th class="r">Qty</th><th class="r">Contract rate</th><th class="r">Contract value</th>
+          <th class="r">Labour</th><th class="r">Plant</th><th class="r">Materials</th><th class="r">Subcon / other</th><th class="r">Budget cost</th><th class="r">Qty done</th><th class="r">Earned</th></tr></thead>
+        <tbody>${rows}<tr class="total"><td></td><td colspan="4">Total</td><td class="num">${$0(P.contract)}</td><td colspan="4"></td><td class="num">${$0(P.cost)}</td><td></td><td class="num">$0</td></tr></tbody>
+      </table></div>
+    </div>`;
+}
+
+/* ── modal ─────────────────────────────────────────────────────────── */
+function modal(html) { document.getElementById('modal').innerHTML = html; document.getElementById('overlay').classList.add('show'); }
+function closeModal() { document.getElementById('overlay').classList.remove('show'); }
+document.getElementById('overlay').addEventListener('click', e => { if (e.target.id === 'overlay') closeModal(); });
+
+render();
+</script>
+</body>
+</html>
