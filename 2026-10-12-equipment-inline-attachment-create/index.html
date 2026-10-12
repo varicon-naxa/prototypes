@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<!--
+  Equipment → Attachments tab: create an attachment without leaving the page.
+
+  Problem: on an equipment record's Attachments tab, the "Select Attachment" dropdown only lists
+  attachments that already exist. If the one you need hasn't been registered, you have to cancel
+  out, go to Equipment Attachment → Register New Attachment, save, then come back and start again.
+
+  Prototype: the dropdown gets a pinned "+ New attachment" footer (it becomes '+ Create "<search>"'
+  once you've typed). It opens a quick-create dialog that asks only what's needed to make the row
+  work: name, ID, resource (which brings the unit and cost rate). Status and company default.
+  Everything else is optional under "More details", and documents / certifications / maintenance
+  stay on the full attachment record. On save the attachment is created AND assigned to the row.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Equipment Attachments · Quick Create</title>
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
+  :root {
+    --primary-main: #143666;
+    --secondary-main: #F19100;
+    --secondary-dark: #C17400;
+    --secondary-bg: rgba(241, 145, 0, 0.08);
+    --warn-bg: #FFF8EC;
+    --warn-border: #F5C46B;
+    --text-primary: rgba(0, 5, 10, 0.87);
+    --text-secondary: rgba(0, 5, 10, 0.64);
+    --text-disabled: rgba(0, 5, 10, 0.38);
+    --error: #D32F2F;
+    --success-main: #0F8A0F;
+    --success-bg: #DBF0DC;
+    --divider: #E0E0E0;
+    --border: #C4C4C4;
+    --head-bg: #D9DEE6;
+    --grey-50: #FAFAFA;
+    --grey-100: #F5F5F5;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Roboto', sans-serif; background: #fff; color: var(--text-primary); font-size: 14px; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; font-size: 14px; color: var(--text-primary); }
+  svg.lucide { width: 18px; height: 18px; }
+
+  /* top bar */
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; border-bottom: 1px solid var(--divider); }
+  .topbar h1 { font-size: 20px; font-weight: 500; display: flex; align-items: center; gap: 12px; }
+  .topbar-right { display: flex; align-items: center; gap: 18px; }
+  .btn { border-radius: 4px; padding: 8px 16px; font-size: 14px; font-weight: 500; border: 1px solid var(--border); background: #fff; color: var(--text-primary); display: inline-flex; align-items: center; gap: 8px; }
+  .btn-primary { background: var(--secondary-main); border-color: var(--secondary-main); color: #fff; }
+  .btn-primary:disabled { background: #F9D7AE; border-color: #F9D7AE; cursor: default; }
+  .btn-danger { color: var(--error); border-color: var(--error); }
+  .btn-text { border: none; background: none; color: var(--secondary-dark); padding: 6px 8px; }
+  .org { font-weight: 500; }
+
+  .page-head { display: flex; align-items: center; justify-content: space-between; padding: 16px; }
+  .page-head h2 { font-size: 20px; font-weight: 500; }
+  .page-head .actions { display: flex; gap: 8px; }
+
+  .card { margin: 0 8px 24px; border: 1px solid var(--divider); border-radius: 6px; padding: 0 16px 16px; }
+  .tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--divider); overflow-x: auto; }
+  .tab { padding: 16px 8px 10px; font-size: 14px; font-weight: 500; letter-spacing: .3px; color: var(--text-secondary); white-space: nowrap; border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--secondary-main); border-color: var(--secondary-main); }
+
+  .tab-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; gap: 8px; flex-wrap: wrap; }
+  .tab-head p { color: var(--text-secondary); }
+  .tab-head .actions { display: flex; gap: 8px; }
+
+  .table { border: 1px solid var(--divider); border-radius: 6px; min-height: 250px; }
+  .row { display: grid; grid-template-columns: 2.2fr 2fr 0.9fr 1.1fr 44px; align-items: center; gap: 16px; padding: 10px 20px; border-bottom: 1px solid var(--divider); }
+  .row.head { background: var(--head-bg); font-weight: 500; padding: 12px 20px; border-radius: 6px 6px 0 0; }
+  .muted { color: var(--text-secondary); }
+  .icon-btn { border: none; background: none; color: var(--text-secondary); display: flex; padding: 6px; border-radius: 50%; }
+  .icon-btn:hover { background: var(--grey-100); }
+  .row.flash { animation: flash 1.6s ease-out; }
+  @keyframes flash { 0% { background: var(--success-bg); } 100% { background: transparent; } }
+
+  /* select (combobox) */
+  .combo { position: relative; }
+  .combo-input { width: 100%; border: 1px solid var(--border); border-radius: 4px; padding: 9px 36px 9px 13px; background: #fff; }
+  .combo-input:focus { outline: none; border-color: var(--secondary-main); box-shadow: 0 0 0 1px var(--secondary-main); }
+  .combo-caret { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text-secondary); }
+  .menu { position: absolute; left: 0; right: 0; top: calc(100% + 4px); background: #fff; border-radius: 4px; box-shadow: 0 6px 20px rgba(0,0,0,.16); z-index: 20; overflow: hidden; display: none; }
+  .menu.open { display: block; }
+  .menu-list { max-height: 220px; overflow-y: auto; padding: 6px 0; }
+  .opt { padding: 9px 14px; display: flex; justify-content: space-between; gap: 12px; cursor: pointer; }
+  .opt:hover, .opt.hl { background: var(--grey-100); }
+  .opt .sub { color: var(--text-secondary); font-size: 12px; }
+  .opt.disabled { color: var(--text-disabled); cursor: default; }
+  .opt.disabled:hover { background: none; }
+  .opt-empty { padding: 10px 14px; color: var(--text-secondary); }
+  .menu-foot { border-top: 1px solid var(--divider); padding: 10px 14px; display: flex; align-items: center; gap: 8px; color: var(--secondary-dark); font-weight: 500; cursor: pointer; background: #fff; }
+  .menu-foot:hover, .menu-foot.hl { background: var(--secondary-bg); }
+
+  .rate { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 4px; padding: 0 12px; }
+  .rate span { color: var(--text-secondary); margin-right: 10px; }
+  .rate input { border: none; padding: 9px 0; width: 100%; background: transparent; }
+  .rate input:focus { outline: none; }
+  .rate.disabled { background: var(--grey-100); }
+  .rate.disabled input { color: var(--text-disabled); }
+
+  /* dialog */
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .scrim.open { display: flex; }
+  .dialog { background: #fff; border-radius: 8px; width: 100%; max-width: 620px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+  .dlg-head { padding: 20px 24px 4px; display: flex; justify-content: space-between; align-items: flex-start; }
+  .dlg-head h3 { font-size: 18px; font-weight: 500; }
+  .dlg-head p { color: var(--text-secondary); margin-top: 4px; font-size: 13px; }
+  .dlg-body { padding: 16px 24px; overflow-y: auto; display: grid; gap: 16px; }
+  .dlg-foot { padding: 14px 24px; border-top: 1px solid var(--divider); display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .dlg-foot .right { display: flex; gap: 8px; margin-left: auto; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 16px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12px; color: var(--text-secondary); }
+  .field input, .field select, .field textarea { border: 1px solid var(--border); border-radius: 4px; padding: 9px 12px; background: #fff; width: 100%; }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--secondary-main); box-shadow: 0 0 0 1px var(--secondary-main); }
+  .field input[readonly] { background: var(--grey-100); color: var(--text-secondary); }
+  .field .hint { font-size: 12px; color: var(--text-secondary); }
+  .field .err { font-size: 12px; color: var(--error); display: none; }
+  .field.invalid input, .field.invalid select { border-color: var(--error); }
+  .field.invalid .err { display: block; }
+
+  .section-label { font-size: 12px; font-weight: 700; letter-spacing: .4px; color: var(--text-secondary); text-transform: uppercase; }
+  .cost-note { background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 4px; padding: 8px 12px; font-size: 12px; color: var(--text-secondary); display: flex; gap: 8px; }
+  .cost-note svg { flex-shrink: 0; width: 16px; height: 16px; color: var(--secondary-main); }
+
+  .defaults { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--text-secondary); }
+  .chip { background: var(--grey-100); border-radius: 12px; padding: 3px 10px; color: var(--text-primary); }
+
+  .more-toggle { display: flex; align-items: center; gap: 6px; border: none; background: none; color: var(--secondary-dark); font-weight: 500; padding: 0; font-size: 14px; }
+  .more-toggle svg { transition: transform .15s; }
+  .more-toggle.open svg { transform: rotate(180deg); }
+  .more { display: none; gap: 16px; }
+  .more.open { display: grid; }
+  .later { font-size: 12px; color: var(--text-secondary); display: flex; gap: 6px; align-items: center; }
+  .later svg { width: 14px; height: 14px; }
+
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: #323232; color: #fff; border-radius: 4px; padding: 12px 16px; display: flex; gap: 16px; align-items: center; opacity: 0; pointer-events: none; transition: all .2s; z-index: 60; max-width: calc(100vw - 32px); }
+  .toast.show { opacity: 1; transform: translateX(-50%); pointer-events: auto; }
+  .toast a { color: #FFC266; font-weight: 500; text-decoration: none; white-space: nowrap; }
+
+  .proto-note { margin: 0 8px 24px; padding: 12px 16px; border: 1px dashed var(--border); border-radius: 6px; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+  .proto-note b { color: var(--text-primary); }
+
+  @media (max-width: 760px) {
+    .row { grid-template-columns: 1fr 44px; }
+    .row.head { display: none; }
+    .row > .c-res, .row > .c-unit { grid-column: 1; font-size: 13px; }
+    .row > .c-rate { grid-column: 1; }
+    .row > .c-x { grid-column: 2; grid-row: 1; }
+    .grid2, .grid3 { grid-template-columns: 1fr; }
+    .topbar .hide-sm { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1><i data-lucide="arrow-left"></i> Equipment</h1>
+  <div class="topbar-right">
+    <button class="btn hide-sm">Initial Data Upload</button>
+    <i data-lucide="plus" class="hide-sm"></i>
+    <span class="org">Varicon Info</span>
+  </div>
+</div>
+
+<div class="page-head">
+  <h2>(DOZ001) Dozer</h2>
+  <div class="actions">
+    <button class="btn">Cancel</button>
+    <button class="btn btn-primary" id="updateBtn" disabled>Update</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="tabs">
+    <div class="tab">BASIC INFO</div>
+    <div class="tab">DETAILED INFO</div>
+    <div class="tab active">ATTACHMENTS</div>
+    <div class="tab">INSPECTION &amp; FORMS</div>
+    <div class="tab">DOCUMENTS &amp; CERTIFICATIONS</div>
+    <div class="tab">MAINTENANCE</div>
+  </div>
+  <div class="tab-head">
+    <p>Assign attachments that work with this equipment.</p>
+    <div class="actions">
+      <button class="btn btn-danger" id="clearAll">Clear All</button>
+      <button class="btn" id="addRow"><i data-lucide="plus"></i> Add Attachment</button>
+    </div>
+  </div>
+  <div class="table">
+    <div class="row head"><div>Attachment</div><div>Resource</div><div>Unit</div><div>Rate</div><div></div></div>
+    <div id="rows"></div>
+  </div>
+</div>
+
+<div class="proto-note">
+  <b>Prototype.</b> Click <b>Add Attachment</b>, open the dropdown, and use <b>+ New attachment</b> at the bottom —
+  or type a name that doesn't exist (try "Rock breaker") and pick <b>+ Create "Rock breaker"</b>.
+  The dialog asks only what this row needs; status and company default, and the rest is optional under <b>More details</b>.
+</div>
+
+<!-- quick-create dialog -->
+<div class="scrim" id="scrim">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <div class="dlg-head">
+      <div>
+        <h3 id="dlgTitle">New attachment</h3>
+        <p>Creates the attachment in your register and assigns it to (DOZ001) Dozer.</p>
+      </div>
+      <button class="icon-btn" id="dlgClose" aria-label="Close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="dlg-body">
+      <div class="grid2">
+        <div class="field" id="f-name">
+          <label for="aName">Attachment name*</label>
+          <input id="aName" autocomplete="off">
+          <span class="err">Enter a name.</span>
+        </div>
+        <div class="field" id="f-id">
+          <label for="aId">Attachment ID*</label>
+          <input id="aId" autocomplete="off">
+          <span class="hint" id="idHint">Suggested from the name. You can change it.</span>
+          <span class="err" id="idErr">This ID is already used.</span>
+        </div>
+      </div>
+
+      <div class="section-label">Resource mapping</div>
+      <div class="cost-note"><i data-lucide="info"></i>The cost to you of running this attachment, not what you charge clients.</div>
+      <div class="grid3">
+        <div class="field" id="f-res">
+          <label for="aRes">Resource*</label>
+          <select id="aRes"></select>
+          <span class="err">Pick a resource. It sets the unit and cost rate.</span>
+        </div>
+        <div class="field">
+          <label for="aUnit">Operating unit</label>
+          <input id="aUnit" readonly placeholder="From resource">
+        </div>
+        <div class="field" id="f-rate">
+          <label for="aRate">Rate*</label>
+          <input id="aRate" type="number" min="0" step="0.01" placeholder="0">
+          <span class="err">Enter a rate.</span>
+        </div>
+      </div>
+
+      <div class="defaults">
+        Defaults: <span class="chip" id="chipStatus">Active</span><span class="chip" id="chipCo">Cookie's Civil Pty</span>
+        <span>· change under More details</span>
+      </div>
+
+      <button class="more-toggle" id="moreToggle" type="button">More details (optional) <i data-lucide="chevron-down"></i></button>
+      <div class="more" id="more">
+        <div class="grid2">
+          <div class="field"><label for="aType">Attachment type</label>
+            <select id="aType"><option value="">None</option><option>Bucket</option><option>Ripper</option><option>Breaker</option><option>Transport / float</option><option>Consumable</option></select></div>
+          <div class="field"><label for="aStatus">Status*</label>
+            <select id="aStatus"><option>Active</option><option>Inactive</option><option>In repair</option></select></div>
+          <div class="field"><label for="aCo">Company / supplier*</label>
+            <select id="aCo"><option>Cookie's Civil Pty</option><option>Coates Hire</option><option>Kennards Hire</option></select></div>
+          <div class="field"><label for="aPm">Plant manager</label>
+            <select id="aPm"><option value="">None</option><option>Sam Whitfield</option><option>Priya Nair</option></select></div>
+        </div>
+        <div class="field"><label for="aNotes">Notes</label><textarea id="aNotes" rows="2" placeholder="Enter notes"></textarea></div>
+        <div class="later"><i data-lucide="file-text"></i>Photo, documents, certifications and maintenance are added on the attachment's own record.</div>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn btn-text" id="openFull" title="Opens the full register form in a new tab">Open full form <i data-lucide="external-link" style="width:14px;height:14px"></i></button>
+      <div class="right">
+        <button class="btn" id="dlgCancel">Cancel</button>
+        <button class="btn btn-primary" id="dlgSave">Create &amp; assign</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toastMsg"></span><a href="#" id="toastLink">View in register</a></div>
+
+<script>
+  const resources = [
+    { id: 'r1', code: 'Float Charge', name: 'Float Charge', unit: 'Each', rate: 25 },
+    { id: 'r2', code: 'Dozer Fuel p/h', name: 'Dozer Fuel p/h', unit: 'Hour', rate: 20 },
+    { id: 'r3', code: 'RIP-H', name: 'Ripper Hire', unit: 'Hour', rate: 15 },
+    { id: 'r4', code: 'TB-D', name: 'Tilt Bucket Hire', unit: 'Day', rate: 80 },
+    { id: 'r5', code: 'GPS-D', name: 'GPS Machine Control', unit: 'Day', rate: 120 },
+    { id: 'r6', code: 'RB-H', name: 'Rock Breaker Hire', unit: 'Hour', rate: 45 },
+  ];
+  const attachments = [
+    { id: 'FLT001', name: 'Float Charge', res: 'r1', rate: 25 },
+    { id: 'FUE001', name: 'Dozer Fuel p/h', res: 'r2', rate: 20 },
+    { id: 'RIP001', name: 'Ripper', res: 'r3', rate: 15 },
+    { id: 'TIL001', name: 'Tilt Bucket 1.2m', res: 'r4', rate: 80 },
+  ];
+  let rows = [
+    { att: 'FLT001', rate: 25 },
+    { att: 'FUE001', rate: 20 },
+  ];
+  let dirty = false;
+  let pendingRow = null;   // row index the dialog will fill
+  let idTouched = false;
+
+  const $ = s => document.querySelector(s);
+  const resById = id => resources.find(r => r.id === id);
+  const attById = id => attachments.find(a => a.id === id);
+  const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function markDirty() { dirty = true; $('#updateBtn').disabled = false; }
+
+  function render(flashIdx) {
+    const wrap = $('#rows');
+    wrap.innerHTML = '';
+    rows.forEach((r, i) => {
+      const a = r.att ? attById(r.att) : null;
+      const res = a ? resById(a.res) : null;
+      const el = document.createElement('div');
+      el.className = 'row' + (i === flashIdx ? ' flash' : '');
+      el.innerHTML = `
+        <div class="combo">
+          <input class="combo-input" placeholder="Select Attachment" value="${a ? esc(a.name) : ''}" autocomplete="off">
+          <i data-lucide="chevron-down" class="combo-caret"></i>
+          <div class="menu"><div class="menu-list"></div><div class="menu-foot"><i data-lucide="plus"></i><span class="foot-label">New attachment</span></div></div>
+        </div>
+        <div class="c-res ${res ? '' : 'muted'}">${res ? `(${esc(res.code)}) ${esc(res.name)}` : '-'}</div>
+        <div class="c-unit ${res ? '' : 'muted'}">${res ? res.unit : '-'}</div>
+        <div class="c-rate"><div class="rate ${a ? '' : 'disabled'}"><span>$</span><input type="number" placeholder="Rate" value="${a ? r.rate : ''}" ${a ? '' : 'disabled'}></div></div>
+        <div class="c-x"><button class="icon-btn" aria-label="Remove"><i data-lucide="x"></i></button></div>`;
+      wrap.appendChild(el);
+      wireRow(el, i);
+    });
+    lucide.createIcons();
+  }
+
+  function wireRow(el, i) {
+    const input = el.querySelector('.combo-input');
+    const menu = el.querySelector('.menu');
+    const list = el.querySelector('.menu-list');
+    const foot = el.querySelector('.menu-foot');
+    const footLabel = el.querySelector('.foot-label');
+    let hl = -1, opts = [];
+
+    function fill() {
+      const q = input.value.trim().toLowerCase();
+      const current = rows[i].att && attById(rows[i].att);
+      const showAll = current && input.value === current.name;
+      const used = new Set(rows.map((r, j) => j !== i && r.att).filter(Boolean));
+      opts = attachments.filter(a => showAll || !q || a.name.toLowerCase().includes(q) || a.id.toLowerCase().includes(q));
+      list.innerHTML = opts.length ? '' : `<div class="opt-empty">No attachments match "${esc(input.value.trim())}"</div>`;
+      opts.forEach((a, k) => {
+        const o = document.createElement('div');
+        const isUsed = used.has(a.id);
+        o.className = 'opt' + (isUsed ? ' disabled' : '') + (k === hl ? ' hl' : '');
+        o.innerHTML = `<span>${esc(a.name)}</span><span class="sub">${isUsed ? 'Already assigned' : a.id}</span>`;
+        if (!isUsed) o.addEventListener('mousedown', e => { e.preventDefault(); choose(a.id); });
+        list.appendChild(o);
+      });
+      const typed = input.value.trim();
+      const exact = attachments.some(a => a.name.toLowerCase() === typed.toLowerCase());
+      footLabel.textContent = typed && !showAll && !exact ? `Create "${typed}"` : 'New attachment';
+      foot.classList.toggle('hl', hl === opts.length);
+    }
+    function open() { document.querySelectorAll('.menu.open').forEach(m => m !== menu && m.classList.remove('open')); hl = -1; fill(); menu.classList.add('open'); }
+    function close() { menu.classList.remove('open'); }
+    function choose(id) {
+      const a = attById(id);
+      rows[i] = { att: id, rate: a.rate };
+      markDirty(); close(); render();
+    }
+    function create() {
+      const current = rows[i].att && attById(rows[i].att);
+      const typed = input.value.trim();
+      close();
+      openDialog(i, current && typed === current.name ? '' : typed);
+    }
+
+    input.addEventListener('focus', () => { input.select(); open(); });
+    input.addEventListener('input', () => { hl = -1; open(); });
+    input.addEventListener('blur', () => setTimeout(() => {
+      close();
+      const a = rows[i].att && attById(rows[i].att);
+      if (!$('#scrim').classList.contains('open')) input.value = a ? a.name : '';
+    }, 120));
+    input.addEventListener('keydown', e => {
+      const max = opts.length; // footer index = opts.length
+      if (e.key === 'ArrowDown') { e.preventDefault(); hl = Math.min(hl + 1, max); fill(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); hl = Math.max(hl - 1, 0); fill(); }
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (hl === max) create();
+        else if (hl >= 0 && !list.children[hl].classList.contains('disabled')) choose(opts[hl].id);
+      } else if (e.key === 'Escape') { close(); input.blur(); }
+    });
+    foot.addEventListener('mousedown', e => { e.preventDefault(); create(); });
+
+    const rateInput = el.querySelector('.rate input');
+    rateInput.addEventListener('input', () => { rows[i].rate = rateInput.value; markDirty(); });
+    el.querySelector('.c-x .icon-btn').addEventListener('click', () => { rows.splice(i, 1); markDirty(); render(); });
+  }
+
+  /* ---------- dialog ---------- */
+  function suggestId(name) {
+    const letters = name.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3).padEnd(3, 'X');
+    let n = 1, id;
+    do { id = letters + String(n++).padStart(3, '0'); } while (attachments.some(a => a.id === id));
+    return id;
+  }
+  function suggestResource(name) {
+    const words = name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    return resources.find(r => words.some(w => r.name.toLowerCase().includes(w)));
+  }
+
+  $('#aRes').innerHTML = '<option value="">Select resource</option>' +
+    resources.map(r => `<option value="${r.id}">(${esc(r.code)}) ${esc(r.name)}</option>`).join('');
+
+  function openDialog(rowIdx, name) {
+    pendingRow = rowIdx; idTouched = false;
+    document.querySelectorAll('.field.invalid').forEach(f => f.classList.remove('invalid'));
+    $('#aName').value = name;
+    $('#aId').value = name ? suggestId(name) : '';
+    const guess = name ? suggestResource(name) : null;
+    $('#aRes').value = guess ? guess.id : '';
+    applyResource();
+    ['#aType', '#aPm', '#aNotes'].forEach(s => $(s).value = '');
+    $('#aStatus').value = 'Active'; $('#aCo').value = "Cookie's Civil Pty"; syncChips();
+    $('#more').classList.remove('open'); $('#moreToggle').classList.remove('open');
+    $('#idHint').textContent = guess ? `Suggested from the name. Resource matched to "${guess.name}", check it.` : 'Suggested from the name. You can change it.';
+    $('#scrim').classList.add('open');
+    setTimeout(() => (name ? $('#aRes') : $('#aName')).focus(), 30);
+  }
+  function closeDialog() { $('#scrim').classList.remove('open'); pendingRow = null; render(); }
+  function applyResource() {
+    const r = resById($('#aRes').value);
+    $('#aUnit').value = r ? r.unit : '';
+    $('#aRate').value = r ? r.rate : '';
+  }
+  function syncChips() { $('#chipStatus').textContent = $('#aStatus').value; $('#chipCo').textContent = $('#aCo').value; }
+
+  $('#aName').addEventListener('input', () => { if (!idTouched) $('#aId').value = $('#aName').value.trim() ? suggestId($('#aName').value) : ''; });
+  $('#aId').addEventListener('input', () => { idTouched = true; $('#f-id').classList.remove('invalid'); });
+  $('#aRes').addEventListener('change', () => { applyResource(); $('#f-res').classList.remove('invalid'); });
+  $('#aStatus').addEventListener('change', syncChips);
+  $('#aCo').addEventListener('change', syncChips);
+  $('#moreToggle').addEventListener('click', () => { $('#more').classList.toggle('open'); $('#moreToggle').classList.toggle('open'); });
+  $('#dlgClose').addEventListener('click', closeDialog);
+  $('#dlgCancel').addEventListener('click', closeDialog);
+  $('#scrim').addEventListener('mousedown', e => { if (e.target === $('#scrim')) closeDialog(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#scrim').classList.contains('open')) closeDialog(); });
+  $('#openFull').addEventListener('click', () => showToast('In the product this opens Register New Attachment in a new tab, prefilled with what you typed.', false));
+
+  $('#dlgSave').addEventListener('click', () => {
+    const name = $('#aName').value.trim(), id = $('#aId').value.trim().toUpperCase();
+    const res = $('#aRes').value, rate = $('#aRate').value;
+    const checks = [
+      ['#f-name', !name],
+      ['#f-id', !id || attachments.some(a => a.id === id)],
+      ['#f-res', !res],
+      ['#f-rate', rate === ''],
+    ];
+    $('#idErr').textContent = id ? 'This ID is already used.' : 'Enter an ID.';
+    checks.forEach(([f, bad]) => $(f).classList.toggle('invalid', bad));
+    if (checks.some(c => c[1])) return;
+
+    attachments.push({ id, name, res, rate: Number(rate) });
+    const idx = pendingRow;
+    rows[idx] = { att: id, rate: Number(rate) };
+    markDirty();
+    $('#scrim').classList.remove('open'); pendingRow = null;
+    render(idx);
+    showToast(`Attachment ${id} created and assigned. Save with Update.`, true);
+  });
+
+  let toastT;
+  function showToast(msg, link) {
+    $('#toastMsg').textContent = msg;
+    $('#toastLink').style.display = link ? '' : 'none';
+    $('#toast').classList.add('show');
+    clearTimeout(toastT); toastT = setTimeout(() => $('#toast').classList.remove('show'), 4500);
+  }
+  $('#toastLink').addEventListener('click', e => e.preventDefault());
+
+  /* ---------- table actions ---------- */
+  $('#addRow').addEventListener('click', () => {
+    rows.push({ att: null, rate: '' }); render();
+    const inputs = document.querySelectorAll('.combo-input');
+    inputs[inputs.length - 1].focus();
+  });
+  $('#clearAll').addEventListener('click', () => { rows = []; markDirty(); render(); });
+
+  render();
+</script>
+</body>
+</html>
