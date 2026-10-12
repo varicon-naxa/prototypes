@@ -576,7 +576,100 @@
   $('#dlgCancel').addEventListener('click', closeDialog);
   $('#scrim').addEventListener('mousedown', e => { if (e.target === $('#scrim')) closeDialog(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#scrim').classList.contains('open')) closeDialog(); });
-  $('#openFull').addEventListener('click', () => showToast('In the product this opens Register New Attachment in a new tab, prefilled with what you typed.', false));
+  /* ---------- full page: carries the dialog's values over, returns to the equipment with the row filled ---------- */
+  const carry = [['#aName', '#fName'], ['#aId', '#fId'], ['#aRes', '#fRes'], ['#aUnit', '#fUnit'], ['#aRate', '#fRate'],
+    ['#aType', '#fType'], ['#aStatus', '#fStatus'], ['#aCo', '#fCo'], ['#aPm', '#fPm'], ['#aNotes', '#fNotes'],
+    ['#sMan', '#fMan'], ['#sModel', '#fModel'], ['#sYear', '#fYear'], ['#sSerial', '#fSerial'],
+    ['#sWeight', '#fWeight'], ['#sBucket', '#fBucket'], ['#sDim', '#fDim']];
+  let fullRow = null, docs = [];
+  $('#fRes').innerHTML = $('#aRes').innerHTML;
+
+  function showView(full) {
+    $('#viewEquip').hidden = full; $('#viewFull').hidden = !full;
+    window.scrollTo(0, 0);
+  }
+  function setTab(name) {
+    document.querySelectorAll('#fTabs .tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    document.querySelectorAll('.fpane').forEach(p => p.hidden = p.dataset.pane !== name);
+  }
+  $('#openFull').addEventListener('click', () => {
+    carry.forEach(([from, to]) => $(to).value = $(from).value);
+    fullRow = pendingRow;
+    docs = []; renderDocs(); resetMaint();
+    $('#fDropLabel').textContent = 'Drag and drop your file here, or click to browse';
+    document.querySelectorAll('#viewFull .field.invalid').forEach(f => f.classList.remove('invalid'));
+    $('#scrim').classList.remove('open'); pendingRow = null;
+    setTab('basic'); showView(true);
+    $('#fName').focus();
+  });
+  document.querySelectorAll('#fTabs .tab').forEach(t => t.addEventListener('click', () => setTab(t.dataset.tab)));
+  $('#fRes').addEventListener('change', () => {
+    const r = resById($('#fRes').value);
+    $('#fUnit').value = r ? r.unit : ''; $('#fRate').value = r ? r.rate : '';
+  });
+  function leaveFull() { fullRow = null; showView(false); render(); }
+  $('#fCancel').addEventListener('click', leaveFull);
+  $('#fBack').addEventListener('click', leaveFull);
+
+  $('#fDrop').addEventListener('click', () => $('#fPhoto').click());
+  $('#fPhoto').addEventListener('change', () => { if ($('#fPhoto').files[0]) $('#fDropLabel').textContent = $('#fPhoto').files[0].name; });
+
+  function renderDocs() {
+    $('#fDocs').innerHTML = docs.length ? '' : '<div class="empty">No documents yet.</div>';
+    docs.forEach((d, k) => {
+      const el = document.createElement('div');
+      el.className = 'row docs-row';
+      el.innerHTML = `<div>${esc(d)}</div>
+        <div><select style="border:1px solid var(--border);border-radius:4px;padding:7px;width:100%"><option>Warranty</option><option>Insurance</option><option>Manual</option><option>Certification</option></select></div>
+        <div><input type="date" style="border:1px solid var(--border);border-radius:4px;padding:6px;width:100%"></div>
+        <div class="muted">Just now</div>
+        <div><button class="icon-btn" aria-label="Remove"><i data-lucide="x"></i></button></div>`;
+      el.querySelector('button').addEventListener('click', () => { docs.splice(k, 1); renderDocs(); });
+      $('#fDocs').appendChild(el);
+    });
+    lucide.createIcons();
+  }
+  $('#fUpload').addEventListener('click', () => $('#fDocFile').click());
+  $('#fDocFile').addEventListener('change', () => { docs.push(...[...$('#fDocFile').files].map(f => f.name)); $('#fDocFile').value = ''; renderDocs(); });
+
+  function resetMaint() {
+    $('#viewFull .empty-box').innerHTML = `<i data-lucide="workflow"></i><p>No maintenance reminders configured yet. Add rules to get started.</p><button class="btn" id="fAddCond"><i data-lucide="plus"></i> Add Conditions</button>`;
+    $('#fAddCond').addEventListener('click', addCond);
+    lucide.createIcons();
+  }
+  function addCond() {
+    const box = $('#viewFull .empty-box');
+    if (box.querySelector('p')) box.innerHTML = '';
+    const el = document.createElement('div');
+    el.className = 'cond';
+    el.innerHTML = `<select><option>Every</option><option>After</option></select><input type="number" placeholder="250"><select><option>Operating hours</option><option>Days</option><option>Kilometres</option></select><button class="icon-btn" aria-label="Remove"><i data-lucide="x"></i></button>`;
+    el.querySelector('button').addEventListener('click', () => { el.remove(); if (!box.querySelector('.cond')) resetMaint(); });
+    box.appendChild(el);
+    if (!box.querySelector('.add-more')) {
+      const more = document.createElement('button');
+      more.className = 'btn add-more'; more.innerHTML = '<i data-lucide="plus"></i> Add another condition';
+      more.addEventListener('click', addCond);
+      box.appendChild(more);
+    } else box.appendChild(box.querySelector('.add-more'));
+    lucide.createIcons();
+  }
+
+  $('#fSave').addEventListener('click', () => {
+    const name = $('#fName').value.trim(), id = $('#fId').value.trim().toUpperCase();
+    const res = $('#fRes').value, rate = $('#fRate').value;
+    const checks = [['#ff-name', !name], ['#ff-id', !id || attachments.some(a => a.id === id)], ['#ff-res', !res], ['#ff-rate', rate === '']];
+    $('#fIdErr').textContent = id ? 'This ID is already used.' : 'Enter an ID.';
+    checks.forEach(([f, bad]) => $(f).classList.toggle('invalid', bad));
+    if (checks.some(c => c[1])) { setTab('basic'); return; }
+
+    attachments.push({ id, name, res, rate: Number(rate) });
+    const idx = fullRow;
+    rows[idx] = { att: id, rate: Number(rate) };
+    markDirty(); fullRow = null;
+    showView(false); render(idx);
+    const extras = [docs.length && `${docs.length} document${docs.length > 1 ? 's' : ''}`, $('#viewFull .cond') && 'maintenance reminders'].filter(Boolean);
+    showToast(`Attachment ${id} created${extras.length ? ' with ' + extras.join(' and ') : ''} and assigned. Save the Dozer with Update.`, false);
+  });
 
   $('#dlgSave').addEventListener('click', () => {
     const name = $('#aName').value.trim(), id = $('#aId').value.trim().toUpperCase();
