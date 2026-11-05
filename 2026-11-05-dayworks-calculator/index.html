@@ -129,6 +129,11 @@ select.cell{padding:5px 7px;border:1px solid #e2e8f0;border-radius:5px;backgroun
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px}
 .kv dt{color:#64748b}
 .help{color:#64748b;font-size:12px;margin-top:6px;line-height:1.5}
+.tree-h{font-size:13px;font-weight:500;color:#334155;margin:18px 0 6px;display:flex;align-items:center;gap:8px}
+.tree-h.sub{margin-top:10px;font-size:12px;font-weight:600;color:#64748b}
+table.tree tr.inh td{color:#64748b}
+table.tree tr.inh td b{font-weight:500;color:#475569}
+table.tree tr.own td{background:#fffdf7}
 .toast{position:fixed;bottom:20px;right:20px;background:#1e293b;color:#fff;padding:10px 14px;border-radius:8px;font-size:13px;display:none;z-index:300}
 </style>
 </head>
@@ -457,23 +462,7 @@ function renderCalc() {
   else h += `<div class="banner ok"><i class="fas fa-check"></i><div>Every person and plant item on the project has a rate at some level.</div></div>`;
 
   h += `<div class="grid2"><div>`;
-  h += `<div class="card ${editing ? '' : 'ro'}"><div class="hdr" style="margin-bottom:8px"><h2 style="margin:0">Rate lines</h2>${editing ? `<div class="form-row edit-only"><select class="cell" id="addHire"><option value="labour">Labour hire</option><option value="dry">Dry hire</option><option value="wet">Wet hire</option></select><button class="btn sm" onclick="addLine()"><i class="fas fa-plus"></i> Add rate line</button></div>` : ''}</div>
-    <table><thead><tr><th>Hire type</th><th>Applies to</th><th>Level</th><th class="num">Standard</th><th class="num">1.5x</th><th class="num">2x</th><th class="num">Public holiday</th><th class="num">Min hrs</th>${editing ? '<th></th>' : ''}</tr></thead><tbody>`;
-  const sorted = [...v.lines].sort((a, b) => ['labour', 'wet', 'dry'].indexOf(a.hire) - ['labour', 'wet', 'dry'].indexOf(b.hire) || levelRank(b) - levelRank(a));
-  sorted.forEach(l => {
-    const over = TIERS.filter(t => t !== 'std').some(t => Math.abs(l.rates[t] - l.rates.std * MULT[t]) > 0.004);
-    const targetCtl = editing ? targetSelect(l) : `<b>${targetLabel(l)}</b>`;
-    const flat = l.hire === 'dry';
-    h += `<tr><td>${editing ? `<select class="cell" onchange="setLine('${l.id}','hire',this.value)">${Object.entries(HIRE_LABEL).map(([k, lab]) => `<option value="${k}" ${k === l.hire ? 'selected' : ''}>${lab}</option>`).join('')}</select>` : `<span class="pill ${l.hire}">${HIRE_LABEL[l.hire]}</span>`}</td>
-      <td>${targetCtl}</td><td><span class="pill lvl${levelRank(l)}">${levelLabel(l)}</span></td>
-      <td class="num"><input class="cell" type="number" step="0.01" value="${l.rates.std}" onchange="setStd('${l.id}',this.value)">${flat ? `<div class="muted">per ${l.unit}${editing ? ` <a href="#" onclick="setLine('${l.id}','unit','${l.unit === 'hour' ? 'day' : 'hour'}');return false">switch</a>` : ''}</div>` : ''}</td>`;
-    if (flat) h += `<td class="num muted" colspan="3">flat, no tiers</td>`;
-    else ['x15', 'x2', 'ph'].forEach(t => h += `<td class="num"><input class="cell ${Math.abs(l.rates[t] - l.rates.std * MULT[t]) > 0.004 ? 'overridden' : ''}" type="number" step="0.01" value="${round2(l.rates[t])}" onchange="setRate('${l.id}','${t}',this.value)" title="${Math.abs(l.rates[t] - l.rates.std * MULT[t]) > 0.004 ? 'Overridden from the ' + MULT[t] + 'x prefill' : 'Prefilled at ' + MULT[t] + 'x Standard'}"></td>`);
-    h += `<td class="num"><input class="cell" type="number" min="0" step="0.5" value="${l.min}" onchange="setLine('${l.id}','min',Number(this.value))"></td>`;
-    if (editing) h += `<td><button class="btn ghost" title="Remove" onclick="removeLine('${l.id}')"><i class="fas fa-trash"></i></button></td>`;
-    h += `</tr>`;
-  });
-  h += `</tbody></table><div class="help">Entering a Standard rate prefills 1.5x, 2x and Public holiday at 1.5x, 2x and 2.5x. Amber cells have been overwritten. Most specific level wins when a docket is priced: <span class="pill lvl1">Plant item / Person</span> beats <span class="pill lvl2">Role / Charge resource</span> beats <span class="pill lvl3">Hire-type default</span>. Minimum hours apply per resource per day; 0 means none.</div></div>`;
+  h += renderRateTree(v, editing);
 
   // triggers
   h += `<div class="card ${editing ? '' : 'ro'} trig"><h2>Tier triggers</h2><table><thead><tr><th>Day type</th><th class="num">Standard</th><th class="num">1.5x</th><th class="num">2x</th><th class="num">Public holiday</th><th></th></tr></thead><tbody>`;
@@ -492,6 +481,107 @@ function renderCalc() {
   h += `</div></div>`;
   el.innerHTML = h;
 }
+
+/* ── Rate card as a tree: default > role / charge resource > person / plant item ── */
+function lineAt(v, hire, level, target) { return v.lines.find(l => l.hire === hire && l.level === level && (level === 'default' || l.target === target)) || null; }
+function srcLabel(hire, line, ownLevel) {
+  if (!line) return '<span class="pill bad">No rate</span>';
+  if (line.hire === hire && line.level === ownLevel) return '<span class="pill lvl1">Own rate</span>';
+  if (line.hire !== hire) return '<span class="pill lvl2">from labour hire (' + (line.level === 'default' ? 'default' : line.level === 'resource' ? line.target : 'own rate') + ')</span>';
+  if (line.level === 'default') return '<span class="pill lvl3">from ' + HIRE_LABEL[hire].toLowerCase() + ' default</span>';
+  return '<span class="pill lvl2">from ' + line.target + '</span>';
+}
+function rateCells(line, own, editing, flat) {
+  if (!line) return flat ? '<td class="num muted">-</td><td></td><td class="num muted">-</td>' : '<td class="num muted" colspan="4">-</td><td class="num muted">-</td>';
+  let h = '';
+  const cell = (t) => {
+    const val = round2(line.rates[t]);
+    if (own && editing) {
+      if (t === 'std') return `<td class="num"><input class="cell" type="number" step="0.01" value="${val}" onchange="setStd('${line.id}',this.value)"></td>`;
+      const ov = Math.abs(line.rates[t] - line.rates.std * MULT[t]) > 0.004;
+      return `<td class="num"><input class="cell ${ov ? 'overridden' : ''}" type="number" step="0.01" value="${val}" onchange="setRate('${line.id}','${t}',this.value)" title="${ov ? 'Overwritten from the ' + MULT[t] + 'x prefill' : 'Prefilled at ' + MULT[t] + 'x Standard'}"></td>`;
+    }
+    return `<td class="num ${own ? '' : 'muted'} mono">${money(val)}</td>`;
+  };
+  if (flat) {
+    h += cell('std');
+    h += `<td class="muted small">per ${line.unit}${own && editing ? ` · <a href="#" onclick="setLine('${line.id}','unit','${line.unit === 'hour' ? 'day' : 'hour'}');return false">switch</a>` : ''}</td>`;
+  } else TIERS.forEach(t => h += cell(t));
+  h += own && editing ? `<td class="num"><input class="cell" style="width:60px" type="number" min="0" step="0.5" value="${line.min}" onchange="setLine('${line.id}','min',Number(this.value))"></td>` : `<td class="num ${own ? '' : 'muted'}">${line.min}h</td>`;
+  return h;
+}
+function treeRow(o) {
+  const pad = 10 + o.indent * 22;
+  const icon = o.indent === 0 ? 'fa-layer-group' : o.indent === 1 ? (o.hire === 'labour' || o.isPerson ? 'fa-id-badge' : 'fa-tags') : (o.hire === 'labour' ? 'fa-user' : 'fa-truck-pickup');
+  let act = '';
+  if (o.editing) {
+    if (o.own) act = `<button class="btn ghost" title="Remove this rate; the row inherits again" onclick="clearAt('${o.line.id}')"><i class="fas fa-rotate-left"></i> inherit</button>`;
+    else act = `<button class="btn sm" onclick="overrideAt('${o.hire}','${o.ownLevel}','${o.target || ''}')"><i class="fas fa-pen"></i> ${o.line ? 'Set own rate' : 'Add rate'}</button>`;
+  }
+  return `<tr class="${o.own ? 'own' : 'inh'}"><td style="padding-left:${pad}px"><i class="fas ${icon} muted" style="width:16px"></i> <b>${o.label}</b>${o.sub ? ` <span class="muted small">${o.sub}</span>` : ''}</td><td>${srcLabel(o.hire, o.line, o.ownLevel)}</td>${rateCells(o.line, o.own, o.editing, o.flat)}${o.editing ? `<td style="white-space:nowrap">${act}</td>` : ''}</tr>`;
+}
+function renderRateTree(v, editing) {
+  const head = (flat) => `<thead><tr><th style="width:34%">Applies to</th><th>Rate comes from</th>${flat ? '<th class="num">Rate</th><th></th>' : '<th class="num">Standard</th><th class="num">1.5x</th><th class="num">2x</th><th class="num">Public holiday</th>'}<th class="num">Min hrs</th>${editing ? '<th></th>' : ''}</tr></thead>`;
+  let h = `<div class="card ${editing ? '' : 'ro'}"><h2>Rate card</h2><div class="help" style="margin:0 0 12px">Each hire type is a tree. A rate set on a row applies to everything under it until a lower row sets its own, and the most specific row wins when a docket is priced. Grey rows inherit from the row above them; <span class="pill lvl1">Own rate</span> rows are set here.</div>`;
+
+  h += `<h3 class="tree-h"><span class="pill labour">Labour hire</span> own people charged out on their own, tiered by the person's hours</h3><table class="tree">${head(false)}<tbody>`;
+  const ld = lineAt(v, 'labour', 'default');
+  h += treeRow({ label: 'All labour hire', sub: 'default for every person', indent: 0, line: ld, own: !!ld, ownLevel: 'default', hire: 'labour', editing });
+  ROLES.forEach(role => {
+    const rl = lineAt(v, 'labour', 'resource', role);
+    h += treeRow({ label: role, sub: 'role', indent: 1, line: rl || ld, own: !!rl, ownLevel: 'resource', hire: 'labour', target: role, editing });
+    PEOPLE.filter(p => p.role === role).forEach(p => {
+      const pl = lineAt(v, 'labour', 'item', p.id);
+      h += treeRow({ label: p.name, indent: 2, line: pl || rl || ld, own: !!pl, ownLevel: 'item', hire: 'labour', target: p.id, editing });
+    });
+  });
+  h += `</tbody></table>`;
+
+  h += `<h3 class="tree-h"><span class="pill wet">Wet hire</span> plant with operator on one docket line, both tiered by the operator's hours</h3><table class="tree">${head(false)}<tbody>`;
+  const wd = lineAt(v, 'wet', 'default');
+  h += treeRow({ label: 'All wet-hire plant', sub: 'default for every plant item', indent: 0, line: wd, own: !!wd, ownLevel: 'default', hire: 'wet', editing });
+  RESOURCES.forEach(res => {
+    const rl = lineAt(v, 'wet', 'resource', res);
+    h += treeRow({ label: res, sub: 'charge resource', indent: 1, line: rl || wd, own: !!rl, ownLevel: 'resource', hire: 'wet', target: res, editing });
+    PLANT.filter(p => p.resource === res).forEach(p => {
+      const il = lineAt(v, 'wet', 'item', p.id);
+      h += treeRow({ label: p.id + ' ' + p.name, indent: 2, line: il || rl || wd, own: !!il, ownLevel: 'item', hire: 'wet', target: p.id, editing });
+    });
+  });
+  h += `</tbody></table>`;
+  h += `<h4 class="tree-h sub">Operators on wet hire <span class="muted small" style="font-weight:400">· the person's charge on a wet-hire line. Uses the person's labour-hire rate unless an operator rate is set here.</span></h4><table class="tree">${head(false)}<tbody>`;
+  PEOPLE.forEach(p => {
+    const ol = lineAt(v, 'wet', 'item', p.id);
+    h += treeRow({ label: p.name, sub: p.role, indent: 1, isPerson: true, line: resolvePerson(v, 'wet', p.id), own: !!ol, ownLevel: 'item', hire: 'wet', target: p.id, editing });
+  });
+  h += `</tbody></table>`;
+
+  h += `<h3 class="tree-h"><span class="pill dry">Dry hire</span> plant only, flat rate, no tiers</h3><table class="tree">${head(true)}<tbody>`;
+  const dd = lineAt(v, 'dry', 'default');
+  h += treeRow({ label: 'All dry-hire plant', sub: 'default for every plant item', indent: 0, line: dd, own: !!dd, ownLevel: 'default', hire: 'dry', editing, flat: true });
+  RESOURCES.forEach(res => {
+    const rl = lineAt(v, 'dry', 'resource', res);
+    h += treeRow({ label: res, sub: 'charge resource', indent: 1, line: rl || dd, own: !!rl, ownLevel: 'resource', hire: 'dry', target: res, editing, flat: true });
+    PLANT.filter(p => p.resource === res).forEach(p => {
+      const il = lineAt(v, 'dry', 'item', p.id);
+      h += treeRow({ label: p.id + ' ' + p.name, indent: 2, line: il || rl || dd, own: !!il, ownLevel: 'item', hire: 'dry', target: p.id, editing, flat: true });
+    });
+  });
+  h += `</tbody></table>`;
+  h += `<div class="help">Entering a Standard rate prefills 1.5x, 2x and Public holiday at 1.5x, 2x and 2.5x; amber cells have been overwritten. Minimum hours apply per resource per day; 0 means none. A rate on a role or charge resource survives Remove Resources (VAR-22888) because the person or plant item still carries that role or charge resource.</div></div>`;
+  return h;
+}
+function overrideAt(hire, level, target) {
+  const w = working();
+  let eff = null;
+  if (hire === 'labour') eff = level === 'default' ? null : level === 'resource' ? lineAt(w, 'labour', 'default') : resolvePerson(w, 'labour', target);
+  else if (hire === 'wet' && personById(target)) eff = resolvePerson(w, 'wet', target);
+  else eff = level === 'default' ? null : level === 'resource' ? lineAt(w, hire, 'default') : resolvePlant(w, hire, target);
+  const nl = L(hire, level, target || null, eff ? clone(eff.rates) : rates(hire === 'dry' ? 100 : 60), eff ? eff.min : 4, eff ? eff.unit : 'hour');
+  w.lines.push(nl); mark();
+}
+function clearAt(id) { removeLine(id); }
+
 function round2(n) { return Math.round(n * 100) / 100; }
 function describeTrig(trig, dt) { return tierOrder(trig, dt).map(([t, hrs]) => (hrs === Infinity ? 'rest' : hrs + 'h') + ' at ' + TIER_LABEL[t]).join(', then '); }
 function targetSelect(l) {

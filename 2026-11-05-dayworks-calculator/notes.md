@@ -8,10 +8,13 @@ Live: https://varicon-naxa.github.io/prototypes/2026-11-05-dayworks-calculator/
 
 Three tabs on a project's Dayworks section (project "Riverside Rd Upgrade", NSW, last issued claim #3 on 25/10/2026).
 
-1. **Dayworks Calculator.** Rate lines with hire type (Labour / Dry / Wet), four explicit tier rates prefilled at
+1. **Dayworks Calculator.** The rate card is a tree per hire type: hire-type default, then role or charge
+   resource, then person or plant item. Every row shows its effective rate and where it comes from (own rate, or
+   inherited from the row above), and any row can set its own rate or go back to inheriting. Operator rates sit
+   in their own table under Wet hire beside each person's labour-hire rate. Four explicit tier rates prefilled at
    1x / 1.5x / 2x / 2.5x of Standard and editable (overridden cells go amber and survive a later Standard change),
-   minimum hours (default 4), and the mapping level of each line (hire-type default, role or charge resource,
-   specific plant item or person). An Unmapped banner at the top. The tier-trigger table with the ticket defaults,
+   minimum hours (default 4). (Reworked 2026-11-05 evening: the first cut was a flat list with a single
+   "Applies to" dropdown, which Alec found confusing because role, resource and person rates work side by side.) An Unmapped banner at the top. The tier-trigger table with the ticket defaults,
    editable ("8", "rest" or blank per cell). Save asks for an effective-from date (default today) and rejects one
    before the last issued claim with the ticket's message. Version list; previous versions open read-only.
    The role switch in the top bar shows the read-only view for site supervisor / site engineer.
