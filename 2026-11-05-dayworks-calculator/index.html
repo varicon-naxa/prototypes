@@ -281,7 +281,7 @@ function dayType(date) {
   const d = new Date(date + 'T00:00:00').getDay();
   return d === 0 ? 'sun' : d === 6 ? 'sat' : 'weekday';
 }
-function addDays(date, n) { const d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
+function addDays(date, n) { const d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() + n); const z = x => String(x).padStart(2, '0'); return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()); }
 function toMin(t) { const [h, m] = t.split(':').map(Number); return h * 60 + m; }
 function fmtH(h) { return (Math.round(h * 100) / 100).toString(); }
 function money(v) { return '$' + v.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -353,7 +353,7 @@ function priceDocket(docket) {
         const name = key.startsWith('P:') ? personById(key.slice(2)).name : key.slice(2);
         const first = docket.lines.indexOf(a.line) < docket.lines.indexOf(b.line) ? a : b;
         const second = first === a ? b : a;
-        const msg = name + ' is already charged on the ' + HIRE_LABEL[first.line.hire].toLowerCase() + ' line for these hours';
+        const msg = name + ' is already charged on the ' + HIRE_LABEL[first.line.hire].toLowerCase().replace(' ', '-') + ' line for these hours';
         if (!flaggedLines.has(second.line.id + msg)) { flaggedLines.add(second.line.id + msg); res.flags.push({ lineId: second.line.id, msg }); }
       }
     }
@@ -600,7 +600,7 @@ function renderExamples() {
   v = lineValue('DW-1047', 0); push('Wet-hire 20t excavator (wet $180/$270/$360) with operator Sam ($80/$120/$160) for 9h on a Monday', 'plant $1,710 + Sam $760 = $2,470', 2470, v.value, 'DW-1047', [v.parts[0].value, v.parts[1].value]);
   ex[ex.length - 1].detail = 'plant ' + money(v.parts[0].value) + ', Sam ' + money(v.parts[1].value);
   const p48 = priceDocket(dockets.find(d => d.id === 'DW-1048'));
-  const flag48 = p48.flags.find(f => f.msg === 'Sam Patel is already charged on the wet hire line for these hours');
+  const flag48 = p48.flags.find(f => f.msg === 'Sam Patel is already charged on the wet-hire line for these hours');
   ex.push({ given: 'Sam on the wet-hire line 7:00 to 16:00, then a labour-hire line for Sam 7:00 to 16:00 is added', then: 'flags "Sam is already charged on the wet-hire line for these hours" and cannot be approved', expectedText: 'flagged, approve blocked', actualText: (flag48 ? '"' + flag48.msg + '"' : 'no flag') + ', approve ' + (p48.approvable ? 'enabled' : 'blocked'), pass: !!flag48 && !p48.approvable, did: 'DW-1048' });
   const p49 = priceDocket(dockets.find(d => d.id === 'DW-1049'));
   const sam49 = p49.lines[1].parts[0];
@@ -618,7 +618,7 @@ function renderExamples() {
   const rl = d54.lines.map(l => l.parts[0].rows[0].rate);
   ex.push({ given: 'Labour-hire default $65, Leading Hand role rate $70, person rate for Sam $85', then: 'Sam (a Leading Hand) uses $85; another Leading Hand with no person rate uses $70; a person whose role has no rate uses $65', expectedText: '$85 / $70 / $65', actualText: rl.map(money).join(' / ') + ' (Sam / Priya / Jo)', pass: rl[0] === 85 && rl[1] === 70 && rl[2] === 65, did: 'DW-1054' });
   const d55 = priceDocket(dockets.find(d => d.id === 'DW-1055'));
-  ex.push({ given: 'EX-07 on a dry-hire line 7:00 to 12:00 and a wet-hire line 9:00 to 15:00 (not in the ticket; the plant half of the rule)', then: 'flags "EX-07 is already charged on the dry hire line for these hours" and cannot be approved', expectedText: 'flagged, approve blocked', actualText: (d55.flags[0] ? '"' + d55.flags[0].msg + '"' : 'no flag') + ', approve ' + (d55.approvable ? 'enabled' : 'blocked'), pass: d55.flags.length === 1 && !d55.approvable, did: 'DW-1055' });
+  ex.push({ given: 'EX-07 on a dry-hire line 7:00 to 12:00 and a wet-hire line 9:00 to 15:00 (not in the ticket; the plant half of the rule)', then: 'flags "EX-07 is already charged on the dry-hire line for these hours" and cannot be approved', expectedText: 'flagged, approve blocked', actualText: (d55.flags[0] ? '"' + d55.flags[0].msg + '"' : 'no flag') + ', approve ' + (d55.approvable ? 'enabled' : 'blocked'), pass: d55.flags.length === 1 && !d55.approvable, did: 'DW-1055' });
   const d56 = priceDocket(dockets.find(d => d.id === 'DW-1056'));
   ex.push({ given: 'Dry-hire roller RL-03 with no rate at any level (not in the ticket; the unmapped rule)', then: 'prices at $0, flagged, blocks approval', expectedText: '$0.00, approve blocked', actualText: money(d56.total) + ', approve ' + (d56.approvable ? 'enabled' : 'blocked'), pass: d56.total === 0 && !d56.approvable, did: 'DW-1056' });
 
