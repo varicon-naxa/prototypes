@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dayworks Calculator - Riverside Rd Upgrade</title>
+<!--
+  Dayworks Calculator prototype (2026-11-05) for Jira story VAR-23035.
+
+  The customer-owned in-app rate card: rate lines per hire type (labour / dry / wet),
+  four explicit tier rates (Standard, 1.5x, 2x, Public holiday), minimum hours,
+  three mapping levels (hire-type default < resource < specific item or person),
+  an editable tier-trigger table, effective-from dated versions, admin/PM edit only.
+
+  The Dockets screen prices daywork dockets from the version in effect on the docket
+  date, shows the tier split per line, and flags double charging of a person or plant
+  item across lines with overlapping hours (blocks approve).
+
+  The Worked examples screen re-computes every example in VAR-23035 from the same
+  pricing engine and shows pass/fail against the stated number.
+
+  See notes.md for the open decisions this surfaced.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#333;display:flex;min-height:100vh;font-size:14px}
+button,input,select{font-family:inherit;font-size:13px}
+.sidebar{width:240px;background:#1b2a4a;color:#fff;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;overflow-y:auto}
+.sidebar-header{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,#f5a623,#f7c948);border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#1b2a4a}
+.sidebar-org{padding:12px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.08)}
+.org-avatar{width:28px;height:28px;background:#3b5998;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+.sidebar-nav{padding:8px 0;flex:1}
+.nav-item{display:flex;align-items:center;gap:12px;padding:10px 16px;font-size:14px;color:rgba(255,255,255,.75);cursor:pointer}
+.nav-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav-item.active{background:#f5a623;color:#fff;font-weight:600;border-radius:0 6px 6px 0;margin-right:8px}
+.nav-item i{width:20px;text-align:center;font-size:15px}
+.nav-sub{padding-left:48px;font-size:13px}
+.nav-group{padding:14px 16px 4px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.4)}
+.main{margin-left:240px;flex:1;display:flex;flex-direction:column;min-height:100vh;min-width:0}
+.topbar{background:#fff;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:50}
+.crumb{color:#64748b;font-size:13px}.crumb b{color:#1e293b;font-weight:600}
+.role{display:flex;align-items:center;gap:8px;font-size:13px;color:#475569}
+.role select{padding:5px 8px;border:1px solid #cbd5e1;border-radius:6px;background:#fff}
+.content{padding:20px 24px 60px;max-width:1280px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid #e2e8f0;margin-bottom:18px}
+.tab{padding:10px 16px;cursor:pointer;color:#64748b;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.active{color:#1b2a4a;border-color:#f5a623;font-weight:600}
+h1{font-size:20px;font-weight:600;color:#1e293b}
+h2{font-size:15px;font-weight:600;color:#1e293b;margin-bottom:10px}
+.hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap}
+.sub{color:#64748b;font-size:13px;margin-top:3px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:16px}
+.btn{padding:7px 12px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;font-weight:500;color:#1e293b;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:#f8fafc}
+.btn.primary{background:#f5a623;border-color:#f5a623;color:#fff}
+.btn.primary:hover{background:#e0961b}
+.btn.danger{color:#b91c1c;border-color:#fecaca}
+.btn.sm{padding:4px 8px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.ghost{border:none;background:transparent;color:#64748b;padding:4px 6px}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#64748b;text-align:left;padding:8px 10px;border-bottom:1px solid #e2e8f0;font-weight:600;white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+input.cell{width:84px;padding:5px 7px;border:1px solid #e2e8f0;border-radius:5px;text-align:right;background:#fff}
+input.cell.wide{width:120px;text-align:left}
+input.cell.overridden{border-color:#f5a623;background:#fffbeb}
+select.cell{padding:5px 7px;border:1px solid #e2e8f0;border-radius:5px;background:#fff}
+.ro input.cell,.ro select.cell{border-color:transparent;background:transparent;pointer-events:none;color:#1e293b}
+.ro .edit-only{display:none !important}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+.pill.labour{background:#dbeafe;color:#1d4ed8}
+.pill.dry{background:#f1f5f9;color:#475569}
+.pill.wet{background:#dcfce7;color:#15803d}
+.pill.lvl1{background:#fef3c7;color:#92400e}
+.pill.lvl2{background:#ede9fe;color:#6d28d9}
+.pill.lvl3{background:#f1f5f9;color:#64748b}
+.pill.ok{background:#dcfce7;color:#15803d}
+.pill.bad{background:#fee2e2;color:#b91c1c}
+.pill.lock{background:#e2e8f0;color:#334155}
+.pill.ver{background:#e0f2fe;color:#075985}
+.banner{border-radius:8px;padding:12px 14px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start;font-size:13px}
+.banner.warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+.banner.err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+.banner.info{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a}
+.banner.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}
+.banner i{margin-top:2px}
+.grid2{display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start}
+.grid-dk{display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start}
+.vlist .v{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px;cursor:pointer}
+.vlist .v:hover{background:#f8fafc}
+.vlist .v.sel{font-weight:600}
+.vlist .v:last-child{border-bottom:none}
+.muted{color:#64748b;font-size:12px}
+.small{font-size:12px}
+.mono{font-variant-numeric:tabular-nums}
+.dk{padding:10px 12px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:8px;cursor:pointer;background:#fff}
+.dk:hover{border-color:#cbd5e1}
+.dk.sel{border-color:#f5a623;box-shadow:0 0 0 2px #fde68a}
+.dk .t{font-weight:600;font-size:13px;display:flex;justify-content:space-between;gap:6px}
+.dk .d{color:#64748b;font-size:12px;margin-top:2px}
+.line{border:1px solid #e2e8f0;border-radius:8px;margin-bottom:12px;overflow:hidden}
+.line.flag{border-color:#fca5a5}
+.line-h{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;flex-wrap:wrap}
+.line-h .who{font-weight:600}
+.line-h .tot{margin-left:auto;font-weight:600;font-size:15px}
+.line-b{padding:10px 14px}
+.split{display:flex;gap:16px;flex-wrap:wrap}
+.split .blk{min-width:260px;flex:1}
+.split .blk h4{font-size:12px;color:#64748b;font-weight:600;margin-bottom:4px}
+.split table td,.split table th{padding:4px 8px;font-size:12px}
+.flagmsg{padding:8px 14px;background:#fef2f2;color:#991b1b;font-size:13px;border-top:1px solid #fecaca;display:flex;gap:8px;align-items:center}
+.modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:200}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:10px;padding:20px;width:440px;max-width:95vw;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.modal h3{font-size:16px;margin-bottom:8px}
+.field{margin:12px 0}.field label{display:block;font-size:12px;color:#64748b;margin-bottom:4px;font-weight:600}
+.field input,.field select{width:100%;padding:7px 9px;border:1px solid #cbd5e1;border-radius:6px}
+.err{color:#b91c1c;font-size:12px;margin-top:6px}
+.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.form-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.form-row .field{margin:0;flex:1;min-width:120px}
+.trig input.cell{width:64px}
+.ex-pass{color:#15803d;font-weight:600}.ex-fail{color:#b91c1c;font-weight:600}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px}
+.kv dt{color:#64748b}
+.help{color:#64748b;font-size:12px;margin-top:6px;line-height:1.5}
+.toast{position:fixed;bottom:20px;right:20px;background:#1e293b;color:#fff;padding:10px 14px;border-radius:8px;font-size:13px;display:none;z-index:300}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="sidebar-header"><div class="logo-icon">V</div><i class="fas fa-angles-left" style="color:rgba(255,255,255,.5)"></i></div>
+  <div class="sidebar-org"><div class="org-avatar">CC</div><span>Cookie's Civil</span></div>
+  <nav class="sidebar-nav">
+    <div class="nav-item"><i class="fas fa-house"></i> Dashboard</div>
+    <div class="nav-item"><i class="fas fa-diagram-project"></i> Projects</div>
+    <div class="nav-group">Riverside Rd Upgrade</div>
+    <div class="nav-item nav-sub">Budget</div>
+    <div class="nav-item nav-sub">Variations</div>
+    <div class="nav-item nav-sub">Progress claims</div>
+    <div class="nav-item nav-sub active" style="margin-left:0;padding-left:48px">Dayworks</div>
+    <div class="nav-item nav-sub">Site diary</div>
+    <div class="nav-item nav-sub">Timesheets</div>
+    <div class="nav-item"><i class="fas fa-truck-pickup"></i> Plant &amp; Equipment</div>
+    <div class="nav-item"><i class="fas fa-users"></i> Workers</div>
+    <div class="nav-item"><i class="fas fa-gear"></i> Settings</div>
+  </nav>
+</aside>
+<div class="main">
+  <div class="topbar">
+    <div class="crumb">Projects / <b>Riverside Rd Upgrade</b> / Dayworks <span class="muted" style="margin-left:8px">NSW · last issued claim #3 on 25/10/2026</span></div>
+    <div class="role"><i class="fas fa-user-circle"></i> Viewing as
+      <select id="roleSel" onchange="setRole(this.value)">
+        <option value="admin">Admin (edit)</option>
+        <option value="pm">Project manager (edit)</option>
+        <option value="super">Site supervisor (read-only)</option>
+        <option value="eng">Site engineer (read-only)</option>
+      </select>
+    </div>
+  </div>
+  <div class="content">
+    <div class="tabs">
+      <div class="tab active" data-tab="calc" onclick="showTab('calc')">Dayworks Calculator</div>
+      <div class="tab" data-tab="dockets" onclick="showTab('dockets')">Daywork dockets</div>
+      <div class="tab" data-tab="examples" onclick="showTab('examples')">Worked examples (VAR-23035)</div>
+    </div>
+    <div id="tab-calc"></div>
+    <div id="tab-dockets" style="display:none"></div>
+    <div id="tab-examples" style="display:none"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="saveModal">
+  <div class="modal">
+    <h3>Save calculator version</h3>
+    <p class="muted">Saving creates a new version. Dockets dated on or after the effective-from date price from it. Dockets on an issued claim or approved variation never change.</p>
+    <div class="field"><label>Effective from</label><input type="date" id="effFrom"></div>
+    <div class="err" id="effErr"></div>
+    <div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="confirmSave()">Save version</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ───────────────────────── Project data ───────────────────────── */
+const TODAY = '2026-11-05';
+const LAST_CLAIM = '2026-10-25';
+const PROJECT_STATE = 'NSW';
+const PUBLIC_HOLIDAYS = { '2026-10-05': 'Labour Day (NSW)', '2026-12-25': 'Christmas Day', '2026-12-26': 'Boxing Day', '2027-01-01': "New Year's Day", '2027-01-26': 'Australia Day' };
+
+const PEOPLE = [
+  { id: 'p-sam',   name: 'Sam Patel',    role: 'Leading Hand' },
+  { id: 'p-priya', name: 'Priya Nguyen', role: 'Leading Hand' },
+  { id: 'p-jo',    name: 'Jo Walker',    role: 'Labourer' },
+  { id: 'p-mia',   name: 'Mia Torres',   role: 'Traffic Controller' },
+];
+const PLANT = [
+  { id: 'EX-07', name: 'Excavator 20t Cat 320', resource: 'Excavator 20t' },
+  { id: 'EX-09', name: 'Excavator 20t Komatsu PC210', resource: 'Excavator 20t' },
+  { id: 'LD-02', name: 'Loader 12t Volvo L90', resource: 'Loader 12t' },
+  { id: 'RL-03', name: 'Roller 12t Dynapac', resource: 'Roller 12t' },
+  { id: 'WC-04', name: 'Water cart 10kL', resource: 'Water cart 10kL' },
+];
+const ROLES = [...new Set(PEOPLE.map(p => p.role))];
+const RESOURCES = [...new Set(PLANT.map(p => p.resource))];
+const TIERS = ['std', 'x15', 'x2', 'ph'];
+const TIER_LABEL = { std: 'Standard', x15: '1.5x', x2: '2x', ph: 'Public holiday' };
+const MULT = { std: 1, x15: 1.5, x2: 2, ph: 2.5 };
+const HIRE_LABEL = { labour: 'Labour hire', dry: 'Dry hire', wet: 'Wet hire' };
+const DAYTYPE_LABEL = { weekday: 'Monday to Friday', sat: 'Saturday', sun: 'Sunday', ph: 'Public holiday' };
+
+function defaultTriggers() {
+  // per day type, hours allowed in each tier in order; 'rest' = everything remaining; null = tier not used
+  return {
+    weekday: { std: 8, x15: 2, x2: 'rest', ph: null },
+    sat:     { std: null, x15: 2, x2: 'rest', ph: null },
+    sun:     { std: null, x15: null, x2: 'rest', ph: null },
+    ph:      { std: null, x15: null, x2: null, ph: 'rest' },
+  };
+}
+function rates(std, x15, x2, ph) { return { std, x15: x15 ?? std * 1.5, x2: x2 ?? std * 2, ph: ph ?? std * 2.5 }; }
+let nextLineId = 100;
+function L(hire, level, target, r, min = 4, unit = 'hour') { return { id: 'L' + (nextLineId++), hire, level, target, rates: r, min, unit }; }
+
+// level: 'default' (hire type), 'resource' (role or plant charge resource), 'item' (plant item id or person id)
+function v1Lines() {
+  return [
+    L('labour', 'default',  null,             rates(65)),
+    L('labour', 'resource', 'Leading Hand',   rates(70)),
+    L('labour', 'item',     'p-sam',          rates(85)),
+    L('wet',    'item',     'p-sam',          rates(80)),
+    L('wet',    'default',  null,             rates(150)),
+    L('wet',    'resource', 'Excavator 20t',  rates(180)),
+    L('wet',    'item',     'EX-07',          rates(200)),
+    L('dry',    'resource', 'Excavator 20t',  rates(120), 4, 'hour'),
+    L('dry',    'resource', 'Loader 12t',     rates(95), 4, 'hour'),
+  ];
+}
+const versions = [
+  { n: 1, effectiveFrom: '2026-10-01', savedBy: 'Alec Neill', savedOn: '2026-09-28', triggers: defaultTriggers(), lines: v1Lines() },
+];
+(function makeV2() {
+  const lines = v1Lines();
+  const lh = lines.find(l => l.hire === 'labour' && l.level === 'resource' && l.target === 'Leading Hand');
+  lh.rates = rates(75);
+  versions.push({ n: 2, effectiveFrom: '2026-11-01', savedBy: 'Dana Whitfield (PM)', savedOn: '2026-10-30', triggers: defaultTriggers(), lines });
+})();
+
+/* Dockets. Each line: hire, person, plant, date, start, end, breakH. end <= start means it crosses midnight. */
+function DL(hire, o) { return Object.assign({ hire, breakH: 0 }, o); }
+const dockets = [
+  { id: 'DW-1041', title: 'Tue labourer 10.5h (example 1)', date: '2026-10-20', note: 'Ticket example: 8h x $70 + 2h x $105 + 0.5h x $140 = $840', lines: [DL('labour', { person: 'p-priya', date: '2026-10-20', start: '06:00', end: '17:00', breakH: 0.5 })] },
+  { id: 'DW-1042', title: 'Tue labourer 8h, no overtime', date: '2026-10-20', note: 'Ticket example: 8h x $70 = $560', lines: [DL('labour', { person: 'p-priya', date: '2026-10-20', start: '06:00', end: '14:30', breakH: 0.5 })] },
+  { id: 'DW-1043', title: 'Saturday labourer 5h', date: '2026-10-24', note: 'Ticket example: 2h x $105 + 3h x $140 = $630', lines: [DL('labour', { person: 'p-priya', date: '2026-10-24', start: '07:00', end: '12:00' })] },
+  { id: 'DW-1044', title: 'Public holiday labourer 4h', date: '2026-10-05', note: 'Ticket example: 4h x $175 = $700 (Labour Day NSW)', lines: [DL('labour', { person: 'p-priya', date: '2026-10-05', start: '07:00', end: '11:00' })] },
+  { id: 'DW-1045', title: 'Monday labourer 2.5h (minimum)', date: '2026-10-19', note: 'Ticket example: 4h minimum, 4h x $70 = $280', lines: [DL('labour', { person: 'p-priya', date: '2026-10-19', start: '07:00', end: '09:30' })] },
+  { id: 'DW-1046', title: 'Dry-hire excavator 2.5h (minimum)', date: '2026-10-19', note: 'Ticket example: 4h x $120 = $480', lines: [DL('dry', { plant: 'EX-07', date: '2026-10-19', start: '07:00', end: '09:30' })] },
+  { id: 'DW-1047', title: 'Wet-hire excavator + Sam 9h', date: '2026-10-19', note: 'Ticket example: plant $1,710 + Sam $760 = $2,470', lines: [DL('wet', { plant: 'EX-09', person: 'p-sam', date: '2026-10-19', start: '07:00', end: '16:00' })] },
+  { id: 'DW-1048', title: 'Sam on wet hire and labour hire, same hours', date: '2026-10-21', note: 'Ticket example: flagged, cannot be approved', lines: [DL('wet', { plant: 'EX-09', person: 'p-sam', date: '2026-10-21', start: '07:00', end: '16:00' }), DL('labour', { person: 'p-sam', date: '2026-10-21', start: '07:00', end: '16:00' })] },
+  { id: 'DW-1049', title: 'Sam wet hire 7-12 then labour hire 12-16', date: '2026-10-26', note: 'Ticket example: both price, tier over the combined 9h, nothing flagged', lines: [DL('wet', { plant: 'EX-09', person: 'p-sam', date: '2026-10-26', start: '07:00', end: '12:00' }), DL('labour', { person: 'p-sam', date: '2026-10-26', start: '12:00', end: '16:00' })] },
+  { id: 'DW-1050', title: 'Friday 18:00 to Saturday 02:00', date: '2026-10-23', note: 'Ticket example: Fri 6h x $70 = $420 + Sat 2h x $105 = $210 = $630', lines: [DL('labour', { person: 'p-priya', date: '2026-10-23', start: '18:00', end: '02:00' })] },
+  { id: 'DW-1051', title: 'Leading Hand 8h on 28 Oct (v1, $70)', date: '2026-10-28', note: 'Ticket example: priced by the version in effect on 28 Oct', lines: [DL('labour', { person: 'p-priya', date: '2026-10-28', start: '07:00', end: '15:00' })] },
+  { id: 'DW-1052', title: 'Leading Hand 8h on 3 Nov (v2, $75)', date: '2026-11-03', note: 'Ticket example: priced by the version effective 1 Nov', lines: [DL('labour', { person: 'p-priya', date: '2026-11-03', start: '07:00', end: '15:00' })] },
+  { id: 'DW-1038', title: 'Leading Hand 8h on claim #3 (locked)', date: '2026-10-14', claim: 'Claim #3 issued 25/10/2026', lockedValue: 560, lockedVersion: 1, note: 'Ticket example: on an issued claim, never repriced', lines: [DL('labour', { person: 'p-priya', date: '2026-10-14', start: '07:00', end: '15:00' })] },
+  { id: 'DW-1053', title: 'Wet-hire precedence: EX-07, EX-09, LD-02', date: '2026-10-22', note: 'Ticket example: EX-07 uses the $200 item rate, EX-09 the $180 resource rate, LD-02 the $150 wet-hire default', lines: [DL('wet', { plant: 'EX-07', person: 'p-sam', date: '2026-10-22', start: '07:00', end: '15:00' }), DL('wet', { plant: 'EX-09', person: 'p-priya', date: '2026-10-22', start: '07:00', end: '15:00' }), DL('wet', { plant: 'LD-02', person: 'p-jo', date: '2026-10-22', start: '07:00', end: '15:00' })] },
+  { id: 'DW-1054', title: 'Labour-hire precedence: Sam, Priya, Jo', date: '2026-10-27', note: 'Ticket example: Sam uses the $85 person rate, Priya the $70 Leading Hand rate, Jo the $65 labour-hire default', lines: [DL('labour', { person: 'p-sam', date: '2026-10-27', start: '07:00', end: '15:00' }), DL('labour', { person: 'p-priya', date: '2026-10-27', start: '07:00', end: '15:00' }), DL('labour', { person: 'p-jo', date: '2026-10-27', start: '07:00', end: '15:00' })] },
+  { id: 'DW-1055', title: 'EX-07 on dry hire and wet hire, overlapping', date: '2026-10-29', note: 'Plant overlap: flagged, cannot be approved', lines: [DL('dry', { plant: 'EX-07', date: '2026-10-29', start: '07:00', end: '12:00' }), DL('wet', { plant: 'EX-07', person: 'p-priya', date: '2026-10-29', start: '09:00', end: '15:00' })] },
+  { id: 'DW-1056', title: 'Dry-hire roller with no rate (unmapped)', date: '2026-10-30', note: 'No rate at any level: prices at $0, flagged, cannot be approved', lines: [DL('dry', { plant: 'RL-03', date: '2026-10-30', start: '07:00', end: '15:00' })] },
+];
+dockets.forEach(d => d.lines.forEach((l, i) => l.id = d.id + '-' + (i + 1)));
+dockets.sort((a, b) => a.date < b.date ? 1 : -1);
+
+/* ───────────────────────── Pricing engine ───────────────────────── */
+function dayType(date) {
+  if (PUBLIC_HOLIDAYS[date]) return 'ph';
+  const d = new Date(date + 'T00:00:00').getDay();
+  return d === 0 ? 'sun' : d === 6 ? 'sat' : 'weekday';
+}
+function addDays(date, n) { const d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
+function toMin(t) { const [h, m] = t.split(':').map(Number); return h * 60 + m; }
+function fmtH(h) { return (Math.round(h * 100) / 100).toString(); }
+function money(v) { return '$' + v.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtDate(d) { const [y, m, dd] = d.split('-'); return dd + '/' + m + '/' + y; }
+function dayName(d) { return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' }); }
+function versionFor(date) {
+  const eligible = versions.filter(v => v.effectiveFrom <= date).sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+  return eligible[0] || null;
+}
+function tierOrder(triggers, dt) { // [[tier, hoursOrInfinity], ...]
+  const t = triggers[dt]; const out = [];
+  for (const tier of TIERS) { const v = t[tier]; if (v === null || v === '' || v === undefined) continue; out.push([tier, v === 'rest' ? Infinity : Number(v)]); }
+  if (!out.length) out.push(['std', Infinity]);
+  return out;
+}
+function lowestTier(triggers, dt) { return tierOrder(triggers, dt)[0][0]; }
+function personById(id) { return PEOPLE.find(p => p.id === id); }
+function plantById(id) { return PLANT.find(p => p.id === id); }
+function targetLabel(line) {
+  if (line.level === 'default') return 'All ' + HIRE_LABEL[line.hire].toLowerCase() + (line.hire === 'labour' ? ' people' : ' plant');
+  if (line.level === 'resource') return line.target;
+  const p = personById(line.target); if (p) return p.name;
+  const pl = plantById(line.target); return pl ? pl.id + ' ' + pl.name : line.target;
+}
+function levelLabel(line) { return line.level === 'default' ? 'Hire-type default' : line.level === 'resource' ? (line.hire === 'labour' ? 'Role' : 'Charge resource') : (line.hire === 'labour' || personById(line.target) ? 'Person' : 'Plant item'); }
+function levelRank(l) { return l.level === 'item' ? 1 : l.level === 'resource' ? 2 : 3; }
+// Resolve the rate line for a subject. Person on wet hire falls back through labour hire levels.
+function resolvePlant(version, hire, plantId) {
+  const pl = plantById(plantId); const ls = version.lines.filter(l => l.hire === hire);
+  return ls.find(l => l.level === 'item' && l.target === plantId) || ls.find(l => l.level === 'resource' && l.target === pl.resource) || ls.find(l => l.level === 'default') || null;
+}
+function resolvePerson(version, hire, personId) {
+  const p = personById(personId);
+  const chain = [];
+  if (hire === 'wet') chain.push(version.lines.find(l => l.hire === 'wet' && l.level === 'item' && l.target === personId));
+  const lab = version.lines.filter(l => l.hire === 'labour');
+  chain.push(lab.find(l => l.level === 'item' && l.target === personId), lab.find(l => l.level === 'resource' && l.target === p.role), lab.find(l => l.level === 'default'));
+  return chain.find(Boolean) || null;
+}
+function subjectName(line) { return line.person ? personById(line.person).name : plantById(line.plant).id; }
+
+function priceDocket(docket) {
+  const version = versionFor(docket.date);
+  const res = { version, lines: [], flags: [], total: 0, approvable: true };
+  if (!version) { res.flags.push('No calculator version is in effect on ' + fmtDate(docket.date)); res.approvable = false; }
+  // 1. segments per calendar day
+  const segs = [];
+  docket.lines.forEach(line => {
+    const s = toMin(line.start), e = toMin(line.end);
+    if (e > s) segs.push({ line, date: line.date, s, e, net: (e - s) / 60 - line.breakH });
+    else {
+      segs.push({ line, date: line.date, s, e: 1440, net: (1440 - s) / 60 - line.breakH, crosses: true });
+      segs.push({ line, date: addDays(line.date, 1), s: 0, e, net: e / 60, crosses: true });
+    }
+  });
+  segs.forEach(sg => { sg.net = Math.max(0, sg.net); sg.tiers = {}; });
+  // 2. overlap check per person and per plant
+  const subjects = {};
+  segs.forEach(sg => {
+    if (sg.line.person) (subjects['P:' + sg.line.person] ||= []).push(sg);
+    if (sg.line.plant) (subjects['E:' + sg.line.plant] ||= []).push(sg);
+  });
+  const flaggedLines = new Set();
+  Object.entries(subjects).forEach(([key, list]) => {
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j];
+      if (a.line === b.line || a.date !== b.date) continue;
+      if (a.s < b.e && b.s < a.e) {
+        const name = key.startsWith('P:') ? personById(key.slice(2)).name : key.slice(2);
+        const first = docket.lines.indexOf(a.line) < docket.lines.indexOf(b.line) ? a : b;
+        const second = first === a ? b : a;
+        const msg = name + ' is already charged on the ' + HIRE_LABEL[first.line.hire].toLowerCase() + ' line for these hours';
+        if (!flaggedLines.has(second.line.id + msg)) { flaggedLines.add(second.line.id + msg); res.flags.push({ lineId: second.line.id, msg }); }
+      }
+    }
+  });
+  // 3. tier the hours per person per day, chronologically across all of that person's lines
+  if (version) {
+    Object.entries(subjects).filter(([k]) => k.startsWith('P:')).forEach(([, list]) => {
+      const byDate = {}; list.forEach(sg => (byDate[sg.date] ||= []).push(sg));
+      Object.entries(byDate).forEach(([date, sgs]) => {
+        sgs.sort((x, y) => x.s - y.s);
+        const buckets = tierOrder(version.triggers, dayType(date)).map(([t, h]) => ({ t, left: h }));
+        let bi = 0;
+        sgs.forEach(sg => {
+          let remaining = sg.net;
+          while (remaining > 1e-9 && bi < buckets.length) {
+            const b = buckets[bi]; const take = Math.min(remaining, b.left);
+            sg.tiers[b.t] = (sg.tiers[b.t] || 0) + take; remaining -= take; b.left -= take;
+            if (b.left <= 1e-9) bi++;
+          }
+          if (remaining > 1e-9) { const last = buckets[buckets.length - 1].t; sg.tiers[last] = (sg.tiers[last] || 0) + remaining; }
+        });
+      });
+    });
+  }
+  // 4. value per line
+  docket.lines.forEach(line => {
+    const lsegs = segs.filter(sg => sg.line === line);
+    const out = { line, segs: lsegs, parts: [], value: 0, flags: res.flags.filter(f => f.lineId === line.id).map(f => f.msg), net: lsegs.reduce((a, s) => a + s.net, 0) };
+    if (version) {
+      const firstDt = dayType(line.date);
+      const addPart = (label, rateLine, kind, subjectId) => {
+        const part = { label, rateLine, kind, rows: [], value: 0, topUp: 0 };
+        if (!rateLine) { part.unmapped = true; out.flags.push('No ' + HIRE_LABEL[line.hire].toLowerCase() + ' rate for ' + label + ' at any level (prices at $0)'); out.parts.push(part); return; }
+        if (kind === 'flat') {
+          const hrs = out.net; const charged = Math.max(hrs, rateLine.min); part.topUp = charged - hrs;
+          if (rateLine.unit === 'day') { const days = lsegs.length; part.rows.push({ tier: 'std', hours: days, rate: rateLine.rates.std, value: days * rateLine.rates.std, unitLabel: 'day' }); }
+          else part.rows.push({ tier: 'std', hours: charged, rate: rateLine.rates.std, value: charged * rateLine.rates.std, unitLabel: 'h' });
+        } else {
+          const tally = {};
+          lsegs.forEach(sg => Object.entries(sg.tiers).forEach(([t, h]) => tally[t] = (tally[t] || 0) + h));
+          const hrs = Object.values(tally).reduce((a, b) => a + b, 0);
+          if (hrs < rateLine.min) { const lt = lowestTier(version.triggers, firstDt); part.topUp = rateLine.min - hrs; tally[lt] = (tally[lt] || 0) + part.topUp; }
+          TIERS.forEach(t => { if (tally[t]) part.rows.push({ tier: t, hours: tally[t], rate: rateLine.rates[t], value: tally[t] * rateLine.rates[t], unitLabel: 'h' }); });
+        }
+        part.value = part.rows.reduce((a, r) => a + r.value, 0);
+        out.parts.push(part);
+      };
+      if (line.hire === 'labour') addPart(personById(line.person).name, resolvePerson(version, 'labour', line.person), 'tier');
+      if (line.hire === 'dry') addPart(line.plant + ' ' + plantById(line.plant).name, resolvePlant(version, 'dry', line.plant), 'flat');
+      if (line.hire === 'wet') { addPart(line.plant + ' ' + plantById(line.plant).name, resolvePlant(version, 'wet', line.plant), 'tier'); addPart(personById(line.person).name + ' (operator)', resolvePerson(version, 'wet', line.person), 'tier'); }
+      out.value = out.parts.reduce((a, p) => a + p.value, 0);
+    }
+    if (out.flags.length) res.approvable = false;
+    res.lines.push(out);
+  });
+  res.total = res.lines.reduce((a, l) => a + l.value, 0);
+  if (docket.claim) { res.locked = true; res.total = docket.lockedValue; }
+  return res;
+}
+
+/* ───────────────────────── State ───────────────────────── */
+let role = 'admin';
+let viewVersion = versions.length - 1; // index
+let draft = null; // editable copy of current version
+let dirty = false;
+let selDocket = dockets.find(d => d.id === 'DW-1041').id;
+let addLineHire = 'labour';
+function canEdit() { return role === 'admin' || role === 'pm'; }
+function isCurrent() { return viewVersion === versions.length - 1; }
+function clone(o) { return JSON.parse(JSON.stringify(o)); }
+function working() { if (!draft) draft = clone(versions[versions.length - 1]); return draft; }
+function setRole(r) { role = r; render(); }
+function showTab(t) { document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === t)); ['calc', 'dockets', 'examples'].forEach(k => document.getElementById('tab-' + k).style.display = k === t ? '' : 'none'); }
+function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 2500); }
+
+/* ───────────────────────── Calculator screen ───────────────────────── */
+function unmapped(version) {
+  const out = [];
+  PEOPLE.forEach(p => { if (!resolvePerson(version, 'labour', p.id)) out.push({ what: p.name + ' (' + p.role + ')', why: 'no labour-hire rate at any level' }); });
+  PLANT.forEach(pl => {
+    const dry = resolvePlant(version, 'dry', pl.id), wet = resolvePlant(version, 'wet', pl.id);
+    if (!dry && !wet) out.push({ what: pl.id + ' ' + pl.name, why: 'no dry-hire or wet-hire rate at any level' });
+    else if (!dry) out.push({ what: pl.id + ' ' + pl.name, why: 'no dry-hire rate (wet hire prices from ' + levelLabel(wet).toLowerCase() + ' ' + money(wet.rates.std) + ')' });
+    else if (!wet) out.push({ what: pl.id + ' ' + pl.name, why: 'no wet-hire rate (dry hire prices from ' + levelLabel(dry).toLowerCase() + ' ' + money(dry.rates.std) + ')' });
+  });
+  return out;
+}
+function renderCalc() {
+  const el = document.getElementById('tab-calc');
+  const editing = canEdit() && isCurrent();
+  const v = editing ? working() : versions[viewVersion];
+  const um = unmapped(v);
+  let h = `<div class="hdr"><div><h1>Dayworks Calculator</h1><div class="sub">The project's rate card. Every daywork docket, variation and claim prices from the version in effect on the docket date.</div></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span class="pill ver">Version ${v.n}${isCurrent() ? ' (current)' : ''} · effective ${fmtDate(v.effectiveFrom)}</span>
+      ${editing ? `<button class="btn" onclick="discard()" ${dirty ? '' : 'disabled'}>Discard</button><button class="btn primary" onclick="openSave()" ${dirty ? '' : 'disabled'}><i class="fas fa-floppy-disk"></i> Save as new version</button>` : ''}
+    </div></div>`;
+  if (!canEdit()) h += `<div class="banner info"><i class="fas fa-lock"></i><div><b>Read-only.</b> Only admins and project managers edit the calculator. You are viewing as a ${document.getElementById('roleSel').selectedOptions[0].text.replace(/ \(.*\)/, '').toLowerCase()}.</div></div>`;
+  else if (!isCurrent()) h += `<div class="banner info"><i class="fas fa-clock-rotate-left"></i><div><b>Previous version, read-only.</b> Edit the current version to make changes. <a href="#" onclick="viewVersion=${versions.length - 1};render();return false">Back to current</a></div></div>`;
+  if (um.length) h += `<div class="banner warn"><i class="fas fa-triangle-exclamation"></i><div><b>Unmapped (${um.length})</b> · these price at $0 on a docket and block its approval until a rate exists at some level.<ul style="margin:6px 0 0 16px">${um.map(u => `<li><b>${u.what}</b>: ${u.why}</li>`).join('')}</ul></div></div>`;
+  else h += `<div class="banner ok"><i class="fas fa-check"></i><div>Every person and plant item on the project has a rate at some level.</div></div>`;
+
+  h += `<div class="grid2"><div>`;
+  h += `<div class="card ${editing ? '' : 'ro'}"><div class="hdr" style="margin-bottom:8px"><h2 style="margin:0">Rate lines</h2>${editing ? `<div class="form-row edit-only"><select class="cell" id="addHire"><option value="labour">Labour hire</option><option value="dry">Dry hire</option><option value="wet">Wet hire</option></select><button class="btn sm" onclick="addLine()"><i class="fas fa-plus"></i> Add rate line</button></div>` : ''}</div>
+    <table><thead><tr><th>Hire type</th><th>Applies to</th><th>Level</th><th class="num">Standard</th><th class="num">1.5x</th><th class="num">2x</th><th class="num">Public holiday</th><th class="num">Min hrs</th>${editing ? '<th></th>' : ''}</tr></thead><tbody>`;
+  const sorted = [...v.lines].sort((a, b) => ['labour', 'wet', 'dry'].indexOf(a.hire) - ['labour', 'wet', 'dry'].indexOf(b.hire) || levelRank(b) - levelRank(a));
+  sorted.forEach(l => {
+    const over = TIERS.filter(t => t !== 'std').some(t => Math.abs(l.rates[t] - l.rates.std * MULT[t]) > 0.004);
+    const targetCtl = editing ? targetSelect(l) : `<b>${targetLabel(l)}</b>`;
+    const flat = l.hire === 'dry';
+    h += `<tr><td>${editing ? `<select class="cell" onchange="setLine('${l.id}','hire',this.value)">${Object.entries(HIRE_LABEL).map(([k, lab]) => `<option value="${k}" ${k === l.hire ? 'selected' : ''}>${lab}</option>`).join('')}</select>` : `<span class="pill ${l.hire}">${HIRE_LABEL[l.hire]}</span>`}</td>
+      <td>${targetCtl}</td><td><span class="pill lvl${levelRank(l)}">${levelLabel(l)}</span></td>
+      <td class="num"><input class="cell" type="number" step="0.01" value="${l.rates.std}" onchange="setStd('${l.id}',this.value)">${flat ? `<div class="muted">per ${l.unit}${editing ? ` <a href="#" onclick="setLine('${l.id}','unit','${l.unit === 'hour' ? 'day' : 'hour'}');return false">switch</a>` : ''}</div>` : ''}</td>`;
+    if (flat) h += `<td class="num muted" colspan="3">flat, no tiers</td>`;
+    else ['x15', 'x2', 'ph'].forEach(t => h += `<td class="num"><input class="cell ${Math.abs(l.rates[t] - l.rates.std * MULT[t]) > 0.004 ? 'overridden' : ''}" type="number" step="0.01" value="${round2(l.rates[t])}" onchange="setRate('${l.id}','${t}',this.value)" title="${Math.abs(l.rates[t] - l.rates.std * MULT[t]) > 0.004 ? 'Overridden from the ' + MULT[t] + 'x prefill' : 'Prefilled at ' + MULT[t] + 'x Standard'}"></td>`);
+    h += `<td class="num"><input class="cell" type="number" min="0" step="0.5" value="${l.min}" onchange="setLine('${l.id}','min',Number(this.value))"></td>`;
+    if (editing) h += `<td><button class="btn ghost" title="Remove" onclick="removeLine('${l.id}')"><i class="fas fa-trash"></i></button></td>`;
+    h += `</tr>`;
+  });
+  h += `</tbody></table><div class="help">Entering a Standard rate prefills 1.5x, 2x and Public holiday at 1.5x, 2x and 2.5x. Amber cells have been overwritten. Most specific level wins when a docket is priced: <span class="pill lvl1">Plant item / Person</span> beats <span class="pill lvl2">Role / Charge resource</span> beats <span class="pill lvl3">Hire-type default</span>. Minimum hours apply per resource per day; 0 means none.</div></div>`;
+
+  // triggers
+  h += `<div class="card ${editing ? '' : 'ro'} trig"><h2>Tier triggers</h2><table><thead><tr><th>Day type</th><th class="num">Standard</th><th class="num">1.5x</th><th class="num">2x</th><th class="num">Public holiday</th><th></th></tr></thead><tbody>`;
+  Object.keys(DAYTYPE_LABEL).forEach(dt => {
+    h += `<tr><td><b>${DAYTYPE_LABEL[dt]}</b></td>`;
+    TIERS.forEach(t => { const val = v.triggers[dt][t]; h += `<td class="num"><input class="cell" value="${val === null || val === undefined ? '' : val}" placeholder="-" onchange="setTrig('${dt}','${t}',this.value)"></td>`; });
+    h += `<td class="muted small">${describeTrig(v.triggers, dt)}</td></tr>`;
+  });
+  h += `</tbody></table><div class="help">Hours in a day fill the tiers left to right: a number is the hours that tier takes, <b>rest</b> takes everything remaining, blank skips the tier. Hours are counted per person per calendar day; a docket across midnight is split at midnight and each part is tiered on its own day. Break time is deducted first. Public holidays come from the ${PROJECT_STATE} calendar. The same table applies to labour hire and wet hire; dry hire is flat.</div></div>`;
+  h += `</div><div>`;
+  // versions
+  h += `<div class="card"><h2>Versions</h2><div class="vlist">`;
+  [...versions].reverse().forEach((ver, i) => { const idx = versions.length - 1 - i; h += `<div class="v ${idx === viewVersion ? 'sel' : ''}" onclick="viewVersion=${idx};render()"><span>Version ${ver.n}${idx === versions.length - 1 ? ' <span class="pill ver">current</span>' : ''}</span><span class="muted">effective ${fmtDate(ver.effectiveFrom)}</span></div>`; });
+  h += `</div><div class="help">Saved by ${v.savedBy} on ${fmtDate(v.savedOn)}. A docket is priced by the version in effect on its date. Dockets on an issued claim or approved variation are never repriced. The effective-from date cannot be before the last issued claim (${fmtDate(LAST_CLAIM)}).</div></div>`;
+  h += `<div class="card"><h2>Project resources</h2><dl class="kv"><dt>People</dt><dd>${PEOPLE.map(p => `${p.name} <span class="muted">· ${p.role}</span>`).join('<br>')}</dd><dt>Plant</dt><dd>${PLANT.map(p => `${p.id} ${p.name} <span class="muted">· ${p.resource}</span>`).join('<br>')}</dd></dl><div class="help">Rates can sit on the person or plant item, on the role or charge resource, or on the hire type. That is what lets the rates survive Remove Resources (VAR-22888).</div></div>`;
+  h += `</div></div>`;
+  el.innerHTML = h;
+}
+function round2(n) { return Math.round(n * 100) / 100; }
+function describeTrig(trig, dt) { return tierOrder(trig, dt).map(([t, hrs]) => (hrs === Infinity ? 'rest' : hrs + 'h') + ' at ' + TIER_LABEL[t]).join(', then '); }
+function targetSelect(l) {
+  const sel = (opts) => `<select class="cell" onchange="setTarget('${l.id}',this.value)">${opts.map(o => `<option value="${o.v}" ${o.v === (l.level + ':' + (l.target || '')) ? 'selected' : ''}>${o.t}</option>`).join('')}</select>`;
+  const opts = [{ v: 'default:', t: 'All ' + HIRE_LABEL[l.hire].toLowerCase() + (l.hire === 'labour' ? ' people' : ' plant') + ' (default)' }];
+  if (l.hire === 'labour') { ROLES.forEach(r => opts.push({ v: 'resource:' + r, t: 'Role: ' + r })); PEOPLE.forEach(p => opts.push({ v: 'item:' + p.id, t: 'Person: ' + p.name })); }
+  else { RESOURCES.forEach(r => opts.push({ v: 'resource:' + r, t: 'Charge resource: ' + r })); PLANT.forEach(p => opts.push({ v: 'item:' + p.id, t: 'Plant item: ' + p.id + ' ' + p.name })); if (l.hire === 'wet') PEOPLE.forEach(p => opts.push({ v: 'item:' + p.id, t: 'Operator: ' + p.name })); }
+  return sel(opts);
+}
+function findLine(id) { return working().lines.find(l => l.id === id); }
+function mark() { dirty = true; render(); }
+function setStd(id, val) { const l = findLine(id); const old = l.rates.std; const n = Number(val); TIERS.filter(t => t !== 'std').forEach(t => { if (Math.abs(l.rates[t] - old * MULT[t]) < 0.004) l.rates[t] = n * MULT[t]; }); l.rates.std = n; mark(); }
+function setRate(id, t, val) { findLine(id).rates[t] = Number(val); mark(); }
+function setLine(id, k, val) { const l = findLine(id); l[k] = val; if (k === 'hire') { l.level = 'default'; l.target = null; } mark(); }
+function setTarget(id, val) { const l = findLine(id); const [level, target] = val.split(':'); l.level = level; l.target = target || null; mark(); }
+function setTrig(dt, t, val) { const v = val.trim().toLowerCase(); working().triggers[dt][t] = v === '' ? null : v === 'rest' ? 'rest' : Number(v); mark(); }
+function addLine() { const hire = document.getElementById('addHire').value; working().lines.push(L(hire, 'default', null, rates(hire === 'dry' ? 100 : 60))); mark(); toast('Rate line added at the hire-type default level. Change "Applies to" to map it to a resource, item or person.'); }
+function removeLine(id) { const w = working(); w.lines = w.lines.filter(l => l.id !== id); mark(); }
+function discard() { draft = null; dirty = false; render(); }
+function openSave() { document.getElementById('effFrom').value = TODAY; document.getElementById('effErr').textContent = ''; document.getElementById('saveModal').classList.add('open'); }
+function closeModal() { document.getElementById('saveModal').classList.remove('open'); }
+function confirmSave() {
+  const d = document.getElementById('effFrom').value;
+  if (!d) { document.getElementById('effErr').textContent = 'Enter an effective-from date.'; return; }
+  if (d < LAST_CLAIM) { document.getElementById('effErr').textContent = 'Effective date cannot be before the last issued claim (' + fmtDate(LAST_CLAIM) + ')'; return; }
+  const nv = clone(working()); nv.n = versions.length + 1; nv.effectiveFrom = d; nv.savedBy = role === 'admin' ? 'Alec Neill' : 'Dana Whitfield (PM)'; nv.savedOn = TODAY;
+  versions.push(nv); draft = null; dirty = false; viewVersion = versions.length - 1; closeModal(); render();
+  toast('Version ' + nv.n + ' saved, effective ' + fmtDate(d) + '. Dockets dated from then price from it.');
+}
+
+/* ───────────────────────── Dockets screen ───────────────────────── */
+function renderDockets() {
+  const el = document.getElementById('tab-dockets');
+  const dk = dockets.find(d => d.id === selDocket);
+  const r = priceDocket(dk);
+  let h = `<div class="hdr"><div><h1>Daywork dockets</h1><div class="sub">Each docket shows its priced value, the tier split per line and the calculator version that priced it.</div></div></div><div class="grid-dk"><div>`;
+  dockets.forEach(d => { const p = priceDocket(d); h += `<div class="dk ${d.id === selDocket ? 'sel' : ''}" onclick="selDocket='${d.id}';render()"><div class="t"><span>${d.id}</span><span class="mono">${money(p.total)}</span></div><div class="d">${dayName(d.date)} ${fmtDate(d.date)} · ${d.title}</div><div style="margin-top:4px">${d.claim ? '<span class="pill lock">On claim</span>' : p.approvable ? '<span class="pill ok">Ready to approve</span>' : '<span class="pill bad">Blocked</span>'}</div></div>`; });
+  h += `</div><div>`;
+  h += `<div class="card"><div class="hdr"><div><h2 style="margin:0">${dk.id} · ${dk.title}</h2><div class="sub">${dayName(dk.date)} ${fmtDate(dk.date)}${PUBLIC_HOLIDAYS[dk.date] ? ' · ' + PUBLIC_HOLIDAYS[dk.date] : ''} · ${dk.note}</div></div>
+    <div style="text-align:right"><div style="font-size:22px;font-weight:700" class="mono">${money(r.total)}</div><div class="muted">${r.version ? 'Priced by calculator version ' + (dk.lockedVersion || r.version.n) + ' (effective ' + fmtDate((dk.lockedVersion ? versions[dk.lockedVersion - 1] : r.version).effectiveFrom) + ')' : 'No calculator version in effect'}</div></div></div>`;
+  if (r.locked) h += `<div class="banner info"><i class="fas fa-lock"></i><div><b>${dk.claim}.</b> This docket is on an issued claim and is never repriced, whatever changes in the calculator.</div></div>`;
+  else if (!r.approvable) h += `<div class="banner err"><i class="fas fa-ban"></i><div><b>Cannot be approved.</b> Resolve the flagged line${r.lines.filter(l => l.flags.length).length > 1 ? 's' : ''} below.</div></div>`;
+  r.lines.forEach((lr, idx) => {
+    const line = lr.line;
+    const who = line.hire === 'labour' ? personById(line.person).name : line.hire === 'dry' ? line.plant + ' ' + plantById(line.plant).name : line.plant + ' ' + plantById(line.plant).name + ' + ' + personById(line.person).name;
+    const crosses = lr.segs.length > 1;
+    h += `<div class="line ${lr.flags.length ? 'flag' : ''}"><div class="line-h"><span class="pill ${line.hire}">${HIRE_LABEL[line.hire]}</span><span class="who">${who}</span>
+      <span class="muted">${canEdit() && !r.locked ? `<input class="cell wide" style="width:120px" type="date" value="${line.date}" onchange="editLine('${dk.id}',${idx},'date',this.value)"> <input class="cell" style="width:70px" type="time" value="${line.start}" onchange="editLine('${dk.id}',${idx},'start',this.value)"> to <input class="cell" style="width:70px" type="time" value="${line.end}" onchange="editLine('${dk.id}',${idx},'end',this.value)"> break <input class="cell" style="width:56px" type="number" step="0.25" min="0" value="${line.breakH}" onchange="editLine('${dk.id}',${idx},'breakH',Number(this.value))">h` : `${fmtDate(line.date)} ${line.start} to ${line.end}${crosses ? ' (next day)' : ''}${line.breakH ? ', ' + line.breakH + 'h break' : ''}`}
+      · ${fmtH(lr.net)}h net${crosses ? ', split at midnight' : ''}</span>
+      <span class="tot mono">${money(lr.value)}</span>${canEdit() && !r.locked ? `<button class="btn ghost" title="Remove line" onclick="removeDocketLine('${dk.id}',${idx})"><i class="fas fa-trash"></i></button>` : ''}</div>`;
+    h += `<div class="line-b"><div class="split">`;
+    lr.parts.forEach(p => {
+      h += `<div class="blk"><h4>${p.label}${p.rateLine ? ` <span class="pill lvl${levelRank(p.rateLine)}">${levelLabel(p.rateLine)}${p.rateLine.level !== 'default' ? ': ' + targetLabel(p.rateLine) : ''}</span>` : ' <span class="pill bad">Unmapped</span>'}</h4>`;
+      if (p.unmapped) h += `<div class="muted">No rate at any level. Prices at $0.</div>`;
+      else {
+        h += `<table><thead><tr><th>Tier</th><th class="num">Hours</th><th class="num">Rate</th><th class="num">Value</th></tr></thead><tbody>`;
+        p.rows.forEach(rw => h += `<tr><td>${p.kind === 'flat' ? 'Flat' : TIER_LABEL[rw.tier]}</td><td class="num">${fmtH(rw.hours)}${rw.unitLabel === 'day' ? ' day' : 'h'}</td><td class="num">${money(rw.rate)}</td><td class="num">${money(rw.value)}</td></tr>`);
+        h += `<tr><td colspan="3" class="muted">${p.topUp > 0 ? 'Includes ' + fmtH(p.topUp) + 'h top-up to the ' + p.rateLine.min + 'h minimum' : 'Minimum ' + p.rateLine.min + 'h met'}</td><td class="num"><b>${money(p.value)}</b></td></tr></tbody></table>`;
+      }
+      h += `</div>`;
+    });
+    if (crosses) h += `<div class="blk"><h4>Midnight split</h4><table><thead><tr><th>Day</th><th class="num">Hours</th><th>Tiered as</th></tr></thead><tbody>${lr.segs.map(sg => `<tr><td>${dayName(sg.date)} ${fmtDate(sg.date)}</td><td class="num">${fmtH(sg.net)}h</td><td>${Object.entries(sg.tiers).map(([t, hh]) => fmtH(hh) + 'h ' + TIER_LABEL[t]).join(', ') || '-'}</td></tr>`).join('')}</tbody></table></div>`;
+    h += `</div></div>`;
+    lr.flags.forEach(f => h += `<div class="flagmsg"><i class="fas fa-triangle-exclamation"></i> ${f}</div>`);
+    h += `</div>`;
+  });
+  // add line
+  if (canEdit() && !r.locked) {
+    h += `<div class="card" style="background:#f8fafc;margin-top:4px"><h2 style="font-size:13px">Add line</h2><div class="form-row">
+      <div class="field"><label>Hire type</label><select id="nlHire" onchange="addLineHire=this.value;render()">${Object.entries(HIRE_LABEL).map(([k, v]) => `<option value="${k}" ${k === addLineHire ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      ${addLineHire !== 'labour' ? `<div class="field"><label>Plant item</label><select id="nlPlant">${PLANT.map(p => `<option value="${p.id}">${p.id} ${p.name}</option>`).join('')}</select></div>` : ''}
+      ${addLineHire !== 'dry' ? `<div class="field"><label>${addLineHire === 'wet' ? 'Operator' : 'Person'}</label><select id="nlPerson">${PEOPLE.map(p => `<option value="${p.id}">${p.name} (${p.role})</option>`).join('')}</select></div>` : ''}
+      <div class="field"><label>Start</label><input type="time" id="nlStart" value="07:00"></div><div class="field"><label>End</label><input type="time" id="nlEnd" value="15:00"></div><div class="field"><label>Break (h)</label><input type="number" step="0.25" min="0" id="nlBreak" value="0"></div>
+      <button class="btn" onclick="addDocketLine('${dk.id}')"><i class="fas fa-plus"></i> Add</button></div>
+      <div class="help">A labour-hire line selects a person. A dry-hire line selects a plant item. A wet-hire line selects a plant item and a person; the person's hours decide the tier for both.</div></div>`;
+  }
+  h += `<div class="actions"><button class="btn">Save draft</button><button class="btn primary" ${r.approvable && !r.locked ? '' : 'disabled'} onclick="toast('Docket ${dk.id} approved at ${money(r.total)}')"><i class="fas fa-check"></i> Approve docket</button></div>`;
+  if (!r.approvable && !r.locked) h += `<div class="muted" style="text-align:right;margin-top:6px">Approve is disabled while a line is flagged.</div>`;
+  h += `</div></div></div>`;
+  el.innerHTML = h;
+}
+function editLine(did, idx, k, val) { dockets.find(d => d.id === did).lines[idx][k] = val; render(); }
+function removeDocketLine(did, idx) { dockets.find(d => d.id === did).lines.splice(idx, 1); render(); }
+function addDocketLine(did) {
+  const dk = dockets.find(d => d.id === did);
+  const line = DL(addLineHire, { date: dk.date, start: document.getElementById('nlStart').value, end: document.getElementById('nlEnd').value, breakH: Number(document.getElementById('nlBreak').value) });
+  if (addLineHire !== 'labour') line.plant = document.getElementById('nlPlant').value;
+  if (addLineHire !== 'dry') line.person = document.getElementById('nlPerson').value;
+  line.id = dk.id + '-' + (dk.lines.length + 1 + Math.floor(Math.random() * 1000));
+  dk.lines.push(line); render();
+}
+
+/* ───────────────────────── Worked examples ───────────────────────── */
+function lineValue(did, i) { const d = dockets.find(x => x.id === did); return priceDocket(d).lines[i]; }
+function renderExamples() {
+  const el = document.getElementById('tab-examples');
+  const ex = [];
+  const push = (given, then, expected, actual, did) => ex.push({ given, then, expected, actual, did });
+  let v;
+  v = lineValue('DW-1041', 0); push('Tuesday labour-hire docket 6:00 to 17:00 with a 0.5h break (10.5h)', '8h x $70 + 2h x $105 + 0.5h x $140 = $840', 840, v.value, 'DW-1041');
+  v = lineValue('DW-1042', 0); push('Tuesday labour-hire docket 6:00 to 14:30 with a 0.5h break (8h)', '8h x $70 = $560, no overtime', 560, v.value, 'DW-1042');
+  v = lineValue('DW-1043', 0); push('Saturday labour-hire docket 7:00 to 12:00, no break (5h)', '2h x $105 + 3h x $140 = $630', 630, v.value, 'DW-1043');
+  v = lineValue('DW-1044', 0); push('Public holiday labour-hire docket of 4h', '4h x $175 = $700', 700, v.value, 'DW-1044');
+  v = lineValue('DW-1045', 0); push('Monday labour-hire docket of 2.5h', '4h minimum applies: 4h x $70 = $280', 280, v.value, 'DW-1045');
+  v = lineValue('DW-1046', 0); push('Dry-hire excavator at $120/h, minimum 4h, run 2.5h on a Monday', '4h x $120 = $480', 480, v.value, 'DW-1046');
+  v = lineValue('DW-1047', 0); push('Wet-hire 20t excavator (wet $180/$270/$360) with operator Sam ($80/$120/$160) for 9h on a Monday', 'plant $1,710 + Sam $760 = $2,470', 2470, v.value, 'DW-1047', [v.parts[0].value, v.parts[1].value]);
+  ex[ex.length - 1].detail = 'plant ' + money(v.parts[0].value) + ', Sam ' + money(v.parts[1].value);
+  const p48 = priceDocket(dockets.find(d => d.id === 'DW-1048'));
+  const flag48 = p48.flags.find(f => f.msg === 'Sam Patel is already charged on the wet hire line for these hours');
+  ex.push({ given: 'Sam on the wet-hire line 7:00 to 16:00, then a labour-hire line for Sam 7:00 to 16:00 is added', then: 'flags "Sam is already charged on the wet-hire line for these hours" and cannot be approved', expectedText: 'flagged, approve blocked', actualText: (flag48 ? '"' + flag48.msg + '"' : 'no flag') + ', approve ' + (p48.approvable ? 'enabled' : 'blocked'), pass: !!flag48 && !p48.approvable, did: 'DW-1048' });
+  const p49 = priceDocket(dockets.find(d => d.id === 'DW-1049'));
+  const sam49 = p49.lines[1].parts[0];
+  ex.push({ given: 'Sam on the wet-hire line 7:00 to 12:00 and a labour-hire line 12:00 to 16:00', then: 'both lines price, Sam\'s tier is worked out over the combined 9h, nothing flagged', expectedText: 'no flag; labour line 3h Standard + 1h 1.5x', actualText: (p49.flags.length ? p49.flags.length + ' flag(s)' : 'no flag') + '; labour line ' + sam49.rows.map(r => fmtH(r.hours) + 'h ' + TIER_LABEL[r.tier]).join(' + ') + ' = ' + money(p49.lines[1].value) + '; docket ' + money(p49.total), pass: !p49.flags.length && sam49.rows.length === 2 && Math.abs(sam49.rows[0].hours - 3) < 1e-9 && sam49.rows[0].tier === 'std' && sam49.rows[1].tier === 'x15' && Math.abs(sam49.rows[1].hours - 1) < 1e-9, did: 'DW-1049' });
+  v = lineValue('DW-1050', 0); const fri = v.segs[0], sat = v.segs[1];
+  push('Docket from Friday 18:00 to Saturday 02:00, no break', 'Friday 6h at Standard = $420 and Saturday 2h at 1.5x = $210, total $630', 630, v.value, 'DW-1050');
+  ex[ex.length - 1].detail = 'Fri ' + fmtH(fri.net) + 'h ' + Object.keys(fri.tiers).map(t => TIER_LABEL[t]).join('/') + ', Sat ' + fmtH(sat.net) + 'h ' + Object.keys(sat.tiers).map(t => TIER_LABEL[t]).join('/');
+  const d51 = priceDocket(dockets.find(d => d.id === 'DW-1051')), d52 = priceDocket(dockets.find(d => d.id === 'DW-1052')), d38 = priceDocket(dockets.find(d => d.id === 'DW-1038'));
+  const r51 = d51.lines[0].parts[0].rows[0].rate, r52 = d52.lines[0].parts[0].rows[0].rate;
+  ex.push({ given: 'Leading Hand Standard rate changes to $75 effective 1 Nov', then: 'docket dated 28 Oct prices at $70, docket dated 3 Nov at $75, docket on a claim issued 25 Oct is unchanged', expectedText: '$70 / $75 / $560 unchanged', actualText: money(r51) + ' (v' + d51.version.n + ') / ' + money(r52) + ' (v' + d52.version.n + ') / ' + money(d38.total) + ' locked', pass: r51 === 70 && r52 === 75 && d38.total === 560 && d38.locked, did: 'DW-1052' });
+  const d53 = priceDocket(dockets.find(d => d.id === 'DW-1053'));
+  const rp = d53.lines.map(l => l.parts[0].rows[0].rate);
+  ex.push({ given: 'Wet-hire default $150, resource rate "Excavator 20t wet" $180, plant-item rate for EX-07 $200', then: 'EX-07 uses $200; EX-09 (no item rate) uses $180; a wet-hire plant with no resource rate uses $150', expectedText: '$200 / $180 / $150', actualText: rp.map(money).join(' / ') + ' (EX-07 / EX-09 / LD-02)', pass: rp[0] === 200 && rp[1] === 180 && rp[2] === 150, did: 'DW-1053' });
+  const d54 = priceDocket(dockets.find(d => d.id === 'DW-1054'));
+  const rl = d54.lines.map(l => l.parts[0].rows[0].rate);
+  ex.push({ given: 'Labour-hire default $65, Leading Hand role rate $70, person rate for Sam $85', then: 'Sam (a Leading Hand) uses $85; another Leading Hand with no person rate uses $70; a person whose role has no rate uses $65', expectedText: '$85 / $70 / $65', actualText: rl.map(money).join(' / ') + ' (Sam / Priya / Jo)', pass: rl[0] === 85 && rl[1] === 70 && rl[2] === 65, did: 'DW-1054' });
+  const d55 = priceDocket(dockets.find(d => d.id === 'DW-1055'));
+  ex.push({ given: 'EX-07 on a dry-hire line 7:00 to 12:00 and a wet-hire line 9:00 to 15:00 (not in the ticket; the plant half of the rule)', then: 'flags "EX-07 is already charged on the dry hire line for these hours" and cannot be approved', expectedText: 'flagged, approve blocked', actualText: (d55.flags[0] ? '"' + d55.flags[0].msg + '"' : 'no flag') + ', approve ' + (d55.approvable ? 'enabled' : 'blocked'), pass: d55.flags.length === 1 && !d55.approvable, did: 'DW-1055' });
+  const d56 = priceDocket(dockets.find(d => d.id === 'DW-1056'));
+  ex.push({ given: 'Dry-hire roller RL-03 with no rate at any level (not in the ticket; the unmapped rule)', then: 'prices at $0, flagged, blocks approval', expectedText: '$0.00, approve blocked', actualText: money(d56.total) + ', approve ' + (d56.approvable ? 'enabled' : 'blocked'), pass: d56.total === 0 && !d56.approvable, did: 'DW-1056' });
+
+  const rowsHtml = ex.map((e, i) => {
+    const pass = e.pass !== undefined ? e.pass : Math.abs(e.expected - e.actual) < 0.005;
+    const expected = e.expectedText || money(e.expected), actual = e.actualText || money(e.actual) + (e.detail ? ' (' + e.detail + ')' : '');
+    return `<tr><td class="muted">${i + 1}</td><td>${e.given}</td><td>${e.then}</td><td class="num">${expected}</td><td>${actual}</td><td>${pass ? '<span class="ex-pass"><i class="fas fa-check"></i> pass</span>' : '<span class="ex-fail"><i class="fas fa-xmark"></i> fail</span>'}</td><td><a href="#" onclick="selDocket='${e.did}';render();showTab('dockets');return false">${e.did}</a></td></tr>`;
+  }).join('');
+  const passes = ex.filter((e) => e.pass !== undefined ? e.pass : Math.abs(e.expected - e.actual) < 0.005).length;
+  el.innerHTML = `<div class="hdr"><div><h1>Worked examples from VAR-23035</h1><div class="sub">Recomputed live from the same pricing engine the dockets use. Edit the calculator or a docket and these re-run.</div></div><span class="pill ${passes === ex.length ? 'ok' : 'bad'}" style="font-size:13px">${passes} / ${ex.length} pass</span></div>
+    <div class="card"><table><thead><tr><th>#</th><th>Given</th><th>Then (ticket)</th><th class="num">Expected</th><th>Prototype</th><th>Result</th><th>Docket</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+    <div class="help">Rates in the ticket's examples: Leading Hand labour hire $70 / $105 / $140 / $175, minimum 4h (version 1, effective 01/10/2026). The examples are dated in October so they price from version 1; version 2 (effective 01/11/2026) moves the Leading Hand to $75.</div></div>`;
+}
+
+function render() {
+  document.getElementById('roleSel').value = role;
+  renderCalc(); renderDockets(); renderExamples();
+}
+render();
+</script>
+</body>
+</html>
