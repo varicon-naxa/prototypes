@@ -17,7 +17,9 @@
 
   The Dockets screen prices daywork dockets (line types Labour, Dry hire, Wet hire) from the
   version in effect on the docket date, shows the rate line name and tier split per line, and
-  flags double charging of a person or plant item across lines with overlapping hours.
+  flags double charging: a person on a wet-hire line and a labour line, or a plant item on two
+  lines, with overlapping hours. A wet-hire line prices at the wet charge resource only (the rate
+  includes the operator); a dry-hire machine with a driver is a dry-hire line plus a labour line.
 
   The Worked examples screen re-computes every example in VAR-23035 from the same engine.
   See notes.md for the open decisions.
@@ -266,9 +268,10 @@ const dockets = [
   { id: 'DW-1044', title: 'Public holiday Leading Hand 4h', date: '2026-10-05', note: 'Ticket example: 4h x $175 = $700 (Labour Day NSW)', lines: [DL('labour', { person: 'p-tom', date: '2026-10-05', start: '07:00', end: '11:00' })] },
   { id: 'DW-1045', title: 'Monday Leading Hand 2.5h (minimum)', date: '2026-10-19', note: 'Ticket example: 4h minimum, 4h x $70 = $280', lines: [DL('labour', { person: 'p-tom', date: '2026-10-19', start: '07:00', end: '09:30' })] },
   { id: 'DW-1046', title: 'Dry-hire excavator 2.5h (minimum)', date: '2026-10-19', note: 'Ticket example: 4h x $120 = $480', lines: [DL('dry', { plant: 'EX-07', date: '2026-10-19', start: '07:00', end: '09:30' })] },
-  { id: 'DW-1047', title: 'Wet-hire EX-07 + Sam 9h', date: '2026-10-19', note: 'Ticket example: plant $1,710 + Sam at "Plant Operator" $760 = $2,470', lines: [DL('wet', { plant: 'EX-07', person: 'p-sam', date: '2026-10-19', start: '07:00', end: '16:00' })] },
+  { id: 'DW-1047', title: 'Wet-hire EX-07 + Sam 9h', date: '2026-10-19', note: 'Ticket example: 8h x $180 + 1h x $270 = $1,710; Sam\'s labour rate is not charged', lines: [DL('wet', { plant: 'EX-07', person: 'p-sam', date: '2026-10-19', start: '07:00', end: '16:00' })] },
+  { id: 'DW-1060', title: 'Dry-hire EX-07 9h + Sam driving it on a labour line', date: '2026-10-20', note: 'Ticket example: dry 9h x $120 = $1,080 flat + Sam at "Plant Operator" 8h x $80 + 1h x $120 = $760, total $1,840, nothing flagged', lines: [DL('dry', { plant: 'EX-07', date: '2026-10-20', start: '07:00', end: '16:00' }), DL('labour', { person: 'p-sam', date: '2026-10-20', start: '07:00', end: '16:00' })] },
   { id: 'DW-1048', title: 'Sam on wet hire and labour, same hours', date: '2026-10-21', note: 'Ticket example: flagged, cannot be approved', lines: [DL('wet', { plant: 'EX-07', person: 'p-sam', date: '2026-10-21', start: '07:00', end: '16:00' }), DL('labour', { person: 'p-sam', date: '2026-10-21', start: '07:00', end: '16:00' })] },
-  { id: 'DW-1049', title: 'Sam wet hire 7-12 then labour 12-16', date: '2026-10-26', note: 'Ticket example: both lines price at "Plant Operator", tier over the combined 9h, nothing flagged', lines: [DL('wet', { plant: 'EX-07', person: 'p-sam', date: '2026-10-26', start: '07:00', end: '12:00' }), DL('labour', { person: 'p-sam', date: '2026-10-26', start: '12:00', end: '16:00' })] },
+  { id: 'DW-1049', title: 'Sam wet hire 7-12 then labour 12-16', date: '2026-10-26', note: 'Ticket example: wet line 5h at the wet rate, labour line 4h at "Plant Operator", tiered over the combined 9h, nothing flagged', lines: [DL('wet', { plant: 'EX-07', person: 'p-sam', date: '2026-10-26', start: '07:00', end: '12:00' }), DL('labour', { person: 'p-sam', date: '2026-10-26', start: '12:00', end: '16:00' })] },
   { id: 'DW-1050', title: 'Friday 18:00 to Saturday 02:00', date: '2026-10-23', note: 'Ticket example: Fri 6h x $70 = $420 + Sat 2h x $105 = $210 = $630', lines: [DL('labour', { person: 'p-tom', date: '2026-10-23', start: '18:00', end: '02:00' })] },
   { id: 'DW-1051', title: 'Leading Hand 8h on 28 Oct (v1, $70)', date: '2026-10-28', note: 'Ticket example: priced by the version in effect on 28 Oct', lines: [DL('labour', { person: 'p-tom', date: '2026-10-28', start: '07:00', end: '15:00' })] },
   { id: 'DW-1052', title: 'Leading Hand 8h on 3 Nov (v2, $75)', date: '2026-11-03', note: 'Ticket example: priced by the version effective 1 Nov', lines: [DL('labour', { person: 'p-tom', date: '2026-11-03', start: '07:00', end: '15:00' })] },
@@ -338,6 +341,8 @@ function priceDocket(docket) {
     for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
       const a = list[i], b = list[j];
       if (a.line === b.line || a.date !== b.date) continue;
+      // A person is charged through a wet-hire line, so wet + labour (or wet + wet) overlaps. Labour alongside a dry-hire machine is the dry-hire case, not an overlap.
+      if (key.startsWith('P:') && a.line.type !== 'wet' && b.line.type !== 'wet') continue;
       if (a.s < b.e && b.s < a.e) {
         const name = key.startsWith('P:') ? personById(key.slice(2)).name : key.slice(2);
         const first = docket.lines.indexOf(a.line) < docket.lines.indexOf(b.line) ? a : b;
@@ -390,7 +395,7 @@ function priceDocket(docket) {
       };
       if (line.type === 'labour') { const p = personById(line.person); addPart(p.name, resolvePerson(version, p.id), 'tier', whyUnmappedPerson(p, version)); }
       if (line.type === 'dry') { const pl = plantById(line.plant); addPart(pl.id + ' ' + pl.name, resolvePlant(version, 'dry', pl.id), 'flat', whyUnmappedPlant(pl, 'dry', version)); }
-      if (line.type === 'wet') { const pl = plantById(line.plant), p = personById(line.person); addPart(pl.id + ' ' + pl.name, resolvePlant(version, 'wet', pl.id), 'tier', whyUnmappedPlant(pl, 'wet', version)); addPart(p.name + ' (operator)', resolvePerson(version, p.id), 'tier', whyUnmappedPerson(p, version)); }
+      if (line.type === 'wet') { const pl = plantById(line.plant); addPart(pl.id + ' ' + pl.name, resolvePlant(version, 'wet', pl.id), 'tier', whyUnmappedPlant(pl, 'wet', version)); out.operatorNote = personById(line.person).name + '\'s hours set the tier. The operator is included in the wet-hire rate and is not charged separately.'; }
       out.value = out.parts.reduce((a, p) => a + p.value, 0);
     }
     if (out.flags.length) res.approvable = false;
@@ -498,7 +503,7 @@ function renderLabourSection(v, editing) {
 function renderPlantSection(v, type, editing) {
   const lines = v.lines.filter(l => l.section === type);
   const flat = type === 'dry';
-  let h = `<div class="card ${editing ? '' : 'ro'}"><div class="sec-h"><div><h3 class="sec"><span class="pill ${type}">${SECTION_LABEL[type]}</span></h3><div class="desc">${flat ? 'Plant only, no operator. Flat rate per hour or per day, no tiers.' : 'Plant with operator. The operator\'s hours decide the tier; the plant prices here and the operator at their Labour rates line, both from the same tier split.'}</div></div></div>
+  let h = `<div class="card ${editing ? '' : 'ro'}"><div class="sec-h"><div><h3 class="sec"><span class="pill ${type}">${SECTION_LABEL[type]}</span></h3><div class="desc">${flat ? 'The machine on its own, flat per hour or per day, no tiers. If someone drives it, they go on a separate labour line at their labour rate.' : 'Machine with its operator on one docket line. Prices at the wet-hire rate only, which includes the operator; the operator\'s hours decide the tier.'}</div></div></div>
     <table><thead><tr><th>Charge resource</th>${flat ? '<th class="num">Rate</th><th>Unit</th>' : '<th class="num">Standard</th><th class="num">1.5x</th><th class="num">2x</th><th class="num">Public holiday</th>'}<th class="num">Min hrs</th>${editing ? '<th></th>' : ''}</tr></thead><tbody>`;
   if (!lines.length) h += `<tr><td colspan="7" class="muted">No ${SECTION_LABEL[type].toLowerCase()} lines yet.</td></tr>`;
   lines.forEach(l => {
@@ -554,7 +559,7 @@ function renderDockets() {
   const el = document.getElementById('tab-dockets');
   const dk = dockets.find(d => d.id === selDocket);
   const r = priceDocket(dk);
-  let h = `<div class="hdr"><div><h1>Daywork dockets</h1><div class="sub">Each docket shows its priced value and, per line, the rate line it priced at, the tier split and the calculator version.</div></div></div><div class="grid-dk"><div>`;
+  let h = `<div class="hdr"><div><h1>Daywork dockets</h1><div class="sub">Line types: Labour (a person on their own), Wet hire (machine plus operator, wet rate only), Dry hire (machine flat; its driver is a separate labour line). Each line shows the rate line it priced at, the tier split and the calculator version.</div></div></div><div class="grid-dk"><div>`;
   dockets.forEach(d => { const p = priceDocket(d); h += `<div class="dk ${d.id === selDocket ? 'sel' : ''}" onclick="selDocket='${d.id}';render()"><div class="t"><span>${d.id}</span><span class="mono">${money(p.total)}</span></div><div class="d">${dayName(d.date)} ${fmtDate(d.date)} · ${d.title}</div><div style="margin-top:4px">${d.claim ? '<span class="pill lock">On claim</span>' : p.approvable ? '<span class="pill ok">Ready to approve</span>' : '<span class="pill bad">Blocked</span>'}</div></div>`; });
   h += `</div><div>`;
   h += `<div class="card"><div class="hdr"><div><h2 style="margin:0">${dk.id} · ${dk.title}</h2><div class="sub">${dayName(dk.date)} ${fmtDate(dk.date)}${PUBLIC_HOLIDAYS[dk.date] ? ' · ' + PUBLIC_HOLIDAYS[dk.date] : ''} · ${dk.note}</div></div>
@@ -581,6 +586,7 @@ function renderDockets() {
       }
       h += `</div>`;
     });
+    if (lr.operatorNote) h += `<div class="blk"><h4>Operator</h4><div class="muted">${lr.operatorNote}</div></div>`;
     if (crosses) h += `<div class="blk"><h4>Midnight split</h4><table><thead><tr><th>Day</th><th class="num">Hours</th><th>Tiered as</th></tr></thead><tbody>${lr.segs.map(sg => `<tr><td>${dayName(sg.date)} ${fmtDate(sg.date)}</td><td class="num">${fmtH(sg.net)}h</td><td>${Object.entries(sg.tiers).map(([t, hh]) => fmtH(hh) + 'h ' + TIER_LABEL[t]).join(', ') || '-'}</td></tr>`).join('')}</tbody></table></div>`;
     h += `</div></div>`;
     lr.flags.forEach(f => h += `<div class="flagmsg"><i class="fas fa-triangle-exclamation"></i> ${f}</div>`);
@@ -593,7 +599,7 @@ function renderDockets() {
       ${addLineType !== 'dry' ? `<div class="field"><label>${addLineType === 'wet' ? 'Operator' : 'Person'}</label><select id="nlPerson">${PEOPLE.map(p => `<option value="${p.id}">${p.name} (${p.resource || 'no resource'})</option>`).join('')}</select></div>` : ''}
       <div class="field"><label>Start</label><input type="time" id="nlStart" value="07:00"></div><div class="field"><label>End</label><input type="time" id="nlEnd" value="15:00"></div><div class="field"><label>Break (h)</label><input type="number" step="0.25" min="0" id="nlBreak" value="0"></div>
       <button class="btn" onclick="addDocketLine('${dk.id}')"><i class="fas fa-plus"></i> Add</button></div>
-      <div class="help">A labour line selects a person. A dry-hire line selects a plant item. A wet-hire line selects a plant item and a person; the person's hours decide the tier for both.</div></div>`;
+      <div class="help">A labour line selects a person. A dry-hire line selects a plant item; its driver, if any, goes on a labour line. A wet-hire line selects a plant item and a person and prices at the wet rate only; the person's hours decide the tier.</div></div>`;
   }
   h += `<div class="actions"><button class="btn">Save draft</button><button class="btn primary" ${r.approvable && !r.locked ? '' : 'disabled'} onclick="toast('Docket ${dk.id} approved at ${money(r.total)}')"><i class="fas fa-check"></i> Approve docket</button></div>`;
   if (!r.approvable && !r.locked) h += `<div class="muted" style="text-align:right;margin-top:6px">Approve is disabled while a line is flagged.</div>`;
@@ -617,34 +623,38 @@ function renderExamples() {
   const el = document.getElementById('tab-examples');
   const ex = [];
   const push = (given, then, expected, actual, did) => ex.push({ given, then, expected, actual, did });
+  const dk = id => priceDocket(dockets.find(d => d.id === id));
   let v;
   v = lineValue('DW-1041', 0); push('Tuesday labour line for a Leading Hand 6:00 to 17:00 with a 0.5h break (10.5h)', '8h x $70 + 2h x $105 + 0.5h x $140 = $840', 840, v.value, 'DW-1041');
   v = lineValue('DW-1042', 0); push('Tuesday labour line for a Leading Hand 6:00 to 14:30 with a 0.5h break (8h)', '8h x $70 = $560, no overtime', 560, v.value, 'DW-1042');
   v = lineValue('DW-1043', 0); push('Saturday labour line for a Leading Hand 7:00 to 12:00, no break (5h)', '2h x $105 + 3h x $140 = $630', 630, v.value, 'DW-1043');
   v = lineValue('DW-1044', 0); push('Public holiday labour line for a Leading Hand of 4h', '4h x $175 = $700', 700, v.value, 'DW-1044');
   v = lineValue('DW-1045', 0); push('Monday labour line for a Leading Hand of 2.5h', '4h minimum applies: 4h x $70 = $280', 280, v.value, 'DW-1045');
-  v = lineValue('DW-1046', 0); push('Dry-hire excavator mapped to "Excavator 20t dry" at $120/h, minimum 4h, run 2.5h on a Monday', '4h x $120 = $480', 480, v.value, 'DW-1046');
-  v = lineValue('DW-1047', 0); push('Wet-hire line with EX-07 mapped to "Excavator 20t wet" ($180/$270/$360) and Sam, mapped to Operator, for 9h on a Monday', 'plant $1,710 + Sam at the "Plant Operator" line $760 = $2,470', 2470, v.value, 'DW-1047');
-  ex[ex.length - 1].detail = 'plant ' + money(v.parts[0].value) + ', Sam at "' + lineName(v.parts[1].rateLine) + '" ' + money(v.parts[1].value);
-  const p48 = priceDocket(dockets.find(d => d.id === 'DW-1048'));
+  v = lineValue('DW-1047', 0);
+  ex.push({ given: 'Wet-hire line with plant EX-07 (mapped to "Excavator 20t wet") and Sam as operator for 9h on a Monday', then: '8h x $180 + 1h x $270 = $1,710, and Sam\'s labour rate is not charged', expectedText: '$1,710.00, one part (plant)', actualText: money(v.value) + ', ' + v.parts.length + ' part (' + v.parts.map(p => p.label).join(', ') + ')', pass: Math.abs(v.value - 1710) < 0.005 && v.parts.length === 1, did: 'DW-1047' });
+  const d60 = dk('DW-1060');
+  ex.push({ given: 'Plant EX-07 on a dry-hire line for 9h on a Monday and Sam (mapped to Operator) driving it on a labour line for the same 9h', then: 'dry-hire line 9h x $120 = $1,080 flat, labour line 8h x $80 + 1h x $120 = $760, docket total $1,840, nothing flagged', expectedText: '$1,080 + $760 = $1,840, no flag', actualText: money(d60.lines[0].value) + ' + ' + money(d60.lines[1].value) + ' = ' + money(d60.total) + ', ' + (d60.flags.length ? d60.flags.length + ' flag(s)' : 'no flag') + ', approve ' + (d60.approvable ? 'enabled' : 'blocked'), pass: Math.abs(d60.lines[0].value - 1080) < 0.005 && Math.abs(d60.lines[1].value - 760) < 0.005 && Math.abs(d60.total - 1840) < 0.005 && !d60.flags.length && d60.approvable, did: 'DW-1060' });
+  v = lineValue('DW-1046', 0); push('Dry-hire excavator run 2.5h on a Monday with no operator line', '4h minimum applies: 4h x $120 = $480', 480, v.value, 'DW-1046');
+  const p48 = dk('DW-1048');
   const flag48 = p48.flags.find(f => f.msg === 'Sam Patel is already charged on the wet-hire line for these hours');
-  ex.push({ given: 'Sam on the wet-hire line 7:00 to 16:00, then a labour line for Sam 7:00 to 16:00 is added', then: 'flags "Sam is already charged on the wet-hire line for these hours" and cannot be approved', expectedText: 'flagged, approve blocked', actualText: (flag48 ? '"' + flag48.msg + '"' : 'no flag') + ', approve ' + (p48.approvable ? 'enabled' : 'blocked'), pass: !!flag48 && !p48.approvable, did: 'DW-1048' });
-  const p49 = priceDocket(dockets.find(d => d.id === 'DW-1049'));
-  const sam49 = p49.lines[1].parts[0];
-  ex.push({ given: 'Sam on the wet-hire line 7:00 to 12:00 and a labour line 12:00 to 16:00', then: 'both lines price at the "Plant Operator" rates, Sam\'s tier is worked out over the combined 9h, nothing flagged', expectedText: 'no flag; both at "Plant Operator"; labour line 3h Standard + 1h 1.5x', actualText: (p49.flags.length ? p49.flags.length + ' flag(s)' : 'no flag') + '; wet operator at "' + lineName(p49.lines[0].parts[1].rateLine) + '", labour at "' + lineName(sam49.rateLine) + '" ' + sam49.rows.map(r => fmtH(r.hours) + 'h ' + TIER_LABEL[r.tier]).join(' + ') + ' = ' + money(p49.lines[1].value) + '; docket ' + money(p49.total), pass: !p49.flags.length && lineName(sam49.rateLine) === 'Plant Operator' && lineName(p49.lines[0].parts[1].rateLine) === 'Plant Operator' && sam49.rows.length === 2 && Math.abs(sam49.rows[0].hours - 3) < 1e-9 && sam49.rows[0].tier === 'std' && sam49.rows[1].tier === 'x15' && Math.abs(sam49.rows[1].hours - 1) < 1e-9, did: 'DW-1049' });
+  ex.push({ given: 'Sam on a wet-hire line 7:00 to 16:00, then a labour line for Sam 7:00 to 16:00 is added', then: 'flags "Sam is already charged on the wet-hire line for these hours" and cannot be approved', expectedText: 'flagged, approve blocked', actualText: (flag48 ? '"' + flag48.msg + '"' : 'no flag') + ', approve ' + (p48.approvable ? 'enabled' : 'blocked'), pass: !!flag48 && !p48.approvable, did: 'DW-1048' });
+  const p49 = dk('DW-1049');
+  const wet49 = p49.lines[0].parts[0], lab49 = p49.lines[1].parts[0];
+  const wetHrs = wet49.rows.reduce((a, r) => a + r.hours, 0);
+  ex.push({ given: 'Sam on a wet-hire line 7:00 to 12:00 and a labour line 12:00 to 16:00', then: 'wet-hire line prices 5h at the wet rate, labour line 4h at the "Plant Operator" rate, Sam\'s tier is worked out over the combined 9h, nothing flagged', expectedText: 'wet 5h Standard = $900; labour 3h Standard + 1h 1.5x at "Plant Operator" = $360; no flag', actualText: 'wet ' + wet49.rows.map(r => fmtH(r.hours) + 'h ' + TIER_LABEL[r.tier]).join(' + ') + ' = ' + money(p49.lines[0].value) + '; labour at "' + lineName(lab49.rateLine) + '" ' + lab49.rows.map(r => fmtH(r.hours) + 'h ' + TIER_LABEL[r.tier]).join(' + ') + ' = ' + money(p49.lines[1].value) + '; ' + (p49.flags.length ? p49.flags.length + ' flag(s)' : 'no flag') + '; docket ' + money(p49.total), pass: !p49.flags.length && Math.abs(wetHrs - 5) < 1e-9 && Math.abs(p49.lines[0].value - 900) < 0.005 && lineName(lab49.rateLine) === 'Plant Operator' && lab49.rows.length === 2 && Math.abs(lab49.rows[0].hours - 3) < 1e-9 && lab49.rows[0].tier === 'std' && lab49.rows[1].tier === 'x15' && Math.abs(lab49.rows[1].hours - 1) < 1e-9 && Math.abs(p49.lines[1].value - 360) < 0.005, did: 'DW-1049' });
   v = lineValue('DW-1050', 0); const fri = v.segs[0], sat = v.segs[1];
   push('Leading Hand labour line from Friday 18:00 to Saturday 02:00, no break', 'Friday 6h at Standard = $420 and Saturday 2h at 1.5x = $210, total $630', 630, v.value, 'DW-1050');
   ex[ex.length - 1].detail = 'Fri ' + fmtH(fri.net) + 'h ' + Object.keys(fri.tiers).map(t => TIER_LABEL[t]).join('/') + ', Sat ' + fmtH(sat.net) + 'h ' + Object.keys(sat.tiers).map(t => TIER_LABEL[t]).join('/');
-  const d51 = priceDocket(dockets.find(d => d.id === 'DW-1051')), d52 = priceDocket(dockets.find(d => d.id === 'DW-1052')), d38 = priceDocket(dockets.find(d => d.id === 'DW-1038'));
+  const d51 = dk('DW-1051'), d52 = dk('DW-1052'), d38 = dk('DW-1038');
   const r51 = d51.lines[0].parts[0].rows[0].rate, r52 = d52.lines[0].parts[0].rows[0].rate;
   ex.push({ given: 'The "Leading Hand" line\'s Standard rate changes to $75 effective 1 Nov', then: 'docket dated 28 Oct prices at $70, docket dated 3 Nov at $75, docket on a claim issued 25 Oct is unchanged', expectedText: '$70 / $75 / $560 unchanged', actualText: money(r51) + ' (v' + d51.version.n + ') / ' + money(r52) + ' (v' + d52.version.n + ') / ' + money(d38.total) + ' locked', pass: r51 === 70 && r52 === 75 && d38.total === 560 && d38.locked, did: 'DW-1052' });
   v = lineValue('DW-1057', 0);
   ex.push({ given: 'A Labour rates line named "Supervisor" mapped to resource Foreman at Standard $95; Priya, mapped to Foreman, on a Monday labour line for 8h', then: 'the docket line reads "Supervisor" and prices 8h x $95 = $760', expectedText: '"Supervisor", $760.00', actualText: '"' + (v.parts[0].rateLine ? lineName(v.parts[0].rateLine) : 'unmapped') + '", ' + money(v.value), pass: v.parts[0].rateLine && lineName(v.parts[0].rateLine) === 'Supervisor' && Math.abs(v.value - 760) < 0.005, did: 'DW-1057' });
   const refusal = (() => { const was = draft; const r = resourceConflict('Foreman', null); if (!was) draft = null; return r; })();
   ex.push({ given: 'Resource Foreman is already on the "Supervisor" line; the user tries to select Foreman on a second line', then: 'the selection is refused with "Foreman is already on the Supervisor line"', expectedText: 'refused', actualText: refusal ? 'refused: "' + refusal + '"' : 'allowed', pass: refusal === 'Foreman is already on the Supervisor line', did: null });
-  const d58 = priceDocket(dockets.find(d => d.id === 'DW-1058'));
+  const d58 = dk('DW-1058');
   ex.push({ given: 'Plant EX-09 is mapped to no charge resource and is put on a dry-hire line', then: 'prices at $0, the docket shows EX-09 as unmapped, cannot be approved', expectedText: '$0.00, unmapped, approve blocked', actualText: money(d58.total) + ', ' + (d58.lines[0].parts[0].unmapped ? 'EX-09 shown unmapped' : 'not shown unmapped') + ', approve ' + (d58.approvable ? 'enabled' : 'blocked'), pass: d58.total === 0 && d58.lines[0].parts[0].unmapped && !d58.approvable, did: 'DW-1058' });
-  const d55 = priceDocket(dockets.find(d => d.id === 'DW-1055'));
+  const d55 = dk('DW-1055');
   ex.push({ given: 'EX-07 on a dry-hire line 7:00 to 12:00 and a wet-hire line 9:00 to 15:00 (not in the ticket; the plant half of the rule)', then: 'flags "EX-07 is already charged on the dry-hire line for these hours" and cannot be approved', expectedText: 'flagged, approve blocked', actualText: (d55.flags[0] ? '"' + d55.flags[0].msg + '"' : 'no flag') + ', approve ' + (d55.approvable ? 'enabled' : 'blocked'), pass: d55.flags.length === 1 && d55.flags[0].msg === 'EX-07 is already charged on the dry-hire line for these hours' && !d55.approvable, did: 'DW-1055' });
 
   const isPass = e => e.pass !== undefined ? !!e.pass : Math.abs(e.expected - e.actual) < 0.005;
@@ -654,9 +664,9 @@ function renderExamples() {
     return `<tr><td class="muted">${i + 1}</td><td>${e.given}</td><td>${e.then}</td><td class="num">${expected}</td><td>${actual}</td><td>${pass ? '<span class="ex-pass"><i class="fas fa-check"></i> pass</span>' : '<span class="ex-fail"><i class="fas fa-xmark"></i> fail</span>'}</td><td>${e.did ? `<a href="#" onclick="selDocket='${e.did}';render();showTab('dockets');return false">${e.did}</a>` : '<span class="muted">calculator</span>'}</td></tr>`;
   }).join('');
   const passes = ex.filter(isPass).length;
-  el.innerHTML = `<div class="hdr"><div><h1>Worked examples from VAR-23035</h1><div class="sub">Recomputed live from the same pricing engine the dockets use. Edit the calculator or a docket and these re-run.</div></div><span class="pill ${passes === ex.length ? 'ok' : 'bad'}" style="font-size:13px">${passes} / ${ex.length} pass</span></div>
+  el.innerHTML = `<div class="hdr"><div><h1>Worked examples from VAR-23035</h1><div class="sub">Recomputed live from the same pricing engine the dockets use, in the ticket's order. Edit the calculator or a docket and these re-run.</div></div><span class="pill ${passes === ex.length ? 'ok' : 'bad'}" style="font-size:13px">${passes} / ${ex.length} pass</span></div>
     <div class="card"><table><thead><tr><th>#</th><th>Given</th><th>Then (ticket)</th><th class="num">Expected</th><th>Prototype</th><th>Result</th><th>Where</th></tr></thead><tbody>${rowsHtml}</tbody></table>
-    <div class="help">Rates in the ticket's examples: line "Leading Hand" (resource Leading Hand) $70 / $105 / $140 / $175, line "Plant Operator" (resource Operator) $80 / $120 / $160, line "Supervisor" (resource Foreman) $95, minimum 4h; version 1, effective 01/10/2026. The examples are dated in October so they price from version 1; version 2 (effective 01/11/2026) moves "Leading Hand" to $75.</div></div>`;
+    <div class="help">Rates in the ticket's examples: line "Leading Hand" (resource Leading Hand) $70 / $105 / $140 / $175; line "Plant Operator" (resource Operator) $80 / $120 / $160; "Excavator 20t wet" $180 / $270 / $360; "Excavator 20t dry" $120/h; minimum 4h; version 1, effective 01/10/2026. The examples are dated in October so they price from version 1; version 2 (effective 01/11/2026) moves "Leading Hand" to $75.</div></div>`;
 }
 
 function render() {

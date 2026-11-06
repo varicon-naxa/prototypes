@@ -1,4 +1,4 @@
-# Dayworks Calculator — 2026-11-05 (simplified 2026-11-06)
+# Dayworks Calculator — 2026-11-05 (simplified 2026-11-06, wet/dry pricing corrected 2026-11-06)
 
 Prototype for Jira story VAR-23035 (epic VAR-23034). Single static `index.html`, no build.
 
@@ -23,14 +23,18 @@ Three tabs on a project's Dayworks section (project "Riverside Rd Upgrade", NSW,
    (History: the 05/11 first cut had a flat list with one "Applies to" dropdown over three mapping levels, then
    a per-hire-type tree with per-person and per-plant-item overrides. Alec simplified the ticket on 06/11 to
    resource-only mapping with named Labour rates lines, and the prototype follows.)
-2. **Daywork dockets.** Line types Labour, Dry hire, Wet hire. Seeded with one docket per worked example. Each
+2. **Daywork dockets.** Line types Labour (a person on their own), Wet hire (machine plus operator on one line,
+   priced at the wet charge resource only because the wet rate includes the operator; the operator's hours set
+   the tier) and Dry hire (machine flat; a driver goes on a separate labour line at their labour rate, two lines
+   two rates, not an overlap). Seeded with one docket per worked example. Each
    line shows the rate line name it priced at (e.g. "Supervisor"), its tier split (hours x rate per tier), top-up
    to the minimum, the midnight split where it applies, and the calculator version that priced the docket.
    Lines can be edited and added (labour = person, dry = plant item, wet = plant item + operator). A person or
    plant item on two lines with overlapping hours shows "<name> is already charged on the <line type> line for
-   these hours" and Approve is disabled. An unmapped person or plant item prices at $0 and also blocks Approve.
+   these hours" and Approve is disabled. For a person the overlap is only wet-hire against another line; labour
+   alongside a dry-hire machine is the dry-hire case. An unmapped person or plant item prices at $0 and also blocks Approve.
 3. **Worked examples.** Every example in VAR-23035 recomputed live from the same engine, with pass/fail against
-   the stated number. All 15 pass (14 from the ticket plus a plant-overlap case).
+   the stated number. All 16 pass (15 from the ticket, in the ticket's order, plus a plant-overlap case).
 
 ## Open decisions this surfaced
 
@@ -52,7 +56,10 @@ Three tabs on a project's Dayworks section (project "Riverside Rd Upgrade", NSW,
    the message needs rewording.
 7. **Public holidays.** Taken from the project's state calendar (NSW here, so Labour Day 05/10/2026 is the PH
    example and Melbourne Cup day is not a holiday). Still one of the unconfirmed calls in the rules note.
-8. **Mapping lives outside the version.** Mapping a person to a labour resource or a plant item to a charge
+8. **Two labour lines for one person.** The overlap rule names wet-hire against a labour line. The prototype does
+   not flag the same person on two labour lines with overlapping hours (not in the ticket); confirm whether that
+   should also block.
+9. **Mapping lives outside the version.** Mapping a person to a labour resource or a plant item to a charge
    resource from the Unmapped banner changes the worker or plant record, not the calculator version, so it is not
    dated. A docket on an old date will reprice if its person is mapped today. Confirm that is acceptable, or
    whether mapping should be versioned with the calculator.
