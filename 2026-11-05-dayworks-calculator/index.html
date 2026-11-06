@@ -5,21 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dayworks Calculator - Riverside Rd Upgrade</title>
 <!--
-  Dayworks Calculator prototype (2026-11-05) for Jira story VAR-23035.
+  Dayworks Calculator prototype for Jira story VAR-23035 (built 2026-11-05, simplified 2026-11-06).
 
-  The customer-owned in-app rate card: rate lines per hire type (labour / dry / wet),
-  four explicit tier rates (Standard, 1.5x, 2x, Public holiday), minimum hours,
-  three mapping levels (hire-type default < resource < specific item or person),
-  an editable tier-trigger table, effective-from dated versions, admin/PM edit only.
+  The customer-owned in-app rate card. Three rate sections: Labour rates, Dry hire, Wet hire.
+  Rates belong to resources only. A Labour rates line has a name (the client's schedule label,
+  e.g. "Supervisor") and exactly one labour resource from the catalogue (e.g. Foreman); a resource
+  can be on only one line. A person prices at the line whose resource they are mapped to. A plant
+  item prices at the charge resource it is mapped to for the line's type (wet or dry).
+  Four explicit tier rates (Standard, 1.5x, 2x, Public holiday), minimum hours, an editable
+  tier-trigger table, effective-from dated versions, admin/PM edit only.
 
-  The Dockets screen prices daywork dockets from the version in effect on the docket
-  date, shows the tier split per line, and flags double charging of a person or plant
-  item across lines with overlapping hours (blocks approve).
+  The Dockets screen prices daywork dockets (line types Labour, Dry hire, Wet hire) from the
+  version in effect on the docket date, shows the rate line name and tier split per line, and
+  flags double charging of a person or plant item across lines with overlapping hours.
 
-  The Worked examples screen re-computes every example in VAR-23035 from the same
-  pricing engine and shows pass/fail against the stated number.
-
-  See notes.md for the open decisions this surfaced.
+  The Worked examples screen re-computes every example in VAR-23035 from the same engine.
+  See notes.md for the open decisions.
 -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -50,6 +51,7 @@ button,input,select{font-family:inherit;font-size:13px}
 .tab.active{color:#1b2a4a;border-color:#f5a623;font-weight:600}
 h1{font-size:20px;font-weight:600;color:#1e293b}
 h2{font-size:15px;font-weight:600;color:#1e293b;margin-bottom:10px}
+h3.sec{font-size:14px;font-weight:600;color:#1e293b;margin:0}
 .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap}
 .sub{color:#64748b;font-size:13px;margin-top:3px}
 .card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:16px}
@@ -57,7 +59,6 @@ h2{font-size:15px;font-weight:600;color:#1e293b;margin-bottom:10px}
 .btn:hover{background:#f8fafc}
 .btn.primary{background:#f5a623;border-color:#f5a623;color:#fff}
 .btn.primary:hover{background:#e0961b}
-.btn.danger{color:#b91c1c;border-color:#fecaca}
 .btn.sm{padding:4px 8px;font-size:12px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .btn.ghost{border:none;background:transparent;color:#64748b;padding:4px 6px}
@@ -67,18 +68,16 @@ td{padding:8px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
 tr:last-child td{border-bottom:none}
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 input.cell{width:84px;padding:5px 7px;border:1px solid #e2e8f0;border-radius:5px;text-align:right;background:#fff}
-input.cell.wide{width:120px;text-align:left}
+input.cell.wide{width:150px;text-align:left;font-weight:600}
 input.cell.overridden{border-color:#f5a623;background:#fffbeb}
 select.cell{padding:5px 7px;border:1px solid #e2e8f0;border-radius:5px;background:#fff}
-.ro input.cell,.ro select.cell{border-color:transparent;background:transparent;pointer-events:none;color:#1e293b}
+.ro input.cell,.ro select.cell{border-color:transparent;background:transparent;pointer-events:none;color:#1e293b;appearance:none;-webkit-appearance:none}
 .ro .edit-only{display:none !important}
 .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
 .pill.labour{background:#dbeafe;color:#1d4ed8}
 .pill.dry{background:#f1f5f9;color:#475569}
 .pill.wet{background:#dcfce7;color:#15803d}
-.pill.lvl1{background:#fef3c7;color:#92400e}
-.pill.lvl2{background:#ede9fe;color:#6d28d9}
-.pill.lvl3{background:#f1f5f9;color:#64748b}
+.pill.res{background:#ede9fe;color:#6d28d9}
 .pill.ok{background:#dcfce7;color:#15803d}
 .pill.bad{background:#fee2e2;color:#b91c1c}
 .pill.lock{background:#e2e8f0;color:#334155}
@@ -89,6 +88,7 @@ select.cell{padding:5px 7px;border:1px solid #e2e8f0;border-radius:5px;backgroun
 .banner.info{background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a}
 .banner.ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}
 .banner i{margin-top:2px}
+.banner table td{padding:4px 8px;border:none;color:inherit}
 .grid2{display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start}
 .grid-dk{display:grid;grid-template-columns:300px 1fr;gap:16px;align-items:start}
 .vlist .v{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:13px;cursor:pointer}
@@ -129,12 +129,11 @@ select.cell{padding:5px 7px;border:1px solid #e2e8f0;border-radius:5px;backgroun
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:13px}
 .kv dt{color:#64748b}
 .help{color:#64748b;font-size:12px;margin-top:6px;line-height:1.5}
-.tree-h{font-size:13px;font-weight:500;color:#334155;margin:18px 0 6px;display:flex;align-items:center;gap:8px}
-.tree-h.sub{margin-top:10px;font-size:12px;font-weight:600;color:#64748b}
-table.tree tr.inh td{color:#64748b}
-table.tree tr.inh td b{font-weight:500;color:#475569}
-table.tree tr.own td{background:#fffdf7}
-.toast{position:fixed;bottom:20px;right:20px;background:#1e293b;color:#fff;padding:10px 14px;border-radius:8px;font-size:13px;display:none;z-index:300}
+.sec-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 6px;flex-wrap:wrap}
+.sec-h .desc{color:#64748b;font-size:12px}
+.addrow{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:6px;padding:10px 12px;margin-top:10px}
+.toast{position:fixed;bottom:20px;right:20px;background:#1e293b;color:#fff;padding:10px 14px;border-radius:8px;font-size:13px;display:none;z-index:300;max-width:420px}
+.toast.err{background:#991b1b}
 </style>
 </head>
 <body>
@@ -193,34 +192,40 @@ table.tree tr.own td{background:#fffdf7}
 
 <script>
 /* ───────────────────────── Project data ───────────────────────── */
-const TODAY = '2026-11-05';
+const TODAY = '2026-11-06';
 const LAST_CLAIM = '2026-10-25';
 const PROJECT_STATE = 'NSW';
 const PUBLIC_HOLIDAYS = { '2026-10-05': 'Labour Day (NSW)', '2026-12-25': 'Christmas Day', '2026-12-26': 'Boxing Day', '2027-01-01': "New Year's Day", '2027-01-26': 'Australia Day' };
 
+// Catalogues (tenant level). Rates attach to these, never to a person or plant item.
+const LABOUR_RESOURCES = ['Leading Hand', 'Operator', 'Foreman', 'Labourer', 'Traffic Controller'];
+const CHARGE_RESOURCES = {
+  wet: ['Excavator 20t wet', 'Loader 12t wet', 'Roller 12t wet', 'Water cart 10kL wet'],
+  dry: ['Excavator 20t dry', 'Loader 12t dry', 'Roller 12t dry', 'Water cart 10kL dry'],
+};
+// People map to one labour resource (from Workers). Plant items map to a wet and/or dry charge resource (from Plant & Equipment).
 const PEOPLE = [
-  { id: 'p-sam',   name: 'Sam Patel',    role: 'Leading Hand' },
-  { id: 'p-priya', name: 'Priya Nguyen', role: 'Leading Hand' },
-  { id: 'p-jo',    name: 'Jo Walker',    role: 'Labourer' },
-  { id: 'p-mia',   name: 'Mia Torres',   role: 'Traffic Controller' },
+  { id: 'p-tom',   name: 'Tom Reilly',   resource: 'Leading Hand' },
+  { id: 'p-sam',   name: 'Sam Patel',    resource: 'Operator' },
+  { id: 'p-priya', name: 'Priya Nguyen', resource: 'Foreman' },
+  { id: 'p-jo',    name: 'Jo Walker',    resource: 'Labourer' },
+  { id: 'p-mia',   name: 'Mia Torres',   resource: null },
 ];
 const PLANT = [
-  { id: 'EX-07', name: 'Excavator 20t Cat 320', resource: 'Excavator 20t' },
-  { id: 'EX-09', name: 'Excavator 20t Komatsu PC210', resource: 'Excavator 20t' },
-  { id: 'LD-02', name: 'Loader 12t Volvo L90', resource: 'Loader 12t' },
-  { id: 'RL-03', name: 'Roller 12t Dynapac', resource: 'Roller 12t' },
-  { id: 'WC-04', name: 'Water cart 10kL', resource: 'Water cart 10kL' },
+  { id: 'EX-07', name: 'Excavator 20t Cat 320',       wet: 'Excavator 20t wet', dry: 'Excavator 20t dry' },
+  { id: 'EX-09', name: 'Excavator 20t Komatsu PC210', wet: null,                dry: null },
+  { id: 'LD-02', name: 'Loader 12t Volvo L90',        wet: 'Loader 12t wet',    dry: 'Loader 12t dry' },
+  { id: 'RL-03', name: 'Roller 12t Dynapac',          wet: null,                dry: 'Roller 12t dry' },
 ];
-const ROLES = [...new Set(PEOPLE.map(p => p.role))];
-const RESOURCES = [...new Set(PLANT.map(p => p.resource))];
 const TIERS = ['std', 'x15', 'x2', 'ph'];
 const TIER_LABEL = { std: 'Standard', x15: '1.5x', x2: '2x', ph: 'Public holiday' };
 const MULT = { std: 1, x15: 1.5, x2: 2, ph: 2.5 };
-const HIRE_LABEL = { labour: 'Labour hire', dry: 'Dry hire', wet: 'Wet hire' };
+const TYPE_LABEL = { labour: 'Labour', dry: 'Dry hire', wet: 'Wet hire' };     // docket line types
+const TYPE_MSG = { labour: 'labour', dry: 'dry-hire', wet: 'wet-hire' };        // wording inside the overlap message
+const SECTION_LABEL = { labour: 'Labour rates', dry: 'Dry hire', wet: 'Wet hire' }; // calculator sections
 const DAYTYPE_LABEL = { weekday: 'Monday to Friday', sat: 'Saturday', sun: 'Sunday', ph: 'Public holiday' };
 
 function defaultTriggers() {
-  // per day type, hours allowed in each tier in order; 'rest' = everything remaining; null = tier not used
   return {
     weekday: { std: 8, x15: 2, x2: 'rest', ph: null },
     sat:     { std: null, x15: 2, x2: 'rest', ph: null },
@@ -230,20 +235,17 @@ function defaultTriggers() {
 }
 function rates(std, x15, x2, ph) { return { std, x15: x15 ?? std * 1.5, x2: x2 ?? std * 2, ph: ph ?? std * 2.5 }; }
 let nextLineId = 100;
-function L(hire, level, target, r, min = 4, unit = 'hour') { return { id: 'L' + (nextLineId++), hire, level, target, rates: r, min, unit }; }
-
-// level: 'default' (hire type), 'resource' (role or plant charge resource), 'item' (plant item id or person id)
+// Rate line. section: labour | wet | dry. Labour lines have a name and a labour resource; wet/dry lines a charge resource.
+function L(section, name, resource, r, min = 4, unit = 'hour') { return { id: 'L' + (nextLineId++), section, name, resource, rates: r, min, unit }; }
 function v1Lines() {
   return [
-    L('labour', 'default',  null,             rates(65)),
-    L('labour', 'resource', 'Leading Hand',   rates(70)),
-    L('labour', 'item',     'p-sam',          rates(85)),
-    L('wet',    'item',     'p-sam',          rates(80)),
-    L('wet',    'default',  null,             rates(150)),
-    L('wet',    'resource', 'Excavator 20t',  rates(180)),
-    L('wet',    'item',     'EX-07',          rates(200)),
-    L('dry',    'resource', 'Excavator 20t',  rates(120), 4, 'hour'),
-    L('dry',    'resource', 'Loader 12t',     rates(95), 4, 'hour'),
+    L('labour', 'Leading Hand',   'Leading Hand',      rates(70)),
+    L('labour', 'Plant Operator', 'Operator',          rates(80)),
+    L('labour', 'Supervisor',     'Foreman',           rates(95)),
+    L('wet',    null,             'Excavator 20t wet', rates(180)),
+    L('wet',    null,             'Loader 12t wet',    rates(150)),
+    L('dry',    null,             'Excavator 20t dry', rates(120), 4, 'hour'),
+    L('dry',    null,             'Loader 12t dry',    rates(95), 4, 'hour'),
   ];
 }
 const versions = [
@@ -251,31 +253,30 @@ const versions = [
 ];
 (function makeV2() {
   const lines = v1Lines();
-  const lh = lines.find(l => l.hire === 'labour' && l.level === 'resource' && l.target === 'Leading Hand');
-  lh.rates = rates(75);
+  lines.find(l => l.section === 'labour' && l.resource === 'Leading Hand').rates = rates(75);
   versions.push({ n: 2, effectiveFrom: '2026-11-01', savedBy: 'Dana Whitfield (PM)', savedOn: '2026-10-30', triggers: defaultTriggers(), lines });
 })();
 
-/* Dockets. Each line: hire, person, plant, date, start, end, breakH. end <= start means it crosses midnight. */
-function DL(hire, o) { return Object.assign({ hire, breakH: 0 }, o); }
+/* Dockets. Line: type, person, plant, date, start, end, breakH. end <= start means it crosses midnight. */
+function DL(type, o) { return Object.assign({ type, breakH: 0 }, o); }
 const dockets = [
-  { id: 'DW-1041', title: 'Tue labourer 10.5h (example 1)', date: '2026-10-20', note: 'Ticket example: 8h x $70 + 2h x $105 + 0.5h x $140 = $840', lines: [DL('labour', { person: 'p-priya', date: '2026-10-20', start: '06:00', end: '17:00', breakH: 0.5 })] },
-  { id: 'DW-1042', title: 'Tue labourer 8h, no overtime', date: '2026-10-20', note: 'Ticket example: 8h x $70 = $560', lines: [DL('labour', { person: 'p-priya', date: '2026-10-20', start: '06:00', end: '14:30', breakH: 0.5 })] },
-  { id: 'DW-1043', title: 'Saturday labourer 5h', date: '2026-10-24', note: 'Ticket example: 2h x $105 + 3h x $140 = $630', lines: [DL('labour', { person: 'p-priya', date: '2026-10-24', start: '07:00', end: '12:00' })] },
-  { id: 'DW-1044', title: 'Public holiday labourer 4h', date: '2026-10-05', note: 'Ticket example: 4h x $175 = $700 (Labour Day NSW)', lines: [DL('labour', { person: 'p-priya', date: '2026-10-05', start: '07:00', end: '11:00' })] },
-  { id: 'DW-1045', title: 'Monday labourer 2.5h (minimum)', date: '2026-10-19', note: 'Ticket example: 4h minimum, 4h x $70 = $280', lines: [DL('labour', { person: 'p-priya', date: '2026-10-19', start: '07:00', end: '09:30' })] },
+  { id: 'DW-1041', title: 'Tue Leading Hand 10.5h', date: '2026-10-20', note: 'Ticket example: 8h x $70 + 2h x $105 + 0.5h x $140 = $840', lines: [DL('labour', { person: 'p-tom', date: '2026-10-20', start: '06:00', end: '17:00', breakH: 0.5 })] },
+  { id: 'DW-1042', title: 'Tue Leading Hand 8h, no overtime', date: '2026-10-20', note: 'Ticket example: 8h x $70 = $560', lines: [DL('labour', { person: 'p-tom', date: '2026-10-20', start: '06:00', end: '14:30', breakH: 0.5 })] },
+  { id: 'DW-1043', title: 'Saturday Leading Hand 5h', date: '2026-10-24', note: 'Ticket example: 2h x $105 + 3h x $140 = $630', lines: [DL('labour', { person: 'p-tom', date: '2026-10-24', start: '07:00', end: '12:00' })] },
+  { id: 'DW-1044', title: 'Public holiday Leading Hand 4h', date: '2026-10-05', note: 'Ticket example: 4h x $175 = $700 (Labour Day NSW)', lines: [DL('labour', { person: 'p-tom', date: '2026-10-05', start: '07:00', end: '11:00' })] },
+  { id: 'DW-1045', title: 'Monday Leading Hand 2.5h (minimum)', date: '2026-10-19', note: 'Ticket example: 4h minimum, 4h x $70 = $280', lines: [DL('labour', { person: 'p-tom', date: '2026-10-19', start: '07:00', end: '09:30' })] },
   { id: 'DW-1046', title: 'Dry-hire excavator 2.5h (minimum)', date: '2026-10-19', note: 'Ticket example: 4h x $120 = $480', lines: [DL('dry', { plant: 'EX-07', date: '2026-10-19', start: '07:00', end: '09:30' })] },
-  { id: 'DW-1047', title: 'Wet-hire excavator + Sam 9h', date: '2026-10-19', note: 'Ticket example: plant $1,710 + Sam $760 = $2,470', lines: [DL('wet', { plant: 'EX-09', person: 'p-sam', date: '2026-10-19', start: '07:00', end: '16:00' })] },
-  { id: 'DW-1048', title: 'Sam on wet hire and labour hire, same hours', date: '2026-10-21', note: 'Ticket example: flagged, cannot be approved', lines: [DL('wet', { plant: 'EX-09', person: 'p-sam', date: '2026-10-21', start: '07:00', end: '16:00' }), DL('labour', { person: 'p-sam', date: '2026-10-21', start: '07:00', end: '16:00' })] },
-  { id: 'DW-1049', title: 'Sam wet hire 7-12 then labour hire 12-16', date: '2026-10-26', note: 'Ticket example: both price, tier over the combined 9h, nothing flagged', lines: [DL('wet', { plant: 'EX-09', person: 'p-sam', date: '2026-10-26', start: '07:00', end: '12:00' }), DL('labour', { person: 'p-sam', date: '2026-10-26', start: '12:00', end: '16:00' })] },
-  { id: 'DW-1050', title: 'Friday 18:00 to Saturday 02:00', date: '2026-10-23', note: 'Ticket example: Fri 6h x $70 = $420 + Sat 2h x $105 = $210 = $630', lines: [DL('labour', { person: 'p-priya', date: '2026-10-23', start: '18:00', end: '02:00' })] },
-  { id: 'DW-1051', title: 'Leading Hand 8h on 28 Oct (v1, $70)', date: '2026-10-28', note: 'Ticket example: priced by the version in effect on 28 Oct', lines: [DL('labour', { person: 'p-priya', date: '2026-10-28', start: '07:00', end: '15:00' })] },
-  { id: 'DW-1052', title: 'Leading Hand 8h on 3 Nov (v2, $75)', date: '2026-11-03', note: 'Ticket example: priced by the version effective 1 Nov', lines: [DL('labour', { person: 'p-priya', date: '2026-11-03', start: '07:00', end: '15:00' })] },
-  { id: 'DW-1038', title: 'Leading Hand 8h on claim #3 (locked)', date: '2026-10-14', claim: 'Claim #3 issued 25/10/2026', lockedValue: 560, lockedVersion: 1, note: 'Ticket example: on an issued claim, never repriced', lines: [DL('labour', { person: 'p-priya', date: '2026-10-14', start: '07:00', end: '15:00' })] },
-  { id: 'DW-1053', title: 'Wet-hire precedence: EX-07, EX-09, LD-02', date: '2026-10-22', note: 'Ticket example: EX-07 uses the $200 item rate, EX-09 the $180 resource rate, LD-02 the $150 wet-hire default', lines: [DL('wet', { plant: 'EX-07', person: 'p-sam', date: '2026-10-22', start: '07:00', end: '15:00' }), DL('wet', { plant: 'EX-09', person: 'p-priya', date: '2026-10-22', start: '07:00', end: '15:00' }), DL('wet', { plant: 'LD-02', person: 'p-jo', date: '2026-10-22', start: '07:00', end: '15:00' })] },
-  { id: 'DW-1054', title: 'Labour-hire precedence: Sam, Priya, Jo', date: '2026-10-27', note: 'Ticket example: Sam uses the $85 person rate, Priya the $70 Leading Hand rate, Jo the $65 labour-hire default', lines: [DL('labour', { person: 'p-sam', date: '2026-10-27', start: '07:00', end: '15:00' }), DL('labour', { person: 'p-priya', date: '2026-10-27', start: '07:00', end: '15:00' }), DL('labour', { person: 'p-jo', date: '2026-10-27', start: '07:00', end: '15:00' })] },
-  { id: 'DW-1055', title: 'EX-07 on dry hire and wet hire, overlapping', date: '2026-10-29', note: 'Plant overlap: flagged, cannot be approved', lines: [DL('dry', { plant: 'EX-07', date: '2026-10-29', start: '07:00', end: '12:00' }), DL('wet', { plant: 'EX-07', person: 'p-priya', date: '2026-10-29', start: '09:00', end: '15:00' })] },
-  { id: 'DW-1056', title: 'Dry-hire roller with no rate (unmapped)', date: '2026-10-30', note: 'No rate at any level: prices at $0, flagged, cannot be approved', lines: [DL('dry', { plant: 'RL-03', date: '2026-10-30', start: '07:00', end: '15:00' })] },
+  { id: 'DW-1047', title: 'Wet-hire EX-07 + Sam 9h', date: '2026-10-19', note: 'Ticket example: plant $1,710 + Sam at "Plant Operator" $760 = $2,470', lines: [DL('wet', { plant: 'EX-07', person: 'p-sam', date: '2026-10-19', start: '07:00', end: '16:00' })] },
+  { id: 'DW-1048', title: 'Sam on wet hire and labour, same hours', date: '2026-10-21', note: 'Ticket example: flagged, cannot be approved', lines: [DL('wet', { plant: 'EX-07', person: 'p-sam', date: '2026-10-21', start: '07:00', end: '16:00' }), DL('labour', { person: 'p-sam', date: '2026-10-21', start: '07:00', end: '16:00' })] },
+  { id: 'DW-1049', title: 'Sam wet hire 7-12 then labour 12-16', date: '2026-10-26', note: 'Ticket example: both lines price at "Plant Operator", tier over the combined 9h, nothing flagged', lines: [DL('wet', { plant: 'EX-07', person: 'p-sam', date: '2026-10-26', start: '07:00', end: '12:00' }), DL('labour', { person: 'p-sam', date: '2026-10-26', start: '12:00', end: '16:00' })] },
+  { id: 'DW-1050', title: 'Friday 18:00 to Saturday 02:00', date: '2026-10-23', note: 'Ticket example: Fri 6h x $70 = $420 + Sat 2h x $105 = $210 = $630', lines: [DL('labour', { person: 'p-tom', date: '2026-10-23', start: '18:00', end: '02:00' })] },
+  { id: 'DW-1051', title: 'Leading Hand 8h on 28 Oct (v1, $70)', date: '2026-10-28', note: 'Ticket example: priced by the version in effect on 28 Oct', lines: [DL('labour', { person: 'p-tom', date: '2026-10-28', start: '07:00', end: '15:00' })] },
+  { id: 'DW-1052', title: 'Leading Hand 8h on 3 Nov (v2, $75)', date: '2026-11-03', note: 'Ticket example: priced by the version effective 1 Nov', lines: [DL('labour', { person: 'p-tom', date: '2026-11-03', start: '07:00', end: '15:00' })] },
+  { id: 'DW-1038', title: 'Leading Hand 8h on claim #3 (locked)', date: '2026-10-14', claim: 'Claim #3 issued 25/10/2026', lockedValue: 560, lockedVersion: 1, note: 'Ticket example: on an issued claim, never repriced', lines: [DL('labour', { person: 'p-tom', date: '2026-10-14', start: '07:00', end: '15:00' })] },
+  { id: 'DW-1057', title: 'Priya (Foreman) on a Monday labour line 8h', date: '2026-10-26', note: 'Ticket example: the line reads "Supervisor" and prices 8h x $95 = $760', lines: [DL('labour', { person: 'p-priya', date: '2026-10-26', start: '07:00', end: '15:00' })] },
+  { id: 'DW-1058', title: 'EX-09 (no charge resource) on dry hire', date: '2026-10-30', note: 'Ticket example: prices at $0, shows EX-09 as unmapped, cannot be approved', lines: [DL('dry', { plant: 'EX-09', date: '2026-10-30', start: '07:00', end: '15:00' })] },
+  { id: 'DW-1055', title: 'EX-07 on dry hire and wet hire, overlapping', date: '2026-10-29', note: 'Plant overlap: flagged, cannot be approved', lines: [DL('dry', { plant: 'EX-07', date: '2026-10-29', start: '07:00', end: '12:00' }), DL('wet', { plant: 'EX-07', person: 'p-tom', date: '2026-10-29', start: '09:00', end: '15:00' })] },
+  { id: 'DW-1059', title: 'Jo (Labourer, no rate line) and Mia (no resource)', date: '2026-10-30', note: 'Unmapped people: $0, flagged, cannot be approved', lines: [DL('labour', { person: 'p-jo', date: '2026-10-30', start: '07:00', end: '15:00' }), DL('labour', { person: 'p-mia', date: '2026-10-30', start: '07:00', end: '15:00' })] },
 ];
 dockets.forEach(d => d.lines.forEach((l, i) => l.id = d.id + '-' + (i + 1)));
 dockets.sort((a, b) => a.date < b.date ? 1 : -1);
@@ -292,11 +293,12 @@ function fmtH(h) { return (Math.round(h * 100) / 100).toString(); }
 function money(v) { return '$' + v.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtDate(d) { const [y, m, dd] = d.split('-'); return dd + '/' + m + '/' + y; }
 function dayName(d) { return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short' }); }
+function round2(n) { return Math.round(n * 100) / 100; }
 function versionFor(date) {
   const eligible = versions.filter(v => v.effectiveFrom <= date).sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
   return eligible[0] || null;
 }
-function tierOrder(triggers, dt) { // [[tier, hoursOrInfinity], ...]
+function tierOrder(triggers, dt) {
   const t = triggers[dt]; const out = [];
   for (const tier of TIERS) { const v = t[tier]; if (v === null || v === '' || v === undefined) continue; out.push([tier, v === 'rest' ? Infinity : Number(v)]); }
   if (!out.length) out.push(['std', Infinity]);
@@ -305,34 +307,17 @@ function tierOrder(triggers, dt) { // [[tier, hoursOrInfinity], ...]
 function lowestTier(triggers, dt) { return tierOrder(triggers, dt)[0][0]; }
 function personById(id) { return PEOPLE.find(p => p.id === id); }
 function plantById(id) { return PLANT.find(p => p.id === id); }
-function targetLabel(line) {
-  if (line.level === 'default') return 'All ' + HIRE_LABEL[line.hire].toLowerCase() + (line.hire === 'labour' ? ' people' : ' plant');
-  if (line.level === 'resource') return line.target;
-  const p = personById(line.target); if (p) return p.name;
-  const pl = plantById(line.target); return pl ? pl.id + ' ' + pl.name : line.target;
-}
-function levelLabel(line) { return line.level === 'default' ? 'Hire-type default' : line.level === 'resource' ? (line.hire === 'labour' ? 'Role' : 'Charge resource') : (line.hire === 'labour' || personById(line.target) ? 'Person' : 'Plant item'); }
-function levelRank(l) { return l.level === 'item' ? 1 : l.level === 'resource' ? 2 : 3; }
-// Resolve the rate line for a subject. Person on wet hire falls back through labour hire levels.
-function resolvePlant(version, hire, plantId) {
-  const pl = plantById(plantId); const ls = version.lines.filter(l => l.hire === hire);
-  return ls.find(l => l.level === 'item' && l.target === plantId) || ls.find(l => l.level === 'resource' && l.target === pl.resource) || ls.find(l => l.level === 'default') || null;
-}
-function resolvePerson(version, hire, personId) {
-  const p = personById(personId);
-  const chain = [];
-  if (hire === 'wet') chain.push(version.lines.find(l => l.hire === 'wet' && l.level === 'item' && l.target === personId));
-  const lab = version.lines.filter(l => l.hire === 'labour');
-  chain.push(lab.find(l => l.level === 'item' && l.target === personId), lab.find(l => l.level === 'resource' && l.target === p.role), lab.find(l => l.level === 'default'));
-  return chain.find(Boolean) || null;
-}
-function subjectName(line) { return line.person ? personById(line.person).name : plantById(line.plant).id; }
+function lineName(l) { return l.section === 'labour' ? l.name : l.resource; }
+// Rates belong to resources only. A person prices at the labour line holding their resource; a plant item at the charge resource it maps to for the line type.
+function resolvePerson(version, personId) { const p = personById(personId); if (!p.resource) return null; return version.lines.find(l => l.section === 'labour' && l.resource === p.resource) || null; }
+function resolvePlant(version, type, plantId) { const pl = plantById(plantId); if (!pl[type]) return null; return version.lines.find(l => l.section === type && l.resource === pl[type]) || null; }
+function whyUnmappedPerson(p, v) { if (!p.resource) return 'not mapped to a labour resource'; if (!resolvePerson(v, p.id)) return 'mapped to ' + p.resource + ', which is on no Labour rates line'; return null; }
+function whyUnmappedPlant(pl, type, v) { if (!pl[type]) return 'no ' + TYPE_MSG[type] + ' charge resource'; if (!resolvePlant(v, type, pl.id)) return 'mapped to ' + pl[type] + ', which has no rate line'; return null; }
 
 function priceDocket(docket) {
   const version = versionFor(docket.date);
   const res = { version, lines: [], flags: [], total: 0, approvable: true };
   if (!version) { res.flags.push('No calculator version is in effect on ' + fmtDate(docket.date)); res.approvable = false; }
-  // 1. segments per calendar day
   const segs = [];
   docket.lines.forEach(line => {
     const s = toMin(line.start), e = toMin(line.end);
@@ -343,7 +328,6 @@ function priceDocket(docket) {
     }
   });
   segs.forEach(sg => { sg.net = Math.max(0, sg.net); sg.tiers = {}; });
-  // 2. overlap check per person and per plant
   const subjects = {};
   segs.forEach(sg => {
     if (sg.line.person) (subjects['P:' + sg.line.person] ||= []).push(sg);
@@ -358,12 +342,11 @@ function priceDocket(docket) {
         const name = key.startsWith('P:') ? personById(key.slice(2)).name : key.slice(2);
         const first = docket.lines.indexOf(a.line) < docket.lines.indexOf(b.line) ? a : b;
         const second = first === a ? b : a;
-        const msg = name + ' is already charged on the ' + HIRE_LABEL[first.line.hire].toLowerCase().replace(' ', '-') + ' line for these hours';
+        const msg = name + ' is already charged on the ' + TYPE_MSG[first.line.type] + ' line for these hours';
         if (!flaggedLines.has(second.line.id + msg)) { flaggedLines.add(second.line.id + msg); res.flags.push({ lineId: second.line.id, msg }); }
       }
     }
   });
-  // 3. tier the hours per person per day, chronologically across all of that person's lines
   if (version) {
     Object.entries(subjects).filter(([k]) => k.startsWith('P:')).forEach(([, list]) => {
       const byDate = {}; list.forEach(sg => (byDate[sg.date] ||= []).push(sg));
@@ -383,15 +366,14 @@ function priceDocket(docket) {
       });
     });
   }
-  // 4. value per line
   docket.lines.forEach(line => {
     const lsegs = segs.filter(sg => sg.line === line);
     const out = { line, segs: lsegs, parts: [], value: 0, flags: res.flags.filter(f => f.lineId === line.id).map(f => f.msg), net: lsegs.reduce((a, s) => a + s.net, 0) };
     if (version) {
       const firstDt = dayType(line.date);
-      const addPart = (label, rateLine, kind, subjectId) => {
+      const addPart = (label, rateLine, kind, why) => {
         const part = { label, rateLine, kind, rows: [], value: 0, topUp: 0 };
-        if (!rateLine) { part.unmapped = true; out.flags.push('No ' + HIRE_LABEL[line.hire].toLowerCase() + ' rate for ' + label + ' at any level (prices at $0)'); out.parts.push(part); return; }
+        if (!rateLine) { part.unmapped = true; part.why = why; out.flags.push(label + ' is unmapped: ' + why + '. Prices at $0.'); out.parts.push(part); return; }
         if (kind === 'flat') {
           const hrs = out.net; const charged = Math.max(hrs, rateLine.min); part.topUp = charged - hrs;
           if (rateLine.unit === 'day') { const days = lsegs.length; part.rows.push({ tier: 'std', hours: days, rate: rateLine.rates.std, value: days * rateLine.rates.std, unitLabel: 'day' }); }
@@ -406,9 +388,9 @@ function priceDocket(docket) {
         part.value = part.rows.reduce((a, r) => a + r.value, 0);
         out.parts.push(part);
       };
-      if (line.hire === 'labour') addPart(personById(line.person).name, resolvePerson(version, 'labour', line.person), 'tier');
-      if (line.hire === 'dry') addPart(line.plant + ' ' + plantById(line.plant).name, resolvePlant(version, 'dry', line.plant), 'flat');
-      if (line.hire === 'wet') { addPart(line.plant + ' ' + plantById(line.plant).name, resolvePlant(version, 'wet', line.plant), 'tier'); addPart(personById(line.person).name + ' (operator)', resolvePerson(version, 'wet', line.person), 'tier'); }
+      if (line.type === 'labour') { const p = personById(line.person); addPart(p.name, resolvePerson(version, p.id), 'tier', whyUnmappedPerson(p, version)); }
+      if (line.type === 'dry') { const pl = plantById(line.plant); addPart(pl.id + ' ' + pl.name, resolvePlant(version, 'dry', pl.id), 'flat', whyUnmappedPlant(pl, 'dry', version)); }
+      if (line.type === 'wet') { const pl = plantById(line.plant), p = personById(line.person); addPart(pl.id + ' ' + pl.name, resolvePlant(version, 'wet', pl.id), 'tier', whyUnmappedPlant(pl, 'wet', version)); addPart(p.name + ' (operator)', resolvePerson(version, p.id), 'tier', whyUnmappedPerson(p, version)); }
       out.value = out.parts.reduce((a, p) => a + p.value, 0);
     }
     if (out.flags.length) res.approvable = false;
@@ -421,29 +403,24 @@ function priceDocket(docket) {
 
 /* ───────────────────────── State ───────────────────────── */
 let role = 'admin';
-let viewVersion = versions.length - 1; // index
-let draft = null; // editable copy of current version
+let viewVersion = versions.length - 1;
+let draft = null;
 let dirty = false;
-let selDocket = dockets.find(d => d.id === 'DW-1041').id;
-let addLineHire = 'labour';
+let selDocket = 'DW-1041';
+let addLineType = 'labour';
 function canEdit() { return role === 'admin' || role === 'pm'; }
 function isCurrent() { return viewVersion === versions.length - 1; }
 function clone(o) { return JSON.parse(JSON.stringify(o)); }
 function working() { if (!draft) draft = clone(versions[versions.length - 1]); return draft; }
 function setRole(r) { role = r; render(); }
 function showTab(t) { document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === t)); ['calc', 'dockets', 'examples'].forEach(k => document.getElementById('tab-' + k).style.display = k === t ? '' : 'none'); }
-function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 2500); }
+function toast(m, isErr) { const t = document.getElementById('toast'); t.textContent = m; t.className = 'toast' + (isErr ? ' err' : ''); t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 3500); }
 
 /* ───────────────────────── Calculator screen ───────────────────────── */
-function unmapped(version) {
+function unmapped(v) {
   const out = [];
-  PEOPLE.forEach(p => { if (!resolvePerson(version, 'labour', p.id)) out.push({ what: p.name + ' (' + p.role + ')', why: 'no labour-hire rate at any level' }); });
-  PLANT.forEach(pl => {
-    const dry = resolvePlant(version, 'dry', pl.id), wet = resolvePlant(version, 'wet', pl.id);
-    if (!dry && !wet) out.push({ what: pl.id + ' ' + pl.name, why: 'no dry-hire or wet-hire rate at any level' });
-    else if (!dry) out.push({ what: pl.id + ' ' + pl.name, why: 'no dry-hire rate (wet hire prices from ' + levelLabel(wet).toLowerCase() + ' ' + money(wet.rates.std) + ')' });
-    else if (!wet) out.push({ what: pl.id + ' ' + pl.name, why: 'no wet-hire rate (dry hire prices from ' + levelLabel(dry).toLowerCase() + ' ' + money(dry.rates.std) + ')' });
-  });
+  PEOPLE.forEach(p => { const why = whyUnmappedPerson(p, v); if (why) out.push({ kind: 'person', id: p.id, what: p.name, why }); });
+  PLANT.forEach(pl => ['wet', 'dry'].forEach(type => { const why = whyUnmappedPlant(pl, type, v); if (why) out.push({ kind: 'plant', id: pl.id, type, what: pl.id + ' ' + pl.name + ' for ' + TYPE_LABEL[type].toLowerCase(), why }); }));
   return out;
 }
 function renderCalc() {
@@ -458,148 +435,108 @@ function renderCalc() {
     </div></div>`;
   if (!canEdit()) h += `<div class="banner info"><i class="fas fa-lock"></i><div><b>Read-only.</b> Only admins and project managers edit the calculator. You are viewing as a ${document.getElementById('roleSel').selectedOptions[0].text.replace(/ \(.*\)/, '').toLowerCase()}.</div></div>`;
   else if (!isCurrent()) h += `<div class="banner info"><i class="fas fa-clock-rotate-left"></i><div><b>Previous version, read-only.</b> Edit the current version to make changes. <a href="#" onclick="viewVersion=${versions.length - 1};render();return false">Back to current</a></div></div>`;
-  if (um.length) h += `<div class="banner warn"><i class="fas fa-triangle-exclamation"></i><div><b>Unmapped (${um.length})</b> · these price at $0 on a docket and block its approval until a rate exists at some level.<ul style="margin:6px 0 0 16px">${um.map(u => `<li><b>${u.what}</b>: ${u.why}</li>`).join('')}</ul></div></div>`;
-  else h += `<div class="banner ok"><i class="fas fa-check"></i><div>Every person and plant item on the project has a rate at some level.</div></div>`;
+  if (um.length) {
+    h += `<div class="banner warn"><i class="fas fa-triangle-exclamation"></i><div style="flex:1"><b>Unmapped (${um.length})</b> · these price at $0 on a docket and block its approval until they are mapped to a resource with a rate line.<table style="margin-top:6px">`;
+    um.forEach(u => {
+      let fix = '';
+      if (canEdit()) {
+        if (u.kind === 'person') fix = `<select class="cell" onchange="mapPerson('${u.id}',this.value)"><option value="">Map to labour resource…</option>${LABOUR_RESOURCES.map(r => `<option value="${r}">${r}</option>`).join('')}</select>`;
+        else fix = `<select class="cell" onchange="mapPlant('${u.id}','${u.type}',this.value)"><option value="">Map to ${TYPE_MSG[u.type]} charge resource…</option>${CHARGE_RESOURCES[u.type].map(r => `<option value="${r}">${r}</option>`).join('')}</select>`;
+      }
+      h += `<tr><td><b>${u.what}</b></td><td>${u.why}</td><td>${fix}</td></tr>`;
+    });
+    h += `</table></div></div>`;
+  } else h += `<div class="banner ok"><i class="fas fa-check"></i><div>Every person and plant item on the project is mapped to a resource with a rate line.</div></div>`;
 
   h += `<div class="grid2"><div>`;
-  h += renderRateTree(v, editing);
+  h += renderLabourSection(v, editing) + renderPlantSection(v, 'wet', editing) + renderPlantSection(v, 'dry', editing);
 
-  // triggers
   h += `<div class="card ${editing ? '' : 'ro'} trig"><h2>Tier triggers</h2><table><thead><tr><th>Day type</th><th class="num">Standard</th><th class="num">1.5x</th><th class="num">2x</th><th class="num">Public holiday</th><th></th></tr></thead><tbody>`;
   Object.keys(DAYTYPE_LABEL).forEach(dt => {
     h += `<tr><td><b>${DAYTYPE_LABEL[dt]}</b></td>`;
     TIERS.forEach(t => { const val = v.triggers[dt][t]; h += `<td class="num"><input class="cell" value="${val === null || val === undefined ? '' : val}" placeholder="-" onchange="setTrig('${dt}','${t}',this.value)"></td>`; });
     h += `<td class="muted small">${describeTrig(v.triggers, dt)}</td></tr>`;
   });
-  h += `</tbody></table><div class="help">Hours in a day fill the tiers left to right: a number is the hours that tier takes, <b>rest</b> takes everything remaining, blank skips the tier. Hours are counted per person per calendar day; a docket across midnight is split at midnight and each part is tiered on its own day. Break time is deducted first. Public holidays come from the ${PROJECT_STATE} calendar. The same table applies to labour hire and wet hire; dry hire is flat.</div></div>`;
+  h += `</tbody></table><div class="help">Hours in a day fill the tiers left to right: a number is the hours that tier takes, <b>rest</b> takes everything remaining, blank skips the tier. Hours are counted per person per calendar day; a docket across midnight is split at midnight and each part is tiered on its own day. Break time is deducted first. Public holidays come from the ${PROJECT_STATE} calendar. The same table applies to labour and wet hire; dry hire is flat.</div></div>`;
   h += `</div><div>`;
-  // versions
   h += `<div class="card"><h2>Versions</h2><div class="vlist">`;
   [...versions].reverse().forEach((ver, i) => { const idx = versions.length - 1 - i; h += `<div class="v ${idx === viewVersion ? 'sel' : ''}" onclick="viewVersion=${idx};render()"><span>Version ${ver.n}${idx === versions.length - 1 ? ' <span class="pill ver">current</span>' : ''}</span><span class="muted">effective ${fmtDate(ver.effectiveFrom)}</span></div>`; });
   h += `</div><div class="help">Saved by ${v.savedBy} on ${fmtDate(v.savedOn)}. A docket is priced by the version in effect on its date. Dockets on an issued claim or approved variation are never repriced. The effective-from date cannot be before the last issued claim (${fmtDate(LAST_CLAIM)}).</div></div>`;
-  h += `<div class="card"><h2>Project resources</h2><dl class="kv"><dt>People</dt><dd>${PEOPLE.map(p => `${p.name} <span class="muted">· ${p.role}</span>`).join('<br>')}</dd><dt>Plant</dt><dd>${PLANT.map(p => `${p.id} ${p.name} <span class="muted">· ${p.resource}</span>`).join('<br>')}</dd></dl><div class="help">Rates can sit on the person or plant item, on the role or charge resource, or on the hire type. That is what lets the rates survive Remove Resources (VAR-22888).</div></div>`;
+  h += `<div class="card"><h2>Who prices at what</h2><table><thead><tr><th>Person</th><th>Labour resource</th><th>Rate line</th></tr></thead><tbody>`;
+  PEOPLE.forEach(p => { const rl = resolvePerson(v, p.id); h += `<tr><td>${p.name}</td><td class="muted">${p.resource || '-'}</td><td>${rl ? '<b>' + rl.name + '</b>' : '<span class="pill bad">Unmapped</span>'}</td></tr>`; });
+  h += `</tbody></table><table style="margin-top:10px"><thead><tr><th>Plant item</th><th>Wet hire</th><th>Dry hire</th></tr></thead><tbody>`;
+  PLANT.forEach(pl => { const w = resolvePlant(v, 'wet', pl.id), d = resolvePlant(v, 'dry', pl.id); h += `<tr><td>${pl.id}</td><td>${w ? '<b>' + w.resource + '</b>' : '<span class="pill bad">Unmapped</span>'}</td><td>${d ? '<b>' + d.resource + '</b>' : '<span class="pill bad">Unmapped</span>'}</td></tr>`; });
+  h += `</tbody></table><div class="help">Rates belong to resources only. People are mapped to a labour resource in Workers; plant items to wet and dry charge resources in Plant &amp; Equipment. Rates per specific person or plant item are deferred to Remove Resources (VAR-22888).</div></div>`;
   h += `</div></div>`;
   el.innerHTML = h;
 }
-
-/* ── Rate card as a tree: default > role / charge resource > person / plant item ── */
-function lineAt(v, hire, level, target) { return v.lines.find(l => l.hire === hire && l.level === level && (level === 'default' || l.target === target)) || null; }
-function srcLabel(hire, line, ownLevel) {
-  if (!line) return '<span class="pill bad">No rate</span>';
-  if (line.hire === hire && line.level === ownLevel) return '<span class="pill lvl1">Own rate</span>';
-  if (line.hire !== hire) return '<span class="pill lvl2">from labour hire (' + (line.level === 'default' ? 'default' : line.level === 'resource' ? line.target : 'own rate') + ')</span>';
-  if (line.level === 'default') return '<span class="pill lvl3">from ' + HIRE_LABEL[hire].toLowerCase() + ' default</span>';
-  return '<span class="pill lvl2">from ' + line.target + '</span>';
-}
-function rateCells(line, own, editing, flat) {
-  if (!line) return flat ? '<td class="num muted">-</td><td></td><td class="num muted">-</td>' : '<td class="num muted" colspan="4">-</td><td class="num muted">-</td>';
-  let h = '';
-  const cell = (t) => {
-    const val = round2(line.rates[t]);
-    if (own && editing) {
-      if (t === 'std') return `<td class="num"><input class="cell" type="number" step="0.01" value="${val}" onchange="setStd('${line.id}',this.value)"></td>`;
-      const ov = Math.abs(line.rates[t] - line.rates.std * MULT[t]) > 0.004;
-      return `<td class="num"><input class="cell ${ov ? 'overridden' : ''}" type="number" step="0.01" value="${val}" onchange="setRate('${line.id}','${t}',this.value)" title="${ov ? 'Overwritten from the ' + MULT[t] + 'x prefill' : 'Prefilled at ' + MULT[t] + 'x Standard'}"></td>`;
-    }
-    return `<td class="num ${own ? '' : 'muted'} mono">${money(val)}</td>`;
-  };
-  if (flat) {
-    h += cell('std');
-    h += `<td class="muted small">per ${line.unit}${own && editing ? ` · <a href="#" onclick="setLine('${line.id}','unit','${line.unit === 'hour' ? 'day' : 'hour'}');return false">switch</a>` : ''}</td>`;
-  } else TIERS.forEach(t => h += cell(t));
-  h += own && editing ? `<td class="num"><input class="cell" style="width:60px" type="number" min="0" step="0.5" value="${line.min}" onchange="setLine('${line.id}','min',Number(this.value))"></td>` : `<td class="num ${own ? '' : 'muted'}">${line.min}h</td>`;
+function tierInputs(l, editing) {
+  let h = `<td class="num"><input class="cell" type="number" step="0.01" value="${round2(l.rates.std)}" onchange="setStd('${l.id}',this.value)"></td>`;
+  ['x15', 'x2', 'ph'].forEach(t => { const ov = Math.abs(l.rates[t] - l.rates.std * MULT[t]) > 0.004; h += `<td class="num"><input class="cell ${ov ? 'overridden' : ''}" type="number" step="0.01" value="${round2(l.rates[t])}" onchange="setRate('${l.id}','${t}',this.value)" title="${ov ? 'Overwritten from the ' + MULT[t] + 'x prefill' : 'Prefilled at ' + MULT[t] + 'x Standard'}"></td>`; });
   return h;
 }
-function treeRow(o) {
-  const pad = 10 + o.indent * 22;
-  const icon = o.indent === 0 ? 'fa-layer-group' : o.indent === 1 ? (o.hire === 'labour' || o.isPerson ? 'fa-id-badge' : 'fa-tags') : (o.hire === 'labour' ? 'fa-user' : 'fa-truck-pickup');
-  let act = '';
-  if (o.editing) {
-    if (o.own) act = `<button class="btn ghost" title="Remove this rate; the row inherits again" onclick="clearAt('${o.line.id}')"><i class="fas fa-rotate-left"></i> inherit</button>`;
-    else act = `<button class="btn sm" onclick="overrideAt('${o.hire}','${o.ownLevel}','${o.target || ''}')"><i class="fas fa-pen"></i> ${o.line ? 'Set own rate' : 'Add rate'}</button>`;
+function minInput(l) { return `<td class="num"><input class="cell" style="width:60px" type="number" min="0" step="0.5" value="${l.min}" onchange="setLine('${l.id}','min',Number(this.value))"></td>`; }
+function renderLabourSection(v, editing) {
+  const lines = v.lines.filter(l => l.section === 'labour');
+  let h = `<div class="card ${editing ? '' : 'ro'}"><div class="sec-h"><div><h3 class="sec"><span class="pill labour">Labour rates</span></h3><div class="desc">One line per label on the client's schedule. Each line prices exactly one labour resource from the catalogue; a resource can be on only one line.</div></div></div>
+    <table><thead><tr><th>Line name <span class="muted" style="text-transform:none;letter-spacing:0">(shows on the docket and export)</span></th><th>Labour resource</th><th class="num">Standard</th><th class="num">1.5x</th><th class="num">2x</th><th class="num">Public holiday</th><th class="num">Min hrs</th>${editing ? '<th></th>' : ''}</tr></thead><tbody>`;
+  if (!lines.length) h += `<tr><td colspan="8" class="muted">No Labour rates lines yet.</td></tr>`;
+  lines.forEach(l => {
+    const who = PEOPLE.filter(p => p.resource === l.resource).map(p => p.name.split(' ')[0]);
+    h += `<tr><td><input class="cell wide" value="${l.name}" onchange="setLine('${l.id}','name',this.value)"></td>
+      <td><select class="cell" onchange="chooseResource('${l.id}',this)">${LABOUR_RESOURCES.map(r => `<option value="${r}" ${r === l.resource ? 'selected' : ''}>${r}</option>`).join('')}</select><div class="muted">${who.length ? who.join(', ') : 'nobody on the project'}</div></td>
+      ${tierInputs(l, editing)}${minInput(l)}${editing ? `<td><button class="btn ghost" title="Remove line" onclick="removeLine('${l.id}')"><i class="fas fa-trash"></i></button></td>` : ''}</tr>`;
+  });
+  h += `</tbody></table>`;
+  if (editing) {
+    const free = LABOUR_RESOURCES.filter(r => !lines.some(l => l.resource === r));
+    h += `<div class="addrow edit-only"><div class="form-row"><div class="field"><label>Line name</label><input id="nlName" placeholder="e.g. Supervisor"></div><div class="field"><label>Labour resource</label><select id="nlRes">${LABOUR_RESOURCES.map(r => `<option value="${r}">${r}${free.includes(r) ? '' : ' (on the ' + lines.find(l => l.resource === r).name + ' line)'}</option>`).join('')}</select></div><div class="field"><label>Standard rate</label><input id="nlStd" type="number" step="0.01" placeholder="0.00"></div><button class="btn" onclick="addLabourLine()"><i class="fas fa-plus"></i> Add line</button></div><div class="err" id="nlErr"></div></div>`;
   }
-  return `<tr class="${o.own ? 'own' : 'inh'}"><td style="padding-left:${pad}px"><i class="fas ${icon} muted" style="width:16px"></i> <b>${o.label}</b>${o.sub ? ` <span class="muted small">${o.sub}</span>` : ''}</td><td>${srcLabel(o.hire, o.line, o.ownLevel)}</td>${rateCells(o.line, o.own, o.editing, o.flat)}${o.editing ? `<td style="white-space:nowrap">${act}</td>` : ''}</tr>`;
-}
-function renderRateTree(v, editing) {
-  const head = (flat) => `<thead><tr><th style="width:34%">Applies to</th><th>Rate comes from</th>${flat ? '<th class="num">Rate</th><th></th>' : '<th class="num">Standard</th><th class="num">1.5x</th><th class="num">2x</th><th class="num">Public holiday</th>'}<th class="num">Min hrs</th>${editing ? '<th></th>' : ''}</tr></thead>`;
-  let h = `<div class="card ${editing ? '' : 'ro'}"><h2>Rate card</h2><div class="help" style="margin:0 0 12px">Each hire type is a tree. A rate set on a row applies to everything under it until a lower row sets its own, and the most specific row wins when a docket is priced. Grey rows inherit from the row above them; <span class="pill lvl1">Own rate</span> rows are set here.</div>`;
-
-  h += `<h3 class="tree-h"><span class="pill labour">Labour hire</span> own people charged out on their own, tiered by the person's hours</h3><table class="tree">${head(false)}<tbody>`;
-  const ld = lineAt(v, 'labour', 'default');
-  h += treeRow({ label: 'All labour hire', sub: 'default for every person', indent: 0, line: ld, own: !!ld, ownLevel: 'default', hire: 'labour', editing });
-  ROLES.forEach(role => {
-    const rl = lineAt(v, 'labour', 'resource', role);
-    h += treeRow({ label: role, sub: 'role', indent: 1, line: rl || ld, own: !!rl, ownLevel: 'resource', hire: 'labour', target: role, editing });
-    PEOPLE.filter(p => p.role === role).forEach(p => {
-      const pl = lineAt(v, 'labour', 'item', p.id);
-      h += treeRow({ label: p.name, indent: 2, line: pl || rl || ld, own: !!pl, ownLevel: 'item', hire: 'labour', target: p.id, editing });
-    });
-  });
-  h += `</tbody></table>`;
-
-  h += `<h3 class="tree-h"><span class="pill wet">Wet hire</span> plant with operator on one docket line, both tiered by the operator's hours</h3><table class="tree">${head(false)}<tbody>`;
-  const wd = lineAt(v, 'wet', 'default');
-  h += treeRow({ label: 'All wet-hire plant', sub: 'default for every plant item', indent: 0, line: wd, own: !!wd, ownLevel: 'default', hire: 'wet', editing });
-  RESOURCES.forEach(res => {
-    const rl = lineAt(v, 'wet', 'resource', res);
-    h += treeRow({ label: res, sub: 'charge resource', indent: 1, line: rl || wd, own: !!rl, ownLevel: 'resource', hire: 'wet', target: res, editing });
-    PLANT.filter(p => p.resource === res).forEach(p => {
-      const il = lineAt(v, 'wet', 'item', p.id);
-      h += treeRow({ label: p.id + ' ' + p.name, indent: 2, line: il || rl || wd, own: !!il, ownLevel: 'item', hire: 'wet', target: p.id, editing });
-    });
-  });
-  h += `</tbody></table>`;
-  h += `<h4 class="tree-h sub">Operators on wet hire <span class="muted small" style="font-weight:400">· the person's charge on a wet-hire line. Uses the person's labour-hire rate unless an operator rate is set here.</span></h4><table class="tree">${head(false)}<tbody>`;
-  PEOPLE.forEach(p => {
-    const ol = lineAt(v, 'wet', 'item', p.id);
-    h += treeRow({ label: p.name, sub: p.role, indent: 1, isPerson: true, line: resolvePerson(v, 'wet', p.id), own: !!ol, ownLevel: 'item', hire: 'wet', target: p.id, editing });
-  });
-  h += `</tbody></table>`;
-
-  h += `<h3 class="tree-h"><span class="pill dry">Dry hire</span> plant only, flat rate, no tiers</h3><table class="tree">${head(true)}<tbody>`;
-  const dd = lineAt(v, 'dry', 'default');
-  h += treeRow({ label: 'All dry-hire plant', sub: 'default for every plant item', indent: 0, line: dd, own: !!dd, ownLevel: 'default', hire: 'dry', editing, flat: true });
-  RESOURCES.forEach(res => {
-    const rl = lineAt(v, 'dry', 'resource', res);
-    h += treeRow({ label: res, sub: 'charge resource', indent: 1, line: rl || dd, own: !!rl, ownLevel: 'resource', hire: 'dry', target: res, editing, flat: true });
-    PLANT.filter(p => p.resource === res).forEach(p => {
-      const il = lineAt(v, 'dry', 'item', p.id);
-      h += treeRow({ label: p.id + ' ' + p.name, indent: 2, line: il || rl || dd, own: !!il, ownLevel: 'item', hire: 'dry', target: p.id, editing, flat: true });
-    });
-  });
-  h += `</tbody></table>`;
-  h += `<div class="help">Entering a Standard rate prefills 1.5x, 2x and Public holiday at 1.5x, 2x and 2.5x; amber cells have been overwritten. Minimum hours apply per resource per day; 0 means none. A rate on a role or charge resource survives Remove Resources (VAR-22888) because the person or plant item still carries that role or charge resource.</div></div>`;
+  h += `<div class="help">Entering a Standard rate prefills 1.5x, 2x and Public holiday at 1.5x, 2x and 2.5x; amber cells have been overwritten. Minimum hours apply per rate line per day; 0 means none.</div></div>`;
   return h;
 }
-function overrideAt(hire, level, target) {
-  const w = working();
-  let eff = null;
-  if (hire === 'labour') eff = level === 'default' ? null : level === 'resource' ? lineAt(w, 'labour', 'default') : resolvePerson(w, 'labour', target);
-  else if (hire === 'wet' && personById(target)) eff = resolvePerson(w, 'wet', target);
-  else eff = level === 'default' ? null : level === 'resource' ? lineAt(w, hire, 'default') : resolvePlant(w, hire, target);
-  const nl = L(hire, level, target || null, eff ? clone(eff.rates) : rates(hire === 'dry' ? 100 : 60), eff ? eff.min : 4, eff ? eff.unit : 'hour');
-  w.lines.push(nl); mark();
+function renderPlantSection(v, type, editing) {
+  const lines = v.lines.filter(l => l.section === type);
+  const flat = type === 'dry';
+  let h = `<div class="card ${editing ? '' : 'ro'}"><div class="sec-h"><div><h3 class="sec"><span class="pill ${type}">${SECTION_LABEL[type]}</span></h3><div class="desc">${flat ? 'Plant only, no operator. Flat rate per hour or per day, no tiers.' : 'Plant with operator. The operator\'s hours decide the tier; the plant prices here and the operator at their Labour rates line, both from the same tier split.'}</div></div></div>
+    <table><thead><tr><th>Charge resource</th>${flat ? '<th class="num">Rate</th><th>Unit</th>' : '<th class="num">Standard</th><th class="num">1.5x</th><th class="num">2x</th><th class="num">Public holiday</th>'}<th class="num">Min hrs</th>${editing ? '<th></th>' : ''}</tr></thead><tbody>`;
+  if (!lines.length) h += `<tr><td colspan="7" class="muted">No ${SECTION_LABEL[type].toLowerCase()} lines yet.</td></tr>`;
+  lines.forEach(l => {
+    const items = PLANT.filter(p => p[type] === l.resource).map(p => p.id);
+    h += `<tr><td><b>${l.resource}</b><div class="muted">${items.length ? items.join(', ') : 'no plant item mapped'}</div></td>`;
+    if (flat) h += `<td class="num"><input class="cell" type="number" step="0.01" value="${round2(l.rates.std)}" onchange="setStd('${l.id}',this.value)"></td><td><select class="cell" onchange="setLine('${l.id}','unit',this.value)"><option value="hour" ${l.unit === 'hour' ? 'selected' : ''}>per hour</option><option value="day" ${l.unit === 'day' ? 'selected' : ''}>per day</option></select></td>`;
+    else h += tierInputs(l, editing);
+    h += `${minInput(l)}${editing ? `<td><button class="btn ghost" title="Remove line" onclick="removeLine('${l.id}')"><i class="fas fa-trash"></i></button></td>` : ''}</tr>`;
+  });
+  h += `</tbody></table>`;
+  if (editing) {
+    const free = CHARGE_RESOURCES[type].filter(r => !lines.some(l => l.resource === r));
+    h += `<div class="addrow edit-only"><div class="form-row"><div class="field"><label>Charge resource</label><select id="nl-${type}">${free.length ? free.map(r => `<option value="${r}">${r}</option>`).join('') : '<option value="">All charge resources have a line</option>'}</select></div><div class="field"><label>${flat ? 'Rate' : 'Standard rate'}</label><input id="nl-${type}-std" type="number" step="0.01" placeholder="0.00"></div><button class="btn" onclick="addPlantLine('${type}')" ${free.length ? '' : 'disabled'}><i class="fas fa-plus"></i> Add line</button></div></div>`;
+  }
+  h += `</div>`;
+  return h;
 }
-function clearAt(id) { removeLine(id); }
-
-function round2(n) { return Math.round(n * 100) / 100; }
 function describeTrig(trig, dt) { return tierOrder(trig, dt).map(([t, hrs]) => (hrs === Infinity ? 'rest' : hrs + 'h') + ' at ' + TIER_LABEL[t]).join(', then '); }
-function targetSelect(l) {
-  const sel = (opts) => `<select class="cell" onchange="setTarget('${l.id}',this.value)">${opts.map(o => `<option value="${o.v}" ${o.v === (l.level + ':' + (l.target || '')) ? 'selected' : ''}>${o.t}</option>`).join('')}</select>`;
-  const opts = [{ v: 'default:', t: 'All ' + HIRE_LABEL[l.hire].toLowerCase() + (l.hire === 'labour' ? ' people' : ' plant') + ' (default)' }];
-  if (l.hire === 'labour') { ROLES.forEach(r => opts.push({ v: 'resource:' + r, t: 'Role: ' + r })); PEOPLE.forEach(p => opts.push({ v: 'item:' + p.id, t: 'Person: ' + p.name })); }
-  else { RESOURCES.forEach(r => opts.push({ v: 'resource:' + r, t: 'Charge resource: ' + r })); PLANT.forEach(p => opts.push({ v: 'item:' + p.id, t: 'Plant item: ' + p.id + ' ' + p.name })); if (l.hire === 'wet') PEOPLE.forEach(p => opts.push({ v: 'item:' + p.id, t: 'Operator: ' + p.name })); }
-  return sel(opts);
-}
 function findLine(id) { return working().lines.find(l => l.id === id); }
 function mark() { dirty = true; render(); }
 function setStd(id, val) { const l = findLine(id); const old = l.rates.std; const n = Number(val); TIERS.filter(t => t !== 'std').forEach(t => { if (Math.abs(l.rates[t] - old * MULT[t]) < 0.004) l.rates[t] = n * MULT[t]; }); l.rates.std = n; mark(); }
 function setRate(id, t, val) { findLine(id).rates[t] = Number(val); mark(); }
-function setLine(id, k, val) { const l = findLine(id); l[k] = val; if (k === 'hire') { l.level = 'default'; l.target = null; } mark(); }
-function setTarget(id, val) { const l = findLine(id); const [level, target] = val.split(':'); l.level = level; l.target = target || null; mark(); }
+function setLine(id, k, val) { findLine(id)[k] = val; mark(); }
 function setTrig(dt, t, val) { const v = val.trim().toLowerCase(); working().triggers[dt][t] = v === '' ? null : v === 'rest' ? 'rest' : Number(v); mark(); }
-function addLine() { const hire = document.getElementById('addHire').value; working().lines.push(L(hire, 'default', null, rates(hire === 'dry' ? 100 : 60))); mark(); toast('Rate line added at the hire-type default level. Change "Applies to" to map it to a resource, item or person.'); }
+// The one-resource-per-line rule. Returns the refusal message, or null if the resource can go on the line.
+function resourceConflict(resource, lineId) { const other = working().lines.find(l => l.section === 'labour' && l.resource === resource && l.id !== lineId); return other ? resource + ' is already on the ' + other.name + ' line' : null; }
+function chooseResource(id, sel) { const msg = resourceConflict(sel.value, id); if (msg) { toast(msg, true); sel.value = findLine(id).resource; return; } setLine(id, 'resource', sel.value); }
+function addLabourLine() {
+  const name = document.getElementById('nlName').value.trim(), res = document.getElementById('nlRes').value, std = Number(document.getElementById('nlStd').value);
+  const err = document.getElementById('nlErr');
+  if (!name) { err.textContent = 'Type the line name first (the label the client\'s schedule uses).'; return; }
+  const msg = resourceConflict(res, null); if (msg) { err.textContent = msg; toast(msg, true); return; }
+  working().lines.push(L('labour', name, res, rates(std || 0))); mark();
+}
+function addPlantLine(type) { const res = document.getElementById('nl-' + type).value; if (!res) return; const std = Number(document.getElementById('nl-' + type + '-std').value); working().lines.push(L(type, null, res, rates(std || 0), 4, 'hour')); mark(); }
 function removeLine(id) { const w = working(); w.lines = w.lines.filter(l => l.id !== id); mark(); }
+function mapPerson(id, res) { if (!res) return; personById(id).resource = res; render(); toast(personById(id).name + ' mapped to ' + res + ' (project worker setting, not part of the calculator version)'); }
+function mapPlant(id, type, res) { if (!res) return; plantById(id)[type] = res; render(); toast(id + ' mapped to ' + res + ' (plant item setting, not part of the calculator version)'); }
 function discard() { draft = null; dirty = false; render(); }
 function openSave() { document.getElementById('effFrom').value = TODAY; document.getElementById('effErr').textContent = ''; document.getElementById('saveModal').classList.add('open'); }
 function closeModal() { document.getElementById('saveModal').classList.remove('open'); }
@@ -617,7 +554,7 @@ function renderDockets() {
   const el = document.getElementById('tab-dockets');
   const dk = dockets.find(d => d.id === selDocket);
   const r = priceDocket(dk);
-  let h = `<div class="hdr"><div><h1>Daywork dockets</h1><div class="sub">Each docket shows its priced value, the tier split per line and the calculator version that priced it.</div></div></div><div class="grid-dk"><div>`;
+  let h = `<div class="hdr"><div><h1>Daywork dockets</h1><div class="sub">Each docket shows its priced value and, per line, the rate line it priced at, the tier split and the calculator version.</div></div></div><div class="grid-dk"><div>`;
   dockets.forEach(d => { const p = priceDocket(d); h += `<div class="dk ${d.id === selDocket ? 'sel' : ''}" onclick="selDocket='${d.id}';render()"><div class="t"><span>${d.id}</span><span class="mono">${money(p.total)}</span></div><div class="d">${dayName(d.date)} ${fmtDate(d.date)} · ${d.title}</div><div style="margin-top:4px">${d.claim ? '<span class="pill lock">On claim</span>' : p.approvable ? '<span class="pill ok">Ready to approve</span>' : '<span class="pill bad">Blocked</span>'}</div></div>`; });
   h += `</div><div>`;
   h += `<div class="card"><div class="hdr"><div><h2 style="margin:0">${dk.id} · ${dk.title}</h2><div class="sub">${dayName(dk.date)} ${fmtDate(dk.date)}${PUBLIC_HOLIDAYS[dk.date] ? ' · ' + PUBLIC_HOLIDAYS[dk.date] : ''} · ${dk.note}</div></div>
@@ -626,16 +563,17 @@ function renderDockets() {
   else if (!r.approvable) h += `<div class="banner err"><i class="fas fa-ban"></i><div><b>Cannot be approved.</b> Resolve the flagged line${r.lines.filter(l => l.flags.length).length > 1 ? 's' : ''} below.</div></div>`;
   r.lines.forEach((lr, idx) => {
     const line = lr.line;
-    const who = line.hire === 'labour' ? personById(line.person).name : line.hire === 'dry' ? line.plant + ' ' + plantById(line.plant).name : line.plant + ' ' + plantById(line.plant).name + ' + ' + personById(line.person).name;
+    const who = line.type === 'labour' ? personById(line.person).name : line.type === 'dry' ? line.plant + ' ' + plantById(line.plant).name : line.plant + ' ' + plantById(line.plant).name + ' + ' + personById(line.person).name;
     const crosses = lr.segs.length > 1;
-    h += `<div class="line ${lr.flags.length ? 'flag' : ''}"><div class="line-h"><span class="pill ${line.hire}">${HIRE_LABEL[line.hire]}</span><span class="who">${who}</span>
-      <span class="muted">${canEdit() && !r.locked ? `<input class="cell wide" style="width:120px" type="date" value="${line.date}" onchange="editLine('${dk.id}',${idx},'date',this.value)"> <input class="cell" style="width:70px" type="time" value="${line.start}" onchange="editLine('${dk.id}',${idx},'start',this.value)"> to <input class="cell" style="width:70px" type="time" value="${line.end}" onchange="editLine('${dk.id}',${idx},'end',this.value)"> break <input class="cell" style="width:56px" type="number" step="0.25" min="0" value="${line.breakH}" onchange="editLine('${dk.id}',${idx},'breakH',Number(this.value))">h` : `${fmtDate(line.date)} ${line.start} to ${line.end}${crosses ? ' (next day)' : ''}${line.breakH ? ', ' + line.breakH + 'h break' : ''}`}
+    const names = lr.parts.filter(p => p.rateLine).map(p => lineName(p.rateLine));
+    h += `<div class="line ${lr.flags.length ? 'flag' : ''}"><div class="line-h"><span class="pill ${line.type}">${TYPE_LABEL[line.type]}</span><span class="who">${who}</span>${names.length ? `<span class="pill res" title="Rate line(s) this line priced at">${names.join(' + ')}</span>` : ''}
+      <span class="muted">${canEdit() && !r.locked ? `<input class="cell wide" style="width:120px;font-weight:400" type="date" value="${line.date}" onchange="editLine('${dk.id}',${idx},'date',this.value)"> <input class="cell" style="width:70px" type="time" value="${line.start}" onchange="editLine('${dk.id}',${idx},'start',this.value)"> to <input class="cell" style="width:70px" type="time" value="${line.end}" onchange="editLine('${dk.id}',${idx},'end',this.value)"> break <input class="cell" style="width:56px" type="number" step="0.25" min="0" value="${line.breakH}" onchange="editLine('${dk.id}',${idx},'breakH',Number(this.value))">h` : `${fmtDate(line.date)} ${line.start} to ${line.end}${crosses ? ' (next day)' : ''}${line.breakH ? ', ' + line.breakH + 'h break' : ''}`}
       · ${fmtH(lr.net)}h net${crosses ? ', split at midnight' : ''}</span>
       <span class="tot mono">${money(lr.value)}</span>${canEdit() && !r.locked ? `<button class="btn ghost" title="Remove line" onclick="removeDocketLine('${dk.id}',${idx})"><i class="fas fa-trash"></i></button>` : ''}</div>`;
     h += `<div class="line-b"><div class="split">`;
     lr.parts.forEach(p => {
-      h += `<div class="blk"><h4>${p.label}${p.rateLine ? ` <span class="pill lvl${levelRank(p.rateLine)}">${levelLabel(p.rateLine)}${p.rateLine.level !== 'default' ? ': ' + targetLabel(p.rateLine) : ''}</span>` : ' <span class="pill bad">Unmapped</span>'}</h4>`;
-      if (p.unmapped) h += `<div class="muted">No rate at any level. Prices at $0.</div>`;
+      h += `<div class="blk"><h4>${p.label}${p.rateLine ? ` <span class="pill res">${lineName(p.rateLine)}</span>` : ' <span class="pill bad">Unmapped</span>'}</h4>`;
+      if (p.unmapped) h += `<div class="muted">${p.why}. Prices at $0.</div>`;
       else {
         h += `<table><thead><tr><th>Tier</th><th class="num">Hours</th><th class="num">Rate</th><th class="num">Value</th></tr></thead><tbody>`;
         p.rows.forEach(rw => h += `<tr><td>${p.kind === 'flat' ? 'Flat' : TIER_LABEL[rw.tier]}</td><td class="num">${fmtH(rw.hours)}${rw.unitLabel === 'day' ? ' day' : 'h'}</td><td class="num">${money(rw.rate)}</td><td class="num">${money(rw.value)}</td></tr>`);
@@ -648,15 +586,14 @@ function renderDockets() {
     lr.flags.forEach(f => h += `<div class="flagmsg"><i class="fas fa-triangle-exclamation"></i> ${f}</div>`);
     h += `</div>`;
   });
-  // add line
   if (canEdit() && !r.locked) {
     h += `<div class="card" style="background:#f8fafc;margin-top:4px"><h2 style="font-size:13px">Add line</h2><div class="form-row">
-      <div class="field"><label>Hire type</label><select id="nlHire" onchange="addLineHire=this.value;render()">${Object.entries(HIRE_LABEL).map(([k, v]) => `<option value="${k}" ${k === addLineHire ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
-      ${addLineHire !== 'labour' ? `<div class="field"><label>Plant item</label><select id="nlPlant">${PLANT.map(p => `<option value="${p.id}">${p.id} ${p.name}</option>`).join('')}</select></div>` : ''}
-      ${addLineHire !== 'dry' ? `<div class="field"><label>${addLineHire === 'wet' ? 'Operator' : 'Person'}</label><select id="nlPerson">${PEOPLE.map(p => `<option value="${p.id}">${p.name} (${p.role})</option>`).join('')}</select></div>` : ''}
+      <div class="field"><label>Line type</label><select id="nlType" onchange="addLineType=this.value;render()">${Object.entries(TYPE_LABEL).map(([k, v]) => `<option value="${k}" ${k === addLineType ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      ${addLineType !== 'labour' ? `<div class="field"><label>Plant item</label><select id="nlPlant">${PLANT.map(p => `<option value="${p.id}">${p.id} ${p.name}</option>`).join('')}</select></div>` : ''}
+      ${addLineType !== 'dry' ? `<div class="field"><label>${addLineType === 'wet' ? 'Operator' : 'Person'}</label><select id="nlPerson">${PEOPLE.map(p => `<option value="${p.id}">${p.name} (${p.resource || 'no resource'})</option>`).join('')}</select></div>` : ''}
       <div class="field"><label>Start</label><input type="time" id="nlStart" value="07:00"></div><div class="field"><label>End</label><input type="time" id="nlEnd" value="15:00"></div><div class="field"><label>Break (h)</label><input type="number" step="0.25" min="0" id="nlBreak" value="0"></div>
       <button class="btn" onclick="addDocketLine('${dk.id}')"><i class="fas fa-plus"></i> Add</button></div>
-      <div class="help">A labour-hire line selects a person. A dry-hire line selects a plant item. A wet-hire line selects a plant item and a person; the person's hours decide the tier for both.</div></div>`;
+      <div class="help">A labour line selects a person. A dry-hire line selects a plant item. A wet-hire line selects a plant item and a person; the person's hours decide the tier for both.</div></div>`;
   }
   h += `<div class="actions"><button class="btn">Save draft</button><button class="btn primary" ${r.approvable && !r.locked ? '' : 'disabled'} onclick="toast('Docket ${dk.id} approved at ${money(r.total)}')"><i class="fas fa-check"></i> Approve docket</button></div>`;
   if (!r.approvable && !r.locked) h += `<div class="muted" style="text-align:right;margin-top:6px">Approve is disabled while a line is flagged.</div>`;
@@ -667,60 +604,59 @@ function editLine(did, idx, k, val) { dockets.find(d => d.id === did).lines[idx]
 function removeDocketLine(did, idx) { dockets.find(d => d.id === did).lines.splice(idx, 1); render(); }
 function addDocketLine(did) {
   const dk = dockets.find(d => d.id === did);
-  const line = DL(addLineHire, { date: dk.date, start: document.getElementById('nlStart').value, end: document.getElementById('nlEnd').value, breakH: Number(document.getElementById('nlBreak').value) });
-  if (addLineHire !== 'labour') line.plant = document.getElementById('nlPlant').value;
-  if (addLineHire !== 'dry') line.person = document.getElementById('nlPerson').value;
+  const line = DL(addLineType, { date: dk.date, start: document.getElementById('nlStart').value, end: document.getElementById('nlEnd').value, breakH: Number(document.getElementById('nlBreak').value) });
+  if (addLineType !== 'labour') line.plant = document.getElementById('nlPlant').value;
+  if (addLineType !== 'dry') line.person = document.getElementById('nlPerson').value;
   line.id = dk.id + '-' + (dk.lines.length + 1 + Math.floor(Math.random() * 1000));
   dk.lines.push(line); render();
 }
 
 /* ───────────────────────── Worked examples ───────────────────────── */
-function lineValue(did, i) { const d = dockets.find(x => x.id === did); return priceDocket(d).lines[i]; }
+function lineValue(did, i) { return priceDocket(dockets.find(x => x.id === did)).lines[i]; }
 function renderExamples() {
   const el = document.getElementById('tab-examples');
   const ex = [];
   const push = (given, then, expected, actual, did) => ex.push({ given, then, expected, actual, did });
   let v;
-  v = lineValue('DW-1041', 0); push('Tuesday labour-hire docket 6:00 to 17:00 with a 0.5h break (10.5h)', '8h x $70 + 2h x $105 + 0.5h x $140 = $840', 840, v.value, 'DW-1041');
-  v = lineValue('DW-1042', 0); push('Tuesday labour-hire docket 6:00 to 14:30 with a 0.5h break (8h)', '8h x $70 = $560, no overtime', 560, v.value, 'DW-1042');
-  v = lineValue('DW-1043', 0); push('Saturday labour-hire docket 7:00 to 12:00, no break (5h)', '2h x $105 + 3h x $140 = $630', 630, v.value, 'DW-1043');
-  v = lineValue('DW-1044', 0); push('Public holiday labour-hire docket of 4h', '4h x $175 = $700', 700, v.value, 'DW-1044');
-  v = lineValue('DW-1045', 0); push('Monday labour-hire docket of 2.5h', '4h minimum applies: 4h x $70 = $280', 280, v.value, 'DW-1045');
-  v = lineValue('DW-1046', 0); push('Dry-hire excavator at $120/h, minimum 4h, run 2.5h on a Monday', '4h x $120 = $480', 480, v.value, 'DW-1046');
-  v = lineValue('DW-1047', 0); push('Wet-hire 20t excavator (wet $180/$270/$360) with operator Sam ($80/$120/$160) for 9h on a Monday', 'plant $1,710 + Sam $760 = $2,470', 2470, v.value, 'DW-1047', [v.parts[0].value, v.parts[1].value]);
-  ex[ex.length - 1].detail = 'plant ' + money(v.parts[0].value) + ', Sam ' + money(v.parts[1].value);
+  v = lineValue('DW-1041', 0); push('Tuesday labour line for a Leading Hand 6:00 to 17:00 with a 0.5h break (10.5h)', '8h x $70 + 2h x $105 + 0.5h x $140 = $840', 840, v.value, 'DW-1041');
+  v = lineValue('DW-1042', 0); push('Tuesday labour line for a Leading Hand 6:00 to 14:30 with a 0.5h break (8h)', '8h x $70 = $560, no overtime', 560, v.value, 'DW-1042');
+  v = lineValue('DW-1043', 0); push('Saturday labour line for a Leading Hand 7:00 to 12:00, no break (5h)', '2h x $105 + 3h x $140 = $630', 630, v.value, 'DW-1043');
+  v = lineValue('DW-1044', 0); push('Public holiday labour line for a Leading Hand of 4h', '4h x $175 = $700', 700, v.value, 'DW-1044');
+  v = lineValue('DW-1045', 0); push('Monday labour line for a Leading Hand of 2.5h', '4h minimum applies: 4h x $70 = $280', 280, v.value, 'DW-1045');
+  v = lineValue('DW-1046', 0); push('Dry-hire excavator mapped to "Excavator 20t dry" at $120/h, minimum 4h, run 2.5h on a Monday', '4h x $120 = $480', 480, v.value, 'DW-1046');
+  v = lineValue('DW-1047', 0); push('Wet-hire line with EX-07 mapped to "Excavator 20t wet" ($180/$270/$360) and Sam, mapped to Operator, for 9h on a Monday', 'plant $1,710 + Sam at the "Plant Operator" line $760 = $2,470', 2470, v.value, 'DW-1047');
+  ex[ex.length - 1].detail = 'plant ' + money(v.parts[0].value) + ', Sam at "' + lineName(v.parts[1].rateLine) + '" ' + money(v.parts[1].value);
   const p48 = priceDocket(dockets.find(d => d.id === 'DW-1048'));
   const flag48 = p48.flags.find(f => f.msg === 'Sam Patel is already charged on the wet-hire line for these hours');
-  ex.push({ given: 'Sam on the wet-hire line 7:00 to 16:00, then a labour-hire line for Sam 7:00 to 16:00 is added', then: 'flags "Sam is already charged on the wet-hire line for these hours" and cannot be approved', expectedText: 'flagged, approve blocked', actualText: (flag48 ? '"' + flag48.msg + '"' : 'no flag') + ', approve ' + (p48.approvable ? 'enabled' : 'blocked'), pass: !!flag48 && !p48.approvable, did: 'DW-1048' });
+  ex.push({ given: 'Sam on the wet-hire line 7:00 to 16:00, then a labour line for Sam 7:00 to 16:00 is added', then: 'flags "Sam is already charged on the wet-hire line for these hours" and cannot be approved', expectedText: 'flagged, approve blocked', actualText: (flag48 ? '"' + flag48.msg + '"' : 'no flag') + ', approve ' + (p48.approvable ? 'enabled' : 'blocked'), pass: !!flag48 && !p48.approvable, did: 'DW-1048' });
   const p49 = priceDocket(dockets.find(d => d.id === 'DW-1049'));
   const sam49 = p49.lines[1].parts[0];
-  ex.push({ given: 'Sam on the wet-hire line 7:00 to 12:00 and a labour-hire line 12:00 to 16:00', then: 'both lines price, Sam\'s tier is worked out over the combined 9h, nothing flagged', expectedText: 'no flag; labour line 3h Standard + 1h 1.5x', actualText: (p49.flags.length ? p49.flags.length + ' flag(s)' : 'no flag') + '; labour line ' + sam49.rows.map(r => fmtH(r.hours) + 'h ' + TIER_LABEL[r.tier]).join(' + ') + ' = ' + money(p49.lines[1].value) + '; docket ' + money(p49.total), pass: !p49.flags.length && sam49.rows.length === 2 && Math.abs(sam49.rows[0].hours - 3) < 1e-9 && sam49.rows[0].tier === 'std' && sam49.rows[1].tier === 'x15' && Math.abs(sam49.rows[1].hours - 1) < 1e-9, did: 'DW-1049' });
+  ex.push({ given: 'Sam on the wet-hire line 7:00 to 12:00 and a labour line 12:00 to 16:00', then: 'both lines price at the "Plant Operator" rates, Sam\'s tier is worked out over the combined 9h, nothing flagged', expectedText: 'no flag; both at "Plant Operator"; labour line 3h Standard + 1h 1.5x', actualText: (p49.flags.length ? p49.flags.length + ' flag(s)' : 'no flag') + '; wet operator at "' + lineName(p49.lines[0].parts[1].rateLine) + '", labour at "' + lineName(sam49.rateLine) + '" ' + sam49.rows.map(r => fmtH(r.hours) + 'h ' + TIER_LABEL[r.tier]).join(' + ') + ' = ' + money(p49.lines[1].value) + '; docket ' + money(p49.total), pass: !p49.flags.length && lineName(sam49.rateLine) === 'Plant Operator' && lineName(p49.lines[0].parts[1].rateLine) === 'Plant Operator' && sam49.rows.length === 2 && Math.abs(sam49.rows[0].hours - 3) < 1e-9 && sam49.rows[0].tier === 'std' && sam49.rows[1].tier === 'x15' && Math.abs(sam49.rows[1].hours - 1) < 1e-9, did: 'DW-1049' });
   v = lineValue('DW-1050', 0); const fri = v.segs[0], sat = v.segs[1];
-  push('Docket from Friday 18:00 to Saturday 02:00, no break', 'Friday 6h at Standard = $420 and Saturday 2h at 1.5x = $210, total $630', 630, v.value, 'DW-1050');
+  push('Leading Hand labour line from Friday 18:00 to Saturday 02:00, no break', 'Friday 6h at Standard = $420 and Saturday 2h at 1.5x = $210, total $630', 630, v.value, 'DW-1050');
   ex[ex.length - 1].detail = 'Fri ' + fmtH(fri.net) + 'h ' + Object.keys(fri.tiers).map(t => TIER_LABEL[t]).join('/') + ', Sat ' + fmtH(sat.net) + 'h ' + Object.keys(sat.tiers).map(t => TIER_LABEL[t]).join('/');
   const d51 = priceDocket(dockets.find(d => d.id === 'DW-1051')), d52 = priceDocket(dockets.find(d => d.id === 'DW-1052')), d38 = priceDocket(dockets.find(d => d.id === 'DW-1038'));
   const r51 = d51.lines[0].parts[0].rows[0].rate, r52 = d52.lines[0].parts[0].rows[0].rate;
-  ex.push({ given: 'Leading Hand Standard rate changes to $75 effective 1 Nov', then: 'docket dated 28 Oct prices at $70, docket dated 3 Nov at $75, docket on a claim issued 25 Oct is unchanged', expectedText: '$70 / $75 / $560 unchanged', actualText: money(r51) + ' (v' + d51.version.n + ') / ' + money(r52) + ' (v' + d52.version.n + ') / ' + money(d38.total) + ' locked', pass: r51 === 70 && r52 === 75 && d38.total === 560 && d38.locked, did: 'DW-1052' });
-  const d53 = priceDocket(dockets.find(d => d.id === 'DW-1053'));
-  const rp = d53.lines.map(l => l.parts[0].rows[0].rate);
-  ex.push({ given: 'Wet-hire default $150, resource rate "Excavator 20t wet" $180, plant-item rate for EX-07 $200', then: 'EX-07 uses $200; EX-09 (no item rate) uses $180; a wet-hire plant with no resource rate uses $150', expectedText: '$200 / $180 / $150', actualText: rp.map(money).join(' / ') + ' (EX-07 / EX-09 / LD-02)', pass: rp[0] === 200 && rp[1] === 180 && rp[2] === 150, did: 'DW-1053' });
-  const d54 = priceDocket(dockets.find(d => d.id === 'DW-1054'));
-  const rl = d54.lines.map(l => l.parts[0].rows[0].rate);
-  ex.push({ given: 'Labour-hire default $65, Leading Hand role rate $70, person rate for Sam $85', then: 'Sam (a Leading Hand) uses $85; another Leading Hand with no person rate uses $70; a person whose role has no rate uses $65', expectedText: '$85 / $70 / $65', actualText: rl.map(money).join(' / ') + ' (Sam / Priya / Jo)', pass: rl[0] === 85 && rl[1] === 70 && rl[2] === 65, did: 'DW-1054' });
+  ex.push({ given: 'The "Leading Hand" line\'s Standard rate changes to $75 effective 1 Nov', then: 'docket dated 28 Oct prices at $70, docket dated 3 Nov at $75, docket on a claim issued 25 Oct is unchanged', expectedText: '$70 / $75 / $560 unchanged', actualText: money(r51) + ' (v' + d51.version.n + ') / ' + money(r52) + ' (v' + d52.version.n + ') / ' + money(d38.total) + ' locked', pass: r51 === 70 && r52 === 75 && d38.total === 560 && d38.locked, did: 'DW-1052' });
+  v = lineValue('DW-1057', 0);
+  ex.push({ given: 'A Labour rates line named "Supervisor" mapped to resource Foreman at Standard $95; Priya, mapped to Foreman, on a Monday labour line for 8h', then: 'the docket line reads "Supervisor" and prices 8h x $95 = $760', expectedText: '"Supervisor", $760.00', actualText: '"' + (v.parts[0].rateLine ? lineName(v.parts[0].rateLine) : 'unmapped') + '", ' + money(v.value), pass: v.parts[0].rateLine && lineName(v.parts[0].rateLine) === 'Supervisor' && Math.abs(v.value - 760) < 0.005, did: 'DW-1057' });
+  const refusal = (() => { const was = draft; const r = resourceConflict('Foreman', null); if (!was) draft = null; return r; })();
+  ex.push({ given: 'Resource Foreman is already on the "Supervisor" line; the user tries to select Foreman on a second line', then: 'the selection is refused with "Foreman is already on the Supervisor line"', expectedText: 'refused', actualText: refusal ? 'refused: "' + refusal + '"' : 'allowed', pass: refusal === 'Foreman is already on the Supervisor line', did: null });
+  const d58 = priceDocket(dockets.find(d => d.id === 'DW-1058'));
+  ex.push({ given: 'Plant EX-09 is mapped to no charge resource and is put on a dry-hire line', then: 'prices at $0, the docket shows EX-09 as unmapped, cannot be approved', expectedText: '$0.00, unmapped, approve blocked', actualText: money(d58.total) + ', ' + (d58.lines[0].parts[0].unmapped ? 'EX-09 shown unmapped' : 'not shown unmapped') + ', approve ' + (d58.approvable ? 'enabled' : 'blocked'), pass: d58.total === 0 && d58.lines[0].parts[0].unmapped && !d58.approvable, did: 'DW-1058' });
   const d55 = priceDocket(dockets.find(d => d.id === 'DW-1055'));
-  ex.push({ given: 'EX-07 on a dry-hire line 7:00 to 12:00 and a wet-hire line 9:00 to 15:00 (not in the ticket; the plant half of the rule)', then: 'flags "EX-07 is already charged on the dry-hire line for these hours" and cannot be approved', expectedText: 'flagged, approve blocked', actualText: (d55.flags[0] ? '"' + d55.flags[0].msg + '"' : 'no flag') + ', approve ' + (d55.approvable ? 'enabled' : 'blocked'), pass: d55.flags.length === 1 && !d55.approvable, did: 'DW-1055' });
-  const d56 = priceDocket(dockets.find(d => d.id === 'DW-1056'));
-  ex.push({ given: 'Dry-hire roller RL-03 with no rate at any level (not in the ticket; the unmapped rule)', then: 'prices at $0, flagged, blocks approval', expectedText: '$0.00, approve blocked', actualText: money(d56.total) + ', approve ' + (d56.approvable ? 'enabled' : 'blocked'), pass: d56.total === 0 && !d56.approvable, did: 'DW-1056' });
+  ex.push({ given: 'EX-07 on a dry-hire line 7:00 to 12:00 and a wet-hire line 9:00 to 15:00 (not in the ticket; the plant half of the rule)', then: 'flags "EX-07 is already charged on the dry-hire line for these hours" and cannot be approved', expectedText: 'flagged, approve blocked', actualText: (d55.flags[0] ? '"' + d55.flags[0].msg + '"' : 'no flag') + ', approve ' + (d55.approvable ? 'enabled' : 'blocked'), pass: d55.flags.length === 1 && d55.flags[0].msg === 'EX-07 is already charged on the dry-hire line for these hours' && !d55.approvable, did: 'DW-1055' });
 
+  const isPass = e => e.pass !== undefined ? !!e.pass : Math.abs(e.expected - e.actual) < 0.005;
   const rowsHtml = ex.map((e, i) => {
-    const pass = e.pass !== undefined ? e.pass : Math.abs(e.expected - e.actual) < 0.005;
+    const pass = isPass(e);
     const expected = e.expectedText || money(e.expected), actual = e.actualText || money(e.actual) + (e.detail ? ' (' + e.detail + ')' : '');
-    return `<tr><td class="muted">${i + 1}</td><td>${e.given}</td><td>${e.then}</td><td class="num">${expected}</td><td>${actual}</td><td>${pass ? '<span class="ex-pass"><i class="fas fa-check"></i> pass</span>' : '<span class="ex-fail"><i class="fas fa-xmark"></i> fail</span>'}</td><td><a href="#" onclick="selDocket='${e.did}';render();showTab('dockets');return false">${e.did}</a></td></tr>`;
+    return `<tr><td class="muted">${i + 1}</td><td>${e.given}</td><td>${e.then}</td><td class="num">${expected}</td><td>${actual}</td><td>${pass ? '<span class="ex-pass"><i class="fas fa-check"></i> pass</span>' : '<span class="ex-fail"><i class="fas fa-xmark"></i> fail</span>'}</td><td>${e.did ? `<a href="#" onclick="selDocket='${e.did}';render();showTab('dockets');return false">${e.did}</a>` : '<span class="muted">calculator</span>'}</td></tr>`;
   }).join('');
-  const passes = ex.filter((e) => e.pass !== undefined ? e.pass : Math.abs(e.expected - e.actual) < 0.005).length;
+  const passes = ex.filter(isPass).length;
   el.innerHTML = `<div class="hdr"><div><h1>Worked examples from VAR-23035</h1><div class="sub">Recomputed live from the same pricing engine the dockets use. Edit the calculator or a docket and these re-run.</div></div><span class="pill ${passes === ex.length ? 'ok' : 'bad'}" style="font-size:13px">${passes} / ${ex.length} pass</span></div>
-    <div class="card"><table><thead><tr><th>#</th><th>Given</th><th>Then (ticket)</th><th class="num">Expected</th><th>Prototype</th><th>Result</th><th>Docket</th></tr></thead><tbody>${rowsHtml}</tbody></table>
-    <div class="help">Rates in the ticket's examples: Leading Hand labour hire $70 / $105 / $140 / $175, minimum 4h (version 1, effective 01/10/2026). The examples are dated in October so they price from version 1; version 2 (effective 01/11/2026) moves the Leading Hand to $75.</div></div>`;
+    <div class="card"><table><thead><tr><th>#</th><th>Given</th><th>Then (ticket)</th><th class="num">Expected</th><th>Prototype</th><th>Result</th><th>Where</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+    <div class="help">Rates in the ticket's examples: line "Leading Hand" (resource Leading Hand) $70 / $105 / $140 / $175, line "Plant Operator" (resource Operator) $80 / $120 / $160, line "Supervisor" (resource Foreman) $95, minimum 4h; version 1, effective 01/10/2026. The examples are dated in October so they price from version 1; version 2 (effective 01/11/2026) moves "Leading Hand" to $75.</div></div>`;
 }
 
 function render() {
