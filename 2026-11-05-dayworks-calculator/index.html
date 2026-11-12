@@ -702,7 +702,7 @@ function renderMapModal() {
     pc.rows.forEach((r, i) => {
       h += `<tr><td><label class="radio"><input type="radio" name="mc${i}" ${r.choice === 'reprice' ? 'checked' : ''} onchange="pending.rows[${i}].choice='reprice';renderMapModal()"> Reprice</label><label class="radio"><input type="radio" name="mc${i}" ${r.choice === 'keep' ? 'checked' : ''} onchange="pending.rows[${i}].choice='keep';renderMapModal()"> Keep current value</label></td>
         <td><b>${r.d.id}</b><div class="muted">${esc(r.d.title)}</div></td><td>${esc(PROJ[r.d.proj].name)}</td><td>${dayName(r.d.date)} ${fmtDate(r.d.date)}</td><td><span class="pill ${r.d.approved ? 'ok' : 'grey'}">${statusOf(r.d)}</span></td>
-        <td class="num">${money(r.old)}</td><td class="num">${money(r.nw)}</td><td class="num ${r.nw > r.old ? '' : ''}">${r.nw >= r.old ? '+' : '-'}${money(Math.abs(r.nw - r.old))}</td></tr>`;
+        <td class="num">${money(r.old)}</td><td class="num">${money(r.nw)}</td><td class="num">${r.nw >= r.old ? '+' : '-'}${money(Math.abs(r.nw - r.old))}</td></tr>`;
     });
     h += `</tbody></table></div>`;
   }
@@ -720,8 +720,6 @@ function applyMapping() {
   pc.rows.forEach(r => { const d = r.d; d.pins ||= {}; if (r.choice === 'keep') { if (!(pc.key in d.pins)) d.pins[pc.key] = pc.oldVal; } else delete d.pins[pc.key]; });
   // Locked dockets keep their locked value whatever happens; pin them too so their live breakdown stays as issued.
   pc.locked.forEach(d => { d.pins ||= {}; if (!(pc.key in d.pins)) d.pins[pc.key] = pc.oldVal; });
-  // Dockets whose value did not change: pin as well, so a later change elsewhere cannot silently move them through this mapping.
-  DOCKETS.filter(d => (!pc.scopeProj || d.proj === pc.scopeProj) && !pc.rows.some(r => r.d === d) && !pc.locked.includes(d)).forEach(d => { /* unchanged value: left live */ });
   const nR = pc.rows.filter(r => r.choice === 'reprice').length;
   pending = null; closeModal('mapModal'); render();
   toast('Applied: ' + pc.desc + '. ' + nR + ' docket(s) repriced, ' + (pc.rows.length - nR) + ' kept at their current value.');
