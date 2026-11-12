@@ -305,7 +305,7 @@ function submitVariation(st, varId, opts = {}) {
 function approveVariation(st, varId, amount) {
   const v = getVar(st, varId);
   if (v.status !== 'Submitted') throw new Error('Only a submitted variation can be approved');
-  v.lines.forEach(ln => ln.frozen = priceDocket(st, getDocket(st, ln.docket)).total);
+  v.lines.forEach(ln => { ln.frozen = priceDocket(st, getDocket(st, ln.docket)).total; ln.frozenVersion = versionFor(st, getDocket(st, ln.docket).date).n; });
   v.submittedFinal = varTotal(st, v);
   v.approvedAmount = amount === undefined || amount === null ? v.submittedFinal : round2(amount);
   v.status = 'Approved'; v.approvedOn = st.today;
@@ -326,7 +326,7 @@ function contractSum(st) { return round2(st.project.contractSum + st.variations.
 
 /* ───────── Claims (VAR-23037) ───────── */
 function createClaim(st, period, ids, opts = {}) {
-  validateAdd(st, ids);
+  if (ids.length) validateAdd(st, ids); // a claim can hold only variation or BOQ lines
   const c = { id: opts.id || nextId(st.claims, 'C-'), period, status: 'Draft', created: st.today, lines: [], boq: {}, varLines: null, decisions: [], history: [{ at: st.today, what: 'Created from dockets' }] };
   st.claims.push(c);
   ids.forEach(id => c.lines.push({ docket: id, added: priceDocket(st, getDocket(st, id)).total, frozen: null }));
@@ -379,7 +379,7 @@ function issueClaim(st, claimId, opts = {}) {
   const n = unapprovedCount(st, c.lines.map(l => l.docket));
   if (n && !opts.confirm) return { needsConfirm: true, count: n, message: plural(n, 'docket') + ' not yet approved' };
   c.varLines = claimVarLines(st, c);
-  c.lines.forEach(ln => ln.frozen = priceDocket(st, getDocket(st, ln.docket)).total);
+  c.lines.forEach(ln => { ln.frozen = priceDocket(st, getDocket(st, ln.docket)).total; ln.frozenVersion = versionFor(st, getDocket(st, ln.docket).date).n; });
   c.status = 'Issued'; c.issued = st.today;
   if (n) c.decisions.push({ at: st.today, by: st.user, what: 'Issued with ' + plural(n, 'unapproved docket') });
   c.history.push({ at: st.today, what: 'Issued; dockets locked' });
