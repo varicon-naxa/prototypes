@@ -1,71 +1,102 @@
-# Dayworks Calculator — 2026-11-05 (simplified 2026-11-06, wet/dry pricing corrected 2026-11-06)
+# Dayworks Calculator (built 2026-11-05, rebuilt 2026-11-12)
 
-Prototype for Jira story VAR-23035 (epic VAR-23034). Single static `index.html`, no build.
+Prototype for Jira story VAR-23035 (epic VAR-23034), rebuilt to match the story as Alec rewrote it on 2026-11-12.
+Single static `index.html`, no build.
 
 Live: https://varicon-naxa.github.io/prototypes/2026-11-05-dayworks-calculator/
 
 ## What it shows
 
-Three tabs on a project's Dayworks section (project "Riverside Rd Upgrade", NSW, last issued claim #3 on 25/10/2026).
+Two projects share one tenant: Project A "Riverside Rd Upgrade" (the ticket's worked-example rate card, last issued
+claim #3 on 25/10/2026) and Project B "Hillview Estate Stage 2" (Leading Hand on a "Site Lead" line at $82). Switch
+project and role (admin / PM edit, supervisor / engineer read-only) in the top bar. "Today" is set to 04/12/2026 so
+the ticket's 20 Nov and 1 Dec dockets are in the past.
 
-1. **Dayworks Calculator.** Three rate sections: Labour rates, Wet hire, Dry hire. Rates belong to resources
-   only. A Labour rates line is added by typing its name (the label on the client's schedule, e.g. "Supervisor")
-   and selecting one labour resource from the catalogue (e.g. Foreman); a resource already on another line is
-   refused with "<resource> is already on the <line name> line". Wet and dry lines are one per charge resource
-   ("Excavator 20t wet", "Excavator 20t dry"). Four explicit tier rates prefilled at 1x / 1.5x / 2x / 2.5x of
-   Standard and editable (overridden cells go amber and survive a later Standard change), minimum hours
-   (default 4). An Unmapped banner at the top lists people with no labour resource or whose resource is on no
-   line, and plant items with no wet or dry charge resource or whose resource has no line; each can be mapped
-   from the banner. A "Who prices at what" panel shows every person's and plant item's rate line. The
-   tier-trigger table with the ticket defaults, editable ("8", "rest" or blank per cell). Save asks for an
-   effective-from date (default today) and rejects one before the last issued claim with the ticket's message.
-   Version list; previous versions open read-only. The role switch in the top bar shows the read-only view.
-   (History: the 05/11 first cut had a flat list with one "Applies to" dropdown over three mapping levels, then
-   a per-hire-type tree with per-person and per-plant-item overrides. Alec simplified the ticket on 06/11 to
-   resource-only mapping with named Labour rates lines, and the prototype follows.)
-2. **Daywork dockets.** Line types Labour (a person on their own), Wet hire (machine plus operator on one line,
-   priced at the wet charge resource only because the wet rate includes the operator; the operator's hours set
-   the tier) and Dry hire (machine flat; a driver goes on a separate labour line at their labour rate, two lines
-   two rates, not an overlap). Seeded with one docket per worked example. Each
-   line shows the rate line name it priced at (e.g. "Supervisor"), its tier split (hours x rate per tier), top-up
-   to the minimum, the midnight split where it applies, and the calculator version that priced the docket.
-   Lines can be edited and added (labour = person, dry = plant item, wet = plant item + operator). A person or
-   plant item on two lines with overlapping hours shows "<name> is already charged on the <line type> line for
-   these hours" and Approve is disabled. For a person the overlap is only wet-hire against another line; labour
-   alongside a dry-hire machine is the dry-hire case. An unmapped person or plant item prices at $0 and also blocks Approve.
-3. **Worked examples.** Every example in VAR-23035 recomputed live from the same engine, with pass/fail against
-   the stated number. All 16 pass (15 from the ticket, in the ticket's order, plus a plant-overlap case).
+1. **Dayworks set-up** (VAR-23108). A four-step checklist with completion state. Step 2 is the Dayworks Calculator
+   ("Complete", or "Needs attention: N unmapped"). Steps 1, 3 and 4 are placeholders: VAR-23108 does not define its
+   steps yet.
+   - **Unmapped** at the top: everything used on the project's dockets that is on no line for what it is used as,
+     naming the section and the dockets. People and plant can be assigned by name to a line from there; attachments,
+     materials and subcontract items can be added to a line in the draft; an allowance type gets a new line. Shows
+     "Covered in your unsaved draft" once the draft would fix it.
+   - **Eight sections**: Labour rates, Wet hire, Dry hire, Attachments, Float, Allowances, Materials, Subcontract.
+     Labour / Wet / Dry lines: typed name, one or more resources (chips), optional people or plant assigned by name
+     (amber chips), like the charge resource screen. Named beats resource. A resource, or a named person or machine,
+     already on another line in the section is refused with "<name> is already on the <line> line".
+     Four tier rates prefilled at 1x / 1.5x / 2x / 2.5x and editable (overwritten cells go amber), minimum hours.
+     Dry hire per hour or per day. Attachments with four tiers and a minimum. Float lines per plant type with
+     mobilise / demobilise. Allowances with type, unit (per day / occurrence / hour / km), amount and optional hours
+     threshold. Materials and Subcontract lines by rate per unit or cost plus margin %.
+   - Tier-trigger table (editable), versions with effective-from (rejected before the last issued claim with the
+     ticket's message), previous versions read-only.
+   - **Project cost-plus margins** card: shows the project's margins and proves they are not applied (DW-1041
+     charges $840, not $924).
+   - **Who prices at what**: every worker's role and every plant item's charge resource, and the line each prices at
+     per section. Roles and charge resources are editable here.
+   - **Mapping-change dialog (open decision).** Changing a worker's role, a plant item's charge resource, or a named
+     assignment opens "Open decision: which of these should reprice?". It lists every docket not on an issued claim or
+     approved variation whose value would change, with current and new value and status (draft / approved), and lists
+     locked dockets that would have moved. Nothing applies until every row has a choice ("Reprice" or "Keep current
+     value"; bulk buttons for all / none / dated on or after a date). "Keep" pins the old mapping on that docket and
+     the docket shows "kept mapping". Cancel changes nothing.
+2. **Daywork dockets.** One docket per worked example. Labour, Wet hire (wet rate only, operator not charged, the
+   operator's hours set the tier) and Dry hire (flat; an operator goes on their own labour line, not an overlap).
+   Each line shows the calculator line it priced at ("by name" when named), the tier split, top-up, midnight split
+   with where the break came off, attachments, allowances and the calculator version. Lines record a break start
+   time, required when the line crosses midnight (the legacy docket DW-1082 shows the old rule: break off day one).
+   Wet / dry lines have attachments and a "Leaving site" control. Float charges show as their own lines. Materials
+   and subcontract items have their own table. Threshold prompts appear as a banner with an "Add" button; nothing is
+   added on its own. Overlaps (person on any two lines, plant on any two lines, overlapping hours, same day) flag both
+   lines with "<name> is already charged on another line for these hours". Anything unmapped prices $0 and blocks
+   Approve. Approved dockets are read-only but can still reprice; claim / variation dockets are locked.
+3. **Worked examples.** The ticket's current list of 43, in order, recomputed live from the same engine.
+   43 / 43 pass on a fresh load. (Changing calculator rates or mappings can make them fail; that is the point.)
 
-## Open decisions this surfaced
+## Open decisions hit while building
 
-1. **Minimum hours on a midnight-crossing docket.** The Friday 18:00 to Saturday 02:00 example totals $630, which
-   only works if the 4h minimum is tested against the line's whole 8h, not the 2h Saturday part on its own.
-   The prototype applies the minimum per docket line. The rule text says "per rate line per day"; confirm which.
-2. **Minimum across two lines for the same person.** Sam on wet hire 7:00 to 12:00 and labour 12:00 to 16:00:
-   is the minimum tested once against his combined 9h, or once per line? Both lines clear 4h in the example so it
-   doesn't show. The prototype tests per line.
-3. **Where the break comes off.** Break hours are deducted before tiering. On a midnight-crossing line the
-   prototype deducts the break from the first day's part. The ticket doesn't say.
-4. **Unmapped is per line type.** A plant item with a wet charge resource but no dry one is unmapped for dry hire
-   (RL-03 in the seed is the reverse: dry only). The banner says which type. Confirm that is the intended reading
-   of "not mapped to a resource with a rate".
-5. **Dry hire per day.** The ticket allows "per hour or per day". The prototype has the unit switch and prices a
-   per-day line as 1 day per calendar day worked. The minimum hours field is meaningless on a per-day line.
-6. **Which line gets flagged.** On an overlap the prototype flags the later line in the docket and names the
-   earlier line's type, so the message reads as in the ticket. If both lines are flagged in the real thing,
-   the message needs rewording.
-7. **Public holidays.** Taken from the project's state calendar (NSW here, so Labour Day 05/10/2026 is the PH
-   example and Melbourne Cup day is not a holiday). Still one of the unconfirmed calls in the rules note.
-8. **Two labour lines for one person.** The overlap rule names wet-hire against a labour line. The prototype does
-   not flag the same person on two labour lines with overlapping hours (not in the ticket); confirm whether that
-   should also block.
-9. **Mapping lives outside the version.** Mapping a person to a labour resource or a plant item to a charge
-   resource from the Unmapped banner changes the worker or plant record, not the calculator version, so it is not
-   dated. A docket on an old date will reprice if its person is mapped today. Confirm that is acceptable, or
-   whether mapping should be versioned with the calculator.
+1. **Which dockets reprice when a mapping changes?** (Alec's open decision.) When a worker's role, a plant item's
+   charge resource, or a named assignment changes, which existing dockets not on an issued claim or approved
+   variation should reprice: all of them, none, only those dated on or after the change, only unapproved ones, or a
+   per-docket choice? The prototype offers every option in the dialog and picks none.
+2. **Are named assignments part of the calculator version?** Lines and rates are versioned by effective-from; the
+   prototype keeps named assignments, roles and charge resources outside the version so the reprice dialog applies to
+   all three. Should a named assignment instead take effect from the version's effective-from date like a rate?
+3. **Can a line cover no resources?** "Skilled Labourer & Trades Assistant" (Cris only) and "EX-12 wet" (EX-12 only)
+   have no resource. The functional requirement says "selecting one or more resources". Are named-only lines allowed?
+4. **Per-hour and per-day dry hire for the same resource.** The examples need Excavator 20t on "Excavator 20t dry"
+   ($120/h) and "Excavator 20t dry day" ($900/day), but a resource can be on only one line per section. The prototype
+   allows one per-hour and one per-day line per resource, and the docket's dry-hire line picks per hour or per day.
+   Is that the rule, or should one Dry hire line carry both rates?
+5. **Tiering across dockets.** Hours are tiered per person per calendar day. The prototype tiers within one docket.
+   If a person is on two dockets on the same day, do the hours combine for tiering (and for allowance thresholds and
+   per-day allowances)?
+6. **Overlaps across dockets.** Same question for double charging: is a person or machine on two different dockets
+   at overlapping hours flagged? The prototype only checks within a docket.
+7. **Attachment minimum.** The attachment charges the machine line's chargeable hours. When does the Attachments
+   line's own minimum apply: only if it is higher than the machine's, and on a per-day dry-hire line (which has no
+   minimum) at all? The prototype tops up to the attachment's minimum in both cases.
+8. **Attachment hours on a per-day dry-hire line.** The machine charges one day; the attachment charges its Standard
+   rate for which hours? The prototype uses the line's worked hours.
+9. **A break that spans midnight.** If a break starts at 23:45 for 30 minutes, does it all come off the day it
+   started? The prototype splits it at midnight.
+10. **Threshold "pass".** Is the Meal prompt at more than 10h, or at 10h or more? The prototype prompts above 10h,
+    using worked hours net of breaks (not chargeable hours with top-up).
+11. **Which line gets the prompted allowance?** The prototype offers the person's last line that day.
+12. **Mobilise on an unmapped or blocked docket.** EX-09 (on no line) still mobilises $450 on its first docket, so
+    the docket is $450 while its machine line is $0. Should float wait until the machine is mapped or the docket is
+    approved?
+13. **Float order on the same day.** Mobilise goes on the earliest docket by date, then docket number. Is that the
+    rule when a machine is on two dockets on its first day?
+14. **Who can change a role or charge resource from the calculator?** The prototype lets admins and PMs change a
+    worker's role and a plant item's charge resource from "Who prices at what". These are tenant-wide records; should
+    they be editable from a project's calculator at all?
+15. **VAR-23108 steps.** Which set-up steps sit beside the calculator, and what makes the calculator step
+    "complete": a saved version, or a version with nothing unmapped? The prototype uses nothing unmapped.
 
 ## Not in the prototype
 
-Upload of a schedule of rates (.xlsx/.csv) with column mapping; the Daywork Summary export; docket PDF; mobile view;
-cost-plus margins; attachment and float charges; night-shift windows; conversion of dockets to variations and
-claims (VAR-23036 / VAR-23037).
+Upload of a schedule of rates (.xlsx/.csv) with column mapping; the Daywork Summary export; docket PDF; mobile
+docket entry; timesheet import (allowances are seeded as "from timesheet"); the public holiday calendar beyond a few
+NSW dates; the real VAR-23108 steps; named assignment of specific attachments (out of scope in the ticket);
+external labour-hire workers; night-shift windows; converting dockets to variations and claims (VAR-23036 /
+VAR-23037); PostHog events; the feature flag.
