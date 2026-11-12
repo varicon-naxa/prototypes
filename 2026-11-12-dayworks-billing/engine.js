@@ -391,7 +391,8 @@ function nextClaimPeriod(st) {
   const last = st.claims.filter(c => c.status === 'Issued').map(c => c.period.to).sort().pop();
   const from = last ? addDays(last, 1) : '2026-11-01';
   const [y, m, d] = from.split('-').map(Number);
-  const to = d <= 15 ? `${y}-${String(m).padStart(2, '0')}-15` : new Date(y, m, 0).toISOString().slice(0, 10).replace(/-\d\d$/, '-' + new Date(y, m, 0).getDate());
+  const mm = String(m).padStart(2, '0');
+  const to = d <= 15 ? `${y}-${mm}-15` : `${y}-${mm}-${new Date(y, m, 0).getDate()}`;
   return { from, to };
 }
 function addDays(date, n) { const d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() + n); const z = x => String(x).padStart(2, '0'); return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()); }
