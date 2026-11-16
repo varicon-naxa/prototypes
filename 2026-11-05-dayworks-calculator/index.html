@@ -486,7 +486,11 @@ function resolveSubject(dk, ver, sec, sid) {
   if (l) return { line: l, via: 'resource', res };
   return { line: null, res, why: (isPerson ? 'role ' : 'charge resource ') + res + ' is on no ' + SEC[sec].label + ' line, and not named on one' };
 }
-function netHours(line) { const s = toMin(line.start), e = toMin(line.end); if (!(e > s)) return 0; return Math.max(0, (e - s) / 60 - (Number(line.breakH) || 0)); }
+function spanHours(line) { const s = toMin(line.start), e = toMin(line.end); return e > s ? (e - s) / 60 : 0; }
+function netHours(line) { const sp = spanHours(line); return sp > 0 ? Math.max(0, sp - (Number(line.breakH) || 0)) : 0; }
+// Breaks setting, per project calculator (decided 2026-11-16): 'deducted' (default) or 'charged'.
+const BREAK_MODE_LABEL = { deducted: 'Deducted', charged: 'Charged' };
+function breakModeOf(proj) { return proj.breakMode === 'charged' ? 'charged' : 'deducted'; }
 function validateLine(line) {
   if (!line.start || !line.end) return 'Enter a start and end time.';
   if (toMin(line.end) <= toMin(line.start)) return 'A line cannot cross midnight. Night shift is not in this release.';
@@ -539,6 +543,7 @@ function priceAll(projId, opt) {
   opt = opt || {};
   const proj = PROJ[projId];
   const dks = DOCKETS.filter(d => d.proj === projId);
+  const breakMode = opt.breakMode || breakModeOf(proj); const charged = breakMode === 'charged';
   const out = {}, all = [];
   dks.forEach(dk => {
     const ver = opt.ver || versionFor(proj, dk.date);
@@ -573,10 +578,22 @@ function priceAll(projId, opt) {
 
   // Person-days: hours per person per day across all their labour and wet-hire lines (day-rated wet included, Not
   // claimable dockets included) on THIS project's dockets, in time order. Other projects' hours never count.
-  // Each line's span (start to end) fills the tiers in time order; the day's breaks then come off the highest-rated
-  // hours, on the line that holds them (latest line first within a tier).
+  // Each line's span (start to end) fills the tiers in time order. Breaks Deducted (decided 2026-11-16): the day's
+  // breaks then come off the top tier of the day, on the hourly line with the highest $ rate in that tier (day-rated
+  // lines are skipped; equal rates: latest line first). If every line holding top-tier hours is day-rated, the break
+  // reduces nothing. A break larger than the hourly hours in the top tier carries on down the tiers, hourly lines only.
+  // Breaks Charged: nothing comes off; break hours are charged and tiered like worked hours.
+  // The minimum, per-hour allowances and hourly attachment hours all use the hours a line holds after this.
   const pd = {};
-  all.forEach(o => { o.held = o.net; if (o.ver && o.line.person && !validateLine(o.line)) (pd[o.line.person + '|' + o.dk.date] ||= []).push(o); });
+  all.forEach(o => { o.held = charged ? spanHours(o.line) : o.net; o.breakCharged = charged && Number(o.line.breakH) > 0; if (o.ver && o.line.person && !validateLine(o.line)) (pd[o.line.person + '|' + o.dk.date] ||= []).push(o); });
+  // $ rate of a person's line in a tier, for break placement: null = day-rated (skipped), -1 = unmapped (last).
+  const breakRate = (o, t) => {
+    const sec = o.line.type; if (sec !== 'labour' && sec !== 'wet') return null;
+    const rs = resolveSubject(o.dk, o.ver, sec, sec === 'labour' ? o.line.person : o.line.plant);
+    if (!rs.line) return -1;
+    if (sec === 'wet' && rs.line.unit === 'day') return null;
+    return Number(rs.line.rates[t]) || 0;
+  };
   Object.entries(pd).forEach(([k, list]) => {
     list.sort((a, b) => toMin(a.line.start) - toMin(b.line.start) || a.dk.id.localeCompare(b.dk.id) || a.idx - b.idx);
     const date = k.split('|')[1];
@@ -587,10 +604,21 @@ function priceAll(projId, opt) {
       while (rem > 1e-9 && bi < buckets.length) { const b = buckets[bi]; const take = Math.min(rem, b.left); o.tiers[b.t] = (o.tiers[b.t] || 0) + take; rem -= take; b.left -= take; if (b.left <= 1e-9) bi++; }
       if (rem > 1e-9) { const last = buckets[buckets.length - 1].t; o.tiers[last] = (o.tiers[last] || 0) + rem; }
     });
-    let brk = list.reduce((a, o) => a + (Number(o.line.breakH) || 0), 0);
+    let brk = charged ? 0 : list.reduce((a, o) => a + (Number(o.line.breakH) || 0), 0);
     list.forEach(o => o.breakOff = 0);
-    for (const t of TIERS.slice().reverse()) {
-      for (let i = list.length - 1; i >= 0 && brk > 1e-9; i--) { const o = list[i]; const h = o.tiers[t] || 0; if (h <= 1e-9) continue; const take = Math.min(h, brk); o.tiers[t] = h - take; o.breakOff += take; brk -= take; }
+    list.breakNote = '';
+    const desc = TIERS.slice().reverse();
+    const topT = desc.find(t => list.some(o => (o.tiers[t] || 0) > 1e-9));
+    if (brk > 1e-9 && topT) {
+      if (!list.some(o => (o.tiers[topT] || 0) > 1e-9 && breakRate(o, topT) !== null)) {
+        list.breakNote = 'Every line holding the day\'s ' + TIER_LABEL[topT] + ' hours is day-rated, so the break reduces nothing.';
+        brk = 0;
+      }
+      for (const t of desc.slice(desc.indexOf(topT))) {
+        const cands = list.map((o, i) => ({ o, i, rate: breakRate(o, t) })).filter(c => c.rate !== null && (c.o.tiers[t] || 0) > 1e-9).sort((a, b) => b.rate - a.rate || b.i - a.i);
+        for (const c of cands) { if (brk <= 1e-9) break; const h = c.o.tiers[t]; const take = Math.min(h, brk); c.o.tiers[t] = h - take; c.o.breakOff += take; brk -= take; }
+      }
+      if (brk > 1e-9) list.breakNote = fmtH(brk) + 'h of break is larger than the hourly hours left in the day and reduces nothing.';
     }
     let cum = 0;
     list.forEach(o => { o.held = sumv(o.tiers); o.dayFrom = cum; cum += o.held; o.dayTo = cum; });
