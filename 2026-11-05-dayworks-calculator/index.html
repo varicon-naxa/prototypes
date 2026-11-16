@@ -1205,15 +1205,15 @@ function buildExamples() {
     const imp = impactRows(() => tom.role = 'Leading Hand', () => tom.role = old);
     const g = id => imp.rows.find(r => r.d.id === id);
     const r310 = g('D310'), r311 = g('D311'); const no300 = !imp.rows.some(r => r.d.id === 'D300') && imp.locked.some(x => x.id === 'D300');
-    tom.role = 'Leading Hand'; const v310 = pd('D310').total; const v311 = withPins(dkById('D311'), [['role:p-tom', old]], () => pd('D311').total); tom.role = old;
+    tom.role = 'Leading Hand'; invalidate(); const v310 = pd('D310').total; const v311 = withPins(dkById('D311'), [['role:p-tom', old]], () => { invalidate(); return pd('D311').total; }); tom.role = old; invalidate();
     const warn = everyProjectWarn(tom.name);
     add('Worker Tom\'s role changes from Labourer to Leading Hand and is saved; the user picks Reprice for D310 and Keep for D311', 'a warning says it applies on every project; D310 (draft, $480 to $560) and D311 (on a draft claim, $480 to $560) are listed but not D300 (issued claim); D310 becomes $560 and D311 stays $480', 'warning; D310 and D311 listed $480 to $560; D300 not listed; then $560 / $480',
       '"' + warn + '"; listed: ' + imp.rows.map(r => r.d.id + ' ' + money(r.old) + ' to ' + money(r.nw)).join(', ') + '; D300 ' + (no300 ? 'not listed (issued claim)' : 'listed') + '; after: D310 ' + money(v310) + ', D311 ' + money(v311),
       warn === 'This changes Tom Reilly on every project' && r310 && near(r310.old, 480) && near(r310.nw, 560) && r311 && near(r311.old, 480) && near(r311.nw, 560) && no300 && imp.rows.length === 2 && near(v310, 560) && near(v311, 480), 'D310');
   })();
   const dA = pd('DW-1123'), dB = pd('DW-2101');
-  const saveB = PROJ.B.versions; PROJ.B.versions = clone(saveB); PROJ.B.versions[0].lines.find(l => l.id === 'B-SL').rates = R(99); const aAfterB = pd('DW-1123').total; PROJ.B.versions = saveB;
-  const saveA = PROJ.A.versions; PROJ.A.versions = clone(saveA); PROJ.A.versions.forEach(v => v.lines.find(l => l.id === 'LH').rates = R(88)); const bAfterA = pd('DW-2101').total; PROJ.A.versions = saveA;
+  const saveB = PROJ.B.versions; PROJ.B.versions = clone(saveB); PROJ.B.versions[0].lines.find(l => l.id === 'B-SL').rates = R(99); invalidate(); const aAfterB = pd('DW-1123').total; PROJ.B.versions = saveB; invalidate();
+  const saveA = PROJ.A.versions; PROJ.A.versions = clone(saveA); PROJ.A.versions.forEach(v => v.lines.find(l => l.id === 'LH').rates = R(88)); invalidate(); const bAfterA = pd('DW-2101').total; PROJ.A.versions = saveA; invalidate();
   add('Project B has role Leading Hand on "Site Lead" at $82; the same person works 8h on each project', 'Project A reads "Leading Hand" $560 and Project B "Site Lead" $656, independently', 'A $560 / B $656; each unchanged when the other changes', 'A "' + lname(dA.lines[0]) + '" ' + money(dA.total) + ' / B "' + lname(dB.lines[0]) + '" ' + money(dB.total) + '; A after B\'s rate changed ' + money(aAfterB) + '; B after A\'s changed ' + money(bAfterA), lname(dA.lines[0]) === 'Leading Hand' && near(dA.total, 560) && lname(dB.lines[0]) === 'Site Lead' && near(dB.total, 656) && near(aAfterB, 560) && near(bAfterA, 656), 'DW-1123');
   d = pd('DW-1124'); const dw = pd('DW-1125'); let umA = projectUnmapped(A);
   add('EX-11 is on a Wet hire line but no Dry hire line; it is put on a dry-hire line', 'the line is $0, EX-11 is listed as unmapped for Dry hire, and the docket can\'t be approved', 'dry $0, listed under Dry hire only, blocked', 'dry ' + money(d.lines[0].value) + ', Unmapped list: ' + (umA.some(u => u.what === 'EX-11' && u.sec === 'dry') ? 'EX-11 under Dry hire' : 'not listed') + (umA.some(u => u.what === 'EX-11' && u.sec === 'wet') ? ' AND Wet hire' : '') + ', approve ' + (d.approvable ? 'enabled' : 'blocked') + '; wet line "' + lname(dw.lines[0]) + '" ' + money(dw.lines[0].value), d.lines[0].value === 0 && umA.some(u => u.what === 'EX-11' && u.sec === 'dry') && !umA.some(u => u.what === 'EX-11' && u.sec === 'wet') && !d.approvable && dw.lines[0].value > 0 && !dw.unmapped.length, 'DW-1124');
@@ -1229,21 +1229,21 @@ function buildExamples() {
   const midClean = between.every(x => !pd(x.id).floats.some(y => y.plant === 'EX-07'));
   add('EX-07 is marked as leaving site on a docket dated 20 Nov, then appears again on 1 Dec', 'a $400 demobilise charge is added on 20 Nov, and a $450 mobilise charge on 1 Dec', 'demobilise $400 on 20/11; mobilise $450 on 01/12', (f20 ? (f20.dir === 'demob' ? 'demobilise ' : 'mobilise ') + money(f20.value) : 'nothing') + ' on 20/11; ' + (f01 ? (f01.dir === 'mob' ? 'mobilise ' : 'demobilise ') + money(f01.value) : 'nothing') + ' on 01/12; no EX-07 float on the ' + between.length + ' dockets in between: ' + (midClean ? 'yes' : 'no'), f20 && f20.dir === 'demob' && near(f20.value, 400) && f01 && f01.dir === 'mob' && near(f01.value, 450) && midClean, 'DW-1206');
   (function () {
-    const key = 'EX-07|2026-11-03'; const saved = A.floatChoice[key]; delete A.floatChoice[key];
+    const key = 'EX-07|2026-11-03'; const saved = A.floatChoice[key]; delete A.floatChoice[key]; invalidate();
     const a5 = pd('DW-1204').floatAsk.find(x => x.plant === 'EX-07'), a6 = pd('DW-1205').floatAsk.find(x => x.plant === 'EX-07');
-    A.floatChoice[key] = 'DW-1205'; const on6 = pd('DW-1205').floats.some(x => x.plant === 'EX-07' && x.dir === 'mob') && !pd('DW-1204').floats.some(x => x.plant === 'EX-07');
-    A.floatChoice[key] = saved;
+    A.floatChoice[key] = 'DW-1205'; invalidate(); const on6 = pd('DW-1205').floats.some(x => x.plant === 'EX-07' && x.dir === 'mob') && !pd('DW-1204').floats.some(x => x.plant === 'EX-07');
+    A.floatChoice[key] = saved; invalidate();
     const on5 = pd('DW-1204').floats.some(x => x.plant === 'EX-07' && x.dir === 'mob') && !pd('DW-1205').floats.length;
     add('EX-07 appears on dockets D5 and D6 on its first day', 'the user is asked which docket carries the mobilise charge', 'asked on both until chosen; the chosen docket carries it', 'with no choice: ' + (a5 && a6 && !a5.chosen ? 'asked on D5 and D6 (' + a5.options.join(', ') + ')' : 'not asked') + '; choosing D6 moves it to D6: ' + (on6 ? 'yes' : 'no') + '; seeded choice D5 carries it: ' + (on5 ? 'yes' : 'no'), a5 && a6 && !a5.chosen && !a6.chosen && a5.options.length === 2 && on6 && on5, 'DW-1205');
   })();
   d = pd('DW-1208'); f = d.floats.find(x => x.plant === 'EX-09');
   add('EX-09 is unmapped and is an Excavator; it first appears', 'the $450 mobilise is added and the docket is still blocked by the unmapped machine', 'mobilise $450, blocked', (f ? 'mobilise ' + money(f.value) : 'no mobilise') + ', machine line ' + money(d.lines[0].value) + ', approve ' + (d.approvable ? 'enabled' : 'blocked'), f && near(f.value, 450) && d.lines[0].value === 0 && !d.approvable, 'DW-1208');
   (function () {
-    const dk5 = dkById('DW-1204'); const was = dk5.notClaimable; dk5.notClaimable = true;
+    const dk5 = dkById('DW-1204'); const was = dk5.notClaimable; dk5.notClaimable = true; invalidate();
     const r5 = pd('DW-1204'); const has = r5.floats.some(x => x.plant === 'EX-07' && x.dir === 'mob');
     const next = DOCKETS.filter(x => x.proj === 'A' && x.id !== 'DW-1204' && x.date >= '2026-11-03' && x.date < '2026-11-20' && x.lines.some(l => l.plant === 'EX-07'));
     const nothingElse = next.every(x => !pd(x.id).floats.some(y => y.plant === 'EX-07'));
-    dk5.notClaimable = was;
+    dk5.notClaimable = was; invalidate();
     add('The docket carrying EX-07\'s mobilise is marked Not claimable', 'the $450 is not billed and nothing is added to EX-07\'s next docket', 'billed $0 on D5; no mobilise elsewhere', 'D5 ' + (has ? 'keeps the $450 mobilise' : 'loses it') + ', billed ' + money(r5.billed) + '; mobilise on another EX-07 docket: ' + (nothingElse ? 'none' : 'yes'), has && r5.billed === 0 && nothingElse, 'DW-1204');
   })();
   d = pd('DW-1209'); add('Tipper TP-03\'s plant type has no float line; it first appears', 'no float charge is added and nothing is flagged', 'no float, no flag', d.floats.length + ' float charges, ' + (d.blockers.length ? 'flagged' : 'no flag') + ', approve ' + (d.approvable ? 'enabled' : 'blocked'), !d.floats.length && !d.blockers.length && d.approvable, 'DW-1209');
@@ -1293,8 +1293,7 @@ function render() {
   document.title = 'Dayworks Calculator - ' + p.name;
   document.getElementById('projMeta').textContent = p.state + ' · last issued ' + p.lastClaimLabel + ' · last approved variation ' + p.lastVariationLabel + ' · today ' + fmtDate(TODAY);
   MEMO = {};
-  try { renderSetup(); renderDockets(); } finally { MEMO = null; }
-  renderExamples();
+  try { renderSetup(); renderDockets(); renderExamples(); } finally { MEMO = null; }
 }
 render();
 </script>
