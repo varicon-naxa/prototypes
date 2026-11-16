@@ -236,8 +236,8 @@ const SCENARIOS = [
       });
       return st;
     } },
-  { story: 'VAR-23036', title: 'D201 on approved V-012: not offered; V-012 offered at 100%',
-    text: 'Given D201 is on approved V-012, when the next claim is created, then D201 is not offered and V-012 is offered at 100%, editable to a lower percent.',
+  { story: 'VAR-23036', title: 'D201 on approved V-012: not offered; V-012 offered at 100% to date',
+    text: 'Given D201 is on approved V-012, when the next claim is created, then D201 is not offered and V-012 is offered at 100% to date, editable to a lower percent.',
     run(c) {
       const st = baseState(); st.today = '2026-11-16';
       addDocket(st, 'D201', '2026-11-02', 'Approved', [lab('tom', '07:00', '15:00')]);
@@ -344,6 +344,18 @@ const SCENARIOS = [
       _chk(c, 'Claim history: $840 to $560', _hasHist(cl, 'D106', 840, 560), true);
       return st;
     } },
+  { story: 'VAR-23037', title: 'Approved D113 on no record: edit returns it to Submitted',
+    text: 'Given D113 is Approved and on no claim or variation, when its hours are edited, then it returns to Submitted.',
+    run(c) {
+      const st = baseState();
+      addDocket(st, 'D113', '2026-11-11', 'Approved', [lab('jo', '07:00', '15:00')]);
+      _chk(c, 'On no claim or variation', docketHome(st, 'D113'), null);
+      editHours(st, 'D113', 0, 6);
+      _chk(c, 'D113 status', getDocket(st, 'D113').status, 'Submitted');
+      _chk(c, 'Docket history records the return', getDocket(st, 'D113').history.some(h => /returned to Submitted/.test(h.what)), true);
+      _chk(c, 'Highlighted as not yet approved in the picker', _row(st, 'claim', 'D113', NOV1).highlight, 'warn');
+      return st;
+    } },
   { story: 'VAR-23037', title: 'Client rejects D107 on a draft claim: issue refused',
     text: 'Given the client rejects D107 while it is on a draft claim, when the user tries to issue, then issue is refused until D107 is fixed or removed.',
     run(c) {
@@ -359,7 +371,7 @@ const SCENARIOS = [
       return st;
     } },
   { story: 'VAR-23037', title: 'Approved V-012 ($5,060) at 100%, reducible',
-    text: 'Given approved variation V-012 ($5,060), when the claim is created, then V-012 appears at 100%, $5,060, and can be reduced to a lower percent.',
+    text: 'Given approved variation V-012 ($5,060), when the claim is created, then V-012 appears at 100% to date, $5,060, and can be reduced to a lower percent.',
     run(c) {
       const st = baseState(); st.today = '2026-11-16';
       publishVersion(st, 'labour', 'Leading Hand', 75, '2026-11-01');
@@ -372,6 +384,27 @@ const SCENARIOS = [
       setVarPct(st, cl.id, 'V-012', 50);
       _chk(c, 'Reduced to 50%', claimTotals(st, cl).vars, 2530);
       _refused(c, 'Over 100% refused', () => setVarPct(st, cl.id, 'V-012', 120), 'Enter a percent complete between 0% (already claimed) and 100%');
+      return st;
+    } },
+  { story: 'VAR-23037', title: 'V-012 at 60% on October, 100% on November charges $2,024',
+    text: 'Given V-012 was claimed at 60% ($3,036) on the October claim, when the November claim enters 100%, then it charges the remaining 40%, $2,024.',
+    run(c) {
+      const st = baseState(); st.today = '2026-11-16';
+      publishVersion(st, 'labour', 'Leading Hand', 75, '2026-11-01');
+      addDocket(st, 'D209', '2026-11-10', 'Approved', [lab('tom', '06:00', '17:00', 0.5)]);
+      addDocket(st, 'D210', '2026-11-02', 'Approved', [wet('EX-07', 'sam', '07:00', '16:00')]);
+      addDocket(st, 'D211', '2026-11-16', 'Approved', [wet('EX-07', 'sam', '07:00', '15:00', 0, ['Breaker 1t']), mat('Concrete', { cost: 600 })]);
+      createVariation(st, ['D209', 'D210', 'D211'], { id: 'V-012' }); submitVariation(st, 'V-012'); approveVariation(st, 'V-012');
+      const oct = createClaim(st, { from: '2026-10-16', to: '2026-10-31' }, [], { id: 'C-003' });
+      setVarPct(st, 'C-003', 'V-012', 60);
+      _chk(c, 'October claim charges 60%', claimVarRows(st, oct)[0].value, 3036);
+      issueClaim(st, 'C-003');
+      const nov = createClaim(st, NOV1, [], { id: 'C-004' });
+      const row = claimVarRows(st, nov)[0];
+      _chk(c, 'November defaults to 100% to date, 60% already claimed', [row.variation, row.pct, row.prev], ['V-012', 100, 60]);
+      _chk(c, 'November charges the remaining 40%', row.value, 2024);
+      _chk(c, 'Claimed to date across both claims', round2(3036 + row.value), 5060);
+      _refused(c, 'Below the 60% already claimed refused', () => setVarPct(st, 'C-004', 'V-012', 50), 'Enter a percent complete between 60% (already claimed) and 100%');
       return st;
     } },
   { story: 'VAR-23037', title: 'Two draft claims: V-012 on one is not offered on the other',
