@@ -73,8 +73,8 @@ and engineer are read-only. "Today" is set to 18/12/2026 so every example docket
    - **Materials and subcontract** sit in their own table.
    - Anything unmapped prices $0 and blocks Approve. Dockets on an issued claim or approved variation are locked.
 3. **Worked examples**: every Given/When/Then from all four tickets, grouped by ticket in each ticket's order, and
-   recomputed live from the same engine, plus six examples for the 2026-11-16 decisions (listed under VAR-23035).
-   On a fresh load: VAR-23035 34/34, VAR-23154 10/10, VAR-23155 7/7, VAR-23156 4/4 (55/55). The examples always
+   recomputed live from the same engine, plus seven examples for the 2026-11-16 decisions (listed under VAR-23035).
+   On a fresh load: VAR-23035 35/35, VAR-23154 10/10, VAR-23155 7/7, VAR-23156 4/4 (56/56). The examples always
    price with Breaks set to Deducted, whatever the project's setting; the Charged example switches it itself.
    Editing rates or mappings can make them fail.
 
@@ -87,7 +87,8 @@ person-day. Cris's version example is dated Friday 6 Nov and Thursday 12 Nov. Se
 - Project B "Supervisor" (Foreman) $98, so Priya prices on both projects in the cross-project overlap example.
 - Ana's role is Labourer, as in the ticket's Ana example.
 - Excavators EX-08 and EX-10, so EX-07's float story (3 Nov arrival, leaves 20 Nov, back 1 Dec) stays clean.
-- For the 2026-11-16 break decisions: Mia D1/D2 on Monday 12 Oct (DW-1133/1134), Sam wet then labour on Saturday
+- For the 2026-11-16 break decisions: a third Leading Hand, Kai Turner, for the single-line 3.5h example on Monday
+  12 Oct (DW-1138); Mia D1/D2 on Monday 12 Oct (DW-1133/1134), Sam wet then labour on Saturday
   14 Nov (DW-1135), Ana labour then day-rated roller on Saturday 21 Nov (DW-1136) and Tuesday 24 Nov (DW-1137).
 - The tickets' rate cards are combined into one calculator, so long core-ticket lines also pick up Meal at 9.5h:
   the $840 docket is $865 in total, and D2 is $515. The core examples check the labour or machine charge.
@@ -97,7 +98,10 @@ person-day. Cris's version example is dated Friday 6 Nov and Thursday 12 Nov. Se
 1. **Minimum on a line after a break moves.** The minimum (4h per line), per-hour allowances and hourly attachment
    hours are tested on the hours a line holds after the day's breaks are placed, not the line's own worked hours.
    Example: D1 worked 5.5h holds 6h once the break comes off D2, so no top-up (DW-1126). A sharper example: D1
-   worked 3.5h holds 4h, so no top-up, $280 (DW-1133).
+   7:00-11:00 with a 0.5h break worked 3.5h, D2 11:00-18:30; the break comes off D2's 2x hours, so D1 holds 4h with
+   no top-up, $280, and D2 is 4h x $70 + 2h x $105 + 1h x $140 = $630 (DW-1133/1134). With no other line that day
+   the break stays on the line: "If 3.5 hours worked and a 30 minute break, 4 hours must be charged", so 3.5h plus
+   a 0.5h minimum top-up = 4h x $70 = $280 (DW-1138).
 2. **Which line loses a deducted break.** Among the day's top-tier hours, the line with the highest $ hourly rate in
    that tier. Day-rated lines are skipped. Only if every top-tier line is day-rated does the break reduce nothing.
    Examples: wet $360 vs labour $160 at 2x, break off the wet line (DW-1135); day-rated roller and hourly labour at
