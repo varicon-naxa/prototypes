@@ -209,7 +209,7 @@ tr.me td{font-weight:600}
 <div class="modal-bg" id="saveModal">
   <div class="modal">
     <h3>Save calculator version <span class="story"><i class="fas fa-ticket"></i>VAR-23035</span></h3>
-    <p class="muted">Saving creates a new version of the rates, lines and named assignments. Dockets dated on or after the effective-from date price from it; dockets dated before it keep pricing from the earlier version. Dockets on an issued claim or approved variation never change.</p>
+    <p class="muted">Saving creates a new version of the rates, lines, named assignments and the Breaks setting. Dockets dated on or after the effective-from date price from it; dockets dated before it keep pricing from the earlier version. Dockets on an issued claim or approved variation never change.</p>
     <div class="field"><label>Effective from</label><input type="date" id="effFrom"></div>
     <div class="muted" id="effFloor"></div>
     <div class="err" id="effErr"></div>
@@ -273,7 +273,7 @@ const SEC = {
   labour: { label: 'Labour rates', pill: 'labour', story: STORY.core, desc: 'Type the label the client\'s schedule uses, select the roles it covers, and/or assign workers by name. A line needs at least one role or one name. A worker named on a line prices there ahead of their role\'s line. Four tier rates and a minimum, tested per docket line.' },
   wet:    { label: 'Wet hire',     pill: 'wet',    story: STORY.core, desc: 'Machine and operator on one docket line, priced at the wet rate only: the operator is included and their labour rate is not charged. Per hour (four tiers, the operator\'s hours decide the tier, minimum applies) or per day (one day per docket line, operator included, no tiers, no minimum), never both. A schedule with both rates for one kind of machine needs a second resource.' },
   dry:    { label: 'Dry hire',     pill: 'dry',    story: STORY.core, desc: 'The machine on its own, no tiers. Per hour (minimum applies) or per day (one day per docket line, no minimum), never both. If someone operates it, they go on their own labour line at their labour rate: two lines, two rates, not an overlap.' },
-  att:    { label: 'Attachments',  pill: 'att',    story: STORY.af,   desc: 'Picked on the wet- or dry-hire docket line of the machine it is fitted to. Per hour (four tier rates) or per day. No minimum of its own. A day-rated attachment charges one day, on any machine line. Hourly attachment on an hourly machine line: the machine line\'s chargeable hours, top-up included, in the same tiers (Standard rate on dry hire). Hourly attachment on a day-rated machine line: the line\'s worked hours (operator\'s tiers on wet hire, Standard on dry hire).' },
+  att:    { label: 'Attachments',  pill: 'att',    story: STORY.af,   desc: 'Picked on the wet- or dry-hire docket line of the machine it is fitted to. Per hour (four tier rates) or per day. No minimum of its own. A day-rated attachment charges one day, on any machine line. Hourly attachment on an hourly machine line: the machine line\'s chargeable hours, top-up included, in the same tiers (Standard rate on dry hire). Hourly attachment on a day-rated machine line: the line\'s worked hours net of the line\'s own break (operator\'s tiers on wet hire, Standard on dry hire).' },
   float:  { label: 'Float',        pill: 'float',  story: STORY.af,   desc: 'One line per plant type. Mobilise is added to the docket where a machine first appears on the project, or first appears again after leaving site, even if the machine itself is unmapped. If it is on two dockets that day, mobilise sits on the earliest by default and a banner asks the user to choose; approval is not blocked while the choice is open. Demobilise is added where its line is marked as leaving site. A float charge goes with its docket (Not claimable: not billed). Flat, no tiers, no minimum. A plant type with no float line is not charged float and is not flagged.' },
   allow:  { label: 'Allowances',   pill: 'allow',  story: STORY.allow, desc: 'One line per timesheet allowance type; the client is charged this amount whatever the worker is paid. Allowances come through from timesheets, are added on a labour or wet-hire line, or are added automatically on the line during which the person\'s worked hours that day (all their lines and dockets) reach the threshold. Per day: once per person per day, on their first line of the day.' },
   mat:    { label: 'Materials',    pill: 'mat',    story: STORY.mat,  desc: 'Each line covers one or more materials and is either a rate per unit (quantity x rate) or cost plus a margin % on the recorded cost. No tiers, no minimum. The project\'s cost-plus margins are not added on top.' },
@@ -325,20 +325,20 @@ const PROJ = {
   A: { id: 'A', name: 'Riverside Rd Upgrade', state: 'NSW',
        lastClaim: '2026-10-25', lastClaimLabel: 'claim #3 on 25/10/2026', lastVariation: '2026-11-05', lastVariationLabel: 'V-04 on 05/11/2026',
        margins: { Labour: 10, Plant: 12, Materials: 15, Subcontract: 8 },
-       floatChoice: {}, breakMode: 'deducted',
+       floatChoice: {},
        versions: [], draft: null, dirty: false, view: 0 },
   B: { id: 'B', name: 'Hillview Estate Stage 2', state: 'NSW',
        lastClaim: '2026-09-30', lastClaimLabel: 'claim #1 on 30/09/2026', lastVariation: null, lastVariationLabel: 'none',
        margins: { Labour: 12, Plant: 10, Materials: 12, Subcontract: 10 },
-       floatChoice: {}, breakMode: 'deducted', versions: [], draft: null, dirty: false, view: 0 },
+       floatChoice: {}, versions: [], draft: null, dirty: false, view: 0 },
 };
 (function seedVersions() {
-  const v1 = { n: 1, effectiveFrom: '2026-10-01', savedBy: 'Alec Neill', savedOn: '2026-09-28', triggers: defaultTriggers(), lines: aLines(), named: emptyNamed() };
+  const v1 = { n: 1, effectiveFrom: '2026-10-01', savedBy: 'Alec Neill', savedOn: '2026-09-28', triggers: defaultTriggers(), breakMode: 'deducted', lines: aLines(), named: emptyNamed() };
   v1.named.wet['EX-12'] = 'W12';
   const v2 = clone(v1); Object.assign(v2, { n: 2, effectiveFrom: '2026-11-01', savedBy: 'Dana Whitfield (PM)', savedOn: '2026-10-30' }); v2.lines.find(l => l.id === 'LH').rates = R(75);
   const v3 = clone(v2); Object.assign(v3, { n: 3, effectiveFrom: '2026-11-10', savedBy: 'Dana Whitfield (PM)', savedOn: '2026-11-09' }); v3.named.labour['p-cris'] = 'SK';
   PROJ.A.versions.push(v1, v2, v3);
-  PROJ.B.versions.push({ n: 1, effectiveFrom: '2026-09-01', savedBy: 'Dana Whitfield (PM)', savedOn: '2026-08-28', triggers: defaultTriggers(), named: emptyNamed(), lines: [
+  PROJ.B.versions.push({ n: 1, effectiveFrom: '2026-09-01', savedBy: 'Dana Whitfield (PM)', savedOn: '2026-08-28', triggers: defaultTriggers(), breakMode: 'deducted', named: emptyNamed(), lines: [
     { id: 'B-SL', sec: 'labour', name: 'Site Lead', res: ['Leading Hand'], rates: R(82), min: 4 },
     { id: 'B-OP', sec: 'labour', name: 'Operator', res: ['Operator'], rates: R(85), min: 4 },
     { id: 'B-LB', sec: 'labour', name: 'General Labourer', res: ['Labourer'], rates: R(62), min: 4 },
@@ -372,6 +372,11 @@ const DOCKETS = [
   D('DW-1135', 'A', '2026-11-14', ['23035 decided 2026-11-16'], 'Saturday Sam wet 6:00-11:00, then labour 11:00-15:00 with a 0.5h break', 'Both lines hold 2x hours; the wet line\'s 2x rate ($360) is higher than labour\'s ($160), so the break comes off the wet line: 2h x $270 + 2.5h x $360 = $1,440; labour 4h x $160 = $640', [W('EX-08', 'p-sam', '06:00', '11:00'), L('p-sam', '11:00', '15:00', { breakH: 0.5, breakStart: '12:00' })]),
   D('DW-1136', 'A', '2026-11-21', ['23035 decided 2026-11-16'], 'Saturday Ana labour 6:00-11:00 with a 0.5h break, then day-rated wet roller 11:00-15:00', 'Both lines hold 2x hours; the roller is day-rated and skipped, so the break comes off labour: 2h x $90 + 2.5h x $120 = $480; roller one day $1,400', [L('p-ana', '06:00', '11:00', { breakH: 0.5, breakStart: '09:00' }), W('RL-02', 'p-ana', '11:00', '15:00')]),
   D('DW-1137', 'A', '2026-11-24', ['23035 decided 2026-11-16'], 'Tuesday Ana labour 7:00-12:00 with a 0.5h break, then day-rated wet roller 12:00-18:00', 'Only the day-rated roller holds the day\'s 2x hour, so the break reduces nothing: labour 5h x $60 = $300', [L('p-ana', '07:00', '12:00', { breakH: 0.5, breakStart: '10:00' }), W('RL-02', 'p-ana', '12:00', '18:00')]),
+  D('DW-1139', 'A', '2026-11-18', ['23035 decided 2026-11-17'], 'Wed Sam wet 7:00-13:00, then labour 13:00-15:30 with a 1h break at 14:00', 'The 1.5x tier holds only 0.5h (labour), so 0.5h of the break comes off there and 0.5h carries down to Standard, off the highest $ line (wet $180): wet 5.5h x $180 = $990; labour 2h + 2h minimum top-up = 4h x $80 = $320', [W('EX-08', 'p-sam', '07:00', '13:00'), L('p-sam', '13:00', '15:30', { breakH: 1, breakStart: '14:00' })]),
+  D('DW-1140', 'A', '2026-10-17', ['23035 decided 2026-11-17'], 'D1 · Saturday Leading Hand 6:00-11:00, 0.5h break at 8:00', 'D1 and D2 both hold 2x hours at $140. D1 is running at 8:00, the break\'s start time, so it loses the break: 2h x $105 + 2.5h x $140 = $560', [L('p-kai', '06:00', '11:00', { breakH: 0.5, breakStart: '08:00' })]),
+  D('DW-1141', 'A', '2026-10-17', ['23035 decided 2026-11-17'], 'D2 · Saturday Leading Hand 11:00-15:00', 'Same $140 2x rate as D1, but not running at 8:00, so the break stays on D1: 4h x $140 = $560', [L('p-kai', '11:00', '15:00')]),
+  D('DW-1142', 'A', '2026-11-28', ['23035 decided 2026-11-17'], 'Saturday Sam labour 6:00-10:00 (0.5h break at 7:00), wet EX-08 10:00-15:00, wet EX-10 15:00-20:00', 'Both wet lines hold 2x hours at $360; neither is running at 7:00, so the later line (EX-10) loses the break: EX-10 4.5h x $360 = $1,620; EX-08 5h x $360 = $1,800; labour 2h x $120 + 2h x $160 = $560', [L('p-sam', '06:00', '10:00', { breakH: 0.5, breakStart: '07:00' }), W('EX-08', 'p-sam', '10:00', '15:00'), W('EX-10', 'p-sam', '15:00', '20:00')]),
+  D('DW-1145', 'A', '2026-11-19', ['23035 decided 2026-11-17'], 'Tipper TP-03 hourly dry hire 7:00-13:00, 0.5h break at 10:00', 'Deducted: 5.5h x $95 = $522.50. Charged: the dry-hire line\'s own break is charged too, 6h x $95 = $570', [Y('TP-03', '07:00', '13:00', { breakH: 0.5, breakStart: '10:00' })]),
   D('DW-1128', 'A', '2026-10-26', ['23035 #7'], 'D1 · Leading Hand 7:00-13:00, Not claimable (Monday)', 'Not claimable: billed $0, but its 6h still count towards the day', [L('p-mia', '07:00', '13:00')], { notClaimable: true }),
   D('DW-1129', 'A', '2026-10-26', ['23035 #7'], 'D2 · Leading Hand 13:00-18:00 (Monday)', 'Still tiers from hour 7 of the day: 2h x $70 + 2h x $105 + 1h x $140 = $490', [L('p-mia', '13:00', '18:00')]),
   D('DW-1130', 'A', '2026-11-02', ['23035 #8'], 'Lee 6h on Project A, then 5h on Project B (Monday)', 'Project A part of Lee\'s day. Project B\'s docket DW-2103 does not count these hours.', [L('p-lee', '07:00', '13:00')]),
@@ -405,6 +410,8 @@ const DOCKETS = [
   D('DW-1201', 'A', '2026-12-07', ['23154 #1'], 'EX-07 wet 9h Monday with Breaker 1t', 'Machine $1,710 + breaker 8h x $40 + 1h x $60 = $380, line $2,090', [W('EX-07', 'p-dev', '07:00', '16:00', { att: ['BR-01'] })]),
   D('DW-1202', 'A', '2026-12-14', ['23154 #2'], 'EX-07 dry 2.5h Monday with Breaker 1t', 'Machine 4h x $120 = $480; breaker 4h x $40 = $160 (chargeable hours, top-up included)', [Y('EX-07', '07:00', '09:30', { att: ['BR-01'] })]),
   D('DW-1203', 'A', '2026-11-12', ['23154 #3'], 'EX-14 day-rated dry hire worked 6h with Breaker 1t', 'Machine one day $900; hourly breaker 6h x $40 = $240 (worked hours)', [Y('EX-14', '07:00', '13:00', { att: ['BR-01'] })]),
+  D('DW-1211', 'A', '2026-11-25', ['23154 decided 2026-11-17'], 'Roller RL-02 day-rated wet 7:00-16:00, 0.5h break at 12:00, with Breaker 1t', 'Machine one day $1,400; hourly breaker on the worked hours net of the line\'s own break, 8.5h: 8h x $40 + 0.5h x $60 = $350', [W('RL-02', 'p-ana', '07:00', '16:00', { breakH: 0.5, breakStart: '12:00', att: ['BR-01'] })]),
+  D('DW-1212', 'A', '2026-11-26', ['23154 decided 2026-11-17'], 'EX-14 day-rated dry 7:00-16:00, 0.5h break at 12:00, with Breaker 1t', 'Machine one day $900; hourly breaker 8.5h x $40 = $340 (worked hours net of the line\'s own break)', [Y('EX-14', '07:00', '16:00', { breakH: 0.5, breakStart: '12:00', att: ['BR-01'] })]),
   D('DW-1210', 'A', '2026-12-08', ['23154 #4'], 'EX-07 hourly wet 5h with Hammer day', 'A day-rated attachment charges one day on any machine line: hammer $250', [W('EX-07', 'p-dev', '07:00', '12:00', { att: ['HM-01'] })]),
   D('DW-1204', 'A', '2026-11-03', ['23154 #5', '23154 #7', '23154 #9'], 'D5 · EX-07 first appears on the project', 'Mobilise $450. EX-07 is also on D6 (DW-1205) that day: mobilise sits on D5, the earliest, and a banner asks which docket carries it. Both can still be approved.', [Y('EX-07', '07:00', '11:00')]),
   D('DW-1205', 'A', '2026-11-03', ['23154 #7'], 'D6 · EX-07 again on its first day', 'Second docket on EX-07\'s first day: a banner asks which docket carries the mobilise; it sits on D5 until chosen', [Y('EX-07', '13:00', '17:00')]),
@@ -495,9 +502,12 @@ function resolveSubject(dk, ver, sec, sid) {
 }
 function spanHours(line) { const s = toMin(line.start), e = toMin(line.end); return e > s ? (e - s) / 60 : 0; }
 function netHours(line) { const sp = spanHours(line); return sp > 0 ? Math.max(0, sp - (Number(line.breakH) || 0)) : 0; }
-// Breaks setting, per project calculator (decided 2026-11-16): 'deducted' (default) or 'charged'.
+// Breaks setting (decided 2026-11-16): 'deducted' (default) or 'charged'. Versioned (decided 2026-11-17): it is part of
+// a calculator version, so a switch is saved as a new version with an effective-from date, and dockets dated before it
+// keep the break treatment of the version they price from. BREAK_FORCE is only set by the worked examples.
 const BREAK_MODE_LABEL = { deducted: 'Deducted', charged: 'Charged' };
-function breakModeOf(proj) { return proj.breakMode === 'charged' ? 'charged' : 'deducted'; }
+let BREAK_FORCE = null;
+function breakModeOf(ver) { if (BREAK_FORCE) return BREAK_FORCE; return ver && ver.breakMode === 'charged' ? 'charged' : 'deducted'; }
 function validateLine(line) {
   if (!line.start || !line.end) return 'Enter a start and end time.';
   if (toMin(line.end) <= toMin(line.start)) return 'A line cannot cross midnight. Night shift is not in this release.';
@@ -550,7 +560,7 @@ function priceAll(projId, opt) {
   opt = opt || {};
   const proj = PROJ[projId];
   const dks = DOCKETS.filter(d => d.proj === projId);
-  const breakMode = opt.breakMode || breakModeOf(proj); const charged = breakMode === 'charged';
+  const chargedFor = ver => !!ver && (opt.breakMode || breakModeOf(ver)) === 'charged';
   const out = {}, all = [];
   dks.forEach(dk => {
     const ver = opt.ver || versionFor(proj, dk.date);
@@ -587,12 +597,15 @@ function priceAll(projId, opt) {
   // claimable dockets included) on THIS project's dockets, in time order. Other projects' hours never count.
   // Each line's span (start to end) fills the tiers in time order. Breaks Deducted (decided 2026-11-16): the day's
   // breaks then come off the top tier of the day, on the hourly line with the highest $ rate in that tier (day-rated
-  // lines are skipped; equal rates: latest line first). If every line holding top-tier hours is day-rated, the break
-  // reduces nothing. A break larger than the hourly hours in the top tier carries on down the tiers, hourly lines only.
-  // Breaks Charged: nothing comes off; break hours are charged and tiered like worked hours.
+  // lines are skipped). Equal rates (decided 2026-11-17): the line running at the break's recorded start time loses it;
+  // if neither covers that time, the later line. If every line holding top-tier hours is day-rated, the break reduces
+  // nothing. A break larger than the hourly hours in the top tier carries down to the next tier (decided 2026-11-17),
+  // hourly lines only, highest $ first, until all of it is placed. Each break is placed in turn, earliest first.
+  // Breaks Charged: nothing comes off; break hours are charged and tiered like worked hours. The setting comes from
+  // the version the person-day prices from.
   // The minimum, per-hour allowances and hourly attachment hours all use the hours a line holds after this.
   const pd = {};
-  all.forEach(o => { o.held = charged ? spanHours(o.line) : o.net; o.breakCharged = charged && Number(o.line.breakH) > 0; if (o.ver && o.line.person && !validateLine(o.line)) (pd[o.line.person + '|' + o.dk.date] ||= []).push(o); });
+  all.forEach(o => { const ch = chargedFor(o.ver); o.held = ch ? spanHours(o.line) : o.net; o.breakCharged = ch && Number(o.line.breakH) > 0; if (o.ver && o.line.person && !validateLine(o.line)) (pd[o.line.person + '|' + o.dk.date] ||= []).push(o); });
   // $ rate of a person's line in a tier, for break placement: null = day-rated (skipped), -1 = unmapped (last).
   const breakRate = (o, t) => {
     const sec = o.line.type; if (sec !== 'labour' && sec !== 'wet') return null;
@@ -611,21 +624,28 @@ function priceAll(projId, opt) {
       while (rem > 1e-9 && bi < buckets.length) { const b = buckets[bi]; const take = Math.min(rem, b.left); o.tiers[b.t] = (o.tiers[b.t] || 0) + take; rem -= take; b.left -= take; if (b.left <= 1e-9) bi++; }
       if (rem > 1e-9) { const last = buckets[buckets.length - 1].t; o.tiers[last] = (o.tiers[last] || 0) + rem; }
     });
-    let brk = charged ? 0 : list.reduce((a, o) => a + (Number(o.line.breakH) || 0), 0);
+    const charged = chargedFor(list[0].ver);
+    let breaks = charged ? [] : list.filter(o => Number(o.line.breakH) > 0).map(o => ({ h: Number(o.line.breakH), at: toMin(o.line.breakStart) })).sort((a, b) => a.at - b.at);
     list.forEach(o => o.breakOff = 0);
     list.breakNote = '';
     const desc = TIERS.slice().reverse();
     const topT = desc.find(t => list.some(o => (o.tiers[t] || 0) > 1e-9));
-    if (brk > 1e-9 && topT) {
+    if (breaks.length && topT) {
       if (!list.some(o => (o.tiers[topT] || 0) > 1e-9 && breakRate(o, topT) !== null)) {
         list.breakNote = 'Every line holding the day\'s ' + TIER_LABEL[topT] + ' hours is day-rated, so the break reduces nothing.';
-        brk = 0;
+        breaks = [];
       }
-      for (const t of desc.slice(desc.indexOf(topT))) {
-        const cands = list.map((o, i) => ({ o, i, rate: breakRate(o, t) })).filter(c => c.rate !== null && (c.o.tiers[t] || 0) > 1e-9).sort((a, b) => b.rate - a.rate || b.i - a.i);
-        for (const c of cands) { if (brk <= 1e-9) break; const h = c.o.tiers[t]; const take = Math.min(h, brk); c.o.tiers[t] = h - take; c.o.breakOff += take; brk -= take; }
-      }
-      if (brk > 1e-9) list.breakNote = fmtH(brk) + 'h of break is larger than the hourly hours left in the day and reduces nothing.';
+      let left = 0;
+      breaks.forEach(b => {
+        let brk = b.h;
+        const runs = o => toMin(o.line.start) <= b.at && b.at < toMin(o.line.end) ? 1 : 0;
+        for (const t of desc.slice(desc.indexOf(topT))) {
+          const cands = list.map((o, i) => ({ o, i, rate: breakRate(o, t) })).filter(c => c.rate !== null && (c.o.tiers[t] || 0) > 1e-9).sort((a, c) => c.rate - a.rate || runs(c.o) - runs(a.o) || c.i - a.i);
+          for (const c of cands) { if (brk <= 1e-9) break; const h = c.o.tiers[t]; const take = Math.min(h, brk); c.o.tiers[t] = h - take; c.o.breakOff += take; brk -= take; }
+        }
+        left += brk;
+      });
+      if (left > 1e-9) list.breakNote = fmtH(left) + 'h of break is larger than the hourly hours left in the day and reduces nothing.';
     }
     let cum = 0;
     list.forEach(o => { o.held = sumv(o.tiers); o.dayFrom = cum; cum += o.held; o.dayTo = cum; });
@@ -668,9 +688,13 @@ function priceAll(projId, opt) {
       const a = attById(aid); const al = ver.lines.find(l => l.sec === 'att' && l.res.includes(a.res));
       const machineDay = o.parts[0] && o.parts[0].unit === 'day';
       const part = { aid, label: a.name, line: al || null, rows: [], value: 0, basis: '' };
+      // Decided 2026-11-17: an hourly attachment on a day-rated wet or dry line charges the line's worked hours net of
+      // the line's own break (9h with a 0.5h break = 8.5h). On wet hire the own break comes off the line's highest tier first.
+      let dayTally = null;
+      if (machineDay) { if (line.type === 'dry') dayTally = { std: o.net }; else { dayTally = clone(o.tiers); let b = Number(line.breakH) || 0; for (const t of TIERS.slice().reverse()) { const h = dayTally[t] || 0; const take = Math.min(h, b); dayTally[t] = h - take; b -= take; } } }
       if (al && al.unit === 'day') { part.rows.push({ tier: 'day', hours: 1, rate: al.rate, value: al.rate }); part.basis = machineDay ? 'Day-rated attachment on a day-rated machine line: one day' : 'Day-rated attachment on an hourly machine line: one day'; }
-      else if (al && line.type === 'dry') { const h = o.chargeHours; part.rows.push({ tier: 'std', hours: h, rate: al.rates.std, value: h * al.rates.std }); part.basis = machineDay ? 'Hourly attachment on a day-rated dry-hire line: the line\'s worked hours at Standard' : 'Dry hire has no tiers: the machine line\'s chargeable hours (top-up included) at Standard'; }
-      else if (al) { TIERS.forEach(t => { const h = o.chargeTally[t] || 0; if (h > 1e-9) part.rows.push({ tier: t, hours: h, rate: al.rates[t], value: h * al.rates[t] }); }); part.basis = machineDay ? 'Hourly attachment on a day-rated wet-hire line: the line\'s worked hours in the operator\'s tiers' : 'The machine line\'s chargeable hours (top-up included) in the same tiers'; }
+      else if (al && line.type === 'dry') { const h = machineDay ? dayTally.std : o.chargeHours; part.rows.push({ tier: 'std', hours: h, rate: al.rates.std, value: h * al.rates.std }); part.basis = machineDay ? 'Hourly attachment on a day-rated dry-hire line: the line\'s worked hours net of its own break, at Standard' : 'Dry hire has no tiers: the machine line\'s chargeable hours (top-up included) at Standard'; }
+      else if (al) { const src = machineDay ? dayTally : o.chargeTally; TIERS.forEach(t => { const h = src[t] || 0; if (h > 1e-9) part.rows.push({ tier: t, hours: h, rate: al.rates[t], value: h * al.rates[t] }); }); part.basis = machineDay ? 'Hourly attachment on a day-rated wet-hire line: the line\'s worked hours net of its own break, in the operator\'s tiers' : 'The machine line\'s chargeable hours (top-up included) in the same tiers'; }
       else unm(o, r, a.name, 'att', 'attachment resource ' + a.res + ' is on no Attachments line', { kind: 'att', id: a.res });
       part.value = part.rows.reduce((x, y) => x + y.value, 0);
       o.atts.push(part);
@@ -898,10 +922,10 @@ function renderCalc() {
     h += `</tbody></table></div></div></div>`;
   } else h += `<div class="banner ok"><i class="fas fa-check"></i><div>Everything used on this project's dockets is on a line for what it is used as.</div></div>`;
 
-  h += `<div class="secnav">${SEC_ORDER.map(s => `<a href="#sec-${s}"><span class="pill ${SEC[s].pill}">${SEC[s].label} (${v.lines.filter(l => l.sec === s).length})</span></a>`).join('')}<a href="#sec-trig"><span class="pill grey">Tier triggers</span></a><a href="#sec-brk"><span class="pill grey">Breaks: ${BREAK_MODE_LABEL[breakModeOf(proj)]}</span></a><a href="#sec-who"><span class="pill grey">Who prices at what</span></a></div>`;
+  h += `<div class="secnav">${SEC_ORDER.map(s => `<a href="#sec-${s}"><span class="pill ${SEC[s].pill}">${SEC[s].label} (${v.lines.filter(l => l.sec === s).length})</span></a>`).join('')}<a href="#sec-trig"><span class="pill grey">Tier triggers</span></a><a href="#sec-brk"><span class="pill grey">Breaks: ${BREAK_MODE_LABEL[breakModeOf(v)]}</span></a><a href="#sec-who"><span class="pill grey">Who prices at what</span></a></div>`;
   SEC_ORDER.forEach(s => h += renderSection(v, s, editing));
   h += renderTriggers(v, editing);
-  h += renderBreaks();
+  h += renderBreaks(v);
   h += `<div class="grid2"><div>${renderVersions(v)}</div><div>${renderMargins()}</div></div>`;
   h += renderWho(v);
   return h;
@@ -982,21 +1006,21 @@ function renderTriggers(v, editing) {
     TIERS.forEach(t => { const val = v.triggers[dt][t]; h += `<td class="num"><input class="cell" value="${val === null || val === undefined ? '' : val}" placeholder="-" onchange="setTrig('${dt}','${t}',this.value)"></td>`; });
     h += `<td class="muted small">${tierOrder(v.triggers, dt).map(([t, hrs]) => (hrs === Infinity ? 'rest' : hrs + 'h') + ' at ' + TIER_LABEL[t]).join(', then ')}</td></tr>`;
   });
-  h += `</tbody></table></div><div class="help">Hours fill the tiers left to right: a number is the hours that tier takes, <b>rest</b> takes everything remaining, blank skips the tier. Hours are counted <b>per person per day across all of that person's lines and dockets on this project that day, in time order</b>, including day-rated wet-hire lines and Not claimable dockets; hours on other projects do not count. Each line with a break records its duration and start time. With Breaks <b>Deducted</b>, the day's breaks come off the day's <b>top tier</b>, on the hourly line with the <b>highest $ rate</b> in that tier; day-rated lines are skipped, and if every line holding top-tier hours is day-rated the break reduces nothing. With Breaks <b>Charged</b>, break hours are charged and tiered like worked hours. Lines cannot cross midnight (night shift is not in this release). Public holidays come from the ${P().state} calendar. Applies to hourly labour and wet-hire lines and their hourly attachments; dry hire is flat.</div></div>`;
+  h += `</tbody></table></div><div class="help">Hours fill the tiers left to right: a number is the hours that tier takes, <b>rest</b> takes everything remaining, blank skips the tier. Hours are counted <b>per person per day across all of that person's lines and dockets on this project that day, in time order</b>, including day-rated wet-hire lines and Not claimable dockets; hours on other projects do not count. Each line with a break records its duration and start time. With Breaks <b>Deducted</b>, the day's breaks come off the day's <b>top tier</b>, on the hourly line with the <b>highest $ rate</b> in that tier (same rate: the line running at the break's start time, else the later line; a break longer than the top tier's hourly hours carries down a tier); day-rated lines are skipped, and if every line holding top-tier hours is day-rated the break reduces nothing. With Breaks <b>Charged</b>, break hours are charged and tiered like worked hours. Lines cannot cross midnight (night shift is not in this release). Public holidays come from the ${P().state} calendar. Applies to hourly labour and wet-hire lines and their hourly attachments; dry hire is flat.</div></div>`;
   return h;
 }
-function renderBreaks() {
-  const proj = P(); const m = breakModeOf(proj); const ed = canEdit();
+function renderBreaks(v) {
+  const m = breakModeOf(v); const ed = editingCalc();
   const opt = k => `<label class="radio"><input type="radio" name="brkMode" value="${k}" ${m === k ? 'checked' : ''} ${ed ? '' : 'disabled'} onchange="setBreakMode('${k}')"> ${BREAK_MODE_LABEL[k]}${k === 'deducted' ? ' (default)' : ''}</label>`;
   return `<div class="card ${ed ? '' : 'ro'}" id="sec-brk"><h2>Breaks ${story(STORY.core)}</h2><div>${opt('deducted')}${opt('charged')}</div>
-    <div class="help"><b>Deducted:</b> the day's breaks come off the person's top-tier hours that day, on the hourly line with the highest $ rate in that tier. Day-rated lines are skipped; if every line holding top-tier hours is day-rated, the break reduces nothing. <b>Charged:</b> break hours are charged and tiered exactly like worked hours, and count towards tier thresholds and the minimum. Changing this reprices this project's dockets straight away; dockets on an issued claim or approved variation keep their value.</div></div>`;
+    <div class="help"><b>Deducted:</b> the day's breaks come off the person's top-tier hours that day, on the hourly line with the highest $ rate in that tier. Two lines at the same $ rate: the line running at the break's recorded start time loses it; if neither covers that time, the later line. A break longer than the top tier's hourly hours carries down to the next tier, hourly lines only, highest $ first. Day-rated lines are skipped; if every line holding top-tier hours is day-rated, the break reduces nothing. <b>Charged:</b> break hours are charged and tiered exactly like worked hours, and count towards tier thresholds and the minimum; a dry-hire line's own break is charged too. <b>Versioned:</b> the setting is part of the calculator version. Switching it is a change to your draft; save it as a new version with an effective-from date, like a rate change. Dockets dated before that date keep their break treatment, and dockets on an issued claim or approved variation keep their value.</div></div>`;
 }
-function setBreakMode(m) { if (!canEdit()) return; P().breakMode = m; render(); toast('Breaks: ' + BREAK_MODE_LABEL[m] + '. ' + P().name + '\'s dockets repriced.'); }
+function setBreakMode(m) { if (!editingCalc()) return; working().breakMode = m; mark(); toast('Breaks: ' + BREAK_MODE_LABEL[m] + ' in your draft. Save it as a new version with an effective-from date to apply it.'); }
 function renderVersions(v) {
   const proj = P();
   let h = `<div class="card"><h2>Versions ${story(STORY.core)}</h2><div class="vlist">`;
-  [...proj.versions].reverse().forEach((ver, i) => { const idx = proj.versions.length - 1 - i; h += `<div class="v ${idx === proj.view ? 'sel' : ''}" onclick="P().view=${idx};render()"><span>Version ${ver.n}${idx === proj.versions.length - 1 ? ' <span class="pill ver">current</span>' : ''}</span><span class="muted">effective ${fmtDate(ver.effectiveFrom)} · ${esc(ver.savedBy)}</span></div>`; });
-  h += `</div><div class="help">A version holds the rates, lines, tier triggers <b>and named assignments</b>. A docket is priced by the version in effect on its date. The effective-from date cannot be before the later of the last issued claim (${fmtDate(proj.lastClaim)}) and the last approved variation (${proj.lastVariation ? fmtDate(proj.lastVariation) : 'none'}). Dockets on an issued claim or approved variation are never repriced.${proj.id === 'A' ? ' Version 2 moves "Leading Hand" to $75; version 3 names Cris on "Skilled Labourer &amp; Trades Assistant".' : ''}</div></div>`;
+  [...proj.versions].reverse().forEach((ver, i) => { const idx = proj.versions.length - 1 - i; h += `<div class="v ${idx === proj.view ? 'sel' : ''}" onclick="P().view=${idx};render()"><span>Version ${ver.n}${idx === proj.versions.length - 1 ? ' <span class="pill ver">current</span>' : ''}</span><span class="muted">effective ${fmtDate(ver.effectiveFrom)} · Breaks ${BREAK_MODE_LABEL[breakModeOf(ver)]} · ${esc(ver.savedBy)}</span></div>`; });
+  h += `</div><div class="help">A version holds the rates, lines, tier triggers, <b>named assignments</b> and the <b>Breaks setting</b>. A docket is priced by the version in effect on its date. The effective-from date cannot be before the later of the last issued claim (${fmtDate(proj.lastClaim)}) and the last approved variation (${proj.lastVariation ? fmtDate(proj.lastVariation) : 'none'}). Dockets on an issued claim or approved variation are never repriced.${proj.id === 'A' ? ' Version 2 moves "Leading Hand" to $75; version 3 names Cris on "Skilled Labourer &amp; Trades Assistant".' : ''}</div></div>`;
   return h;
 }
 function renderMargins() {
@@ -1156,7 +1180,7 @@ function renderDocketLine(dk, r, o, ed) {
   });
   if (o.dayList && line.type !== 'dry') {
     const nm = personById(line.person).name;
-    h += `<div class="blk"><h4>${esc(nm)}'s hours on ${dayName(dk.date)} ${fmtDate(dk.date)} ${story(STORY.core)}</h4><table><thead><tr><th>Docket</th><th>Line</th><th>Time</th><th class="num">Break</th><th class="num">Break off here</th><th>Tiers held</th></tr></thead><tbody>${o.dayList.map(x => `<tr class="${x === o ? 'me' : ''}"><td>${x.dk.id}${x.dk.notClaimable ? ' <span class="pill grey">Not claimable</span>' : ''}</td><td>${TYPE_LABEL[x.line.type]}${x.parts[0] && x.parts[0].unit === 'day' ? ' (day rate)' : ''}</td><td>${x.line.start}-${x.line.end}</td><td class="num">${x.line.breakH ? fmtH(x.line.breakH) + 'h at ' + (x.line.breakStart || '?') : '-'}</td><td class="num">${x.breakCharged ? 'charged' : x.breakOff ? fmtH(x.breakOff) + 'h' : '-'}</td><td>${tierStr(x.tiers)}</td></tr>`).join('')}</tbody></table><div class="muted">Counted in time order across all of ${esc(nm)}'s lines and dockets on this project that day (day-rated wet hire and Not claimable dockets included; other projects not). This line holds hours ${fmtH(o.dayFrom)} to ${fmtH(o.dayTo)}.${o.dayList.some(x => x.line.breakH) ? (o.dayList.some(x => x.breakCharged) ? ' Breaks: Charged. Break hours are charged and tiered like worked hours.' : ' Breaks: Deducted. The day\'s breaks come off the top tier, on the hourly line with the highest $ rate in it; day-rated lines are skipped.' + (o.dayList.breakNote ? ' ' + esc(o.dayList.breakNote) : '')) : ''}</div></div>`;
+    h += `<div class="blk"><h4>${esc(nm)}'s hours on ${dayName(dk.date)} ${fmtDate(dk.date)} ${story(STORY.core)}</h4><table><thead><tr><th>Docket</th><th>Line</th><th>Time</th><th class="num">Break</th><th class="num">Break off here</th><th>Tiers held</th></tr></thead><tbody>${o.dayList.map(x => `<tr class="${x === o ? 'me' : ''}"><td>${x.dk.id}${x.dk.notClaimable ? ' <span class="pill grey">Not claimable</span>' : ''}</td><td>${TYPE_LABEL[x.line.type]}${x.parts[0] && x.parts[0].unit === 'day' ? ' (day rate)' : ''}</td><td>${x.line.start}-${x.line.end}</td><td class="num">${x.line.breakH ? fmtH(x.line.breakH) + 'h at ' + (x.line.breakStart || '?') : '-'}</td><td class="num">${x.breakCharged ? 'charged' : x.breakOff ? fmtH(x.breakOff) + 'h' : '-'}</td><td>${tierStr(x.tiers)}</td></tr>`).join('')}</tbody></table><div class="muted">Counted in time order across all of ${esc(nm)}'s lines and dockets on this project that day (day-rated wet hire and Not claimable dockets included; other projects not). This line holds hours ${fmtH(o.dayFrom)} to ${fmtH(o.dayTo)}.${o.dayList.some(x => x.line.breakH) ? (o.dayList.some(x => x.breakCharged) ? ' Breaks: Charged. Break hours are charged and tiered like worked hours.' : ' Breaks: Deducted. The day\'s breaks come off the top tier, on the hourly line with the highest $ rate in it (same rate: the line running at the break\'s start time, else the later line); day-rated lines are skipped.' + (o.dayList.breakNote ? ' ' + esc(o.dayList.breakNote) : '')) : ''}</div></div>`;
   }
   o.atts.forEach(p => {
     h += `<div class="blk"><h4><span class="pill att">Attachment</span> ${esc(p.label)} ${p.line ? `<span class="pill res">${esc(p.line.name)}</span>` : '<span class="pill bad">Unmapped</span>'} ${story(STORY.af)}</h4>`;
@@ -1259,10 +1283,34 @@ function buildExamples() {
   add('Decided 2026-11-16: on a Tuesday Ana is on a labour line 7:00 to 12:00 with a 0.5h break, then on a day-rated wet-hire roller 12:00 to 18:00; only the roller holds the day\'s 2x hour', 'every top-tier line is day-rated, so the break reduces nothing: labour 5h x $60 = $300', 'labour $300, break placed nowhere', 'labour ' + rowsStr(o.parts[0]) + ' = ' + money(mv(o)) + '; break off labour ' + fmtH(o.breakOff) + 'h, roller ' + fmtH(o2.breakOff) + 'h', near(o.breakOff, 0) && near(o2.breakOff, 0) && near(mv(o), 300) && rowsMatch(o.parts[0], { std: 5 }) && near(mv(o2), 1400), 'DW-1137');
   // Decided 2026-11-16 (A3): Breaks Deducted / Charged, per calculator, default Deducted.
   (function () {
-    const was = A.breakMode; const dd = pd('DW-1101').lines[0]; const vd = mv(dd), modeD = breakModeOf(A);
-    A.breakMode = 'charged'; invalidate(); const oc = pd('DW-1101').lines[0]; const vc = mv(oc), rc = rowsStr(oc.parts[0]), okRows = rowsMatch(oc.parts[0], { std: 8, x15: 2, x2: 1 }), shows = oc.breakCharged && oc.dayList && oc.dayList.some(x => x.breakCharged);
-    A.breakMode = was; invalidate();
+    const was = BREAK_FORCE; BREAK_FORCE = null; invalidate(); const dd = pd('DW-1101').lines[0]; const vd = mv(dd), modeD = breakModeOf(dd.ver);
+    BREAK_FORCE = 'charged'; invalidate(); const oc = pd('DW-1101').lines[0]; const vc = mv(oc), rc = rowsStr(oc.parts[0]), okRows = rowsMatch(oc.parts[0], { std: 8, x15: 2, x2: 1 }), shows = oc.breakCharged && oc.dayList && oc.dayList.some(x => x.breakCharged);
+    BREAK_FORCE = was; invalidate();
     add('Decided 2026-11-16: the Tuesday Leading Hand line 6:00 to 17:00 with a 0.5h break, rates $70 / $105 / $140, priced with Breaks Deducted and then Charged', 'Deducted (the default) = $840; Charged = 8h x $70 + 2h x $105 + 1h x $140 = $910, and the hours table shows the break as charged', 'Deducted $840 / Charged $910, break shown as charged', 'default ' + BREAK_MODE_LABEL[modeD] + ' ' + money(vd) + '; Charged ' + rc + ' = ' + money(vc) + '; hours table ' + (shows ? 'shows "charged"' : 'does not show "charged"'), modeD === 'deducted' && near(vd, 840) && near(vc, 910) && okRows && shows, 'DW-1101');
+  })();
+  // Decided 2026-11-17 (calculator 1, 3, 6, 7).
+  d = pd('DW-1139'); o = d.lines[0]; o2 = d.lines[1];
+  add('Decided 2026-11-17: on a Wednesday Sam is on hourly wet hire 7:00 to 13:00 ($180), then on a labour line 13:00 to 15:30 ($80) with a 1h break at 14:00; the day\'s 1.5x tier holds only 0.5h, on labour', 'the break takes the 0.5h of 1.5x and the other 0.5h carries down to Standard, off the highest $ hourly line there (wet): wet 5.5h x $180 = $990; labour 2h + 2h minimum top-up = 4h x $80 = $320', 'break off labour 0.5h, wet 0.5h; wet $990 / labour $320', 'break off labour ' + fmtH(o2.breakOff) + 'h, wet ' + fmtH(o.breakOff) + 'h; wet ' + rowsStr(o.parts[0]) + ' = ' + money(mv(o)) + '; labour ' + rowsStr(o2.parts[0]) + ' = ' + money(mv(o2)) + ' (top-up ' + fmtH(o2.parts[0].topUp) + 'h)', near(o2.breakOff, 0.5) && near(o.breakOff, 0.5) && near(mv(o), 990) && rowsMatch(o.parts[0], { std: 5.5 }) && near(mv(o2), 320) && near(o2.parts[0].topUp, 2), 'DW-1139');
+  o = pd('DW-1140').lines[0]; o2 = pd('DW-1141').lines[0];
+  add('Decided 2026-11-17: on a Saturday a Leading Hand works D1 6:00 to 11:00 with a 0.5h break at 8:00 and D2 11:00 to 15:00; both hold 2x hours at the same $140', 'equal rates: the line running at the break\'s start time (D1) loses it: D1 2h x $105 + 2.5h x $140 = $560, D2 4h x $140 = $560', 'break off D1; D1 $560 / D2 $560', 'break off D1 ' + fmtH(o.breakOff) + 'h, D2 ' + fmtH(o2.breakOff) + 'h; D1 ' + rowsStr(o.parts[0]) + ' = ' + money(mv(o)) + '; D2 ' + rowsStr(o2.parts[0]) + ' = ' + money(mv(o2)), near(o.breakOff, 0.5) && near(o2.breakOff, 0) && near(mv(o), 560) && rowsMatch(o.parts[0], { x15: 2, x2: 2.5 }) && near(mv(o2), 560) && rowsMatch(o2.parts[0], { x2: 4 }), 'DW-1140');
+  d = pd('DW-1142'); o = d.lines[1]; o2 = d.lines[2];
+  add('Decided 2026-11-17: on a Saturday Sam is on labour 6:00 to 10:00 with a 0.5h break at 7:00, then wet EX-08 10:00 to 15:00 and wet EX-10 15:00 to 20:00, both at $360 2x', 'equal rates and neither wet line is running at 7:00, so the later line (EX-10) loses it: EX-10 4.5h x $360 = $1,620, EX-08 5h x $360 = $1,800, labour $560', 'break off EX-10; $1,620 / $1,800 / $560', 'break off EX-08 ' + fmtH(o.breakOff) + 'h, EX-10 ' + fmtH(o2.breakOff) + 'h, labour ' + fmtH(d.lines[0].breakOff) + 'h; EX-08 ' + money(mv(o)) + ', EX-10 ' + rowsStr(o2.parts[0]) + ' = ' + money(mv(o2)) + ', labour ' + money(mv(d.lines[0])), near(o2.breakOff, 0.5) && near(o.breakOff, 0) && near(d.lines[0].breakOff, 0) && near(mv(o2), 1620) && near(mv(o), 1800) && near(mv(d.lines[0]), 560), 'DW-1142');
+  (function () {
+    const was = BREAK_FORCE; BREAK_FORCE = 'deducted'; invalidate(); const od = pd('DW-1145').lines[0]; const vd = mv(od);
+    BREAK_FORCE = 'charged'; invalidate(); const oc = pd('DW-1145').lines[0]; const vc = mv(oc), rc = rowsStr(oc.parts[0]);
+    BREAK_FORCE = was; invalidate();
+    add('Decided 2026-11-17: Tipper TP-03 on an hourly dry-hire line ($95) 7:00 to 13:00 with a 0.5h break at 10:00', 'Deducted: the break comes off the dry-hire line, 5.5h x $95 = $522.50. Charged: the dry-hire line\'s own break is charged too, 6h x $95 = $570', 'Deducted $522.50 / Charged $570', 'Deducted ' + rowsStr(od.parts[0]) + ' = ' + money(vd) + '; Charged ' + rc + ' = ' + money(vc), near(vd, 522.5) && near(vc, 570), 'DW-1145');
+  })();
+  (function () {
+    const was = BREAK_FORCE; BREAK_FORCE = null;
+    const saved = A.versions; A.versions = clone(saved);
+    const refused = effectiveError(A, '2026-11-01');
+    const nv = clone(latestVer(A)); Object.assign(nv, { n: A.versions.length + 1, effectiveFrom: '2026-11-12', savedBy: 'Dana Whitfield (PM)', savedOn: '2026-11-11', breakMode: 'charged' }); A.versions.push(nv); invalidate();
+    const b = pd('DW-1101'), a = pd('DW-1135'), t = pd('DW-1145');
+    const vb = mv(b.lines[0]), va = mv(a.lines[0]), vt = mv(t.lines[0]);
+    const ok = breakModeOf(b.ver) === 'deducted' && breakModeOf(a.ver) === 'charged' && b.lines[0].breakOff > 0 && a.lines[1].breakCharged && near(vb, 840) && near(va, 1620) && rowsMatch(a.lines[0].parts[0], { x15: 2, x2: 3 }) && near(vt, 570) && !!refused;
+    A.versions = saved; BREAK_FORCE = was; invalidate();
+    add('Decided 2026-11-17: Breaks is versioned. The PM switches Breaks to Charged and saves it as version ' + nv.n + ' effective 12/11/2026 (an effective date of 01/11 is refused, as for any version)', 'DW-1101 (20 Oct, before the switch) stays Deducted at $840; DW-1135 (Saturday 14 Nov, after) is Charged: wet 2h x $270 + 3h x $360 = $1,620 with the labour break shown as charged; DW-1145 (19 Nov) dry 6h x $95 = $570', '20 Oct v1 Deducted $840 / 14 Nov v' + nv.n + ' Charged $1,620 / 19 Nov $570; 01/11 refused', '20 Oct v' + b.ver.n + ' ' + BREAK_MODE_LABEL[breakModeOf(b.ver)] + ' ' + money(vb) + ' / 14 Nov v' + a.ver.n + ' ' + BREAK_MODE_LABEL[breakModeOf(a.ver)] + ' wet ' + rowsStr(a.lines[0].parts[0]) + ' = ' + money(va) + (a.lines[1].breakCharged ? ', labour break charged' : '') + ' / 19 Nov ' + money(vt) + '; 01/11 ' + (refused ? 'refused' : 'allowed'), ok, 'DW-1135');
   })();
   d = pd('DW-1128'); o2 = pd('DW-1129').lines[0];
   add('D1 above is marked Not claimable', 'D2 still tiers from hour 7 of the day: $490', 'D1 billed $0 / D2 $490', 'D1 ' + (d.dk.notClaimable ? 'Not claimable, billed ' + money(d.billed) : 'claimable') + '; D2 ' + rowsStr(o2.parts[0]) + ' = ' + money(mv(o2)), d.dk.notClaimable && d.billed === 0 && near(mv(o2), 490) && rowsMatch(o2.parts[0], { std: 2, x15: 2, x2: 1 }), 'DW-1129');
@@ -1319,6 +1367,8 @@ function buildExamples() {
   o = pd('DW-1202').lines[0]; add('EX-07 on a dry-hire line run 2.5h on a Monday with the breaker', 'the machine is 4h x $120 = $480 and the breaker 4h x $40 = $160', '$480 + $160', money(mv(o)) + ' + ' + (o.atts[0] ? rowsStr(o.atts[0]) + ' = ' + money(o.atts[0].value) : 'no breaker'), near(mv(o), 480) && o.atts[0] && near(o.atts[0].value, 160), 'DW-1202');
   o = pd('DW-1203').lines[0]; add('EX-14 on a day-rated dry-hire line worked 6h with the breaker', 'the machine is $900 and the breaker 6h x $40 = $240', '$900 + $240', money(mv(o)) + ' + ' + (o.atts[0] ? rowsStr(o.atts[0]) + ' = ' + money(o.atts[0].value) : 'no breaker'), near(mv(o), 900) && o.atts[0] && near(o.atts[0].value, 240), 'DW-1203');
   o = pd('DW-1210').lines[0]; add('EX-07 on an hourly wet-hire line for 5h with "Hammer day" fitted', 'the hammer charges one day, $250', '1 day $250', 'machine ' + rowsStr(o.parts[0]) + '; ' + (o.atts[0] ? '"' + (o.atts[0].line ? o.atts[0].line.name : 'unmapped') + '" ' + rowsStr(o.atts[0]) + ' = ' + money(o.atts[0].value) : 'no hammer'), o.parts[0].unit === 'hour' && o.atts[0] && o.atts[0].rows.length === 1 && o.atts[0].rows[0].tier === 'day' && near(o.atts[0].value, 250), 'DW-1210');
+  o = pd('DW-1211').lines[0]; add('Decided 2026-11-17: Roller RL-02 on a day-rated wet-hire line 7:00 to 16:00 (9h) with a 0.5h break, "Breaker 1t" fitted', 'the hourly breaker charges the line\'s worked hours net of its own break, 8.5h: 8h x $40 + 0.5h x $60 = $350; machine one day $1,400', '$1,400 + $350', money(mv(o)) + ' + ' + (o.atts[0] ? rowsStr(o.atts[0]) + ' = ' + money(o.atts[0].value) : 'no breaker'), near(mv(o), 1400) && o.atts[0] && near(o.atts[0].value, 350) && rowsMatch(o.atts[0], { std: 8, x15: 0.5 }), 'DW-1211');
+  o = pd('DW-1212').lines[0]; add('Decided 2026-11-17: EX-14 on a day-rated dry-hire line 7:00 to 16:00 (9h) with a 0.5h break, "Breaker 1t" fitted', 'the hourly breaker charges 8.5h x $40 = $340; machine one day $900', '$900 + $340', money(mv(o)) + ' + ' + (o.atts[0] ? rowsStr(o.atts[0]) + ' = ' + money(o.atts[0].value) : 'no breaker'), near(mv(o), 900) && o.atts[0] && near(o.atts[0].value, 340), 'DW-1212');
   d = pd('DW-1204'); let f = d.floats.find(x => x.plant === 'EX-07');
   add('EX-07 first appears on the project on a docket dated 3 Nov', 'a $450 mobilise charge is added to that docket', 'mobilise $450 on 03/11', f ? (f.dir === 'mob' ? 'mobilise ' : 'demobilise ') + money(f.value) + ' on ' + d.dk.id + ' ' + fmtDate(d.dk.date) : 'no float charge', f && f.dir === 'mob' && near(f.value, 450), 'DW-1204');
   const f20 = pd('DW-1206').floats.find(x => x.plant === 'EX-07'), f01 = pd('DW-1207').floats.find(x => x.plant === 'EX-07');
@@ -1372,11 +1422,11 @@ function buildExamples() {
 }
 function renderExamples() {
   const el = document.getElementById('tab-examples');
-  // The worked examples are written for the default Breaks setting (Deducted); the Charged example switches it itself.
-  const modes = {}; Object.values(PROJ).forEach(p => { modes[p.id] = p.breakMode; p.breakMode = 'deducted'; }); invalidate();
-  let E; try { E = buildExamples(); } finally { Object.values(PROJ).forEach(p => p.breakMode = modes[p.id]); invalidate(); }
+  // The worked examples are written for the default Breaks setting (Deducted); the Charged and versioned examples set it themselves.
+  BREAK_FORCE = 'deducted'; invalidate();
+  let E; try { E = buildExamples(); } finally { BREAK_FORCE = null; invalidate(); }
   const passes = E.filter(e => e.pass).length;
-  let h = `<div class="hdr"><div><h1>Worked examples</h1><div class="sub">Every Given/When/Then in the four stories as rewritten on 2026-11-16, in each ticket's order, recomputed live from the same pricing engine the dockets use, plus the product decisions of 2026-11-16. They price with Breaks set to Deducted (the default) whatever the project's setting; the Charged example switches it itself. Edit the calculator, a mapping or a docket and these re-run (and can fail; that is the point).</div></div><span class="pill ${passes === E.length ? 'ok' : 'bad'}" style="font-size:13px" id="exTotal">${passes} / ${E.length} pass</span></div>`;
+  let h = `<div class="hdr"><div><h1>Worked examples</h1><div class="sub">Every Given/When/Then in the four stories as rewritten on 2026-11-16, in each ticket's order, recomputed live from the same pricing engine the dockets use, plus the product decisions of 2026-11-16 and 2026-11-17. They price with Breaks set to Deducted (the default) whatever the calculator versions say; the Charged and versioned-Breaks examples set it themselves. Edit the calculator, a mapping or a docket and these re-run (and can fail; that is the point).</div></div><span class="pill ${passes === E.length ? 'ok' : 'bad'}" style="font-size:13px" id="exTotal">${passes} / ${E.length} pass</span></div>`;
   TICKETS.forEach(([k, label]) => {
     const G = E.filter(e => e.ticket === k); const p = G.filter(e => e.pass).length;
     h += `<div class="card exgroup"><h2>${story(k)} ${esc(label)} <span class="pill ${p === G.length ? 'ok' : 'bad'}" data-ticket="${k}">${p} / ${G.length} pass</span></h2><div class="tscroll"><table><thead><tr><th>#</th><th>Given / When</th><th>Then (ticket)</th><th>Expected</th><th>Prototype</th><th>Result</th><th>Where</th></tr></thead><tbody>${G.map((e, i) => `<tr><td class="muted">${i + 1}</td><td>${esc(e.given)}</td><td>${esc(e.then)}</td><td>${esc(e.expected)}</td><td class="small">${esc(e.actual)}</td><td>${e.pass ? '<span class="ex-pass"><i class="fas fa-check"></i> pass</span>' : '<span class="ex-fail"><i class="fas fa-xmark"></i> fail</span>'}</td><td>${e.did ? `<a href="#" onclick="goDocket('${e.did}');return false">${e.did}</a>` : '<span class="muted">calculator</span>'}</td></tr>`).join('')}</tbody></table></div></div>`;

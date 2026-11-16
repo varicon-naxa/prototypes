@@ -1,4 +1,4 @@
-# Dayworks Calculator (built 2026-11-05, rebuilt 2026-11-12 and 2026-11-16, updated to Alec's answers and decisions 2026-11-16)
+# Dayworks Calculator (built 2026-11-05, rebuilt 2026-11-12 and 2026-11-16, updated to Alec's answers and decisions 2026-11-16 and 2026-11-17)
 
 Prototype for the Dayworks Calculator stories under epic VAR-23034, rebuilt to match all four as Alec rewrote them
 on 2026-11-16:
@@ -40,9 +40,11 @@ and engineer are read-only. "Today" is set to 18/12/2026 so every example docket
    - **Allowances**: type, unit, amount and an optional threshold.
    - **Materials and Subcontract**: rate per unit, or cost plus margin.
    - **Tier triggers**, editable.
-   - **Breaks: Deducted / Charged** (default Deducted), one setting per project calculator. Switching it reprices
-     the project's dockets straight away (dockets on an issued claim or approved variation keep their value).
-   - **Versions** hold rates, lines, triggers *and named assignments* (v1 01/10, v2 01/11 Leading Hand $75, v3 10/11
+   - **Breaks: Deducted / Charged** (default Deducted). The setting is part of the calculator version: switching it
+     changes the draft, and saving creates a new version with an effective-from date, like a rate change (same
+     earliest effective-from rule). Dockets dated before it keep their break treatment, and dockets on an issued
+     claim or approved variation keep their value. The version list shows each version's Breaks setting.
+   - **Versions** hold rates, lines, triggers, *named assignments* and the Breaks setting (v1 01/10, v2 01/11 Leading Hand $75, v3 10/11
      names Cris). Earlier versions open read-only. The save dialog shows the effective-from floor, which is the later
      of the last issued claim and the last approved variation. A date before it is refused with the ticket's message.
      If a save changes a named assignment, it lists every unbilled docket on or after the date whose value would
@@ -58,7 +60,9 @@ and engineer are read-only. "Today" is set to 18/12/2026 so every example docket
      dockets on this project in time order, and which hours of the day it holds. Hours on day-rated wet-hire lines
      and on Not claimable dockets count; hours on other projects do not. A break needs both duration and start
      time. With Breaks set to Deducted, the day's breaks come off the day's top tier, on the hourly line with the
-     highest $ rate in that tier (day-rated lines skipped), and the table shows where each break came off. With
+     highest $ rate in that tier (day-rated lines skipped; at the same rate, the line running at the break's start
+     time, else the later line; a break longer than the top tier's hourly hours carries down a tier), and the table
+     shows where each break came off. With
      Breaks set to Charged, the table shows each break as "charged". Lines can't cross midnight.
    - **Overlaps.** An overlap on one docket, across dockets, or across projects flags both lines with "<name> is
      already charged on another line for these hours", names the other docket, and blocks both dockets.
@@ -73,9 +77,11 @@ and engineer are read-only. "Today" is set to 18/12/2026 so every example docket
    - **Materials and subcontract** sit in their own table.
    - Anything unmapped prices $0 and blocks Approve. Dockets on an issued claim or approved variation are locked.
 3. **Worked examples**: every Given/When/Then from all four tickets, grouped by ticket in each ticket's order, and
-   recomputed live from the same engine, plus seven examples for the 2026-11-16 decisions (listed under VAR-23035).
-   On a fresh load: VAR-23035 35/35, VAR-23154 10/10, VAR-23155 7/7, VAR-23156 4/4 (56/56). The examples always
-   price with Breaks set to Deducted, whatever the project's setting; the Charged example switches it itself.
+   recomputed live from the same engine, plus seven examples for the 2026-11-16 decisions and seven for the
+   2026-11-17 decisions (five under VAR-23035, two under VAR-23154).
+   On a fresh load: VAR-23035 40/40, VAR-23154 12/12, VAR-23155 7/7, VAR-23156 4/4 (63/63). The examples always
+   price with Breaks set to Deducted, whatever the calculator versions say; the Charged, dry-hire Charged and
+   versioned-Breaks examples set it themselves.
    Editing rates or mappings can make them fail.
 
 Seeding notes: hours combine across a person's dockets on a project each day, so each example sits on its own
@@ -90,6 +96,11 @@ person-day. Cris's version example is dated Friday 6 Nov and Thursday 12 Nov. Se
 - For the 2026-11-16 break decisions: a third Leading Hand, Kai Turner, for the single-line 3.5h example on Monday
   12 Oct (DW-1138); Mia D1/D2 on Monday 12 Oct (DW-1133/1134), Sam wet then labour on Saturday
   14 Nov (DW-1135), Ana labour then day-rated roller on Saturday 21 Nov (DW-1136) and Tuesday 24 Nov (DW-1137).
+- For the 2026-11-17 decisions: Sam wet then labour with a 1h break on Wednesday 18 Nov (DW-1139, carry-down);
+  Kai D1/D2 on Saturday 17 Oct (DW-1140/1141, equal rates, D1 covers the break time); Sam labour then two wet
+  lines on Saturday 28 Nov (DW-1142, equal rates, neither covers); Tipper TP-03 hourly dry with a break on
+  Thursday 19 Nov (DW-1145); RL-02 day-rated wet with a breaker on Wednesday 25 Nov (DW-1211) and EX-14 day-rated
+  dry with a breaker on Thursday 26 Nov (DW-1212).
 - The tickets' rate cards are combined into one calculator, so long core-ticket lines also pick up Meal at 9.5h:
   the $840 docket is $865 in total, and D2 is $515. The core examples check the labour or machine charge.
 
@@ -111,31 +122,42 @@ person-day. Cris's version example is dated Friday 6 Nov and Thursday 12 Nov. Se
    6:00-17:00 with a 0.5h break, $70 / $105 / $140: Deducted $840, Charged 8x70 + 2x105 + 1x140 = $910 (DW-1101).
    The per-day hours table shows the break as "charged".
 
+## Decided (2026-11-17)
+
+1. **Break bigger than the top tier's hourly hours.** The rest carries down to the next tier, on hourly lines only,
+   highest $ first, until all of it is placed. Example: Sam wet 7:00-13:00 ($180), labour 13:00-15:30 ($80) with a
+   1h break; the 1.5x tier holds 0.5h (labour), so 0.5h comes off there and 0.5h off the wet line's Standard:
+   wet 5.5h x $180 = $990, labour 2h + 2h top-up = $320 (DW-1139).
+2. **Top tier all day-rated.** The break reduces nothing: "For day rate, breaks do not matter, day rate charged".
+   Unchanged: DW-1137, labour $300.
+3. **Equal $ rates in the top tier.** The line running at the break's recorded start time loses it; if neither
+   covers that time, the later line. Examples: Saturday D1 6:00-11:00 with a break at 8:00 and D2 11:00-15:00, both
+   $140 at 2x: the break comes off D1, $560 / $560 (DW-1140/1141). Labour with a break at 7:00, then two $360 wet
+   lines: neither covers 7:00, so the later one (EX-10) loses it, $1,620 (DW-1142).
+4. **Unmapped lines** rank last for the break. Unchanged.
+5. **Hourly attachment on a day-rated wet or dry line** charges the line's worked hours net of the line's own break
+   (9h with a 0.5h break = 8.5h). Examples: RL-02 day-rated wet 7:00-16:00 with a 0.5h break, breaker 8h x $40 +
+   0.5h x $60 = $350 (DW-1211); EX-14 day-rated dry, breaker 8.5h x $40 = $340 (DW-1212). On wet hire the own break
+   comes off the line's highest tier first (see open question 2).
+6. **The Breaks setting is versioned.** Switching it creates a calculator version with an effective-from date, like
+   a rate change, with the same earliest effective-from rule; dockets dated before keep their break treatment.
+   Example: Charged saved as a version effective 12/11/2026; DW-1101 (20 Oct) stays Deducted at $840, DW-1135
+   (14 Nov) is Charged, wet $1,620, and DW-1145 (19 Nov) dry $570.
+7. **Dry hire under Charged.** A dry-hire line's own break is charged too. Example: TP-03 7:00-13:00 with a
+   0.5h break: Deducted 5.5h x $95 = $522.50, Charged 6h x $95 = $570 (DW-1145).
+
 ## Open questions
 
-These came up while building the 2026-11-16 decisions. The prototype's current behaviour is noted so it can be
+These came up while building the 2026-11-17 decisions. The prototype's current behaviour is noted so it can be
 checked, but none of it is decided.
 
-1. **Break bigger than the top tier's hourly hours.** When the hourly hours in the top tier are fewer than the
-   break, the prototype carries the rest of the break down to the next tier (hourly lines only, highest $ first),
-   and if no hourly hours are left the rest reduces nothing. Is that right?
-2. **Top tier all day-rated, lower tiers hourly.** When only day-rated lines hold the top tier, the break reduces
-   nothing even though an hourly line holds lower-tier hours (DW-1137: the worker is charged for the break on the
-   labour line). Is that the intent, or should the break move to the highest tier that has an hourly line?
-3. **Equal rates in the top tier.** When two hourly lines hold top-tier hours at the same $ rate, the prototype takes
-   the break off the later line of the day. Is that the tie-break?
-4. **Unmapped lines.** An unmapped line has no rate yet. The prototype ranks it below every mapped hourly line, so
-   the break only comes off it when no mapped hourly line holds hours in that tier. Once it is mapped, the break
-   may move. Is that acceptable?
-5. **Hourly attachment on a day-rated wet line with a break.** Its hours are the hours the line holds. Because a
-   deducted break never comes off a day-rated line, those hours now include the line's own break. Should the
-   attachment's hours exclude the line's own break?
-6. **Is the Breaks setting versioned?** The prototype keeps it as one live setting per project calculator, outside
-   the dated versions, and switching it reprices every unbilled docket straight away. Should it instead be part of
-   a calculator version (with an effective-from date), and should a change list the affected dockets for Reprice or
-   Keep, like a named-assignment change?
-7. **Dry hire under Charged.** A dry-hire line's own break is deducted from that line under Deducted. Under Charged
-   the prototype charges the dry-hire line's break too. Is that right?
+1. **Day-rated attachment hours under Charged.** Decision 5 says the attachment charges worked hours net of the
+   line's own break. Under Breaks Charged every other line charges its break. The prototype applies decision 5 as
+   written under both settings, so under Charged the attachment still excludes the line's own break. Should it
+   include the break under Charged?
+2. **Which tier the excluded break comes off (wet hire).** For an hourly attachment on a day-rated wet line, the
+   prototype takes the line's own break off the line's highest tier first (9h weekday with a 0.5h break: 8h
+   Standard + 0.5h 1.5x). Is that right, or should it come off the lowest tier?
 
 ## Not in the prototype
 
