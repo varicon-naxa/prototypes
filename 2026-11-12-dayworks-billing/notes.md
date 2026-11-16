@@ -1,6 +1,6 @@
 # Dayworks billing: dockets to variations and progress claims
 
-Clickable static prototype. Built 2026-11-12, updated 2026-11-16 to match the tickets as Alec rewrote them that day:
+Clickable static prototype. Built 2026-11-12, updated 2026-11-16 to match the tickets as Alec rewrote them that day, then again with his answers to the eight open questions (also 2026-11-16, written into both tickets):
 
 - **VAR-23036** Convert daywork dockets into a variation (main spec)
 - **VAR-23037** Convert daywork dockets into a progress claim (main spec)
@@ -27,7 +27,7 @@ One project, Riverside Rd Upgrade (NSW), runs 20 Oct to 16 Nov 2026. It is price
   - Dockets on an approved variation or issued claim show a lock and their frozen value. If the calculator has moved since, the row also shows "live calc $x, not applied".
   - Open a docket to edit hours or a start time, add an allowance (Tool has no calculator line, so adding it makes the docket unmapped), or remove a line or allowance.
   - From the same screen you can approve, have the client reject, send back, mark Not claimable or reopen.
-  - **Editing an Approved docket while it is on a draft claim or an unapproved variation returns it to Submitted.** Its line is flagged "edited, back to Submitted".
+  - **Any edit to an Approved docket returns it to Submitted** for re-approval: on a draft claim, on an unsubmitted or submitted variation, or on no record. On a record its line is flagged "edited, back to Submitted".
   - **A docket the client rejects, or one edited into an unmapped item or an overlap, stays on its record.** The line is flagged in red with the reason. It blocks variation submit and approve, and claim issue, until it is fixed (resubmitted, or the line or allowance removed) or taken off the record.
 - **Variations**: "Add dockets to variation" opens the picker:
   - dockets are listed oldest first
@@ -39,15 +39,16 @@ One project, Riverside Rd Upgrade (NSW), runs 20 Oct to 16 Nov 2026. It is price
   - **Lines.** Each docket becomes one line at its full calculator value, with no margin.
   - **Submitting** with unapproved dockets warns and records the decision.
   - **Until approval,** lines follow their dockets and show "changed since added".
-  - **When a submitted variation's amount moves,** it shows **"Changed since submitted"** and a **"Send new revision"** button. Sending a revision records it and clears the prompt.
-  - **"Client approved" can take a different amount.** The docket lines keep their values. The difference is held as **one adjustment**, which must be marked Absorbed, Under dispute or To resubmit. The contract sum moves by the approved amount.
+  - **When a submitted variation's amount or dockets change,** it shows **"Changed since submitted"** and a **"Send new revision"** button. Sending a revision records it and clears the prompt.
+  - **Approving while "Changed since submitted" shows is allowed.** The approval dialog warns that the client saw an earlier amount, and the warning is recorded on the variation and in its history.
+  - **"Client approved" can take a different amount.** The docket lines keep their values and the difference is held as **one adjustment**. Less than submitted: it must be marked Absorbed, Under dispute or To resubmit before approval saves ("To resubmit" records the status only). More than submitted: no status needed. The contract sum moves by the approved amount.
   - **Approval** locks the dockets and clears the line flags.
-  - **Withdraw** keeps the variation on the register as **Withdrawn**, with its history, and releases its dockets. A client rejection releases its dockets the same way.
-  - **Removing a docket.** Any docket can be removed from an unsubmitted variation. Only a flagged docket can be removed from a submitted one.
+  - **Withdraw,** from unsubmitted or submitted, keeps the variation on the register as **Withdrawn**, with its history, and releases its dockets. A client rejection releases its dockets the same way.
+  - **Removing a docket.** Any docket can be removed from an unsubmitted or a submitted variation, and is released. Removal from a submitted one marks it "Changed since submitted" and prompts a new revision.
   - **History.** Every variation keeps a history table of every line change, with old and new values.
 - **Progress claims**: "Create claim from dockets" defaults to the next claim period after C-003.
   - **Picker.** Dockets dated in the period are pre-ticked. Older unclaimed dockets (D095) and later ones (D217, 16 Nov) are listed unticked. The picker follows the same highlight rules. Dockets on a variation are never offered.
-  - **Approved variations** are picked in the same dialog, ticked by default. They are claimed **by percent complete, 100% by default**, and the percent can be edited on the claim. A variation on one draft claim is not offered on another. Create a second draft claim to see "On draft claim C-004; not offered here".
+  - **Approved variations** are picked in the same dialog, ticked by default. They are claimed **by percent complete to date, 100% by default**, and the percent can be edited on the claim. Each claim charges the increase since the last issued claim (60% on one claim, then 100% on the next, charges the remaining 40%). A variation on one draft claim is not offered on another. Create a second draft claim to see "On draft claim C-004; not offered here".
   - **BOQ quantities** can be entered alongside the docket lines.
   - **Retention 5% and GST 10%** are labelled "as existing claims". Retention comes off the gross ex GST and GST is charged on the net.
   - **Until issue,** docket lines follow their dockets and are flagged. Issuing warns with the unapproved count, then locks the claim and clears the flags. The history table keeps every change.
@@ -58,27 +59,21 @@ One project, Riverside Rd Upgrade (NSW), runs 20 Oct to 16 Nov 2026. It is price
   - publish a new calculator version. Pick a rate line, a new Standard rate and an effective date. A date before the later of the last issued claim and the last approved variation is refused; in the demo that date is 04/11/2026, from V-012.
 
   Every live line or submitted amount that moves is written to the feed in amber. Each publish also checks every approved variation and issued claim and reports "all unchanged".
-- **Scenarios**: every worked example in the rewritten VAR-23036 (12) and VAR-23037 (13) runs on a fresh project through the same engine. **25/25 pass.** Each scenario can load its end state into the screens.
+- **Scenarios**: every worked example in VAR-23036 (15) and VAR-23037 (15) runs on a fresh project through the same engine. **30/30 pass.** Each scenario can load its end state into the screens.
 
 Demo starting state:
 - **V-012** approved (D201).
 - **V-013** unsubmitted.
 - **V-015** unsubmitted, holding Approved D208. Edit D208's hours to see it return to Submitted.
 - **V-014** submitted with three dockets. Reject it to see the release.
-- **V-016** submitted at $5,000 with D209, D210 and D211. Publish Leading Hand $75 from 05/11/2026: D209 goes to $900 and the amount to $5,060, with "Changed since submitted" and "Send new revision".
+- **V-016** submitted at $5,000 with D209, D210 and D211. Publish Leading Hand $75 from 05/11/2026: D209 goes to $900 and the amount to $5,060, with "Changed since submitted" and "Send new revision". Approve it without sending the revision to see the recorded warning, or remove any docket to see the revision prompt.
 - **V-017** submitted with D215 (Submitted) and D216. Open D215 and use "Client rejects" to see V-017 blocked.
 - **C-003** issued 31/10/2026.
 
 ## Open questions
 
-1. An Approved docket edited while on a **submitted** (not yet approved) variation: does it also return to Submitted? The tickets name unsubmitted variations and draft claims. The prototype applies the same rule.
-2. An Approved docket edited while it is on **no record**: does it stay Approved or return to Submitted?
-3. "Fixed or removed": can a flagged docket be **removed from a submitted variation**, and can an unflagged one? The prototype allows removing flagged dockets only.
-4. "Claimed by percent like other variations": is the percent **cumulative to date**, with each claim taking the increase since the last issued claim? That is what the prototype assumes.
-5. If the client approves **more** than the submitted amount, does the shortfall rule (absorbed, under dispute, to resubmit) still apply to the positive adjustment?
-6. Can a variation be **approved while "Changed since submitted"** is showing, before a new revision is sent?
-7. Can a **submitted** variation be withdrawn, or only an unsubmitted one? The prototype offers Withdraw on both.
-8. Does marking an adjustment **"To resubmit"** do anything beyond recording the status, such as opening a new variation for the difference?
+1. When a variation is approved while "Changed since submitted" shows, should the approved amount default to the amount the client saw (the last submitted revision, e.g. $5,000) or to the current lines total ($5,060)?
+2. Can a later claim enter a percent complete to date **lower** than an approved variation's percent already claimed on an issued claim (a credit back)?
 
 ## Not covered
 

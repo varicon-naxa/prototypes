@@ -307,23 +307,24 @@ function addToVariation(st, varId, ids) {
   log(st, ids.join(', ') + ' added to ' + v.id);
   return v;
 }
-// Any docket can come off an unsubmitted variation. On a submitted one only a flagged docket can, so the block can be cleared.
+// Any docket can come off an unsubmitted or a submitted variation. Off a submitted one it marks the variation
+// changed since submitted and prompts a new revision, whether or not the amount moved.
 function removeFromVariation(st, varId, id) {
   const v = getVar(st, varId);
   const ln = v.lines.find(l => l.docket === id); if (!ln) throw new Error(id + ' is not on ' + v.id);
-  if (v.status === 'Submitted') { if (!docketIssue(st, getDocket(st, id))) throw new Error('Only a flagged docket can be removed from a submitted variation'); }
-  else if (v.status !== 'Draft') throw new Error('Dockets can only be removed from an unsubmitted variation');
+  if (!['Draft', 'Submitted'].includes(v.status)) throw new Error('Dockets cannot be removed from a ' + v.status.toLowerCase() + ' variation');
   v.lines = v.lines.filter(l => l.docket !== id);
-  hist(v, st, 'Removed ' + id + ' (' + money(ln.last) + '), released', { docket: id, old: ln.last, new: 0 });
-  log(st, id + ' removed from ' + v.id + ' and released');
+  hist(v, st, 'Removed ' + id + ' (' + money(ln.last) + '), released' + (v.status === 'Submitted' ? '; changed since submitted, new revision prompted' : ''), { docket: id, old: ln.last, new: 0 });
+  if (v.status === 'Submitted') v.docketsChanged = true;
+  log(st, id + ' removed from ' + v.id + ' and released' + (v.status === 'Submitted' ? '; ' + v.id + ' changed since submitted' : ''));
   sync(st, id + ' removed');
 }
 function varLineValue(st, v, ln) { return v.status === 'Approved' ? ln.frozen : (ACTIVE_VAR.includes(v.status) ? priceDocket(st, getDocket(st, ln.docket)).total : ln.releasedAt); }
 function varLineChanged(st, v, ln) { return v.status !== 'Approved' && ACTIVE_VAR.includes(v.status) && Math.abs(varLineValue(st, v, ln) - ln.added) > 0.004; }
 function varTotal(st, v) { return round2(v.lines.reduce((a, ln) => a + (varLineValue(st, v, ln) || 0), 0)); }
 function varSubmittedAmount(st, v) { if (v.status === 'Draft') return null; if (v.status === 'Submitted') return varTotal(st, v); return v.submittedFinal; }
-// Changed since submitted: the amount moved since the client last saw it (submission or the last revision sent).
-function varSubmittedChanged(st, v) { return v.status === 'Submitted' && Math.abs(varTotal(st, v) - v.submittedBase) > 0.004; }
+// Changed since submitted: the amount or the dockets moved since the client last saw it (submission or the last revision sent).
+function varSubmittedChanged(st, v) { return v.status === 'Submitted' && (!!v.docketsChanged || Math.abs(varTotal(st, v) - v.submittedBase) > 0.004); }
 function varNeedsRevision(st, v) { return varSubmittedChanged(st, v); }
 function unapprovedCount(st, ids) { return ids.filter(id => getDocket(st, id).status !== 'Approved').length; }
 function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
@@ -344,7 +345,7 @@ function sendRevision(st, varId) {
   const v = getVar(st, varId);
   if (!varNeedsRevision(st, v)) throw new Error(v.id + ' has not changed since it was last sent');
   const was = v.submittedBase;
-  v.revision += 1; v.submittedBase = varTotal(st, v);
+  v.revision += 1; v.submittedBase = varTotal(st, v); v.docketsChanged = false;
   hist(v, st, 'Revision ' + v.revision + ' sent to the client at ' + money(v.submittedBase) + ' (was ' + money(was) + ')', { old: was, new: v.submittedBase });
   log(st, v.id + ' revision ' + v.revision + ' sent at ' + money(v.submittedBase));
 }
@@ -355,19 +356,25 @@ function approveVariation(st, varId, amount, shortfall) {
   const total = varTotal(st, v);
   const appr = amount === undefined || amount === null ? total : round2(amount);
   const diff = round2(appr - total);
-  if (Math.abs(diff) > 0.004 && !SHORTFALL.includes(shortfall)) throw new Error('Mark the ' + money(diff) + ' adjustment absorbed, under dispute or to resubmit');
+  // Less than submitted: the shortfall rule applies. More than submitted: one adjustment, no status needed.
+  if (diff < -0.004 && !SHORTFALL.includes(shortfall)) throw new Error('Mark the ' + money(diff) + ' adjustment absorbed, under dispute or to resubmit');
+  // Approving while "Changed since submitted" shows is allowed; the warning is recorded.
+  const warning = varSubmittedChanged(st, v) ? 'Approved while changed since submitted: the client saw ' + money(v.submittedBase) + ' (revision ' + v.revision + '), the lines now total ' + money(total) : null;
   v.lines.forEach(ln => { ln.frozen = priceDocket(st, getDocket(st, ln.docket)).total; ln.frozenVersion = versionFor(st, getDocket(st, ln.docket).date).n; });
   v.submittedFinal = total;
   v.approvedAmount = appr;
-  v.adjustment = Math.abs(diff) > 0.004 ? { amount: diff, status: shortfall } : null;
-  v.status = 'Approved'; v.approvedOn = st.today;
+  v.adjustment = Math.abs(diff) > 0.004 ? { amount: diff, status: diff < 0 ? shortfall : null } : null;
+  if (warning) { v.decisions.push({ at: st.today, by: st.user, what: warning }); hist(v, st, warning, { old: v.submittedBase, new: total }); }
+  v.status = 'Approved'; v.approvedOn = st.today; v.docketsChanged = false;
   hist(v, st, 'Approved at ' + money(appr) + '; lines frozen, dockets locked, changed-since-added flags cleared');
-  if (v.adjustment) hist(v, st, 'Adjustment ' + money(diff) + ' (submitted ' + money(total) + ', approved ' + money(appr) + '): ' + shortfall, { old: total, new: appr });
-  log(st, v.id + ' approved at ' + money(appr) + (v.adjustment ? ' (adjustment ' + money(diff) + ', ' + shortfall.toLowerCase() + ')' : '') + '; ' + v.lines.map(l => l.docket).join(', ') + ' locked');
+  if (v.adjustment) hist(v, st, 'Adjustment ' + money(diff) + ' (submitted ' + money(total) + ', approved ' + money(appr) + ')' + (v.adjustment.status ? ': ' + v.adjustment.status : ': higher approval, no status needed'), { old: total, new: appr });
+  log(st, v.id + ' approved at ' + money(appr) + (v.adjustment ? ' (adjustment ' + money(diff) + (v.adjustment.status ? ', ' + v.adjustment.status.toLowerCase() : '') + ')' : '') + (warning ? ' over the changed-since-submitted warning' : '') + '; ' + v.lines.map(l => l.docket).join(', ') + ' locked');
+  return { ok: true, warning };
 }
 function setAdjustmentStatus(st, varId, status) {
   const v = getVar(st, varId);
   if (!v.adjustment) throw new Error(v.id + ' has no adjustment');
+  if (v.adjustment.amount > 0) throw new Error('A higher approved amount needs no status');
   if (!SHORTFALL.includes(status)) throw new Error('Pick absorbed, under dispute or to resubmit');
   const was = v.adjustment.status; v.adjustment.status = status;
   hist(v, st, 'Adjustment ' + money(v.adjustment.amount) + ' ' + (was || 'unmarked') + ' to ' + status);
@@ -503,14 +510,15 @@ function addDays(date, n) { const d = new Date(date + 'T00:00:00'); d.setDate(d.
 
 /* ───────── Docket actions (VAR-23062, VAR-23063, edits) ───────── */
 function refuseIfOnRecord(st, d) { const h = docketHome(st, d.id); if (h) throw new Error('Remove this docket from ' + h.label + ' first'); }
-// An Approved docket edited while on a draft claim or an unapproved variation goes back to Submitted for re-approval.
+// Any edit to an Approved docket returns it to Submitted for re-approval: on a draft claim, on an unsubmitted or
+// submitted variation, or on no record. (Dockets on an approved variation or issued claim are read-only.)
 function afterEdit(st, d, what) {
   d.history.push({ at: st.today, by: st.user, what });
   const h = docketHome(st, d.id);
-  if (d.status === 'Approved' && h) {
-    d.status = 'Submitted'; d.reapprove = { at: st.today, on: h.rec.id };
-    d.history.push({ at: st.today, by: st.user, what: 'Edited while Approved on ' + h.label + ': returned to Submitted for re-approval' });
-    log(st, d.id + ' edited while Approved on ' + h.rec.id + ': returned to Submitted');
+  if (d.status === 'Approved') {
+    d.status = 'Submitted'; d.reapprove = { at: st.today, on: h ? h.rec.id : null };
+    d.history.push({ at: st.today, by: st.user, what: 'Edited while Approved' + (h ? ' on ' + h.label : '') + ': returned to Submitted for re-approval' });
+    log(st, d.id + ' edited while Approved' + (h ? ' on ' + h.rec.id : '') + ': returned to Submitted');
   }
   sync(st, d.id + ' edited');
 }
