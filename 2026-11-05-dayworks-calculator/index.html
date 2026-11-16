@@ -515,6 +515,8 @@ function computeFloat(projId) {
 }
 
 let MEMO = null;
+function invalidate() { if (MEMO) MEMO = {}; }
+function allTotals() { const t = {}; Object.keys(PROJ).forEach(p => { const r = priceAll(p); Object.values(r).forEach(x => t[x.dk.id] = x.liveTotal); }); return t; }
 function priceDocket(dk, opt) {
   if (MEMO && !(opt && opt.ver)) { if (!MEMO[dk.proj]) MEMO[dk.proj] = priceAll(dk.proj); return MEMO[dk.proj][dk.id]; }
   return priceAll(dk.proj, opt)[dk.id];
@@ -537,14 +539,13 @@ function priceAll(projId, opt) {
   });
 
   // Overlaps: same person or plant item, same day, overlapping hours, on any two lines of any dockets (tenant-wide).
-  const tenantLines = []; DOCKETS.forEach(d => d.lines.forEach((l, idx) => tenantLines.push({ d, l, idx })));
+  const byDay = {}; DOCKETS.forEach(d => d.lines.forEach((l, idx) => { if (!validateLine(l)) (byDay[d.date] ||= []).push({ d, l, idx, ts: toMin(l.start), te: toMin(l.end) }); }));
   all.forEach(o => {
     if (validateLine(o.line)) return;
     const s = toMin(o.line.start), e = toMin(o.line.end);
-    tenantLines.forEach(t => {
+    (byDay[o.dk.date] || []).forEach(t => {
       if (t.d === o.dk && t.idx === o.idx) return;
-      if (t.d.date !== o.dk.date || validateLine(t.l)) return;
-      const ts = toMin(t.l.start), te = toMin(t.l.end);
+      const ts = t.ts, te = t.te;
       if (!(s < te && ts < e)) return;
       [['person', p => personById(p).name], ['plant', p => p]].forEach(([k, nm]) => {
         if (o.line[k] && o.line[k] === t.l[k]) {
