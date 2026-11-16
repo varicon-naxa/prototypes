@@ -405,17 +405,21 @@ function varClaimedPct(st, varId) {
   return issued[issued.length - 1].varLines.find(l => l.variation === varId).pct;
 }
 function varDraftClaim(st, varId) { return st.claims.find(c => c.status === 'Draft' && c.vars.some(x => x.variation === varId)) || null; }
+// Decided 2026-11-17: a variation claimed to 100% on an issued claim is still offered on later claims, unticked by
+// default, so a later claim can credit it back. Variations not yet fully claimed are ticked by default.
 function offeredVariations(st, claimId) {
-  return st.variations.filter(v => v.status === 'Approved' && varClaimedPct(st, v.id) < 100 - 1e-9 && !varDraftClaim(st, v.id));
+  return st.variations.filter(v => v.status === 'Approved' && !varDraftClaim(st, v.id));
 }
+function varFullyClaimed(st, varId) { return varClaimedPct(st, varId) >= 100 - 1e-9; }
+function defaultClaimVariations(st) { return offeredVariations(st).filter(v => !varFullyClaimed(st, v.id)); }
 function addVarToClaim(st, claimId, varId, pct = 100) {
   const c = getClaim(st, claimId); const v = getVar(st, varId);
   if (c.status !== 'Draft') throw new Error(c.id + ' is issued and locked');
   if (v.status !== 'Approved') throw new Error(v.id + ' is not approved');
   const other = varDraftClaim(st, varId); if (other) throw new Error(v.id + ' is already on draft claim ' + other.id);
-  const prev = varClaimedPct(st, varId); if (prev >= 100 - 1e-9) throw new Error(v.id + ' is fully claimed');
+  const prev = varClaimedPct(st, varId);
   c.vars.push({ variation: varId, pct: 100 });
-  hist(c, st, v.id + ' added at 100% (' + money(round2(v.approvedAmount * (100 - prev) / 100)) + ')');
+  hist(c, st, v.id + ' added at 100% (' + money(round2(v.approvedAmount * (100 - prev) / 100)) + ')' + (prev >= 100 - 1e-9 ? '; fully claimed, lower the percent to credit it back' : ''));
   if (pct !== 100) setVarPct(st, claimId, varId, pct);
   log(st, v.id + ' added to ' + c.id);
 }
@@ -445,8 +449,7 @@ function claimVarRows(st, c) {
 }
 function createClaim(st, period, ids, opts = {}) {
   if (ids.length) validateAdd(st, ids); // a claim can hold only variation or BOQ lines
-  const offered = offeredVariations(st).map(v => v.id);
-  const vars = opts.vars === undefined ? offered : opts.vars;
+  const vars = opts.vars === undefined ? defaultClaimVariations(st).map(v => v.id) : opts.vars;
   const c = { id: opts.id || nextId(st.claims, 'C-'), period, status: 'Draft', created: st.today, lines: [], boq: {}, vars: [], varLines: null, decisions: [], history: [] };
   st.claims.push(c);
   ids.forEach(id => c.lines.push(newLine(st, id)));
@@ -480,6 +483,8 @@ function deleteDraftClaim(st, claimId) {
 function claimLineValue(st, c, ln) { return c.status === 'Issued' ? ln.frozen : priceDocket(st, getDocket(st, ln.docket)).total; }
 function claimLineChanged(st, c, ln) { return c.status === 'Draft' && Math.abs(claimLineValue(st, c, ln) - ln.added) > 0.004; }
 // Retention and GST: same order and rules as existing claims (retention off the gross ex GST, GST on the net), per project settings.
+// Decided 2026-11-17: a claim whose total is below zero can be issued as a negative claim; retention and GST are
+// calculated the same way and go negative.
 function claimTotals(st, c) {
   const dockets = round2(c.lines.reduce((a, ln) => a + (claimLineValue(st, c, ln) || 0), 0));
   const vars = round2(claimVarRows(st, c).reduce((a, l) => a + l.value, 0));
@@ -488,7 +493,7 @@ function claimTotals(st, c) {
   const retention = round2(gross * st.project.retention / 100);
   const net = round2(gross - retention);
   const gst = round2(net * st.project.gst / 100);
-  return { dockets, vars, boq, gross, retention, net, gst, total: round2(net + gst) };
+  return { dockets, vars, boq, gross, retention, net, gst, total: round2(net + gst), negative: gross < -0.004 };
 }
 function issueClaim(st, claimId, opts = {}) {
   const c = getClaim(st, claimId);
@@ -500,7 +505,7 @@ function issueClaim(st, claimId, opts = {}) {
   c.lines.forEach(ln => { ln.frozen = priceDocket(st, getDocket(st, ln.docket)).total; ln.frozenVersion = versionFor(st, getDocket(st, ln.docket).date).n; });
   c.status = 'Issued'; c.issued = st.today; st.issueSeq = (st.issueSeq || 0) + 1; c.issueSeq = st.issueSeq;
   if (n) c.decisions.push({ at: st.today, by: st.user, what: 'Issued with ' + plural(n, 'unapproved docket') });
-  hist(c, st, 'Issued at ' + money(claimTotals(st, c).gross) + ' ex GST; lines frozen, dockets locked, changed-since-added flags cleared');
+  hist(c, st, 'Issued at ' + money(claimTotals(st, c).gross) + ' ex GST' + (claimTotals(st, c).negative ? ' (negative claim)' : '') + '; lines frozen, dockets locked, changed-since-added flags cleared');
   log(st, c.id + ' issued at ' + money(claimTotals(st, c).gross) + ' ex GST' + (n ? ' (' + plural(n, 'unapproved docket') + ', confirmed)' : '') + '; dockets locked');
   return { ok: true };
 }

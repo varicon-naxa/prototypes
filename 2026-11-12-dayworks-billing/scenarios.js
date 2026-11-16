@@ -1,5 +1,6 @@
 /* Scenarios: every worked example in VAR-23036 (15) and VAR-23037 (15), as updated with Alec's answers of 2026-11-16,
-   plus one for the 2026-11-16 decision that a lower percent to date is charged as a credit (31 in all),
+   plus one for the 2026-11-16 decision that a lower percent to date is charged as a credit, and two for the
+   2026-11-17 decisions (a fully claimed variation is still offered, unticked; a negative claim can be issued) (33 in all),
    each run on a fresh project through the same engine the UI uses. */
 
 function _chk(out, label, actual, expected) {
@@ -434,6 +435,52 @@ const SCENARIOS = [
       issueClaim(st, 'C-004');
       _chk(c, 'After issue, already claimed is 40%', varClaimedPct(st, 'V-012'), 40);
       _chk(c, 'Claimed to date across both claims: 40% of $5,060', round2(3036 - 1012), 2024);
+      return st;
+    } },
+  { story: 'VAR-23037', title: 'Decided 2026-11-17: V-012 claimed to 100% is still offered, unticked, and can be credited back',
+    text: 'Given V-012 ($5,060) was claimed to 100% on an issued claim, when the next claim is created, then V-012 is still offered but unticked by default, and once added at 80% to date it charges a credit of minus 20%, -$1,012.',
+    run(c) {
+      const st = baseState(); st.today = '2026-11-16';
+      publishVersion(st, 'labour', 'Leading Hand', 75, '2026-11-01');
+      addDocket(st, 'D209', '2026-11-10', 'Approved', [lab('tom', '06:00', '17:00', 0.5)]);
+      addDocket(st, 'D210', '2026-11-02', 'Approved', [wet('EX-07', 'sam', '07:00', '16:00')]);
+      addDocket(st, 'D211', '2026-11-16', 'Approved', [wet('EX-07', 'sam', '07:00', '15:00', 0, ['Breaker 1t']), mat('Concrete', { cost: 600 })]);
+      createVariation(st, ['D209', 'D210', 'D211'], { id: 'V-012' }); submitVariation(st, 'V-012'); approveVariation(st, 'V-012');
+      createClaim(st, { from: '2026-10-16', to: '2026-10-31' }, [], { id: 'C-003' }); issueClaim(st, 'C-003');
+      _chk(c, 'Claimed to 100% on issued C-003', varClaimedPct(st, 'V-012'), 100);
+      _chk(c, 'Still offered on the next claim', offeredVariations(st).map(v => v.id), ['V-012']);
+      _chk(c, 'Unticked by default', defaultClaimVariations(st).map(v => v.id), []);
+      const nov = createClaim(st, NOV1, [], { id: 'C-004' });
+      _chk(c, 'Not on the new claim unless ticked', claimVarRows(st, nov).length, 0);
+      _allowed(c, 'Ticked: added to C-004', () => addVarToClaim(st, 'C-004', 'V-012'));
+      _chk(c, 'Added at 100% to date charges nothing', claimVarRows(st, nov).map(l => [l.variation, l.pct, l.prev, l.value]), [['V-012', 100, 100, 0]]);
+      setVarPct(st, 'C-004', 'V-012', 80);
+      const row = claimVarRows(st, nov)[0];
+      _chk(c, '80% to date: credit of minus 20% of $5,060', row.value, -1012);
+      _chk(c, 'Shown as a credit', row.credit, true);
+      return st;
+    } },
+  { story: 'VAR-23037', title: 'Decided 2026-11-17: a claim below zero is issued as a negative claim',
+    text: 'Given V-012 ($5,060) was claimed to 100% on an issued claim, when the next claim credits it back to 40% with no other lines, then the gross is -$3,036, retention 5% is -$151.80, net -$2,884.20, GST 10% -$288.42 and total -$3,172.62, and the claim can be issued.',
+    run(c) {
+      const st = baseState(); st.today = '2026-11-16';
+      publishVersion(st, 'labour', 'Leading Hand', 75, '2026-11-01');
+      addDocket(st, 'D209', '2026-11-10', 'Approved', [lab('tom', '06:00', '17:00', 0.5)]);
+      addDocket(st, 'D210', '2026-11-02', 'Approved', [wet('EX-07', 'sam', '07:00', '16:00')]);
+      addDocket(st, 'D211', '2026-11-16', 'Approved', [wet('EX-07', 'sam', '07:00', '15:00', 0, ['Breaker 1t']), mat('Concrete', { cost: 600 })]);
+      createVariation(st, ['D209', 'D210', 'D211'], { id: 'V-012' }); submitVariation(st, 'V-012'); approveVariation(st, 'V-012');
+      createClaim(st, { from: '2026-10-16', to: '2026-10-31' }, [], { id: 'C-003' }); issueClaim(st, 'C-003');
+      const nov = createClaim(st, NOV1, [], { id: 'C-004', vars: ['V-012'] });
+      setVarPct(st, 'C-004', 'V-012', 40);
+      const t = claimTotals(st, nov);
+      _chk(c, 'Gross ex GST', t.gross, -3036);
+      _chk(c, 'Retention 5%', t.retention, -151.8);
+      _chk(c, 'Net ex GST', t.net, -2884.2);
+      _chk(c, 'GST 10%', t.gst, -288.42);
+      _chk(c, 'Total incl GST', t.total, -3172.62);
+      _chk(c, 'Flagged as a negative claim', t.negative, true);
+      _allowed(c, 'Issued as a negative claim', () => issueClaim(st, 'C-004'));
+      _chk(c, 'Issued, totals unchanged', [nov.status, claimTotals(st, nov).gross, claimTotals(st, nov).total], ['Issued', -3036, -3172.62]);
       return st;
     } },
   { story: 'VAR-23037', title: 'Two draft claims: V-012 on one is not offered on the other',

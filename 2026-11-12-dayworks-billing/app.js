@@ -202,7 +202,7 @@ function docketModal(id) {
 /* ───────── Picker ───────── */
 function openPicker(mode, target) {
   const drafts = S.variations.filter(v => v.status === 'Draft');
-  PK = { mode, target: target || 'new', title: '', ticked: new Set(), period: null, vars: new Set(offeredVariations(S).map(v => v.id)) };
+  PK = { mode, target: target || 'new', title: '', ticked: new Set(), period: null, vars: new Set(defaultClaimVariations(S).map(v => v.id)) };
   if (mode === 'claim' && PK.target === 'new') PK.period = nextClaimPeriod(S);
   if (mode === 'claim' && PK.target !== 'new') PK.period = getClaim(S, PK.target).period;
   resetTicks();
@@ -232,8 +232,8 @@ function pickerModal() {
   if (!isVar && PK.target === 'new') {
     const offered = offeredVariations(S);
     const onDraft = S.variations.filter(v => v.status === 'Approved' && varDraftClaim(S, v.id));
-    h += `<h2 style="margin-top:14px">Approved variations</h2><div class="muted" style="margin-bottom:6px">Claimed by percent complete to date like other variations, 100% by default, editable on the claim; each claim charges the change since the last issued claim, and a lower percent is charged as a credit. A variation goes on one draft claim only.</div><div class="tbl-wrap"><table><thead><tr><th></th><th>Variation</th><th>Title</th><th class="num">Approved amount</th><th class="num">Already claimed</th></tr></thead><tbody>`;
-    offered.forEach(v => h += `<tr><td><input type="checkbox" ${PK.vars.has(v.id) ? 'checked' : ''} onchange="this.checked?PK.vars.add('${v.id}'):PK.vars.delete('${v.id}');refreshModal()"></td><td><b>${v.id}</b></td><td>${esc(v.title)}</td><td class="num">${money(v.approvedAmount)}</td><td class="num">${varClaimedPct(S, v.id)}%</td></tr>`);
+    h += `<h2 style="margin-top:14px">Approved variations</h2><div class="muted" style="margin-bottom:6px">Claimed by percent complete to date like other variations, 100% by default, editable on the claim; each claim charges the change since the last issued claim, and a lower percent is charged as a credit. A variation claimed to 100% is still listed, unticked, so it can be credited back. A variation goes on one draft claim only.</div><div class="tbl-wrap"><table><thead><tr><th></th><th>Variation</th><th>Title</th><th class="num">Approved amount</th><th class="num">Already claimed</th></tr></thead><tbody>`;
+    offered.forEach(v => h += `<tr><td><input type="checkbox" ${PK.vars.has(v.id) ? 'checked' : ''} onchange="this.checked?PK.vars.add('${v.id}'):PK.vars.delete('${v.id}');refreshModal()"></td><td><b>${v.id}</b></td><td>${esc(v.title)}</td><td class="num">${money(v.approvedAmount)}</td><td class="num">${varClaimedPct(S, v.id)}%${varFullyClaimed(S, v.id) ? ' <span class="pill lock" title="Unticked by default; tick it to credit it back on this claim">fully claimed</span>' : ''}</td></tr>`);
     onDraft.forEach(v => h += `<tr class="hl-block"><td><input type="checkbox" disabled></td><td><b>${v.id}</b></td><td>${esc(v.title)}</td><td class="num">${money(v.approvedAmount)}</td><td class="small">On draft claim ${varDraftClaim(S, v.id).id}; not offered here</td></tr>`);
     if (!offered.length && !onDraft.length) h += `<tr><td colspan="5" class="muted">No approved variations to claim.</td></tr>`;
     h += `</tbody></table></div>`;
@@ -387,6 +387,7 @@ function claimDetail(c) {
   if (iss.length) h += `<div class="banner err"><i class="fas fa-ban"></i><div><b>Cannot be issued</b> until ${iss.map(x => x.docket).join(', ')} ${iss.length === 1 ? 'is' : 'are'} fixed or removed: ${iss.map(x => esc(x.docket + ' ' + x.issue)).join('; ')}.</div></div>`;
   if (draft) h += `<div class="banner warn"><i class="fas fa-arrows-rotate"></i><div>Draft: each docket line follows its docket's current calculator value until the claim is issued. Every change is written to the history below.</div></div>`;
   else h += `<div class="banner ok"><i class="fas fa-lock"></i><div>Issued and locked. Docket lines are frozen, their dockets are read-only, and the changed-since-added flags are cleared (the history keeps every change). Dockets that were not on this claim stay unclaimed and are offered on the next claim.</div></div>`;
+  if (t.negative) h += `<div class="banner warn"><i class="fas fa-circle-minus"></i><div><b>Negative claim.</b> The credit lines take this claim below zero: gross ${money(t.gross)} ex GST. It ${draft ? 'can be issued' : 'was issued'} as a negative claim; retention and GST are calculated the same way and are negative too (retention ${money(t.retention)}, GST ${money(t.gst)}).</div></div>`;
   h += marginNote();
   h += `<h2>Docket lines</h2><div class="tbl-wrap"><table><thead><tr><th>Docket</th><th>Date</th><th>Docket status</th><th>Resources</th><th class="num">Docket calculator value</th><th class="num">Line value</th><th>Flags</th><th></th></tr></thead><tbody>`;
   c.lines.forEach(ln => {
@@ -410,7 +411,7 @@ function claimDetail(c) {
   h += `</tbody></table></div>`;
   if (draft) {
     const elsewhere = S.variations.filter(v => v.status === 'Approved' && varDraftClaim(S, v.id) && varDraftClaim(S, v.id) !== c);
-    h += `<div class="form-row" style="margin-top:6px">${offered.length ? `<div class="field" style="max-width:340px"><label>Add an approved variation</label><select onchange="if(this.value)act(()=>addVarToClaim(S,'${c.id}',this.value),this.value+' added at 100%')"><option value="">Choose...</option>${offered.map(v => `<option value="${v.id}">${v.id} ${esc(v.title)} (${money(v.approvedAmount)})</option>`).join('')}</select></div>` : ''}
+    h += `<div class="form-row" style="margin-top:6px">${offered.length ? `<div class="field" style="max-width:340px"><label>Add an approved variation</label><select onchange="if(this.value)act(()=>addVarToClaim(S,'${c.id}',this.value),this.value+' added at 100%')"><option value="">Choose...</option>${offered.map(v => `<option value="${v.id}">${v.id} ${esc(v.title)} (${money(v.approvedAmount)})${varFullyClaimed(S, v.id) ? ', fully claimed: lower the percent to credit it back' : ''}</option>`).join('')}</select></div>` : ''}
       ${elsewhere.length ? `<div class="muted">${elsewhere.map(v => v.id + ' is on draft claim ' + varDraftClaim(S, v.id).id).join(' · ')}; not offered here.</div>` : ''}</div>`;
   }
   h += `<h2 style="margin-top:14px">BOQ lines <span class="muted" style="font-weight:400">priced BOQ, alongside the docket lines</span></h2><div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Description</th><th class="num">Contract qty</th><th class="num">Rate</th><th class="num">Qty this claim</th><th class="num">Value</th></tr></thead><tbody>`;
@@ -423,7 +424,7 @@ function claimDetail(c) {
     <tr><td>Docket lines</td><td class="num">${money(t.dockets)}</td></tr><tr><td>Approved variations</td><td class="num">${money(t.vars)}</td></tr><tr><td>BOQ</td><td class="num">${money(t.boq)}</td></tr>
     <tr><td>Cost-plus margin applied to docket lines</td><td class="num">${money(0)}</td></tr>
     <tr class="total"><td>Gross this claim (ex GST)</td><td class="num">${money(t.gross)}</td></tr>
-    <tr><td>Less retention ${S.project.retention}% <span class="muted">as existing claims</span></td><td class="num">-${money(t.retention)}</td></tr>
+    <tr><td>Less retention ${S.project.retention}% <span class="muted">as existing claims</span></td><td class="num">${money(-t.retention)}</td></tr>
     <tr><td>Net (ex GST)</td><td class="num">${money(t.net)}</td></tr><tr><td>GST ${S.project.gst}% <span class="muted">as existing claims</span></td><td class="num">${money(t.gst)}</td></tr>
     <tr class="total"><td>Total incl GST</td><td class="num">${money(t.total)}</td></tr></tbody></table>`;
   if (c.decisions.length) h += `<div class="banner warn" style="margin-top:12px"><i class="fas fa-clipboard-check"></i><div>${c.decisions.map(x => `${fmtDate(x.at)} · ${esc(x.by)} · ${esc(x.what)}`).join('<br>')}</div></div>`;
