@@ -732,8 +732,8 @@ function linesWithoutSubject(ver) { return ver.lines.filter(l => ['labour', 'wet
 /* ───────────────────────── Reprice-or-keep dialog ───────────────────────── */
 function impactRows(apply, revert, pool) {
   pool = pool || DOCKETS;
-  const before = {}; pool.forEach(d => before[d.id] = priceDocket(d).liveTotal);
-  apply(); const after = {}; pool.forEach(d => after[d.id] = priceDocket(d).liveTotal); revert();
+  const before = allTotals();
+  apply(); const after = allTotals(); revert(); invalidate();
   const changed = pool.filter(d => !near(before[d.id], after[d.id])).sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
   return { rows: changed.filter(d => !isLocked(d)).map(d => ({ d, old: before[d.id], nw: after[d.id], choice: null })), locked: changed.filter(isLocked) };
 }
@@ -1012,12 +1012,14 @@ function confirmSave() {
   };
   if (!changed.length) { commit(null); render(); return; }
   const pool = DOCKETS.filter(x => x.proj === proj.id && x.date >= d);
-  const cur = {}; pool.forEach(x => cur[x.id] = priceDocket(x).liveTotal);
+  const cur = allTotals();
   const rows = [], locked = [];
   proj.versions.push(nv);
+  const nwAll = allTotals();
+  const pairs = changed.map(c => [namedKey(c.sec, c.key), c.old]);
+  const keptAll = pool.reduceRight((fn, x) => () => withPins(x, pairs, fn), () => allTotals())();
   pool.forEach(x => {
-    const nw = priceDocket(x).liveTotal;
-    const kept = withPins(x, changed.map(c => [namedKey(c.sec, c.key), c.old]), () => priceDocket(x).liveTotal);
+    const nw = nwAll[x.id], kept = keptAll[x.id];
     if (!near(nw, kept)) (isLocked(x) ? locked.push(x) : rows.push({ d: x, old: cur[x.id], nw, choice: null }));
   });
   proj.versions.pop();
