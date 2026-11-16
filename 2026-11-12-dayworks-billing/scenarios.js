@@ -1,4 +1,5 @@
 /* Scenarios: every worked example in VAR-23036 (15) and VAR-23037 (15), as updated with Alec's answers of 2026-11-16,
+   plus one for the 2026-11-16 decision that a lower percent to date is charged as a credit (31 in all),
    each run on a fresh project through the same engine the UI uses. */
 
 function _chk(out, label, actual, expected) {
@@ -130,8 +131,8 @@ const SCENARIOS = [
       _chk(c, 'Approved amount', v.approvedAmount, 5060);
       return st;
     } },
-  { story: 'VAR-23036', title: 'V-016 approved while changed since submitted: warned, recorded',
-    text: 'Given V-016 still shows changed since submission, when the user approves it, then a warning says the client saw $5,000, approval goes through, and the warning is recorded.',
+  { story: 'VAR-23036', title: 'V-016 approved while changed since submitted: warned, recorded, defaults to $5,060',
+    text: 'Given V-016 still shows changed since submission, when the user approves it, then a warning says the client saw $5,000, approval goes through, and the warning is recorded. Decided 2026-11-16: the approved amount defaults to the current total, $5,060, not the $5,000 submitted.',
     run(c) {
       const st = baseState(); st.today = '2026-11-16';
       addDocket(st, 'D209', '2026-11-10', 'Approved', [lab('tom', '06:00', '17:00', 0.5)]);
@@ -140,12 +141,16 @@ const SCENARIOS = [
       const v = createVariation(st, ['D209', 'D210', 'D211'], { id: 'V-016' }); submitVariation(st, 'V-016');
       publishVersion(st, 'labour', 'Leading Hand', 75, '2026-11-01');
       _chk(c, 'Still changed since submitted', varSubmittedChanged(st, v), true);
+      _chk(c, 'Client last saw (submitted)', v.submittedBase, 5000);
+      _chk(c, 'Decided 2026-11-16: approved amount defaults to the current total', defaultApprovedAmount(st, v), 5060);
       let r = null;
       _allowed(c, 'Approval goes through', () => { r = approveVariation(st, 'V-016'); });
       _chk(c, 'Warning says the client saw $5,000', !!r && /client saw \$5,000\.00/.test(r.warning), true);
       _chk(c, 'Approved', v.status, 'Approved');
       _chk(c, 'Warning recorded on the variation', v.decisions.some(x => /client saw \$5,000\.00/.test(x.what)), true);
       _chk(c, 'Warning in the history', v.history.some(x => /client saw \$5,000\.00/.test(x.what)), true);
+      _chk(c, 'Approved at the default: current total, not the $5,000 submitted', v.approvedAmount, 5060);
+      _chk(c, 'No adjustment at the default', v.adjustment, null);
       return st;
     } },
   { story: 'VAR-23036', title: 'D212 removed from submitted V-016: released, revision prompted',
@@ -383,7 +388,7 @@ const SCENARIOS = [
       _chk(c, 'V-012 at 100%', claimVarRows(st, cl).map(l => [l.variation, l.pct, l.value]), [['V-012', 100, 5060]]);
       setVarPct(st, cl.id, 'V-012', 50);
       _chk(c, 'Reduced to 50%', claimTotals(st, cl).vars, 2530);
-      _refused(c, 'Over 100% refused', () => setVarPct(st, cl.id, 'V-012', 120), 'Enter a percent complete between 0% (already claimed) and 100%');
+      _refused(c, 'Over 100% refused', () => setVarPct(st, cl.id, 'V-012', 120), 'Enter a percent complete between 0% and 100% (0% already claimed; a lower percent is charged as a credit)');
       return st;
     } },
   { story: 'VAR-23037', title: 'V-012 at 60% on October, 100% on November charges $2,024',
@@ -404,7 +409,31 @@ const SCENARIOS = [
       _chk(c, 'November defaults to 100% to date, 60% already claimed', [row.variation, row.pct, row.prev], ['V-012', 100, 60]);
       _chk(c, 'November charges the remaining 40%', row.value, 2024);
       _chk(c, 'Claimed to date across both claims', round2(3036 + row.value), 5060);
-      _refused(c, 'Below the 60% already claimed refused', () => setVarPct(st, 'C-004', 'V-012', 50), 'Enter a percent complete between 60% (already claimed) and 100%');
+      _allowed(c, 'Decided 2026-11-16: below the 60% already claimed is allowed', () => setVarPct(st, 'C-004', 'V-012', 50));
+      _chk(c, '50% to date charges a credit of 10%', claimVarRows(st, nov)[0].value, -506);
+      return st;
+    } },
+  { story: 'VAR-23037', title: 'Decided 2026-11-16: V-012 at 60% on an issued claim, then 40% charges a credit of 20%',
+    text: 'Given V-012 ($5,060) was claimed at 60% ($3,036) on an issued claim, when the next claim enters 40% to date, then it is allowed and the drop is charged as a credit line of minus 20% of the approved amount, -$1,012.',
+    run(c) {
+      const st = baseState(); st.today = '2026-11-16';
+      publishVersion(st, 'labour', 'Leading Hand', 75, '2026-11-01');
+      addDocket(st, 'D209', '2026-11-10', 'Approved', [lab('tom', '06:00', '17:00', 0.5)]);
+      addDocket(st, 'D210', '2026-11-02', 'Approved', [wet('EX-07', 'sam', '07:00', '16:00')]);
+      addDocket(st, 'D211', '2026-11-16', 'Approved', [wet('EX-07', 'sam', '07:00', '15:00', 0, ['Breaker 1t']), mat('Concrete', { cost: 600 })]);
+      createVariation(st, ['D209', 'D210', 'D211'], { id: 'V-012' }); submitVariation(st, 'V-012'); approveVariation(st, 'V-012');
+      createClaim(st, { from: '2026-10-16', to: '2026-10-31' }, [], { id: 'C-003' });
+      setVarPct(st, 'C-003', 'V-012', 60); issueClaim(st, 'C-003');
+      const nov = createClaim(st, NOV1, [], { id: 'C-004' });
+      _allowed(c, '40% to date entered on the next claim', () => setVarPct(st, 'C-004', 'V-012', 40));
+      const row = claimVarRows(st, nov)[0];
+      _chk(c, 'Row: 40% to date, 60% already claimed', [row.variation, row.pct, row.prev], ['V-012', 40, 60]);
+      _chk(c, 'Credit line: minus 20% of $5,060', row.value, -1012);
+      _chk(c, 'Shown as a credit', row.credit, true);
+      _chk(c, 'Claim variation total', claimTotals(st, nov).vars, -1012);
+      issueClaim(st, 'C-004');
+      _chk(c, 'After issue, already claimed is 40%', varClaimedPct(st, 'V-012'), 40);
+      _chk(c, 'Claimed to date across both claims: 40% of $5,060', round2(3036 - 1012), 2024);
       return st;
     } },
   { story: 'VAR-23037', title: 'Two draft claims: V-012 on one is not offered on the other',

@@ -1,6 +1,6 @@
 # Dayworks billing: dockets to variations and progress claims
 
-Clickable static prototype. Built 2026-11-12, updated 2026-11-16 to match the tickets as Alec rewrote them that day, then again with his answers to the eight open questions (also 2026-11-16, written into both tickets):
+Clickable static prototype. Built 2026-11-12, updated 2026-11-16 to match the tickets as Alec rewrote them that day, then again with his answers to the eight open questions (also 2026-11-16, written into both tickets), then with two more product decisions of 2026-11-16 (see Decided below):
 
 - **VAR-23036** Convert daywork dockets into a variation (main spec)
 - **VAR-23037** Convert daywork dockets into a progress claim (main spec)
@@ -40,7 +40,7 @@ One project, Riverside Rd Upgrade (NSW), runs 20 Oct to 16 Nov 2026. It is price
   - **Submitting** with unapproved dockets warns and records the decision.
   - **Until approval,** lines follow their dockets and show "changed since added".
   - **When a submitted variation's amount or dockets change,** it shows **"Changed since submitted"** and a **"Send new revision"** button. Sending a revision records it and clears the prompt.
-  - **Approving while "Changed since submitted" shows is allowed.** The approval dialog warns that the client saw an earlier amount, and the warning is recorded on the variation and in its history.
+  - **Approving while "Changed since submitted" shows is allowed.** The approval dialog warns that the client saw an earlier amount, and the warning is recorded on the variation and in its history. The approved amount defaults to the current lines total ($5,060), not the amount last submitted ($5,000).
   - **"Client approved" can take a different amount.** The docket lines keep their values and the difference is held as **one adjustment**. Less than submitted: it must be marked Absorbed, Under dispute or To resubmit before approval saves ("To resubmit" records the status only). More than submitted: no status needed. The contract sum moves by the approved amount.
   - **Approval** locks the dockets and clears the line flags.
   - **Withdraw,** from unsubmitted or submitted, keeps the variation on the register as **Withdrawn**, with its history, and releases its dockets. A client rejection releases its dockets the same way.
@@ -48,7 +48,7 @@ One project, Riverside Rd Upgrade (NSW), runs 20 Oct to 16 Nov 2026. It is price
   - **History.** Every variation keeps a history table of every line change, with old and new values.
 - **Progress claims**: "Create claim from dockets" defaults to the next claim period after C-003.
   - **Picker.** Dockets dated in the period are pre-ticked. Older unclaimed dockets (D095) and later ones (D217, 16 Nov) are listed unticked. The picker follows the same highlight rules. Dockets on a variation are never offered.
-  - **Approved variations** are picked in the same dialog, ticked by default. They are claimed **by percent complete to date, 100% by default**, and the percent can be edited on the claim. Each claim charges the increase since the last issued claim (60% on one claim, then 100% on the next, charges the remaining 40%). A variation on one draft claim is not offered on another. Create a second draft claim to see "On draft claim C-004; not offered here".
+  - **Approved variations** are picked in the same dialog, ticked by default. They are claimed **by percent complete to date, 100% by default**, and the percent can be edited on the claim, from 0% to 100%. Each claim charges the change since the last issued claim (60% on one claim, then 100% on the next, charges the remaining 40%). A lower percent than the last issued claim is allowed and the drop is charged as a **credit** (negative) line (60%, then 40%, charges minus 20% of the approved amount). A variation on one draft claim is not offered on another. Create a second draft claim to see "On draft claim C-004; not offered here".
   - **BOQ quantities** can be entered alongside the docket lines.
   - **Retention 5% and GST 10%** are labelled "as existing claims". Retention comes off the gross ex GST and GST is charged on the net.
   - **Until issue,** docket lines follow their dockets and are flagged. Issuing warns with the unapproved count, then locks the claim and clears the flags. The history table keeps every change.
@@ -59,7 +59,7 @@ One project, Riverside Rd Upgrade (NSW), runs 20 Oct to 16 Nov 2026. It is price
   - publish a new calculator version. Pick a rate line, a new Standard rate and an effective date. A date before the later of the last issued claim and the last approved variation is refused; in the demo that date is 04/11/2026, from V-012.
 
   Every live line or submitted amount that moves is written to the feed in amber. Each publish also checks every approved variation and issued claim and reports "all unchanged".
-- **Scenarios**: every worked example in VAR-23036 (15) and VAR-23037 (15) runs on a fresh project through the same engine. **30/30 pass.** Each scenario can load its end state into the screens.
+- **Scenarios**: every worked example in VAR-23036 (15) and VAR-23037 (15), plus one for the 2026-11-16 credit decision, runs on a fresh project through the same engine. **31/31 pass.** Each scenario can load its end state into the screens.
 
 Demo starting state:
 - **V-012** approved (D201).
@@ -70,10 +70,27 @@ Demo starting state:
 - **V-017** submitted with D215 (Submitted) and D216. Open D215 and use "Client rejects" to see V-017 blocked.
 - **C-003** issued 31/10/2026.
 
+## Decided (2026-11-16)
+
+1. **Approving while "Changed since submitted" shows.** The approved amount defaults to the current total ($5,060
+   for V-016), not the $5,000 the client last saw. The approval dialog prefills it and the "V-016 approved while
+   changed since submitted" scenario asserts it.
+2. **Lower percent to date on a later claim.** Allowed. The drop below the percent on the last issued claim is
+   charged as a credit (negative) line. Scenario: V-012 ($5,060) at 60% on an issued claim, then 40% on the next
+   claim, charges minus 20%, -$1,012. "Already claimed" is now the percent on the latest issued claim that carries
+   the variation (it was the highest percent on any issued claim).
+
 ## Open questions
 
-1. When a variation is approved while "Changed since submitted" shows, should the approved amount default to the amount the client saw (the last submitted revision, e.g. $5,000) or to the current lines total ($5,060)?
-2. Can a later claim enter a percent complete to date **lower** than an approved variation's percent already claimed on an issued claim (a credit back)?
+These came up while building the 2026-11-16 decisions. The prototype's current behaviour is noted, but none of it is
+decided.
+
+1. **Credit on a fully claimed variation.** A variation claimed at 100% on an issued claim is no longer offered to new
+   claims, so its percent can never be brought down. Should a fully claimed variation still be offered so a later
+   claim can credit it back?
+2. **Claim total below zero.** A credit line can make a claim's gross, retention, net and GST negative. The prototype
+   lets that happen, and lets the claim be issued. Is a negative claim allowed, and how is retention treated on a
+   credit?
 
 ## Not covered
 

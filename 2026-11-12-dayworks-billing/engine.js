@@ -349,12 +349,15 @@ function sendRevision(st, varId) {
   hist(v, st, 'Revision ' + v.revision + ' sent to the client at ' + money(v.submittedBase) + ' (was ' + money(was) + ')', { old: was, new: v.submittedBase });
   log(st, v.id + ' revision ' + v.revision + ' sent at ' + money(v.submittedBase));
 }
+// Decided 2026-11-16: the approved amount defaults to the current lines total, even while "Changed since submitted"
+// shows (e.g. $5,060, not the $5,000 the client last saw).
+function defaultApprovedAmount(st, v) { return varTotal(st, v); }
 function approveVariation(st, varId, amount, shortfall) {
   const v = getVar(st, varId);
   if (v.status !== 'Submitted') throw new Error('Only a submitted variation can be approved');
   refuseIfIssues(st, v, 'approved');
   const total = varTotal(st, v);
-  const appr = amount === undefined || amount === null ? total : round2(amount);
+  const appr = amount === undefined || amount === null ? defaultApprovedAmount(st, v) : round2(amount);
   const diff = round2(appr - total);
   // Less than submitted: the shortfall rule applies. More than submitted: one adjustment, no status needed.
   if (diff < -0.004 && !SHORTFALL.includes(shortfall)) throw new Error('Mark the ' + money(diff) + ' adjustment absorbed, under dispute or to resubmit');
@@ -394,7 +397,13 @@ function contractSum(st) { return round2(st.project.contractSum + st.variations.
 
 /* ───────── Claims (VAR-23037) ───────── */
 // Approved variations on claims: claimed by percent complete to date like other variations, default 100%, on one draft claim at a time.
-function varClaimedPct(st, varId) { return st.claims.filter(c => c.status === 'Issued').flatMap(c => c.varLines || []).filter(l => l.variation === varId).reduce((m, l) => Math.max(m, l.pct), 0); }
+// Decided 2026-11-16: a later claim can enter a lower percent to date than an issued claim; the drop is charged as a
+// credit (negative) line. So "already claimed" is the percent on the latest issued claim that carries the variation.
+function varClaimedPct(st, varId) {
+  const issued = st.claims.filter(c => c.status === 'Issued' && (c.varLines || []).some(l => l.variation === varId)).sort((a, b) => (a.issueSeq || 0) - (b.issueSeq || 0));
+  if (!issued.length) return 0;
+  return issued[issued.length - 1].varLines.find(l => l.variation === varId).pct;
+}
 function varDraftClaim(st, varId) { return st.claims.find(c => c.status === 'Draft' && c.vars.some(x => x.variation === varId)) || null; }
 function offeredVariations(st, claimId) {
   return st.variations.filter(v => v.status === 'Approved' && varClaimedPct(st, v.id) < 100 - 1e-9 && !varDraftClaim(st, v.id));
@@ -414,7 +423,7 @@ function setVarPct(st, claimId, varId, pct) {
   const c = getClaim(st, claimId); if (c.status !== 'Draft') throw new Error(c.id + ' is issued and locked');
   const x = c.vars.find(l => l.variation === varId); if (!x) throw new Error(varId + ' is not on ' + c.id);
   const prev = varClaimedPct(st, varId);
-  if (!(pct >= prev && pct <= 100)) throw new Error('Enter a percent complete between ' + prev + '% (already claimed) and 100%');
+  if (!(pct >= 0 && pct <= 100)) throw new Error('Enter a percent complete between 0% and 100% (' + prev + '% already claimed; a lower percent is charged as a credit)');
   if (pct === x.pct) return;
   const v = getVar(st, varId); const val = p => round2(v.approvedAmount * (p - prev) / 100);
   hist(c, st, varId + ' ' + x.pct + '% to ' + pct + '% (' + money(val(x.pct)) + ' to ' + money(val(pct)) + ')', { old: val(x.pct), new: val(pct) });
@@ -430,7 +439,8 @@ function claimVarRows(st, c) {
   if (c.status !== 'Draft') return [];
   return c.vars.map(x => {
     const v = getVar(st, x.variation); const prev = varClaimedPct(st, v.id);
-    return { variation: v.id, title: v.title, approved: v.approvedAmount, pct: x.pct, prev, value: round2(v.approvedAmount * (x.pct - prev) / 100), dockets: v.lines.map(l => l.docket) };
+    const value = round2(v.approvedAmount * (x.pct - prev) / 100);
+    return { variation: v.id, title: v.title, approved: v.approvedAmount, pct: x.pct, prev, value, credit: value < -0.004, dockets: v.lines.map(l => l.docket) };
   });
 }
 function createClaim(st, period, ids, opts = {}) {
@@ -488,7 +498,7 @@ function issueClaim(st, claimId, opts = {}) {
   if (n && !opts.confirm) return { needsConfirm: true, count: n, message: plural(n, 'docket') + ' not yet approved' };
   c.varLines = claimVarRows(st, c);
   c.lines.forEach(ln => { ln.frozen = priceDocket(st, getDocket(st, ln.docket)).total; ln.frozenVersion = versionFor(st, getDocket(st, ln.docket).date).n; });
-  c.status = 'Issued'; c.issued = st.today;
+  c.status = 'Issued'; c.issued = st.today; st.issueSeq = (st.issueSeq || 0) + 1; c.issueSeq = st.issueSeq;
   if (n) c.decisions.push({ at: st.today, by: st.user, what: 'Issued with ' + plural(n, 'unapproved docket') });
   hist(c, st, 'Issued at ' + money(claimTotals(st, c).gross) + ' ex GST; lines frozen, dockets locked, changed-since-added flags cleared');
   log(st, c.id + ' issued at ' + money(claimTotals(st, c).gross) + ' ex GST' + (n ? ' (' + plural(n, 'unapproved docket') + ', confirmed)' : '') + '; dockets locked');
