@@ -324,12 +324,12 @@ const PROJ = {
   A: { id: 'A', name: 'Riverside Rd Upgrade', state: 'NSW',
        lastClaim: '2026-10-25', lastClaimLabel: 'claim #3 on 25/10/2026', lastVariation: '2026-11-05', lastVariationLabel: 'V-04 on 05/11/2026',
        margins: { Labour: 10, Plant: 12, Materials: 15, Subcontract: 8 },
-       floatChoice: {},
+       floatChoice: {}, breakMode: 'deducted',
        versions: [], draft: null, dirty: false, view: 0 },
   B: { id: 'B', name: 'Hillview Estate Stage 2', state: 'NSW',
        lastClaim: '2026-09-30', lastClaimLabel: 'claim #1 on 30/09/2026', lastVariation: null, lastVariationLabel: 'none',
        margins: { Labour: 12, Plant: 10, Materials: 12, Subcontract: 10 },
-       floatChoice: {}, versions: [], draft: null, dirty: false, view: 0 },
+       floatChoice: {}, breakMode: 'deducted', versions: [], draft: null, dirty: false, view: 0 },
 };
 (function seedVersions() {
   const v1 = { n: 1, effectiveFrom: '2026-10-01', savedBy: 'Alec Neill', savedOn: '2026-09-28', triggers: defaultTriggers(), lines: aLines(), named: emptyNamed() };
@@ -642,7 +642,7 @@ function priceAll(projId, opt) {
         if (o.held < rs.line.min - 1e-9) { part.topUp = rs.line.min - o.held; tally[lt] = (tally[lt] || 0) + part.topUp; }
         TIERS.forEach(t => { if ((tally[t] || 0) > 1e-9) part.rows.push({ tier: t, hours: tally[t], rate: rs.line.rates[t], value: tally[t] * rs.line.rates[t] }); });
         o.chargeHours = sumv(tally); o.chargeTally = tally;
-      } else { unm(o, r, sec === 'labour' ? personById(sid).name : sid, sec, rs.why, { kind: sec === 'labour' ? 'person' : 'plant', id: sid }); o.chargeHours = o.net; o.chargeTally = clone(o.tiers); }
+      } else { unm(o, r, sec === 'labour' ? personById(sid).name : sid, sec, rs.why, { kind: sec === 'labour' ? 'person' : 'plant', id: sid }); o.chargeHours = o.held; o.chargeTally = clone(o.tiers); }
       part.value = part.rows.reduce((a, x) => a + x.value, 0);
       o.parts.push(part);
       if (sec === 'wet') o.operatorNote = personById(line.person).name + (part.unit === 'day' ? '\'s hours still count towards their day, but the day rate includes the operator.' : '\'s hours set the tier.') + ' The operator is included in the wet rate; their labour rate is not charged.';
@@ -650,9 +650,9 @@ function priceAll(projId, opt) {
     if (line.type === 'dry') {
       const rs = resolveSubject(dk, ver, 'dry', line.plant);
       const part = { sec: 'dry', r: rs, rows: [], topUp: 0, value: 0, unit: rs.line ? rs.line.unit : 'hour' };
-      if (rs.line && rs.line.unit === 'day') { part.rows.push({ tier: 'day', hours: 1, rate: rs.line.rate, value: rs.line.rate }); o.chargeHours = o.net; }
-      else if (rs.line) { const ch = Math.max(o.net, rs.line.min); part.topUp = ch - o.net; part.rows.push({ tier: 'flat', hours: ch, rate: rs.line.rate, value: ch * rs.line.rate }); o.chargeHours = ch; }
-      else { unm(o, r, line.plant, 'dry', rs.why, { kind: 'plant', id: line.plant }); o.chargeHours = o.net; }
+      if (rs.line && rs.line.unit === 'day') { part.rows.push({ tier: 'day', hours: 1, rate: rs.line.rate, value: rs.line.rate }); o.chargeHours = o.held; }
+      else if (rs.line) { const ch = Math.max(o.held, rs.line.min); part.topUp = ch - o.held; part.rows.push({ tier: 'flat', hours: ch, rate: rs.line.rate, value: ch * rs.line.rate }); o.chargeHours = ch; }
+      else { unm(o, r, line.plant, 'dry', rs.why, { kind: 'plant', id: line.plant }); o.chargeHours = o.held; }
       o.chargeTally = { std: o.chargeHours };
       part.value = part.rows.reduce((a, x) => a + x.value, 0);
       o.parts.push(part);
@@ -891,9 +891,10 @@ function renderCalc() {
     h += `</tbody></table></div></div></div>`;
   } else h += `<div class="banner ok"><i class="fas fa-check"></i><div>Everything used on this project's dockets is on a line for what it is used as.</div></div>`;
 
-  h += `<div class="secnav">${SEC_ORDER.map(s => `<a href="#sec-${s}"><span class="pill ${SEC[s].pill}">${SEC[s].label} (${v.lines.filter(l => l.sec === s).length})</span></a>`).join('')}<a href="#sec-trig"><span class="pill grey">Tier triggers</span></a><a href="#sec-who"><span class="pill grey">Who prices at what</span></a></div>`;
+  h += `<div class="secnav">${SEC_ORDER.map(s => `<a href="#sec-${s}"><span class="pill ${SEC[s].pill}">${SEC[s].label} (${v.lines.filter(l => l.sec === s).length})</span></a>`).join('')}<a href="#sec-trig"><span class="pill grey">Tier triggers</span></a><a href="#sec-brk"><span class="pill grey">Breaks: ${BREAK_MODE_LABEL[breakModeOf(proj)]}</span></a><a href="#sec-who"><span class="pill grey">Who prices at what</span></a></div>`;
   SEC_ORDER.forEach(s => h += renderSection(v, s, editing));
   h += renderTriggers(v, editing);
+  h += renderBreaks();
   h += `<div class="grid2"><div>${renderVersions(v)}</div><div>${renderMargins()}</div></div>`;
   h += renderWho(v);
   return h;
@@ -950,7 +951,7 @@ function renderSection(v, s, editing) {
   });
   h += `</tbody></table></div>`;
   if (editing) h += renderAddRow(s);
-  if (s === 'labour' || s === 'wet' || s === 'att') h += `<div class="help">Entering a Standard rate prefills 1.5x, 2x and Public holiday at 1.5x, 2x and 2.5x; amber cells have been overwritten.${s !== 'att' ? ' Minimum hours are tested per docket line (worked hours excluding breaks); 0 means none; top-up hours price at the lowest tier for the day type.' : ' Attachments have no minimum of their own.'}</div>`;
+  if (s === 'labour' || s === 'wet' || s === 'att') h += `<div class="help">Entering a Standard rate prefills 1.5x, 2x and Public holiday at 1.5x, 2x and 2.5x; amber cells have been overwritten.${s !== 'att' ? ' Minimum hours are tested per docket line, on the hours the line holds after the day's breaks are placed (break hours count when Breaks is Charged); 0 means none; top-up hours price at the lowest tier for the day type.' : ' Attachments have no minimum of their own.'}</div>`;
   if (s === 'labour' || s === 'wet' || s === 'dry') h += `<div class="help">A ${s === 'labour' ? 'role' : 'charge resource'} can be on only one line in this section, and so can a named ${s === 'labour' ? 'worker' : 'plant item'}; picking one already on another line is refused with "&lt;name&gt; is already on the &lt;line&gt; line". Named assignments (amber) are part of the version: saving a change lists the unbilled dockets it would reprice and asks Reprice or Keep for each.</div>`;
   h += `</div>`;
   return h;
@@ -974,9 +975,16 @@ function renderTriggers(v, editing) {
     TIERS.forEach(t => { const val = v.triggers[dt][t]; h += `<td class="num"><input class="cell" value="${val === null || val === undefined ? '' : val}" placeholder="-" onchange="setTrig('${dt}','${t}',this.value)"></td>`; });
     h += `<td class="muted small">${tierOrder(v.triggers, dt).map(([t, hrs]) => (hrs === Infinity ? 'rest' : hrs + 'h') + ' at ' + TIER_LABEL[t]).join(', then ')}</td></tr>`;
   });
-  h += `</tbody></table></div><div class="help">Hours fill the tiers left to right: a number is the hours that tier takes, <b>rest</b> takes everything remaining, blank skips the tier. Hours are counted <b>per person per day across all of that person's lines and dockets on this project that day, in time order</b>, including day-rated wet-hire lines and Not claimable dockets; hours on other projects do not count. Each line with a break records its duration and start time; the break comes off the person's <b>highest-rated</b> hours that day, on the line that holds them. Lines cannot cross midnight (night shift is not in this release). Public holidays come from the ${P().state} calendar. Applies to hourly labour and wet-hire lines and their hourly attachments; dry hire is flat.</div></div>`;
+  h += `</tbody></table></div><div class="help">Hours fill the tiers left to right: a number is the hours that tier takes, <b>rest</b> takes everything remaining, blank skips the tier. Hours are counted <b>per person per day across all of that person's lines and dockets on this project that day, in time order</b>, including day-rated wet-hire lines and Not claimable dockets; hours on other projects do not count. Each line with a break records its duration and start time. With Breaks <b>Deducted</b>, the day's breaks come off the day's <b>top tier</b>, on the hourly line with the <b>highest $ rate</b> in that tier; day-rated lines are skipped, and if every line holding top-tier hours is day-rated the break reduces nothing. With Breaks <b>Charged</b>, break hours are charged and tiered like worked hours. Lines cannot cross midnight (night shift is not in this release). Public holidays come from the ${P().state} calendar. Applies to hourly labour and wet-hire lines and their hourly attachments; dry hire is flat.</div></div>`;
   return h;
 }
+function renderBreaks() {
+  const proj = P(); const m = breakModeOf(proj); const ed = canEdit();
+  const opt = k => `<label class="radio"><input type="radio" name="brkMode" value="${k}" ${m === k ? 'checked' : ''} ${ed ? '' : 'disabled'} onchange="setBreakMode('${k}')"> ${BREAK_MODE_LABEL[k]}${k === 'deducted' ? ' (default)' : ''}</label>`;
+  return `<div class="card ${ed ? '' : 'ro'}" id="sec-brk"><h2>Breaks ${story(STORY.core)}</h2><div>${opt('deducted')}${opt('charged')}</div>
+    <div class="help"><b>Deducted:</b> the day's breaks come off the person's top-tier hours that day, on the hourly line with the highest $ rate in that tier. Day-rated lines are skipped; if every line holding top-tier hours is day-rated, the break reduces nothing. <b>Charged:</b> break hours are charged and tiered exactly like worked hours, and count towards tier thresholds and the minimum. Changing this reprices this project's dockets straight away; dockets on an issued claim or approved variation keep their value.</div></div>`;
+}
+function setBreakMode(m) { if (!canEdit()) return; P().breakMode = m; render(); toast('Breaks: ' + BREAK_MODE_LABEL[m] + '. ' + P().name + '\'s dockets repriced.'); }
 function renderVersions(v) {
   const proj = P();
   let h = `<div class="card"><h2>Versions ${story(STORY.core)}</h2><div class="vlist">`;
@@ -1141,7 +1149,7 @@ function renderDocketLine(dk, r, o, ed) {
   });
   if (o.dayList && line.type !== 'dry') {
     const nm = personById(line.person).name;
-    h += `<div class="blk"><h4>${esc(nm)}'s hours on ${dayName(dk.date)} ${fmtDate(dk.date)} ${story(STORY.core)}</h4><table><thead><tr><th>Docket</th><th>Line</th><th>Time</th><th class="num">Break</th><th class="num">Break off here</th><th>Tiers held</th></tr></thead><tbody>${o.dayList.map(x => `<tr class="${x === o ? 'me' : ''}"><td>${x.dk.id}${x.dk.notClaimable ? ' <span class="pill grey">Not claimable</span>' : ''}</td><td>${TYPE_LABEL[x.line.type]}${x.parts[0] && x.parts[0].unit === 'day' ? ' (day rate)' : ''}</td><td>${x.line.start}-${x.line.end}</td><td class="num">${x.line.breakH ? fmtH(x.line.breakH) + 'h at ' + (x.line.breakStart || '?') : '-'}</td><td class="num">${x.breakOff ? fmtH(x.breakOff) + 'h' : '-'}</td><td>${tierStr(x.tiers)}</td></tr>`).join('')}</tbody></table><div class="muted">Counted in time order across all of ${esc(nm)}'s lines and dockets on this project that day (day-rated wet hire and Not claimable dockets included; other projects not). This line holds hours ${fmtH(o.dayFrom)} to ${fmtH(o.dayTo)}.${o.dayList.some(x => x.line.breakH) ? ' The day\'s breaks come off the highest-rated hours, on the line that holds them.' : ''}</div></div>`;
+    h += `<div class="blk"><h4>${esc(nm)}'s hours on ${dayName(dk.date)} ${fmtDate(dk.date)} ${story(STORY.core)}</h4><table><thead><tr><th>Docket</th><th>Line</th><th>Time</th><th class="num">Break</th><th class="num">Break off here</th><th>Tiers held</th></tr></thead><tbody>${o.dayList.map(x => `<tr class="${x === o ? 'me' : ''}"><td>${x.dk.id}${x.dk.notClaimable ? ' <span class="pill grey">Not claimable</span>' : ''}</td><td>${TYPE_LABEL[x.line.type]}${x.parts[0] && x.parts[0].unit === 'day' ? ' (day rate)' : ''}</td><td>${x.line.start}-${x.line.end}</td><td class="num">${x.line.breakH ? fmtH(x.line.breakH) + 'h at ' + (x.line.breakStart || '?') : '-'}</td><td class="num">${x.breakCharged ? 'charged' : x.breakOff ? fmtH(x.breakOff) + 'h' : '-'}</td><td>${tierStr(x.tiers)}</td></tr>`).join('')}</tbody></table><div class="muted">Counted in time order across all of ${esc(nm)}'s lines and dockets on this project that day (day-rated wet hire and Not claimable dockets included; other projects not). This line holds hours ${fmtH(o.dayFrom)} to ${fmtH(o.dayTo)}.${o.dayList.some(x => x.line.breakH) ? (o.dayList.some(x => x.breakCharged) ? ' Breaks: Charged. Break hours are charged and tiered like worked hours.' : ' Breaks: Deducted. The day\'s breaks come off the top tier, on the hourly line with the highest $ rate in it; day-rated lines are skipped.' + (o.dayList.breakNote ? ' ' + esc(o.dayList.breakNote) : '')) : ''}</div></div>`;
   }
   o.atts.forEach(p => {
     h += `<div class="blk"><h4><span class="pill att">Attachment</span> ${esc(p.label)} ${p.line ? `<span class="pill res">${esc(p.line.name)}</span>` : '<span class="pill bad">Unmapped</span>'} ${story(STORY.af)}</h4>`;
