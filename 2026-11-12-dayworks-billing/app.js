@@ -180,7 +180,7 @@ function docketModal(id) {
     if (d.status === 'Submitted') {
       b.push(`<button class="btn primary" onclick="act(()=>approveDocket(S,'${id}'),'${id} approved')">Approve</button>`);
       b.push(`<button class="btn" onclick="DK_FORM='sendback';refreshModal()"><i class="fas fa-reply"></i> Send back</button>`);
-      b.push(`<button class="btn danger" onclick="act(()=>rejectDocket(S,'${id}'),'${id} rejected')" title="Simulates the client rejecting it by email">Client rejects</button>`);
+      b.push(`<button class="btn danger" onclick="act(()=>rejectDocket(S,'${id}'),'${id} rejected by the client${h0 ? '; stays on ' + h0.rec.id + ', flagged' : ''}')" title="Simulates the client rejecting it through the docket email">Client rejects</button>`);
     }
     if (['Draft', 'Submitted', 'Approved'].includes(d.status)) b.push(`<button class="btn" onclick="DK_FORM='nc';refreshModal()"><i class="fas fa-ban"></i> Mark as not claimable</button>`);
     if (d.status === 'Not claimable') b.push(`<button class="btn" onclick="act(()=>reopenDocket(S,'${id}'),'${id} reopened')">Reopen</button>`);
