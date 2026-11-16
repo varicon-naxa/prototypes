@@ -1,4 +1,4 @@
-# Dayworks Calculator (built 2026-11-05, rebuilt 2026-11-12 and 2026-11-16)
+# Dayworks Calculator (built 2026-11-05, rebuilt 2026-11-12 and 2026-11-16, updated to Alec's answers 2026-11-16)
 
 Prototype for the Dayworks Calculator stories under epic VAR-23034, rebuilt to match all four as Alec rewrote them
 on 2026-11-16:
@@ -17,7 +17,7 @@ Live: https://varicon-naxa.github.io/prototypes/2026-11-05-dayworks-calculator/
 
 Two projects share one tenant. Project A "Riverside Rd Upgrade" has the tickets' rate cards. Its last issued claim is
 #3 on 25/10/2026 and its last approved variation is V-04 on 05/11/2026. Project B "Hillview Estate Stage 2" puts
-Leading Hand on a "Site Lead" line at $82. Switch project and role in the top bar: admin and PM can edit, supervisor
+Leading Hand on a "Site Lead" line at $82 and Foreman on "Supervisor" at $98. Switch project and role in the top bar: admin and PM can edit, supervisor
 and engineer are read-only. "Today" is set to 18/12/2026 so every example docket is in the past.
 
 1. **Dayworks set-up** (VAR-23108). A four-step checklist: Client approvers, Docket template, Dayworks Calculator,
@@ -35,7 +35,7 @@ and engineer are read-only. "Today" is set to 18/12/2026 so every example docket
    - Labour, Wet and Dry hire lines can hold resources, named people or plant, or both. A line with neither can't be
      saved. A resource or a name already on another line in the section is refused with "<name> is already on the
      <line> line".
-   - **Attachments**: per hour (four tiers) or per day, with no minimum.
+   - **Attachments**: per hour (four tiers) or per day, with no minimum. "Hammer day" ($250) is day-rated.
    - **Float**: one line per plant type, with a mobilise and a demobilise amount.
    - **Allowances**: type, unit, amount and an optional threshold.
    - **Materials and Subcontract**: rate per unit, or cost plus margin.
@@ -53,54 +53,48 @@ and engineer are read-only. "Today" is set to 18/12/2026 so every example docket
 2. **Daywork dockets**: one or two dockets per worked example. Labour, Wet hire and Dry hire lines. Whether a machine
    line is hourly or daily comes from its calculator line.
    - **Hours and breaks.** Each labour or wet-hire line shows the person's whole day across all their lines and
-     dockets in time order, and which hours of the day it holds. A break needs both duration and start time, and
-     comes off the day's highest-rated hours. Lines can't cross midnight.
-   - **Overlaps.** An overlap on one docket, or across dockets (on any project), flags both lines with "<name> is
+     dockets on this project in time order, and which hours of the day it holds. Hours on day-rated wet-hire lines
+     and on Not claimable dockets count; hours on other projects do not. A break needs both duration and start
+     time. The day's breaks come off the highest-rated hours, on the line that holds them, and the table shows
+     where each break came off. Lines can't cross midnight.
+   - **Overlaps.** An overlap on one docket, across dockets, or across projects flags both lines with "<name> is
      already charged on another line for these hours", names the other docket, and blocks both dockets.
-   - **Attachments** show which hours they charge and why.
-   - **Float** has its own block. A machine on two dockets on its first day shows a "which docket carries the
-     mobilise" banner with a button per docket. "Mark Not claimable" (VAR-23062) bills the docket at $0, float
-     included, and the float does not move to another docket.
+   - **Attachments** show which hours they charge and why. A day-rated attachment charges one day on any machine
+     line.
+   - **Float** has its own block. A machine on two dockets on its first day carries mobilise on the earliest docket
+     and shows a "which docket carries the mobilise" banner on both, with a button per docket. Approval is not
+     blocked while the choice is open. "Mark Not claimable" (VAR-23062) bills the docket at $0, float included, and
+     the float does not move to another docket.
    - **Allowances** show their source: timesheet, added on the docket, added automatically (threshold), or per day
      on the first line of the day.
    - **Materials and subcontract** sit in their own table.
    - Anything unmapped prices $0 and blocks Approve. Dockets on an issued claim or approved variation are locked.
 3. **Worked examples**: every Given/When/Then from all four tickets, grouped by ticket in each ticket's order, and
-   recomputed live from the same engine. On a fresh load: VAR-23035 24/24, VAR-23154 9/9, VAR-23155 7/7,
-   VAR-23156 4/4 (44/44). Editing rates or mappings can make them fail.
+   recomputed live from the same engine. On a fresh load: VAR-23035 28/28, VAR-23154 10/10, VAR-23155 7/7,
+   VAR-23156 4/4 (49/49). Editing rates or mappings can make them fail.
 
-Seeding notes: hours now combine across a person's dockets each day, so each example sits on its own person-day.
-Seed extras not in the tickets:
+Seeding notes: hours combine across a person's dockets on a project each day, so each example sits on its own
+person-day. Cris's version example is dated Friday 6 Nov and Thursday 12 Nov. Seed extras not in the tickets:
 
 - "Supervisor" (Foreman) $95, "Excavator 25t wet" $230 for EX-11, and "Tipper 10t dry" $95/h.
+- A second Leading Hand, Mia Brooks, for the break and Not claimable D1/D2 examples, because Lee's October Mondays
+  are taken and the $70 rate only applies before 1 Nov.
+- Project B "Supervisor" (Foreman) $98, so Priya prices on both projects in the cross-project overlap example.
+- Ana's role is Labourer, as in the ticket's Ana example.
 - Excavators EX-08 and EX-10, so EX-07's float story (3 Nov arrival, leaves 20 Nov, back 1 Dec) stays clean.
 - The tickets' rate cards are combined into one calculator, so long core-ticket lines also pick up Meal at 9.5h:
   the $840 docket is $865 in total, and D2 is $515. The core examples check the labour or machine charge.
 
 ## Questions hit while building
 
-1. **Cris version example date.** VAR-23035 says Cris's 8h docket on 8 Nov is $480. 8 Nov 2026 is a Sunday, so 8h
-   tiers to 2x ($960 at "Labourer"). Should the example use a weekday date? The prototype dates it Friday 6 Nov.
-2. **Which line loses the break hours?** If the break is on one line but the day's highest-rated hours sit on a later
-   line or docket, whose hours come down? The prototype keeps each line's own worked hours (net of its own break) and
-   fills tiers in time order. The day's total then comes off the highest-rated hours, and the reduction shows on the
-   line that holds them. Is that the intended split, given that minimums and per-hour allowances use each line's own
-   hours?
-3. **Does a person's day cross projects?** If someone works on two projects on the same day, do their hours combine
-   for tiers, thresholds and per-day allowances? Each project has its own triggers. The prototype counts within a
-   project only, but checks overlaps across projects.
-4. **Wet day-rated line and the operator's day.** Do an operator's hours on a day-rated wet line count towards their
-   day for tiers on their other lines and for allowance thresholds? The prototype counts them.
-5. **Day-rated attachment on an hourly machine line.** VAR-23154 covers an hourly attachment on a day-rated line, but
-   not this case. Does it charge one day? The prototype charges one day.
-6. **Per-day allowance recorded on a later line.** If the per-day allowance comes through on the person's second
-   line or docket of the day but not the first, does the charge move to the first line, even on another docket? The
-   prototype moves it.
-7. **Unchosen mobilise docket.** While the user has not yet picked which of two same-day dockets carries the
-   mobilise, does that block approval of either docket? The prototype does not block. It shows the charge on the
-   earliest docket with a banner asking for the choice.
-8. **Hours on a Not claimable docket.** Do hours on a Not claimable docket still count towards the person's tiers and
-   thresholds that day? The prototype counts them.
+1. **Minimum on a line after a break moves.** In the D1/D2 break example, D1 has 5.5h worked but holds 6h once the
+   break comes off D2. The minimum is tested on "worked hours excluding breaks" per docket line. Is that the line's
+   own worked hours (net of its own break) or the hours it holds after the day's breaks are placed? The same choice
+   sets per-hour allowances and hourly attachment hours. The prototype uses the hours the line holds.
+2. **Which line loses the break when the highest-rated hours are split.** If the day's highest-tier hours sit on
+   two lines at different rates (for example a wet-hire line and a labour line), or on a day-rated wet-hire line
+   where fewer hours change nothing, which line's hours come down? The prototype takes the highest tier first and,
+   within it, the latest line of the day, whatever its rate.
 
 ## Not in the prototype
 
