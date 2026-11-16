@@ -36,7 +36,7 @@ function act(fn, okMsg) {
   const moved = [], held = [];
   Object.keys(after).forEach(k => {
     if (!(k in before)) return;
-    if (Math.abs((after[k] || 0) - (before[k] || 0)) > 0.004) { moved.push(k); log(S, k + ': ' + money(before[k]) + ' to ' + money(after[k]) + ' (flagged until ' + (k.startsWith('C-') ? 'issue' : 'approval') + ')', 'change'); }
+    if (Math.abs((after[k] || 0) - (before[k] || 0)) > 0.004) { moved.push(k); log(S, k + ': ' + money(before[k]) + ' to ' + money(after[k]) + ' (flagged until ' + (k.startsWith('C-') ? 'issue' : 'approval') + ', kept in the record history)', 'change'); }
   });
   if (okMsg) toast(okMsg + (moved.length ? ' · ' + plural(moved.length, 'live value') + ' moved' : ''));
   render();
@@ -48,8 +48,8 @@ function showTab(t) { TAB = t; render(); window.scrollTo(0, 0); }
 function render() {
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === TAB));
   document.querySelectorAll('[data-nav]').forEach(x => x.classList.toggle('active', x.dataset.nav === TAB));
-  const last = lastIssuedClaimDate(S);
-  document.getElementById('crumbInfo').textContent = 'NSW · contract sum ' + money(contractSum(S)) + (last ? ' · last issued claim ' + fmtDate(last) : '');
+  const floor = calcFloor(S);
+  document.getElementById('crumbInfo').textContent = 'NSW · contract sum ' + money(contractSum(S)) + (floor ? ' · calculator changes effective from ' + fmtDate(floor) + ' or later' : '');
   renderSim();
   const v = document.getElementById('view');
   v.innerHTML = TAB === 'dockets' ? viewDockets() : TAB === 'variations' ? viewVariations() : TAB === 'claims' ? viewClaims() : TAB === 'calc' ? viewCalc() : viewScenarios();
@@ -81,7 +81,7 @@ function renderSim() {
       <button class="btn alt" onclick="if(confirm('Reset the demo project?')){S=seedState();SEL_VAR='V-016';SEL_CLAIM=null;SIM.eff=null;closeModal();render();}"><i class="fas fa-rotate-left"></i> Reset demo</button>
     </div>
     <div class="vers">${S.versions.slice().sort((a, b) => a.n - b.n).map(v => `<span>Calculator v${v.n} from ${fmtDate(v.effectiveFrom)}${v.n > 1 ? ': ' + esc(v.note) : ''}</span>`).join('')}</div>
-    <div class="muted" style="color:rgba(255,255,255,.55);margin-top:8px">Edit a docket's hours from the docket itself (Dockets tab, Open). Every live line or submitted amount that moves is listed below in amber.</div>
+    <div class="muted" style="color:rgba(255,255,255,.55);margin-top:8px">Effective date must be on or after ${fmtDate(calcFloor(S))} (the later of the last issued claim and last approved variation). Try Leading Hand $75 from 05/11/2026 to move D209 on V-016 and D208 on V-015. Edit hours, add an allowance or have the client reject from the docket itself (Dockets tab, Open). Every live line or submitted amount that moves is listed below in amber.</div>
     <div class="log">${entries.map(e => `<div class="${e.kind}">${fmtDate(e.at)} · ${esc(e.what)}</div>`).join('')}</div>
   </div>`;
 }
@@ -151,7 +151,9 @@ function docketModal(id) {
   const editable = !locked;
   let h = `<div class="hdr" style="margin-bottom:8px"><div><h3 style="margin:0">Docket ${d.id} · ${dayName(d.date)} ${fmtDate(d.date)}</h3><div class="sub">Raised by ${esc(d.createdBy)} · priced by calculator v${p.version ? p.version.n : '-'}</div></div><div class="btns">${pill(d.status)} ${onMarker(id)} <button class="btn ghost" onclick="closeModal()"><i class="fas fa-xmark"></i></button></div></div>`;
   if (locked) h += `<div class="banner dark"><i class="fas fa-lock"></i><div><b>Read-only.</b> This docket is on ${h0.kind === 'variation' ? 'approved variation' : 'issued claim'} ${h0.rec.id}. Its value is frozen at ${money(h0.line.frozen)} and is never repriced${Math.abs(p.total - h0.line.frozen) > 0.004 ? ` (the live calculator would now say ${money(p.total)})` : ''}.</div></div>`;
-  else if (h0) h += `<div class="banner info"><i class="fas fa-link"></i><div>On ${h0.label} (${h0.rec.status.toLowerCase()}). Edits flow through to its line until the ${h0.kind === 'variation' ? 'variation is approved' : 'claim is issued'}. Send back and Not claimable are refused until it is removed.</div></div>`;
+  else if (h0) h += `<div class="banner info"><i class="fas fa-link"></i><div>On ${h0.label} (${h0.rec.status.toLowerCase()}). Edits flow through to its line until the ${h0.kind === 'variation' ? 'variation is approved' : 'claim is issued'}, and are kept in its history.${d.status === 'Approved' ? ' <b>Editing this Approved docket returns it to Submitted for re-approval</b> and flags its line.' : ''} Send back and Not claimable are refused until it is removed.</div></div>`;
+  if (h0 && !locked && docketIssue(S, d)) h += `<div class="banner err"><i class="fas fa-ban"></i><div><b>Blocking ${h0.rec.id}:</b> ${esc(docketIssue(S, d))}. It stays on the ${h0.kind}, flagged, and the ${h0.kind === 'variation' ? 'variation cannot be submitted or approved' : 'claim cannot be issued'} until it is fixed or removed.</div></div>`;
+  if (d.reapprove && d.status === 'Submitted') h += `<div class="banner warn"><i class="fas fa-rotate-left"></i><div><b>Edited after approval</b> on ${fmtDate(d.reapprove.at)} while on ${d.reapprove.on}: back to Submitted for re-approval.</div></div>`;
   if (d.sentBack) h += `<div class="banner warn"><i class="fas fa-reply"></i><div><b>Sent back: ${esc(d.sentBack.reason)}</b>${d.sentBack.note ? ' · ' + esc(d.sentBack.note) : ''}<div class="muted">by ${esc(d.sentBack.by)} on ${fmtDate(d.sentBack.at)} · stays until ${esc(d.createdBy)} resubmits</div></div></div>`;
   if (d.status === 'Not claimable') h += `<div class="banner dark"><i class="fas fa-ban"></i><div><b>Not claimable</b>${d.nc.note ? ' · ' + esc(d.nc.note) : ''}<div class="muted">set by ${esc(d.nc.by)} on ${fmtDate(d.nc.at)} · was ${d.prevStatus} · never offered to a variation or claim</div></div></div>`;
   if (p.problems.length) h += `<div class="banner err"><i class="fas fa-triangle-exclamation"></i><div><b>Cannot be approved:</b> ${p.problems.map(esc).join(' · ')}. It cannot go on a variation or claim until fixed.${editable ? ' Remove the line or allowance below to fix it.' : ''}</div></div>`;
@@ -389,7 +391,7 @@ function viewCalc() {
     v.dry.forEach(l => h += `<tr><td class="small">Dry hire</td><td>${esc(l.name)}</td><td class="num">${money(l.r.std)}/${l.unit}</td><td colspan="3" class="muted">no tiers</td><td class="num">${l.min}</td></tr>`);
     h += `</tbody></table></div><div class="tbl-wrap"><table><thead><tr><th>Section</th><th>Line</th><th>Charge</th></tr></thead><tbody>`;
     v.float.forEach(f => h += `<tr><td class="small">Float</td><td>${esc(f.name)}</td><td>mobilise ${money(f.mob)} · demobilise ${money(f.demob)}</td></tr>`);
-    v.allow.forEach(a => h += `<tr><td class="small">Allowances</td><td>${esc(a.name)}</td><td>${money(a.amount)} per ${a.unit}${a.threshold ? ' · prompt after ' + a.threshold + 'h' : ''}</td></tr>`);
+    v.allow.forEach(a => h += `<tr><td class="small">Allowances</td><td>${esc(a.name)}</td><td>${money(a.amount)} per ${a.unit}${a.threshold ? ' · added automatically from ' + a.threshold + 'h worked (not modelled here)' : ''}</td></tr>`);
     v.materials.forEach(m => h += `<tr><td class="small">Materials</td><td>${esc(m.name)}</td><td>${m.rate !== undefined ? money(m.rate) + ' per ' + m.unit : 'cost + ' + m.margin + '%'}</td></tr>`);
     v.sub.forEach(m => h += `<tr><td class="small">Subcontract</td><td>${esc(m.name)}</td><td>cost + ${m.margin}%</td></tr>`);
     h += `<tr><td class="small">Allowances</td><td class="muted">no line for Tool</td><td class="muted">a Tool allowance is Unmapped</td></tr></tbody></table></div></div></div>`;
