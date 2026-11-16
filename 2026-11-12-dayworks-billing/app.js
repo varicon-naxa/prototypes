@@ -171,7 +171,7 @@ function docketModal(id) {
       <td class="small">${start}</td><td class="num">${hrs}</td><td class="small">${split}${extras}${addAl}</td><td class="num"><b>${money(r.value)}</b></td>
       <td>${editable ? `<button class="btn ghost" title="Remove line" onclick="act(()=>removeDocketLine(S,'${id}',${i}),'Line removed')"><i class="fas fa-trash"></i></button>` : ''}</td></tr>`;
   });
-  h += `<tr class="total"><td></td><td colspan="4">Docket total (ex GST, calculator value, no margin)</td><td class="num">${money(locked ? h0.line.frozen : p.total)}</td><td></td></tr></tbody></table></div>`;
+  h += `<tr class="total"><td></td><td colspan="5">Docket total (ex GST, calculator value, no margin)</td><td class="num">${money(locked ? h0.line.frozen : p.total)}</td><td></td></tr></tbody></table></div>`;
   // actions
   const b = [];
   if (!locked) {
