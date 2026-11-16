@@ -1,4 +1,4 @@
-/* Scenarios: every worked example in VAR-23036 (12) and VAR-23037 (13), as rewritten 2026-11-16,
+/* Scenarios: every worked example in VAR-23036 (15) and VAR-23037 (15), as updated with Alec's answers of 2026-11-16,
    each run on a fresh project through the same engine the UI uses. */
 
 function _chk(out, label, actual, expected) {
@@ -130,6 +130,43 @@ const SCENARIOS = [
       _chk(c, 'Approved amount', v.approvedAmount, 5060);
       return st;
     } },
+  { story: 'VAR-23036', title: 'V-016 approved while changed since submitted: warned, recorded',
+    text: 'Given V-016 still shows changed since submission, when the user approves it, then a warning says the client saw $5,000, approval goes through, and the warning is recorded.',
+    run(c) {
+      const st = baseState(); st.today = '2026-11-16';
+      addDocket(st, 'D209', '2026-11-10', 'Approved', [lab('tom', '06:00', '17:00', 0.5)]);
+      addDocket(st, 'D210', '2026-11-02', 'Approved', [wet('EX-07', 'sam', '07:00', '16:00')]);
+      addDocket(st, 'D211', '2026-11-16', 'Approved', [wet('EX-07', 'sam', '07:00', '15:00', 0, ['Breaker 1t']), mat('Concrete', { cost: 600 })]);
+      const v = createVariation(st, ['D209', 'D210', 'D211'], { id: 'V-016' }); submitVariation(st, 'V-016');
+      publishVersion(st, 'labour', 'Leading Hand', 75, '2026-11-01');
+      _chk(c, 'Still changed since submitted', varSubmittedChanged(st, v), true);
+      let r = null;
+      _allowed(c, 'Approval goes through', () => { r = approveVariation(st, 'V-016'); });
+      _chk(c, 'Warning says the client saw $5,000', !!r && /client saw \$5,000\.00/.test(r.warning), true);
+      _chk(c, 'Approved', v.status, 'Approved');
+      _chk(c, 'Warning recorded on the variation', v.decisions.some(x => /client saw \$5,000\.00/.test(x.what)), true);
+      _chk(c, 'Warning in the history', v.history.some(x => /client saw \$5,000\.00/.test(x.what)), true);
+      return st;
+    } },
+  { story: 'VAR-23036', title: 'D212 removed from submitted V-016: released, revision prompted',
+    text: 'Given D212 is removed from submitted V-016, when the removal saves, then D212 is released, V-016 shows changed since submission, and a new revision is prompted.',
+    run(c) {
+      const st = baseState(); st.today = '2026-11-16';
+      addDocket(st, 'D209', '2026-11-10', 'Approved', [lab('tom', '06:00', '17:00', 0.5)]);
+      addDocket(st, 'D210', '2026-11-02', 'Approved', [wet('EX-07', 'sam', '07:00', '16:00')]);
+      addDocket(st, 'D212', '2026-11-03', 'Approved', [mat('Road base', { qty: 12 }), lab('jo', '07:00', '15:00')]);
+      const v = createVariation(st, ['D209', 'D210', 'D212'], { id: 'V-016' }); submitVariation(st, 'V-016');
+      _chk(c, 'D212 has no flag (any docket can come off)', docketIssue(st, getDocket(st, 'D212')), null);
+      _allowed(c, 'Removal saves', () => removeFromVariation(st, 'V-016', 'D212'));
+      _chk(c, 'D212 released', [docketHome(st, 'D212'), _ids(st, 'variation').includes('D212')], [null, true]);
+      _chk(c, 'V-016 still submitted', v.status, 'Submitted');
+      _chk(c, 'Changed since submitted', varSubmittedChanged(st, v), true);
+      _chk(c, 'New revision prompted', varNeedsRevision(st, v), true);
+      _chk(c, 'History: D212 removed', _hasHist(v, 'D212', 1020, 0), true);
+      sendRevision(st, 'V-016');
+      _chk(c, 'Revision 2 sent, prompt cleared', [v.revision, varNeedsRevision(st, v)], [2, false]);
+      return st;
+    } },
   { story: 'VAR-23036', title: 'Client rejects D210 on submitted V-017: approval refused',
     text: 'Given the client rejects D210 while it is on submitted V-017, when the user tries to approve V-017, then it is refused until D210 is fixed or removed.',
     run(c) {
@@ -164,18 +201,39 @@ const SCENARIOS = [
       _chk(c, 'Contract sum moves by', round2(contractSum(st) - before), 9000);
       return st;
     } },
-  { story: 'VAR-23036', title: 'Withdrawn V-019 stays on the register; dockets offered again',
-    text: 'Given unsubmitted V-019 holds two dockets, when it is withdrawn, then it stays on the register as Withdrawn with its history and both dockets are offered again.',
+  { story: 'VAR-23036', title: 'Client approves V-020 at $4,300 against $4,000: +$300, no status',
+    text: 'Given V-020 was submitted at $4,000, when the client approves $4,300, then a +$300 adjustment is recorded with no status needed and the contract sum moves by $4,300.',
     run(c) {
-      const st = baseState();
-      addDocket(st, 'D501', '2026-11-04', 'Approved', [lab('jo', '07:00', '15:00')]);
-      addDocket(st, 'D502', '2026-11-05', 'Approved', [lab('tom', '07:00', '15:00')]);
-      createVariation(st, ['D501', 'D502'], { id: 'V-019' });
-      releaseVariation(st, 'V-019', 'Withdrawn');
-      const v = st.variations.find(x => x.id === 'V-019');
-      _chk(c, 'On the register as Withdrawn', v && v.status, 'Withdrawn');
-      _chk(c, 'History kept (created, withdrawn)', v.history.length >= 2 && /^Withdrawn/.test(v.history[v.history.length - 1].what), true);
-      _chk(c, 'Both offered again', ['D501', 'D502'].map(id => _ids(st, 'variation').includes(id)), [true, true]);
+      const st = baseState(); st.today = '2026-11-16';
+      addDocket(st, 'D601', '2026-11-09', 'Approved', [mat('Road base', { qty: 40 })]);
+      addDocket(st, 'D602', '2026-11-10', 'Approved', [sub('Traffic control', 2000)]);
+      const v = createVariation(st, ['D601', 'D602'], { id: 'V-020' }); submitVariation(st, 'V-020');
+      _chk(c, 'Submitted at', varSubmittedAmount(st, v), 4000);
+      const before = contractSum(st);
+      _allowed(c, 'Approve at $4,300 with no status', () => approveVariation(st, 'V-020', 4300));
+      _chk(c, 'Docket lines keep their values', v.lines.map(l => varLineValue(st, v, l)), [1800, 2200]);
+      _chk(c, 'One +$300 adjustment', v.adjustment.amount, 300);
+      _chk(c, 'No status', v.adjustment.status, null);
+      _refused(c, 'Status cannot be set on a higher approval', () => setAdjustmentStatus(st, 'V-020', 'Absorbed'), 'A higher approved amount needs no status');
+      _chk(c, 'Contract sum moves by', round2(contractSum(st) - before), 4300);
+      return st;
+    } },
+  { story: 'VAR-23036', title: 'Withdrawn V-019, submitted or not, stays on the register; dockets offered again',
+    text: 'Given V-019 holds two dockets, submitted or not, when it is withdrawn, then it stays on the register as Withdrawn with its history and both dockets are offered again.',
+    run(c) {
+      let st;
+      ['unsubmitted', 'submitted'].forEach(kind => {
+        st = baseState();
+        addDocket(st, 'D501', '2026-11-04', 'Approved', [lab('jo', '07:00', '15:00')]);
+        addDocket(st, 'D502', '2026-11-05', 'Approved', [lab('tom', '07:00', '15:00')]);
+        createVariation(st, ['D501', 'D502'], { id: 'V-019' });
+        if (kind === 'submitted') submitVariation(st, 'V-019');
+        _allowed(c, 'Withdraw ' + kind + ' V-019', () => releaseVariation(st, 'V-019', 'Withdrawn'));
+        const v = st.variations.find(x => x.id === 'V-019');
+        _chk(c, kind + ': on the register as Withdrawn', v && v.status, 'Withdrawn');
+        _chk(c, kind + ': history kept', v.history.length >= 2 && /^Withdrawn/.test(v.history[v.history.length - 1].what), true);
+        _chk(c, kind + ': both offered again', ['D501', 'D502'].map(id => _ids(st, 'variation').includes(id)), [true, true]);
+      });
       return st;
     } },
   { story: 'VAR-23036', title: 'D201 on approved V-012: not offered; V-012 offered at 100%',
