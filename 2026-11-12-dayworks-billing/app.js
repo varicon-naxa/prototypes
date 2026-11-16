@@ -168,7 +168,7 @@ function docketModal(id) {
     const extras = r.extras.map(x => `<div class="small">${x.value === 0 && /Unmapped/.test(x.note) ? '<span class="pill bad">Unmapped</span> ' : '+ '}${esc(x.label)} ${money(x.value)} <span class="muted">${esc(x.note)}</span>${editable && /Unmapped/.test(x.note) && (l.allow || []).some(a => allowName(a.type) === x.label) ? ` <a onclick="act(()=>removeAllowance(S,'${id}',${i},'${esc((l.allow.find(a => allowName(a.type) === x.label) || {}).type)}'),'Allowance removed')">remove</a>` : ''}</div>`).join('');
     h += `<tr${r.overlap || r.unmapped.length ? ' class="hl-block"' : ''}><td>${i + 1}</td><td>${esc(r.label)}${r.overlap ? ' <span class="pill bad">overlap</span>' : ''}${l.t === 'wet' ? '<div class="muted">operator included in the wet rate</div>' : ''}</td>
       <td class="small">${r.rateLine ? esc(r.rateLine.name) : (l.t === 'float' ? '<span class="muted">no float line</span>' : '<span class="pill bad">Unmapped</span>')}</td>
-      <td class="num">${hrs}</td><td class="small">${split}${extras}</td><td class="num"><b>${money(r.value)}</b></td>
+      <td class="small">${start}</td><td class="num">${hrs}</td><td class="small">${split}${extras}${addAl}</td><td class="num"><b>${money(r.value)}</b></td>
       <td>${editable ? `<button class="btn ghost" title="Remove line" onclick="act(()=>removeDocketLine(S,'${id}',${i}),'Line removed')"><i class="fas fa-trash"></i></button>` : ''}</td></tr>`;
   });
   h += `<tr class="total"><td></td><td colspan="4">Docket total (ex GST, calculator value, no margin)</td><td class="num">${money(locked ? h0.line.frozen : p.total)}</td><td></td></tr></tbody></table></div>`;
