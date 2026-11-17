@@ -525,7 +525,7 @@ function issueClaim(st, claimId, opts = {}) {
   if (claimTotals(st, c).negative) c.sentAs = 'credit note';
   c.status = 'Issued'; c.issued = st.today; st.issueSeq = (st.issueSeq || 0) + 1; c.issueSeq = st.issueSeq;
   if (n) c.decisions.push({ at: st.today, by: st.user, what: 'Issued with ' + plural(n, 'unapproved docket') });
-  hist(c, st, 'Issued at ' + money(claimTotals(st, c).gross) + ' ex GST' + (claimTotals(st, c).negative ? ' (negative claim)' : '') + '; lines frozen, dockets locked, changed-since-added flags cleared');
+  hist(c, st, 'Issued at ' + money(claimTotals(st, c).gross) + ' ex GST' + (claimTotals(st, c).negative ? ' (negative claim, sent to accounting as a credit note)' : '') + '; lines frozen, dockets locked, changed-since-added flags cleared');
   log(st, c.id + ' issued at ' + money(claimTotals(st, c).gross) + ' ex GST' + (n ? ' (' + plural(n, 'unapproved docket') + ', confirmed)' : '') + '; dockets locked');
   return { ok: true };
 }
