@@ -11,7 +11,7 @@ Live: https://varicon-naxa.github.io/prototypes/2026-11-12-dayworks-billing/
 
 Built 2026-11-12. **Rebuilt 2026-11-17** to sit inside a Varicon project and mirror the real pages (checked in app.varicon.com.au that day, project VAR004 Bourke Street Roadworks, Cookie's Civil), with Varicon's own statuses.
 
-Files: `index.html` (shell and styles), `engine.js` (pricing, docket, variation and claim rules), `app.js` (screens), `scenarios.js` (worked examples, 38/38 passing). State is in memory and resets on reload.
+Files: `index.html` (shell and styles), `engine.js` (pricing, docket, variation and claim rules), `app.js` (screens), `scenarios.js` (worked examples, 43/43 passing). State is in memory and resets on reload.
 
 ## Layout
 
@@ -45,16 +45,14 @@ Rules:
 
 Everything earlier still holds: one line per docket at full calculator value, no margin; lines follow their dockets until approval with "changed since added" flags and full history; a rejected, unmapped or overlapping docket on a record blocks submit and approval; any edit to a signed docket returns it to Submitted; the approved amount defaults to the current lines total; variations are claimed by percent to date with credit lines for a lower percent; a 100%-claimed variation is still offered unticked; a negative claim can be approved and goes to accounting as a credit note; retention and GST follow Varicon's existing rules; the calculator effective date cannot be before the last approved claim or variation.
 
-## How the prototype reads two Varicon steps (literal reading, not a new decision)
+## Decided (Alec, 2026-11-17, answers to the rebuild's open questions)
 
-- Varicon's docket **Reopen** (clears the signature, unlocks the fields) is treated as the existing rule "any edit to an Approved docket returns it to Submitted": Reopen sends an Approved or Costed docket back to Submitted for the client to sign again.
-- A claim's **Submitted** step: lines keep following their dockets and dockets can still be added or removed until the claim is Approved, because the rule says "until issued".
+- **Credit back after 100%.** If a docket variation was 100% claimed (its dockets went Invoiced) and a later claim credits it back below 100%, its dockets stay Invoiced.
+- **Not claimable** can be set from Draft, Ready for Review, Submitted, Approved or Costed (not Invoiced or Rejected). Reopening returns the docket to its previous status.
+- **Reopen** on a signed Approved or Costed docket clears the signature and sends it to Submitted for re-approval. On a record its line is flagged and the change kept in the record's history. Invoiced dockets have no Reopen.
+- **Estimated Cost** on a docket-built variation is the dockets' actual cost (timesheet and plant cost, as in Daily Cost Tracking): worked hours at internal cost rates, materials and subcontract at cost. It shows per docket sub-line and in total on the Variation Register, and on the variation page with the margin (charge minus cost, and as a % of the charge). The seed holds simple internal **cost** rates, labelled as cost and never charged: labour per hour by role (Leading Hand $55, Operator $60, Labourer $45, Plumber $50), Excavator 20t $95/h plus the operator, Breaker 1t $20/h, float $300 per move, road base $30/t, other materials and subcontract at cost. They are listed in the Prototype drawer under Calculator rates.
+- **Submitted claims.** Dockets can be added to or removed from a Submitted claim until it is Approved. Each change flags the claim "changed since submitted" (list and claim page) and is kept in the claim's history; approval clears the flag.
 
 ## Open questions for Alec
 
 1. A docket marked Invoiced by hand (today's "Mark as invoiced") is offered to variations and claims, because the rule is "anything but Draft and Rejected". Should a hand-invoiced docket be offered, given it may already have been billed outside Varicon?
-2. If a docket variation was 100% claimed (its dockets went Invoiced) and a later claim credits it back below 100%, do its dockets stay Invoiced? The prototype leaves them Invoiced.
-3. Can Not claimable (VAR-23062) be set from Ready for Review and Costed too? VAR-23062 lists Draft, Submitted and Approved only, and the prototype follows that.
-4. Is Varicon's docket Reopen the same step as "edit returns to Submitted" (see above), and does Reopen apply to Costed dockets?
-5. What should the Variation Register's Estimated Cost column show for a docket-built variation? The prototype shows "-" (docket values are charge, not cost).
-6. While a claim is Submitted (before Approved), can dockets still be added or removed? The prototype allows it.

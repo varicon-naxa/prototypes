@@ -1,7 +1,7 @@
 /* Scenarios: every worked example in VAR-23036 and VAR-23037 with Alec's answers of 2026-11-16 and 2026-11-17, translated
    to Varicon's own statuses (checked in the app 2026-11-17): variations Pending / Approved / Partial Approved /
    Non-Claimable / Rejected, claims Draft / Submitted / Approved ("issued" in the tickets = Approved), dockets Draft /
-   Ready for Review / Submitted / Approved / Costed / Invoiced / Rejected. Plus five scenarios for the 2026-11-17 status
+   Ready for Review / Submitted / Approved / Costed / Invoiced / Rejected. Plus ten scenarios for the 2026-11-17 status
    decisions. Each runs on a fresh project through the same engine the UI uses. */
 
 function _chk(out, label, actual, expected) {
@@ -607,6 +607,75 @@ const SCENARIOS = [
       _chk(c, 'Hand-invoiced docket is still offered to a claim', _ids(st, 'claim', NOV1).includes('D401'), true);
       reopenSigned(st, 'D402');
       _chk(c, 'Reopened: back to Submitted', getDocket(st, 'D402').status, 'Submitted');
+      return st;
+    } },
+  { story: 'Statuses', title: 'Credited back below 100%: the variation dockets stay Invoiced',
+    text: 'Decided 2026-11-17: V012 (D201) claimed to 100% on approved claim 4 moves D201 to Invoiced. Claim 5 credits it back to 60% and is approved; D201 stays Invoiced.',
+    run(c) {
+      const st = baseState(); st.today = '2026-11-16';
+      addDocket(st, 'D201', '2026-11-02', 'Approved', [lab('tom', '07:00', '15:00')]);
+      createVariation(st, ['D201'], { id: 'V012' }); submitVariation(st, 'V012'); approveVariation(st, 'V012');
+      createClaim(st, NOV1, [], { id: 4 }); approveClaim(st, '4');
+      _chk(c, 'At 100%: D201 Invoiced', getDocket(st, 'D201').status, 'Invoiced');
+      createClaim(st, { from: '2026-11-16', to: '2026-11-30' }, [], { id: 5, vars: ['V012'] }); setVarPct(st, '5', 'V012', 60);
+      _chk(c, 'Claim 5 carries a credit of 40%', claimVarRows(st, getClaim(st, '5'))[0].value, -224);
+      approveClaim(st, '5');
+      _chk(c, 'After the credit is approved: D201 still Invoiced', getDocket(st, 'D201').status, 'Invoiced');
+      return st;
+    } },
+  { story: 'Statuses', title: 'Not claimable from Draft, Ready for Review, Submitted, Approved or Costed',
+    text: 'Decided 2026-11-17: Not claimable can be set from Draft, Ready for Review, Submitted, Approved or Costed, and not from Invoiced or Rejected.',
+    run(c) {
+      const st = baseState();
+      [['D701', 'Draft'], ['D702', 'Ready for Review'], ['D703', 'Submitted'], ['D704', 'Approved'], ['D705', 'Costed'], ['D706', 'Invoiced'], ['D707', 'Rejected']].forEach(([id, s]) => addDocket(st, id, '2026-11-04', s, [lab('jo', '07:00', '15:00')]));
+      ['D701', 'D702', 'D703', 'D704', 'D705'].forEach(id => _allowed(c, id + ' ' + getDocket(st, id).status, () => markNotClaimable(st, id, '')));
+      _chk(c, 'All five Not claimable', ['D701', 'D702', 'D703', 'D704', 'D705'].map(id => getDocket(st, id).status), Array(5).fill('Not claimable'));
+      reopenDocket(st, 'D705');
+      _chk(c, 'Reopen returns Costed', getDocket(st, 'D705').status, 'Costed');
+      _refused(c, 'Invoiced refused', () => markNotClaimable(st, 'D706', ''), 'Only a Draft, Ready for Review, Submitted, Approved or Costed docket can be marked Not claimable');
+      _refused(c, 'Rejected refused', () => markNotClaimable(st, 'D707', ''), 'Only a Draft, Ready for Review, Submitted, Approved or Costed docket can be marked Not claimable');
+      return st;
+    } },
+  { story: 'Statuses', title: 'Reopen on a Costed docket clears the signature and returns it to Submitted',
+    text: 'Decided 2026-11-17: Reopen on a signed Approved or Costed docket clears the signature and sends it to Submitted for re-approval. On a Pending variation its line is flagged in the history.',
+    run(c) {
+      const st = baseState();
+      addDocket(st, 'D801', '2026-11-04', 'Costed', [lab('tom', '07:00', '15:00')]);
+      const v = createVariation(st, ['D801'], { id: 'V030' });
+      reopenSigned(st, 'D801');
+      _chk(c, 'Costed docket back to Submitted', getDocket(st, 'D801').status, 'Submitted');
+      _chk(c, 'Variation history records the status change', v.history.some(h => /D801 status Costed to Submitted/.test(h.what)), true);
+      _refused(c, 'Invoiced cannot be reopened', () => { addDocket(st, 'D802', '2026-11-04', 'Invoiced', [lab('jo', '07:00', '15:00')]); reopenSigned(st, 'D802'); }, 'Only an Approved or Costed docket can be reopened here');
+      return st;
+    } },
+  { story: 'Statuses', title: 'Estimated Cost on a docket variation is the dockets\' actual cost',
+    text: 'Decided 2026-11-17: a docket variation\'s Estimated Cost is the dockets\' actual cost (timesheet and plant cost, as in Daily Cost Tracking), shown per docket and in total with the margin against the charge. D201: Leading Hand 8h at $55 cost = $440 against a $560 charge; D210: Excavator 20t wet 9h at $95 plant + $60 operator = $1,395 against $1,710.',
+    run(c) {
+      const st = baseState();
+      addDocket(st, 'D201', '2026-11-02', 'Approved', [lab('tom', '07:00', '15:00')]);
+      addDocket(st, 'D210', '2026-11-02', 'Approved', [wet('EX-07', 'sam', '07:00', '16:00')]);
+      const v = createVariation(st, ['D201', 'D210']);
+      _chk(c, 'D201 cost', docketCost(st, getDocket(st, 'D201')), 440);
+      _chk(c, 'D210 cost', docketCost(st, getDocket(st, 'D210')), 1395);
+      _chk(c, 'Estimated Cost (variation)', varEstimatedCost(st, v), 1835);
+      _chk(c, 'Charge (lines total)', varTotal(st, v), 2270);
+      _chk(c, 'Margin $ and % of charge', [varMargin(st, v).amount, varMargin(st, v).pct], [435, 19.16]);
+      return st;
+    } },
+  { story: 'Statuses', title: 'Dockets added to or removed from a Submitted claim are flagged and kept in history',
+    text: 'Decided 2026-11-17: until a Submitted claim is Approved, dockets can be added or removed; each change flags the claim "changed since submitted" and is kept in its history. Approval clears the flag.',
+    run(c) {
+      const st = baseState(); st.today = '2026-11-16';
+      addDocket(st, 'D101', '2026-11-03', 'Approved', [lab('tom', '06:00', '17:00', 0.5)]);
+      addDocket(st, 'D202', '2026-11-04', 'Approved', [lab('jo', '07:00', '15:00')]);
+      const cl = createClaim(st, NOV1, ['D101'], { id: 4 }); submitClaim(st, '4');
+      _chk(c, 'Submitted, no flag', [cl.status, !!cl.changedSinceSubmitted], ['Submitted', false]);
+      _allowed(c, 'Add D202 to the Submitted claim', () => claimAddDockets(st, '4', ['D202']));
+      _chk(c, 'Flagged, history kept', [!!cl.changedSinceSubmitted, cl.history.some(h => /Added D202.*changed since submitted/.test(h.what))], [true, true]);
+      _allowed(c, 'Remove D101 from the Submitted claim', () => claimRemoveDocket(st, '4', 'D101'));
+      _chk(c, 'Removal in history with old value', _hasHist(cl, 'D101', 840, 0), true);
+      approveClaim(st, '4');
+      _chk(c, 'Approved: flag cleared, D202 Invoiced, D101 released', [!!cl.changedSinceSubmitted, getDocket(st, 'D202').status, docketHome(st, 'D101')], [false, 'Invoiced', null]);
       return st;
     } },
 ];

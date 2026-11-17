@@ -59,6 +59,8 @@ function baseState() {
     project: {
       name: 'Riverside Rd Upgrade', code: 'RRU01', client: 'Northern Councils', state: 'NSW', contractSum: 1250000,
       margins: { Labour: 10, Plant: 8, Materials: 12, Subcontract: 10 },
+      // Internal COST rates (what the work costs us, as in Daily Cost Tracking), not the client charge.
+      cost: { labour: { 'Leading Hand': 55, 'Operator': 60, 'Labourer': 45, 'Plumber': 50 }, plant: { 'Excavator 20t': 95 }, attach: { 'Breaker 1t': 20 }, float: 300, material: { 'Road base': 30 } },
       retention: 5, gst: 10,
       boq: [
         { code: '1.1', desc: 'Bulk excavation', unit: 'm3', qty: 4200, rate: 18.5 },
@@ -330,6 +332,22 @@ function removeFromVariation(st, varId, id) {
   log(st, id + ' removed from ' + v.id + ' and released' + (v.submittedOn ? '; ' + v.id + ' changed since submitted' : ''));
   sync(st, id + ' removed');
 }
+// Decided 2026-11-17: a docket variation's Estimated Cost is its dockets' actual cost (timesheet and plant cost, as in
+// Daily Cost Tracking): worked hours x internal cost rate, materials and subcontract at cost. Never the charge.
+function docketCost(st, d) {
+  const C = st.project.cost; let t = 0;
+  d.lines.forEach(l => {
+    if (l.t === 'labour') t += lineHours(l) * (C.labour[PEOPLE[l.person].role] || 0);
+    else if (l.t === 'wet') { const h = lineHours(l); t += h * ((C.plant[PLANT[l.plant].res] || 0) + (C.labour[PEOPLE[l.person].role] || 0)); (l.att || []).forEach(a => t += h * (C.attach[a] || 0)); }
+    else if (l.t === 'dry') t += lineHours(l) * (C.plant[PLANT[l.plant].res] || 0);
+    else if (l.t === 'float') t += C.float;
+    else if (l.t === 'material') t += l.qty !== undefined ? l.qty * (C.material[l.item] || 0) : (l.cost || 0);
+    else if (l.t === 'sub') t += l.cost || 0;
+  });
+  return round2(t);
+}
+function varEstimatedCost(st, v) { if (v.manual) return v.manual.estimated; return round2(v.lines.reduce((a, ln) => a + docketCost(st, getDocket(st, ln.docket)), 0)); }
+function varMargin(st, v) { const charge = v.approvedAmount ?? varTotal(st, v); const cost = varEstimatedCost(st, v); return { amount: round2(charge - cost), pct: charge ? round2((charge - cost) / charge * 100) : 0 }; }
 function varLineValue(st, v, ln) { return VAR_LOCKED.includes(v.status) ? ln.frozen : v.status === 'Pending' ? priceDocket(st, getDocket(st, ln.docket)).total : ln.releasedAt; }
 function varLineChanged(st, v, ln) { return v.status === 'Pending' && Math.abs(varLineValue(st, v, ln) - ln.added) > 0.004; }
 function varTotal(st, v) { if (v.manual) return v.manual.submitted; return round2(v.lines.reduce((a, ln) => a + (varLineValue(st, v, ln) || 0), 0)); }
@@ -470,15 +488,17 @@ function claimAddDockets(st, claimId, ids) {
   const c = getClaim(st, claimId); refuseIfClaimClosed(c);
   validateAdd(st, ids);
   ids.forEach(id => c.lines.push(newLine(st, id)));
-  hist(c, st, 'Added ' + ids.map(id => id + ' at ' + money(c.lines.find(l => l.docket === id).added)).join(', '));
-  log(st, ids.join(', ') + ' added to claim ' + c.id);
+  const sub = c.status === 'Submitted'; if (sub) c.changedSinceSubmitted = true;
+  hist(c, st, 'Added ' + ids.map(id => id + ' at ' + money(c.lines.find(l => l.docket === id).added)).join(', ') + (sub ? '; changed since submitted' : ''));
+  log(st, ids.join(', ') + ' added to claim ' + c.id + (sub ? ' (submitted, flagged)' : ''));
 }
 function claimRemoveDocket(st, claimId, id) {
   const c = getClaim(st, claimId); refuseIfClaimClosed(c);
   const ln = c.lines.find(l => l.docket === id); if (!ln) throw new Error(id + ' is not on claim ' + c.id);
   if (ln.frozen !== null) throw new Error(id + ' was approved on this claim and stays locked');
   c.lines = c.lines.filter(l => l.docket !== id);
-  hist(c, st, 'Removed ' + id + ' (' + money(ln.last) + '), released', { docket: id, old: ln.last, new: 0 });
+  const sub = c.status === 'Submitted'; if (sub) c.changedSinceSubmitted = true;
+  hist(c, st, 'Removed ' + id + ' (' + money(ln.last) + '), released' + (sub ? '; changed since submitted' : ''), { docket: id, old: ln.last, new: 0 });
   log(st, id + ' removed from claim ' + c.id + ' and released');
 }
 function deleteDraftClaim(st, claimId) {
@@ -524,7 +544,7 @@ function approveClaim(st, claimId, opts = {}) {
   newly.forEach(ln => { ln.frozen = priceDocket(st, getDocket(st, ln.docket)).total; ln.frozenVersion = versionFor(st, getDocket(st, ln.docket).date).n; });
   if (claimTotals(st, c).negative) c.sentAs = 'credit note';
   if (!c.submittedOn) c.submittedOn = st.today;
-  c.status = 'Approved'; c.issued = st.today; st.issueSeq = (st.issueSeq || 0) + 1; c.issueSeq = st.issueSeq;
+  c.status = 'Approved'; c.issued = st.today; c.changedSinceSubmitted = false; st.issueSeq = (st.issueSeq || 0) + 1; c.issueSeq = st.issueSeq;
   if (n) c.decisions.push({ at: st.today, by: st.user, what: 'Approved with ' + plural(n, 'unapproved docket') });
   const inv = [];
   newly.forEach(ln => toInvoiced(st, ln.docket, 'on approved claim ' + c.id, inv));
@@ -595,7 +615,7 @@ function markInvoiced(st, id) {
 }
 function markNotClaimable(st, id, note) {
   const d = getDocket(st, id);
-  if (!['Draft', 'Submitted', 'Approved'].includes(d.status)) throw new Error('Only a Draft, Submitted or Approved docket can be marked Not claimable');
+  if (!['Draft', 'Ready for Review', 'Submitted', 'Approved', 'Costed'].includes(d.status)) throw new Error('Only a Draft, Ready for Review, Submitted, Approved or Costed docket can be marked Not claimable');
   refuseIfOnRecord(st, d);
   d.prevStatus = d.status; d.status = 'Not claimable'; d.nc = { note: note || '', by: st.user, at: st.today };
   d.history.push({ at: st.today, by: st.user, what: 'Marked Not claimable' + (note ? ': ' + note : '') });
