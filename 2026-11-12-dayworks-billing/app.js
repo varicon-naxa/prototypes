@@ -368,7 +368,7 @@ function viewClaims() {
   h += `<div class="card tbl-wrap" style="padding:6px"><table><thead><tr><th>Claim</th><th>Period</th><th>Status</th><th class="num">Docket lines</th><th class="num">Variation lines</th><th class="num">BOQ</th><th class="num">Gross ex GST</th><th>Issued</th></tr></thead><tbody>`;
   cs.forEach(c => {
     const t = claimTotals(S, c);
-    h += `<tr class="clickable ${c.id === SEL_CLAIM ? 'sel' : ''}" onclick="SEL_CLAIM='${c.id}';render()"><td><b>${c.id}</b></td><td class="small">${fmtDate(c.period.from)} to ${fmtDate(c.period.to)}</td><td>${pill(c.status)}${c.status === 'Draft' && c.lines.some(l => claimLineChanged(S, c, l)) ? ' <span class="pill chg">changed</span>' : ''}${c.status === 'Draft' && recordIssues(S, c).length ? ' <span class="pill bad">blocked</span>' : ''}</td>
+    h += `<tr class="clickable ${c.id === SEL_CLAIM ? 'sel' : ''}" onclick="SEL_CLAIM='${c.id}';render()"><td><b>${c.id}</b></td><td class="small">${fmtDate(c.period.from)} to ${fmtDate(c.period.to)}</td><td>${pill(c.status)}${c.status === 'Draft' && c.lines.some(l => claimLineChanged(S, c, l)) ? ' <span class="pill chg">changed</span>' : ''}${c.status === 'Draft' && recordIssues(S, c).length ? ' <span class="pill bad">blocked</span>' : ''}${claimAccountingLabel(S, c) ? ` <span class="pill chg" title="${esc(claimAccountingLabel(S, c))}">credit note</span>` : ''}</td>
       <td class="num">${money(t.dockets)}</td><td class="num">${money(t.vars)}</td><td class="num">${money(t.boq)}</td><td class="num"><b>${money(t.gross)}</b></td><td class="small">${c.issued ? fmtDate(c.issued) : '-'}</td></tr>`;
   });
   if (!cs.length) h += `<tr><td colspan="8" class="muted">No claims.</td></tr>`;
