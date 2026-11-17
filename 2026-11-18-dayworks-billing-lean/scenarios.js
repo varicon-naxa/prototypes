@@ -188,6 +188,26 @@ const SCENARIOS = [
       return st;
     } },
 
+  { only: 'lean', story: 'Snapshot', title: 'Refresh after submit starts a new revision',
+    text: 'Decided 2026-11-18: Refresh from dockets is allowed any time while Pending. Before submit it only reprices the lines. After submit (V016 at $5,000, revision 1) a refresh that moves D209 to $900 updates the Submitted Amount to $5,060 and starts revision 2, with the history line "Revision 2 sent at $5,060.00 (was $5,000.00) after refresh".',
+    run(c) {
+      const st = baseState(); st.today = '2026-11-16';
+      const v = _v016(st);
+      publishVersion(st, 'labour', 'Leading Hand', 75, '2026-11-01');
+      refreshFromDockets(st, 'V016');
+      _chk(c, 'Before submit: repriced, no revision', [varTotal(st, v), v.revision], [5060, 0]);
+      publishVersion(st, 'labour', 'Leading Hand', 70, '2026-11-01');
+      refreshFromDockets(st, 'V016');
+      submitVariation(st, 'V016');
+      _chk(c, 'Submitted at $5,000, revision 1', [varSubmittedAmount(st, v), v.revision], [5000, 1]);
+      publishVersion(st, 'labour', 'Leading Hand', 75, '2026-11-01');
+      _allowed(c, 'Refresh after submit allowed', () => refreshFromDockets(st, 'V016'));
+      _chk(c, 'Submitted Amount updated, revision 2', [varSubmittedAmount(st, v), v.revision, v.submittedBase], [5060, 2, 5060]);
+      _chk(c, 'History line', v.history.some(h => h.what === 'Revision 2 sent at $5,060.00 (was $5,000.00) after refresh'), true);
+      _chk(c, 'Still Pending', v.status, 'Pending');
+      return st;
+    } },
+
   /* ───── Middle only: live repricing ───── */
   { only: 'middle', story: 'Live', title: 'Lines follow the calculator until approval, flagged',
     text: 'On Pending V016 (not submitted), a Leading Hand rate change to $75 from 1 Nov moves D209 from $840 to $900; the line is flagged "changed since added" and the change is in the history.',
