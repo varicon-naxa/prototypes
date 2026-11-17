@@ -77,9 +77,9 @@ and engineer are read-only. "Today" is set to 18/12/2026 so every example docket
    - **Materials and subcontract** sit in their own table.
    - Anything unmapped prices $0 and blocks Approve. Dockets on an issued claim or approved variation are locked.
 3. **Worked examples**: every Given/When/Then from all four tickets, grouped by ticket in each ticket's order, and
-   recomputed live from the same engine, plus seven examples for the 2026-11-16 decisions and seven for the
-   2026-11-17 decisions (five under VAR-23035, two under VAR-23154).
-   On a fresh load: VAR-23035 40/40, VAR-23154 12/12, VAR-23155 7/7, VAR-23156 4/4 (63/63). The examples always
+   recomputed live from the same engine, plus seven examples for the 2026-11-16 decisions and nine for the
+   2026-11-17 decisions (five under VAR-23035, four under VAR-23154).
+   On a fresh load: VAR-23035 40/40, VAR-23154 14/14, VAR-23155 7/7, VAR-23156 4/4 (65/65). The examples always
    price with Breaks set to Deducted, whatever the calculator versions say; the Charged, dry-hire Charged and
    versioned-Breaks examples set it themselves.
    Editing rates or mappings can make them fail.
@@ -137,8 +137,8 @@ person-day. Cris's version example is dated Friday 6 Nov and Thursday 12 Nov. Se
 4. **Unmapped lines** rank last for the break. Unchanged.
 5. **Hourly attachment on a day-rated wet or dry line** charges the line's worked hours net of the line's own break
    (9h with a 0.5h break = 8.5h). Examples: RL-02 day-rated wet 7:00-16:00 with a 0.5h break, breaker 8h x $40 +
-   0.5h x $60 = $350 (DW-1211); EX-14 day-rated dry, breaker 8.5h x $40 = $340 (DW-1212). On wet hire the own break
-   comes off the line's highest tier first (see open question 2).
+   0.5h x $60 = $350 (DW-1211); EX-14 day-rated dry, breaker 8.5h x $40 = $340 (DW-1212). This is under Breaks
+   Deducted; see 8 for Charged and 9 for the tier.
 6. **The Breaks setting is versioned.** Switching it creates a calculator version with an effective-from date, like
    a rate change, with the same earliest effective-from rule; dockets dated before keep their break treatment.
    Example: Charged saved as a version effective 12/11/2026; DW-1101 (20 Oct) stays Deducted at $840, DW-1135
@@ -146,18 +146,17 @@ person-day. Cris's version example is dated Friday 6 Nov and Thursday 12 Nov. Se
 7. **Dry hire under Charged.** A dry-hire line's own break is charged too. Example: TP-03 7:00-13:00 with a
    0.5h break: Deducted 5.5h x $95 = $522.50, Charged 6h x $95 = $570 (DW-1145).
 
+8. **Hourly attachment on a day-rated line under Breaks Charged** includes the line's own break; under Deducted it
+   is net of the break (5). Example: RL-02 day-rated wet, weekday 7:00-16:00 (9h) with a 0.5h break, Breaker
+   $40 / $60 / $80: Deducted 8h Standard + 0.5h 1.5x = $350, Charged 8h Standard + 1h 1.5x = $380 (DW-1211). The
+   prototype applies the same rule to a day-rated dry line: EX-14 Deducted 8.5h x $40 = $340, Charged 9h x $40 = $360
+   (DW-1212).
+9. **Which tier the attachment's break comes off (day-rated wet line).** The highest tier first: 9h weekday with a
+   0.5h break = 8h Standard + 0.5h 1.5x. Asserted on the tier split in DW-1211.
+
 ## Open questions
 
-These came up while building the 2026-11-17 decisions. The prototype's current behaviour is noted so it can be
-checked, but none of it is decided.
-
-1. **Day-rated attachment hours under Charged.** Decision 5 says the attachment charges worked hours net of the
-   line's own break. Under Breaks Charged every other line charges its break. The prototype applies decision 5 as
-   written under both settings, so under Charged the attachment still excludes the line's own break. Should it
-   include the break under Charged?
-2. **Which tier the excluded break comes off (wet hire).** For an hourly attachment on a day-rated wet line, the
-   prototype takes the line's own break off the line's highest tier first (9h weekday with a 0.5h break: 8h
-   Standard + 0.5h 1.5x). Is that right, or should it come off the lowest tier?
+None open. Questions 1 and 2 from 2026-11-17 are answered by decisions 8 and 9 above.
 
 ## Not in the prototype
 
