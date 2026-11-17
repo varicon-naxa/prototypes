@@ -59,7 +59,7 @@ function baseState() {
     project: {
       name: 'Riverside Rd Upgrade', state: 'NSW', contractSum: 1250000,
       margins: { Labour: 10, Plant: 8, Materials: 12, Subcontract: 10 },
-      retention: 5, gst: 10, retentionReleased: 0,
+      retention: 5, gst: 10,
       boq: [
         { code: '1.1', desc: 'Bulk excavation', unit: 'm3', qty: 4200, rate: 18.5 },
         { code: '2.3', desc: 'Kerb and channel', unit: 'm', qty: 1600, rate: 62 },
@@ -482,33 +482,20 @@ function deleteDraftClaim(st, claimId) {
 }
 function claimLineValue(st, c, ln) { return c.status === 'Issued' ? ln.frozen : priceDocket(st, getDocket(st, ln.docket)).total; }
 function claimLineChanged(st, c, ln) { return c.status === 'Draft' && Math.abs(claimLineValue(st, c, ln) - ln.added) > 0.004; }
-// Retention held to date on the project: the retention on every issued claim, less any retention released.
-// Release is not modelled (project.retentionReleased, 0 in the demo; a scenario sets it). C-001 and C-002 predate
-// the demo and are not counted. For an issued claim, the held figure it was issued against is frozen on it.
-function retentionHeld(st, exceptClaim) {
-  const issued = st.claims.filter(c => c.status === 'Issued' && c !== exceptClaim);
-  return round2(issued.reduce((a, c) => a + claimTotals(st, c).retention, 0) - (st.project.retentionReleased || 0));
-}
 // Retention and GST: same order and rules as existing claims (retention off the gross ex GST, GST on the net), per project settings.
 // Decided 2026-11-17: a claim whose total is below zero can be issued as a negative claim; retention and GST are
 // calculated the same way and go negative.
-// Decided 2026-11-17 (later): negative retention is capped at the retention held to date (retention held can't go
-// below zero across the project); any excess credit comes off the net instead.
+// Decided 2026-11-17 (later): "For all retention rules we will be using what already exists in Varicon". Retention on
+// every claim, a negative one included, is the project's retention % of the gross; no cap, no retention-held tracking.
 function claimTotals(st, c) {
   const dockets = round2(c.lines.reduce((a, ln) => a + (claimLineValue(st, c, ln) || 0), 0));
   const vars = round2(claimVarRows(st, c).reduce((a, l) => a + l.value, 0));
   const boq = round2(st.project.boq.reduce((a, b) => a + (c.boq[b.code] || 0) * b.rate, 0));
   const gross = round2(dockets + vars + boq);
-  const retentionCalc = round2(gross * st.project.retention / 100);
-  let retention = retentionCalc, heldBefore = null, capped = false;
-  if (retentionCalc < -0.004) {
-    heldBefore = c.status === 'Issued' && c.heldBefore !== undefined ? c.heldBefore : retentionHeld(st, c);
-    const floor = -Math.max(0, heldBefore);
-    if (retentionCalc < floor - 0.004) { retention = round2(floor); capped = true; }
-  }
+  const retention = round2(gross * st.project.retention / 100);
   const net = round2(gross - retention);
   const gst = round2(net * st.project.gst / 100);
-  return { dockets, vars, boq, gross, retentionCalc, retention, capped, excess: round2(retention - retentionCalc), heldBefore, heldAfter: heldBefore === null ? null : round2(heldBefore + retention), net, gst, total: round2(net + gst), negative: gross < -0.004 };
+  return { dockets, vars, boq, gross, retention, net, gst, total: round2(net + gst), negative: gross < -0.004 };
 }
 // Decided 2026-11-17: a negative claim goes to Xero or MYOB as a credit note. Invoicing is not in this prototype; an
 // issued negative claim only carries the label.
@@ -521,7 +508,6 @@ function issueClaim(st, claimId, opts = {}) {
   if (n && !opts.confirm) return { needsConfirm: true, count: n, message: plural(n, 'docket') + ' not yet approved' };
   c.varLines = claimVarRows(st, c);
   c.lines.forEach(ln => { ln.frozen = priceDocket(st, getDocket(st, ln.docket)).total; ln.frozenVersion = versionFor(st, getDocket(st, ln.docket).date).n; });
-  c.heldBefore = retentionHeld(st, c);
   if (claimTotals(st, c).negative) c.sentAs = 'credit note';
   c.status = 'Issued'; c.issued = st.today; st.issueSeq = (st.issueSeq || 0) + 1; c.issueSeq = st.issueSeq;
   if (n) c.decisions.push({ at: st.today, by: st.user, what: 'Issued with ' + plural(n, 'unapproved docket') });

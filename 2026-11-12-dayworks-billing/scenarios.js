@@ -1,7 +1,7 @@
 /* Scenarios: every worked example in VAR-23036 (15) and VAR-23037 (15), as updated with Alec's answers of 2026-11-16,
    plus one for the 2026-11-16 decision that a lower percent to date is charged as a credit, and two for the
    2026-11-17 decisions (a fully claimed variation is still offered, unticked; a negative claim can be issued and goes
-   to accounting as a credit note; negative retention is capped at the retention held to date) (34 in all),
+   to accounting as a credit note; retention follows Varicon's existing retention rules, no cap) (33 in all),
    each run on a fresh project through the same engine the UI uses. */
 
 function _chk(out, label, actual, expected) {
@@ -480,40 +480,13 @@ const SCENARIOS = [
       _chk(c, 'GST 10%', t.gst, -288.42);
       _chk(c, 'Total incl GST', t.total, -3172.62);
       _chk(c, 'Flagged as a negative claim', t.negative, true);
-      _chk(c, 'Retention held to date $253 (5% of C-003), so the -$151.80 is not capped', [t.heldBefore, t.capped, t.heldAfter], [253, false, 101.2]);
+      _chk(c, 'Retention is the project 5% of the gross, as on any claim (no cap)', t.retention, round2(t.gross * st.project.retention / 100));
+      _chk(c, 'No cap or retention-held figures on the totals', ['retentionCalc', 'capped', 'excess', 'heldBefore', 'heldAfter'].filter(k => k in t), []);
       _allowed(c, 'Issued as a negative claim', () => issueClaim(st, 'C-004'));
       _chk(c, 'Issued, totals unchanged', [nov.status, claimTotals(st, nov).gross, claimTotals(st, nov).total], ['Issued', -3036, -3172.62]);
       _chk(c, 'Labelled as sent to accounting as a credit note', claimAccountingLabel(st, nov), 'Sent to accounting as a credit note');
       _chk(c, 'The positive claim C-003 carries no credit note label', claimAccountingLabel(st, getClaim(st, 'C-003')), null);
-      _chk(c, 'Retention held after C-004', retentionHeld(st), 101.2);
-      return st;
-    } },
-  { story: 'VAR-23037', title: 'Decided 2026-11-17: negative retention is capped at the retention held to date',
-    text: 'Given $30 of retention is held to date on the project (V-012 at 100% on issued C-003 held $253, and $223 has since been released), when the next claim credits V-012 from 100% to 80% with no other lines, then the gross is -$1,012, 5% retention would be -$50.60 but is capped at -$30 (retention held can\'t go below zero), the other $20.60 of credit comes off the net: net -$982, GST 10% -$98.20, total -$1,080.20; the claim issues, is sent to accounting as a credit note, and retention held is $0.',
-    run(c) {
-      const st = baseState(); st.today = '2026-11-16';
-      publishVersion(st, 'labour', 'Leading Hand', 75, '2026-11-01');
-      addDocket(st, 'D209', '2026-11-10', 'Approved', [lab('tom', '06:00', '17:00', 0.5)]);
-      addDocket(st, 'D210', '2026-11-02', 'Approved', [wet('EX-07', 'sam', '07:00', '16:00')]);
-      addDocket(st, 'D211', '2026-11-16', 'Approved', [wet('EX-07', 'sam', '07:00', '15:00', 0, ['Breaker 1t']), mat('Concrete', { cost: 600 })]);
-      createVariation(st, ['D209', 'D210', 'D211'], { id: 'V-012' }); submitVariation(st, 'V-012'); approveVariation(st, 'V-012');
-      createClaim(st, { from: '2026-10-16', to: '2026-10-31' }, [], { id: 'C-003' }); issueClaim(st, 'C-003');
-      st.project.retentionReleased = 223;
-      _chk(c, 'Retention held to date: $253 on C-003 less $223 released', retentionHeld(st), 30);
-      const nov = createClaim(st, NOV1, [], { id: 'C-004', vars: ['V-012'] });
-      setVarPct(st, 'C-004', 'V-012', 80);
-      const t = claimTotals(st, nov);
-      _chk(c, 'Gross ex GST', t.gross, -1012);
-      _chk(c, 'Retention at 5% before the cap', t.retentionCalc, -50.6);
-      _chk(c, 'Retention capped at the $30 held', [t.retention, t.capped], [-30, true]);
-      _chk(c, 'Extra credit taken off the net instead', t.excess, 20.6);
-      _chk(c, 'Net ex GST', t.net, -982);
-      _chk(c, 'GST 10%', t.gst, -98.2);
-      _chk(c, 'Total incl GST', t.total, -1080.2);
-      _allowed(c, 'Issued as a negative claim', () => issueClaim(st, 'C-004'));
-      _chk(c, 'Issued, totals unchanged', [claimTotals(st, nov).retention, claimTotals(st, nov).net, claimTotals(st, nov).total], [-30, -982, -1080.2]);
-      _chk(c, 'Retention held is now $0, not below', retentionHeld(st), 0);
-      _chk(c, 'Labelled as sent to accounting as a credit note', claimAccountingLabel(st, nov), 'Sent to accounting as a credit note');
+      _chk(c, 'Issued retention is still 5% of the gross', claimTotals(st, nov).retention, -151.8);
       return st;
     } },
   { story: 'VAR-23037', title: 'Two draft claims: V-012 on one is not offered on the other',

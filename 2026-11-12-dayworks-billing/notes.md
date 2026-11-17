@@ -1,6 +1,6 @@
 # Dayworks billing: dockets to variations and progress claims
 
-Clickable static prototype. Built 2026-11-12, updated 2026-11-16 to match the tickets as Alec rewrote them that day, then again with his answers to the eight open questions (also 2026-11-16, written into both tickets), then with two more product decisions of 2026-11-16 and four of 2026-11-17 (see Decided below):
+Clickable static prototype. Built 2026-11-12, updated 2026-11-16 to match the tickets as Alec rewrote them that day, then again with his answers to the eight open questions (also 2026-11-16, written into both tickets), then with two more product decisions of 2026-11-16 and five of 2026-11-17 (one superseding another) (see Decided below):
 
 - **VAR-23036** Convert daywork dockets into a variation (main spec)
 - **VAR-23037** Convert daywork dockets into a progress claim (main spec)
@@ -51,8 +51,7 @@ One project, Riverside Rd Upgrade (NSW), runs 20 Oct to 16 Nov 2026. It is price
   - **Approved variations** are picked in the same dialog, ticked by default. They are claimed **by percent complete to date, 100% by default**, and the percent can be edited on the claim, from 0% to 100%. Each claim charges the change since the last issued claim (60% on one claim, then 100% on the next, charges the remaining 40%). A lower percent than the last issued claim is allowed and the drop is charged as a **credit** (negative) line (60%, then 40%, charges minus 20% of the approved amount). A variation claimed to 100% on an issued claim is still offered on later claims, **unticked** by default and marked "fully claimed", so it can be credited back. A variation on one draft claim is not offered on another. Create a second draft claim to see "On draft claim C-004; not offered here".
   - **BOQ quantities** can be entered alongside the docket lines.
   - **Retention 5% and GST 10%** are labelled "as existing claims". Retention comes off the gross ex GST and GST is charged on the net.
-  - **Negative claim.** When credit lines take a claim below zero it can still be issued, as a negative claim. Retention and GST are calculated the same way and go negative; a banner on the claim says so. The totals show the retention row as "Retention returned" with a negative amount and the retention held before and after.
-  - **Retention held to date** is the retention on every issued claim for the project, less retention released (release is not modelled; 0 in the demo, set by one scenario). Negative retention is capped at the retention held, and any excess credit comes off the net instead.
+  - **Negative claim.** When credit lines take a claim below zero it can still be issued, as a negative claim. Retention and GST are calculated the same way and go negative; a banner on the claim says so. The totals show the retention row as "Retention returned" with a negative amount, noted "Retention follows Varicon's existing retention rules."
   - **Credit note.** An issued negative claim is labelled "Sent to accounting as a credit note" (banner on the claim and a "credit note" pill in the register). Invoicing itself is not in the prototype.
   - **Until issue,** docket lines follow their dockets and are flagged. Issuing warns with the unapproved count, then locks the claim and clears the flags. The history table keeps every change.
 - **Simulation controls** (dark bar on every tab):
@@ -62,7 +61,7 @@ One project, Riverside Rd Upgrade (NSW), runs 20 Oct to 16 Nov 2026. It is price
   - publish a new calculator version. Pick a rate line, a new Standard rate and an effective date. A date before the later of the last issued claim and the last approved variation is refused; in the demo that date is 04/11/2026, from V-012.
 
   Every live line or submitted amount that moves is written to the feed in amber. Each publish also checks every approved variation and issued claim and reports "all unchanged".
-- **Scenarios**: every worked example in VAR-23036 (15) and VAR-23037 (15), plus one for the 2026-11-16 credit decision and three for the 2026-11-17 decisions, runs on a fresh project through the same engine. **34/34 pass.** Each scenario can load its end state into the screens.
+- **Scenarios**: every worked example in VAR-23036 (15) and VAR-23037 (15), plus one for the 2026-11-16 credit decision and two for the 2026-11-17 decisions, runs on a fresh project through the same engine. **33/33 pass.** Each scenario can load its end state into the screens.
 
 Demo starting state:
 - **V-012** approved (D201).
@@ -92,28 +91,16 @@ Demo starting state:
    calculated the same way and go negative. Scenario: V-012 credited from 100% to 40% with no other lines: gross
    -$3,036, retention 5% -$151.80, net -$2,884.20, GST 10% -$288.42, total -$3,172.62, and the claim issues.
 
-3. **Negative retention is capped at the retention held to date.** Retention held can't go below zero across the
-   project; any excess credit comes off the net instead. Retention held is the sum of retention on the project's
-   issued claims (less any released; see open question 1). Scenario: V-012 at 100% on issued C-003 held $253, $223
-   since released, so $30 held; the next claim credits V-012 from 100% to 80%: gross -$1,012, 5% would be -$50.60,
-   capped at -$30, net -$982 (the extra $20.60 reduces the net), GST -$98.20, total -$1,080.20, and retention held
-   ends at $0. The earlier negative-claim scenario is unchanged ($253 held covers -$151.80). On a negative claim the
-   totals row reads "Retention returned 5%" with the amount shown negative and the retention held before and after.
+3. ~~**Negative retention is capped at the retention held to date.**~~ **Superseded 2026-11-17** by decision 5. The
+   cap, the retention-held tracking, the "retention released" figure and the $30-held cap scenario were removed.
 4. **Negative claim to the accounting system.** A negative claim goes to Xero or MYOB as a credit note. Invoicing is
-   not in the prototype; an issued negative claim shows "Sent to accounting as a credit note", asserted in both
-   negative-claim scenarios.
-
-## Open questions
-
-These came up while building the 2026-11-17 decisions. The prototype's current behaviour is noted, but none of it is
-decided.
-
-1. **What reduces retention held besides negative claims.** The cap only bites once retention held is below a
-   credit's retention. With only the claims in this demo that can't happen: any credit is against a variation that
-   was charged on an earlier claim, whose retention is still held. In practice it happens after retention is released
-   (for example at practical completion) or with retention on claims from before Varicon. The prototype subtracts a
-   "retention released" figure (0 in the demo; the cap scenario sets $223) and does not count C-001 and C-002. Should
-   retention held be retention on issued claims less releases recorded in Varicon, and where is a release recorded?
+   not in the prototype; an issued negative claim shows "Sent to accounting as a credit note", asserted in the
+   negative-claim scenario.
+5. **Retention rules (2026-11-17, supersedes 3).** "For all retention rules we will be using what already exists in
+   Varicon". Retention on every claim, a negative claim included, is the project's retention % of the gross, as on
+   any claim, with no cap. Scenario: the negative-claim scenario above (retention -$151.80) asserts no cap logic. On a
+   negative claim the totals row reads "Retention returned 5%", shown negative, noted "Retention follows Varicon's
+   existing retention rules."
 
 ## Not covered
 

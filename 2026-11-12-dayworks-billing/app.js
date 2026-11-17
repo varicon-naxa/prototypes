@@ -387,7 +387,7 @@ function claimDetail(c) {
   if (iss.length) h += `<div class="banner err"><i class="fas fa-ban"></i><div><b>Cannot be issued</b> until ${iss.map(x => x.docket).join(', ')} ${iss.length === 1 ? 'is' : 'are'} fixed or removed: ${iss.map(x => esc(x.docket + ' ' + x.issue)).join('; ')}.</div></div>`;
   if (draft) h += `<div class="banner warn"><i class="fas fa-arrows-rotate"></i><div>Draft: each docket line follows its docket's current calculator value until the claim is issued. Every change is written to the history below.</div></div>`;
   else h += `<div class="banner ok"><i class="fas fa-lock"></i><div>Issued and locked. Docket lines are frozen, their dockets are read-only, and the changed-since-added flags are cleared (the history keeps every change). Dockets that were not on this claim stay unclaimed and are offered on the next claim.</div></div>`;
-  if (t.negative) h += `<div class="banner warn"><i class="fas fa-circle-minus"></i><div><b>Negative claim.</b> The credit lines take this claim below zero: gross ${money(t.gross)} ex GST. It ${draft ? 'can be issued' : 'was issued'} as a negative claim; retention and GST are calculated the same way and are negative too (retention ${money(t.retention)}, GST ${money(t.gst)}).${t.capped ? ` Retention is capped at the ${money(t.heldBefore)} held to date; the other ${money(t.excess)} of credit comes off the net.` : ''}</div></div>`;
+  if (t.negative) h += `<div class="banner warn"><i class="fas fa-circle-minus"></i><div><b>Negative claim.</b> The credit lines take this claim below zero: gross ${money(t.gross)} ex GST. It ${draft ? 'can be issued' : 'was issued'} as a negative claim; retention and GST are calculated the same way and are negative too (retention ${money(t.retention)}, GST ${money(t.gst)}).</div></div>`;
   const acct = claimAccountingLabel(S, c);
   if (acct) h += `<div class="banner ok"><i class="fas fa-file-invoice"></i><div><b>${esc(acct)}.</b> A negative claim goes to Xero or MYOB as a credit note, not an invoice.</div></div>`;
   h += marginNote();
@@ -426,8 +426,8 @@ function claimDetail(c) {
     <tr><td>Docket lines</td><td class="num">${money(t.dockets)}</td></tr><tr><td>Approved variations</td><td class="num">${money(t.vars)}</td></tr><tr><td>BOQ</td><td class="num">${money(t.boq)}</td></tr>
     <tr><td>Cost-plus margin applied to docket lines</td><td class="num">${money(0)}</td></tr>
     <tr class="total"><td>Gross this claim (ex GST)</td><td class="num">${money(t.gross)}</td></tr>
-    ${t.retention < -0.004 || t.capped
-      ? `<tr><td>Retention returned ${S.project.retention}% <span class="pill chg">negative retention</span> <span class="muted">this claim gives back ${money(-t.retention)} of retention held; retention held ${money(t.heldBefore)} to ${money(t.heldAfter)}${t.capped ? `. ${S.project.retention}% would be ${money(t.retentionCalc)}; capped at the retention held to date, so the other ${money(t.excess)} of credit comes off the net` : ''}</span></td><td class="num">${money(t.retention)}</td></tr>`
+    ${t.retention < -0.004
+      ? `<tr><td>Retention returned ${S.project.retention}% <span class="pill chg">negative retention</span> <span class="muted">Retention follows Varicon's existing retention rules.</span></td><td class="num">${money(t.retention)}</td></tr>`
       : `<tr><td>Less retention ${S.project.retention}% <span class="muted">as existing claims</span></td><td class="num">${money(-t.retention)}</td></tr>`}
     <tr><td>Net (ex GST)</td><td class="num">${money(t.net)}</td></tr><tr><td>GST ${S.project.gst}% <span class="muted">as existing claims</span></td><td class="num">${money(t.gst)}</td></tr>
     <tr class="total"><td>Total incl GST</td><td class="num">${money(t.total)}</td></tr></tbody></table>`;
