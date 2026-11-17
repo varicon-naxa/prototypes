@@ -383,7 +383,7 @@ function sendRevision(st, varId) {
 }
 function defaultApprovedAmount(st, v) { return varTotal(st, v); }
 // Lean: lines are a snapshot taken when each docket was added. Refresh reprices every line to the current calculator
-// value and writes old -> new to the history. Otherwise values never move on their own.
+// value and writes old -> new to the history. Allowed any time while Pending. Otherwise values never move on their own.
 function refreshFromDockets(st, varId) {
   if (RELEASE !== 'lean') throw new Error('Refresh is only in the lean release');
   const v = getVar(st, varId);
@@ -391,6 +391,9 @@ function refreshFromDockets(st, varId) {
   let n = 0;
   v.lines.forEach(ln => { const now = priceDocket(st, getDocket(st, ln.docket)).total; if (Math.abs(now - ln.snap) > 0.004) { hist(v, st, ln.docket + ' refreshed ' + money(ln.snap) + ' to ' + money(now), { docket: ln.docket, old: ln.snap, new: now }); ln.snap = now; n++; } });
   if (!n) hist(v, st, 'Refreshed from dockets: no line changed');
+  // Decided 2026-11-18: after the variation is submitted, a refresh that changes it updates the Submitted Amount and
+  // starts a new revision.
+  if (n && v.submittedOn) { const was = v.submittedBase; v.revision += 1; v.submittedBase = varTotal(st, v); v.lastTotal = v.submittedBase; hist(v, st, 'Revision ' + v.revision + ' sent at ' + money(v.submittedBase) + ' (was ' + money(was) + ') after refresh', { old: was, new: v.submittedBase }); }
   log(st, v.id + ' refreshed from dockets: ' + plural(n, 'line') + ' repriced');
   return n;
 }

@@ -43,10 +43,10 @@ Shared with lean:
 
 The scope above is from Alec via the coordinator brief of 2026-11-18. Everything not listed there keeps the full prototype's decided rules (VAR-23036, VAR-23037 and Alec's answers of 2026-11-16 and 2026-11-17; see the full prototype's `notes.md`).
 
-## How the prototype reads one point (literal reading, not a new decision)
+## Decided (Alec, 2026-11-18)
 
-- Mark as Costed and Mark as Invoiced are status marks, not edits, so they stay available on a docket that is locked on a variation.
+- Mark as Costed and Mark as Invoiced are allowed on a docket that is locked on a variation; they change its status only (no edits, no Reopen).
 
 ## Open questions for Alec
 
-None new.
+None.
