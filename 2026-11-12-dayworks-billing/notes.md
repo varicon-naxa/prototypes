@@ -53,6 +53,8 @@ Everything earlier still holds: one line per docket at full calculator value, no
 - **Estimated Cost** on a docket-built variation is the dockets' actual cost (timesheet and plant cost, as in Daily Cost Tracking): worked hours at internal cost rates, materials and subcontract at cost. It shows per docket sub-line and in total on the Variation Register, and on the variation page with the margin (charge minus cost, and as a % of the charge). The seed holds simple internal **cost** rates, labelled as cost and never charged: labour per hour by role (Leading Hand $55, Operator $60, Labourer $45, Plumber $50), Excavator 20t $95/h plus the operator, Breaker 1t $20/h, float $300 per move, road base $30/t, other materials and subcontract at cost. They are listed in the Prototype drawer under Calculator rates.
 - **Submitted claims.** Dockets can be added to or removed from a Submitted claim until it is Approved. Each change flags the claim "changed since submitted" (list and claim page) and is kept in the claim's history; approval clears the flag.
 
+- **Hand-invoiced dockets.** A docket marked Invoiced by hand is offered to variations and claims: Alec chose "anything but Draft and Rejected" for both pickers (2026-11-17), and VAR-23037 carries the example.
+
 ## Open questions for Alec
 
-1. A docket marked Invoiced by hand (today's "Mark as invoiced") is offered to variations and claims, because the rule is "anything but Draft and Rejected". Should a hand-invoiced docket be offered, given it may already have been billed outside Varicon?
+None.
