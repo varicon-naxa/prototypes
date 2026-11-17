@@ -21,8 +21,8 @@ const PLANT = {
   'EX-12': { name: 'Komatsu PC210', res: 'Excavator 20t', type: 'Excavator' },
   'EX-15': { name: 'Hitachi ZX200', res: 'Excavator 20t', type: 'Excavator' },
 };
-const ACTIVE_VAR = ['Draft', 'Submitted', 'Approved'];
-const ACTIVE_CLAIM = ['Draft', 'Issued'];
+const ACTIVE_VAR = ['Pending', 'Approved', 'Partial Approved'];
+const ACTIVE_CLAIM = ['Draft', 'Submitted', 'Approved'];
 
 function rates(std, x15, x2, ph) { return { std, x15: x15 ?? std * 1.5, x2: x2 ?? std * 2, ph: ph ?? std * 2.5 }; }
 function baseCalc() {
@@ -57,7 +57,7 @@ function baseState() {
   return {
     today: '2026-11-16', user: 'Dana Whitfield (PM)',
     project: {
-      name: 'Riverside Rd Upgrade', state: 'NSW', contractSum: 1250000,
+      name: 'Riverside Rd Upgrade', code: 'RRU01', client: 'Northern Councils', state: 'NSW', contractSum: 1250000,
       margins: { Labour: 10, Plant: 8, Materials: 12, Subcontract: 10 },
       retention: 5, gst: 10,
       boq: [
@@ -79,9 +79,11 @@ function flt(plant, dir = 'mob') { return { t: 'float', plant, dir }; }
 function mat(item, o) { return Object.assign({ t: 'material', item }, o); }
 function sub(item, cost) { return { t: 'sub', item, cost }; }
 function addDocket(st, id, date, status, lines, extra = {}) {
-  const d = Object.assign({ id, date, status, prevStatus: null, sentBack: null, nc: null, createdBy: 'Sam Patel', history: [{ at: date, by: 'Sam Patel', what: 'Created' }], lines }, extra);
-  if (status !== 'Draft') d.history.push({ at: date, by: 'Sam Patel', what: 'Submitted' });
-  if (status === 'Approved') d.history.push({ at: date, by: 'Dana Whitfield (PM)', what: 'Approved' });
+  const d = Object.assign({ id, date, status, prevStatus: null, sentBack: null, nc: null, createdBy: 'Sam Patel', desc: '', ref: '', approvedOn: null, history: [{ at: date, by: 'Sam Patel', what: 'Created' }], lines }, extra);
+  if (status !== 'Draft') d.history.push({ at: date, by: 'Sam Patel', what: status === 'Ready for Review' ? 'Ready for review' : 'Sent to the client for signature' });
+  if (['Approved', 'Costed', 'Invoiced'].includes(status)) { d.approvedOn = date; d.history.push({ at: date, by: 'Client (signed)', what: 'Approved' }); }
+  if (status === 'Costed') d.history.push({ at: date, by: 'Dana Whitfield (PM)', what: 'Marked as costed' });
+  if (status === 'Invoiced') d.history.push({ at: date, by: 'Dana Whitfield (PM)', what: 'Marked as invoiced (manually)' });
   if (status === 'Rejected') d.history.push({ at: date, by: 'Client (email)', what: 'Rejected by client' });
   st.dockets.push(d);
   return d;
@@ -218,32 +220,42 @@ function docketSummary(d) {
   }).join(' · ') + (d.lines.some(l => (l.allow || []).length) ? ' · ' + d.lines.flatMap(l => (l.allow || []).map(a => allowName(a.type))).join(', ') : '');
 }
 
+
+/* ───────── Statuses (Varicon's own, checked in the app 2026-11-17) ─────────
+   Docket: Draft, Ready for Review, Submitted, Approved, Costed, Invoiced, Rejected, plus Not claimable (VAR-23062).
+   Variation: Pending, Approved, Partial Approved, Non-Claimable, Rejected. Unsubmitted and submitted are both Pending.
+   Claim: Draft, Submitted, Approved. "Issued" in the tickets means Approved. */
+const SIGNED = ['Approved', 'Costed', 'Invoiced'];               // signed by the client
+const NOT_YET = ['Ready for Review', 'Submitted'];                // offered, highlighted "not yet approved"
+const VAR_LOCKED = ['Approved', 'Partial Approved'];
+const CLAIM_LIVE = ['Draft', 'Submitted'];
+
 /* ───────── Where a docket lives ───────── */
 function docketHome(st, id) {
   for (const v of st.variations) if (ACTIVE_VAR.includes(v.status)) { const ln = v.lines.find(l => l.docket === id); if (ln) return { kind: 'variation', rec: v, line: ln, label: 'variation ' + v.id }; }
   for (const c of st.claims) if (ACTIVE_CLAIM.includes(c.status)) { const ln = c.lines.find(l => l.docket === id); if (ln) return { kind: 'claim', rec: c, line: ln, label: 'claim ' + c.id }; }
   return null;
 }
-function isLocked(st, id) { const h = docketHome(st, id); return !!h && ((h.kind === 'variation' && h.rec.status === 'Approved') || (h.kind === 'claim' && h.rec.status === 'Issued')); }
-// The value a docket carries now: the frozen value if it is on an approved variation or issued claim, else the live calculator price.
+function claimLineLocked(c, ln) { return c.status === 'Approved' || ln.frozen !== null; }
+function isLocked(st, id) { const h = docketHome(st, id); return !!h && ((h.kind === 'variation' && VAR_LOCKED.includes(h.rec.status)) || (h.kind === 'claim' && claimLineLocked(h.rec, h.line))); }
 function docketValue(st, id) { const h = docketHome(st, id); if (h && isLocked(st, id)) return h.line.frozen; return priceDocket(st, getDocket(st, id)).total; }
-function refuseIfLocked(st, d) { if (isLocked(st, d.id)) { const h = docketHome(st, d.id); throw new Error(d.id + ' is read-only: it is on ' + (h.kind === 'variation' ? 'approved variation ' : 'issued claim ') + h.rec.id); } }
-// Why a docket cannot be approved or billed right now (rejected by the client, unmapped item, overlap), or null.
+function refuseIfLocked(st, d) { if (isLocked(st, d.id)) { const h = docketHome(st, d.id); throw new Error(d.id + ' is read-only: it is on ' + (h.kind === 'variation' ? h.rec.status.toLowerCase() + ' variation ' : 'approved claim ') + h.rec.id); } }
 function docketIssue(st, d) { if (d.status === 'Rejected') return 'Rejected by client'; const p = priceDocket(st, d); return p.problems.length ? p.problems.join(' · ') : null; }
-function recordIssues(st, rec) { return rec.lines.map(ln => ({ docket: ln.docket, issue: docketIssue(st, getDocket(st, ln.docket)) })).filter(x => x.issue); }
+function recordIssues(st, rec) { return rec.lines.filter(ln => !(rec.kind === 'claim' && ln.frozen !== null)).map(ln => ({ docket: ln.docket, issue: docketIssue(st, getDocket(st, ln.docket)) })).filter(x => x.issue); }
 function refuseIfIssues(st, rec, verb) {
   const iss = recordIssues(st, rec); if (!iss.length) return;
-  throw new Error(rec.id + ' cannot be ' + verb + ' until ' + iss.map(x => x.docket).join(', ') + (iss.length === 1 ? ' is' : ' are') + ' fixed or removed (' + iss.map(x => x.docket + ': ' + x.issue).join('; ') + ')');
+  throw new Error(recLabel(rec) + ' cannot be ' + verb + ' until ' + iss.map(x => x.docket).join(', ') + (iss.length === 1 ? ' is' : ' are') + ' fixed or removed (' + iss.map(x => x.docket + ': ' + x.issue).join('; ') + ')');
 }
+function recLabel(rec) { return rec.kind === 'claim' ? 'Claim ' + rec.id : rec.id; }
 
-/* ───────── Record history: every line change with old and new value ───────── */
+/* ───────── Record history ───────── */
 function newLine(st, id) { const d = getDocket(st, id); const val = priceDocket(st, d).total; return { docket: id, added: val, last: val, lastStatus: d.status, lastIssue: docketIssue(st, d), frozen: null }; }
 function hist(rec, st, what, extra) { rec.history.push(Object.assign({ at: st.today, by: st.user, what }, extra || {})); }
-// Called after anything that can move a docket: compares every live line with what the record last saw and writes the difference to its history.
 function sync(st, cause) {
-  const recs = [...st.variations.filter(v => v.status === 'Draft' || v.status === 'Submitted'), ...st.claims.filter(c => c.status === 'Draft')];
+  const recs = [...st.variations.filter(v => v.status === 'Pending'), ...st.claims.filter(c => CLAIM_LIVE.includes(c.status))];
   recs.forEach(r => {
     r.lines.forEach(ln => {
+      if (ln.frozen !== null) return;
       const d = getDocket(st, ln.docket);
       const val = priceDocket(st, d).total;
       if (Math.abs(val - ln.last) > 0.004) { hist(r, st, ln.docket + ' line ' + money(ln.last) + ' to ' + money(val) + (cause ? ' (' + cause + ')' : ''), { docket: ln.docket, old: ln.last, new: val }); ln.last = val; }
@@ -251,15 +263,14 @@ function sync(st, cause) {
       const iss = docketIssue(st, d);
       if (iss !== ln.lastIssue) { hist(r, st, iss ? ln.docket + ' flagged: ' + iss : ln.docket + ' fixed, flag cleared', { docket: ln.docket }); ln.lastIssue = iss; }
     });
-    if (r.id.startsWith('V-') && r.status === 'Submitted') {
+    if (r.kind === 'variation' && r.submittedOn) {
       const t = varTotal(st, r);
       if (Math.abs(t - r.lastTotal) > 0.004) { hist(r, st, 'Submitted amount ' + money(r.lastTotal) + ' to ' + money(t) + ': changed since submitted, new revision prompted', { old: r.lastTotal, new: t }); r.lastTotal = t; }
     }
   });
 }
 
-/* ───────── Pickers ───────── */
-// mode: 'variation' | 'claim'. period only for claims. Not claimable and already-used dockets are not listed.
+/* ───────── Pickers (decided 2026-11-17: any docket except Draft and Rejected) ───────── */
 function pickerRows(st, mode, period) {
   return st.dockets
     .filter(d => d.status !== 'Not claimable' && !docketHome(st, d.id))
@@ -268,13 +279,13 @@ function pickerRows(st, mode, period) {
       const p = priceDocket(st, d);
       let block = null;
       if (d.status === 'Rejected') block = 'Rejected';
+      else if (d.status === 'Draft') block = d.sentBack ? 'Draft (sent back)' : 'Draft';
       else if (p.problems.length) block = p.problems.join(' · ');
-      const highlight = block ? 'block' : (d.status === 'Draft' || d.status === 'Submitted') ? 'warn' : null;
+      const highlight = block ? 'block' : NOT_YET.includes(d.status) ? 'warn' : null;
       const inPeriod = !!period && d.date >= period.from && d.date <= period.to;
       return { d, value: p.total, block, highlight, tickable: !block, inPeriod, preTick: mode === 'claim' && inPeriod && !block, older: !!period && d.date < period.from, later: !!period && d.date > period.to };
     });
 }
-// Save-time enforcement: the same rules as the picker, checked again when lines are saved.
 function validateAdd(st, ids) {
   if (!ids.length) throw new Error('Tick at least one docket');
   ids.forEach(id => {
@@ -282,16 +293,18 @@ function validateAdd(st, ids) {
     if (d.status === 'Not claimable') throw new Error(id + ' is Not claimable');
     const h = docketHome(st, id); if (h) throw new Error(id + ' is already on ' + h.label);
     if (d.status === 'Rejected') throw new Error(id + ' is Rejected and cannot be added');
+    if (d.status === 'Draft') throw new Error(id + ' is Draft and cannot be added');
     const p = priceDocket(st, d); if (p.problems.length) throw new Error(id + ' cannot be added: ' + p.problems.join(', '));
   });
 }
 
-/* ───────── Variations (VAR-23036) ───────── */
+/* ───────── Variations (VAR-23036) on the Variation Register ───────── */
 const SHORTFALL = ['Absorbed', 'Under dispute', 'To resubmit'];
-function nextId(list, prefix) { const n = list.reduce((m, x) => Math.max(m, parseInt(x.id.slice(2), 10)), 0) + 1; return prefix + String(n).padStart(3, '0'); }
+function nextVarId(st) { const n = st.variations.reduce((m, x) => Math.max(m, parseInt(x.id.replace(/\D/g, ''), 10) || 0), 0) + 1; return 'V' + String(n).padStart(3, '0'); }
+function getVarOrNull(st, id) { return st.variations.find(x => x.id === id) || null; }
 function createVariation(st, ids, opts = {}) {
   validateAdd(st, ids);
-  const v = { id: opts.id || nextId(st.variations, 'V-'), title: opts.title || 'Dayworks ' + fmtDate(st.today), status: 'Draft', created: st.today, lines: [], submittedBase: null, submittedFinal: null, approvedAmount: null, adjustment: null, revision: 0, lastTotal: null, decisions: [], history: [] };
+  const v = { kind: 'variation', id: opts.id || nextVarId(st), title: opts.title || 'Dayworks ' + fmtDate(st.today), status: 'Pending', created: st.today, lines: [], submittedOn: null, submittedBase: null, submittedFinal: null, approvedAmount: null, adjustment: null, revision: 0, lastTotal: null, decisions: [], history: [], claimRef: opts.claimRef || '', costCentre: opts.costCentre || 'Dayworks' };
   st.variations.push(v);
   ids.forEach(id => v.lines.push(newLine(st, id)));
   hist(v, st, 'Created from ' + ids.map(id => id + ' at ' + money(v.lines.find(l => l.docket === id).added)).join(', '));
@@ -300,44 +313,41 @@ function createVariation(st, ids, opts = {}) {
 }
 function addToVariation(st, varId, ids) {
   const v = getVar(st, varId);
-  if (v.status !== 'Draft') throw new Error(v.id + ' is ' + v.status.toLowerCase() + ' and cannot take more dockets');
+  if (v.status !== 'Pending' || v.submittedOn) throw new Error(v.id + ' has been ' + (v.submittedOn && v.status === 'Pending' ? 'submitted' : v.status.toLowerCase()) + ' and cannot take more dockets');
   validateAdd(st, ids);
   ids.forEach(id => v.lines.push(newLine(st, id)));
   hist(v, st, 'Added ' + ids.map(id => id + ' at ' + money(v.lines.find(l => l.docket === id).added)).join(', '));
   log(st, ids.join(', ') + ' added to ' + v.id);
   return v;
 }
-// Any docket can come off an unsubmitted or a submitted variation. Off a submitted one it marks the variation
-// changed since submitted and prompts a new revision, whether or not the amount moved.
 function removeFromVariation(st, varId, id) {
   const v = getVar(st, varId);
   const ln = v.lines.find(l => l.docket === id); if (!ln) throw new Error(id + ' is not on ' + v.id);
-  if (!['Draft', 'Submitted'].includes(v.status)) throw new Error('Dockets cannot be removed from a ' + v.status.toLowerCase() + ' variation');
+  if (v.status !== 'Pending') throw new Error('Dockets cannot be removed from a ' + v.status.toLowerCase() + ' variation');
   v.lines = v.lines.filter(l => l.docket !== id);
-  hist(v, st, 'Removed ' + id + ' (' + money(ln.last) + '), released' + (v.status === 'Submitted' ? '; changed since submitted, new revision prompted' : ''), { docket: id, old: ln.last, new: 0 });
-  if (v.status === 'Submitted') v.docketsChanged = true;
-  log(st, id + ' removed from ' + v.id + ' and released' + (v.status === 'Submitted' ? '; ' + v.id + ' changed since submitted' : ''));
+  hist(v, st, 'Removed ' + id + ' (' + money(ln.last) + '), released' + (v.submittedOn ? '; changed since submitted, new revision prompted' : ''), { docket: id, old: ln.last, new: 0 });
+  if (v.submittedOn) v.docketsChanged = true;
+  log(st, id + ' removed from ' + v.id + ' and released' + (v.submittedOn ? '; ' + v.id + ' changed since submitted' : ''));
   sync(st, id + ' removed');
 }
-function varLineValue(st, v, ln) { return v.status === 'Approved' ? ln.frozen : (ACTIVE_VAR.includes(v.status) ? priceDocket(st, getDocket(st, ln.docket)).total : ln.releasedAt); }
-function varLineChanged(st, v, ln) { return v.status !== 'Approved' && ACTIVE_VAR.includes(v.status) && Math.abs(varLineValue(st, v, ln) - ln.added) > 0.004; }
-function varTotal(st, v) { return round2(v.lines.reduce((a, ln) => a + (varLineValue(st, v, ln) || 0), 0)); }
-function varSubmittedAmount(st, v) { if (v.status === 'Draft') return null; if (v.status === 'Submitted') return varTotal(st, v); return v.submittedFinal; }
-// Changed since submitted: the amount or the dockets moved since the client last saw it (submission or the last revision sent).
-function varSubmittedChanged(st, v) { return v.status === 'Submitted' && (!!v.docketsChanged || Math.abs(varTotal(st, v) - v.submittedBase) > 0.004); }
+function varLineValue(st, v, ln) { return VAR_LOCKED.includes(v.status) ? ln.frozen : v.status === 'Pending' ? priceDocket(st, getDocket(st, ln.docket)).total : ln.releasedAt; }
+function varLineChanged(st, v, ln) { return v.status === 'Pending' && Math.abs(varLineValue(st, v, ln) - ln.added) > 0.004; }
+function varTotal(st, v) { if (v.manual) return v.manual.submitted; return round2(v.lines.reduce((a, ln) => a + (varLineValue(st, v, ln) || 0), 0)); }
+function varSubmittedAmount(st, v) { if (v.manual) return v.manual.submitted; if (!v.submittedOn) return null; if (v.status === 'Pending') return varTotal(st, v); return v.submittedFinal; }
+function varSubmittedChanged(st, v) { return !v.manual && v.status === 'Pending' && !!v.submittedOn && (!!v.docketsChanged || Math.abs(varTotal(st, v) - v.submittedBase) > 0.004); }
 function varNeedsRevision(st, v) { return varSubmittedChanged(st, v); }
-function unapprovedCount(st, ids) { return ids.filter(id => getDocket(st, id).status !== 'Approved').length; }
+function unapprovedCount(st, ids) { return ids.filter(id => !SIGNED.includes(getDocket(st, id).status)).length; }
 function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
 function submitVariation(st, varId, opts = {}) {
   const v = getVar(st, varId);
-  if (v.status !== 'Draft') throw new Error(v.id + ' is already ' + v.status.toLowerCase());
+  if (v.status !== 'Pending' || v.submittedOn) throw new Error(v.id + ' is already ' + (v.submittedOn ? 'submitted' : v.status.toLowerCase()));
   if (!v.lines.length) throw new Error('Add at least one docket before submitting');
   refuseIfIssues(st, v, 'submitted');
   const n = unapprovedCount(st, v.lines.map(l => l.docket));
   if (n && !opts.confirm) return { needsConfirm: true, count: n, message: plural(n, 'docket') + ' not yet approved' };
-  v.status = 'Submitted'; v.submittedOn = st.today; v.submittedBase = varTotal(st, v); v.lastTotal = v.submittedBase; v.revision = 1;
+  v.submittedOn = st.today; v.submittedBase = varTotal(st, v); v.lastTotal = v.submittedBase; v.revision = 1;
   if (n) v.decisions.push({ at: st.today, by: st.user, what: 'Submitted with ' + plural(n, 'unapproved docket') });
-  hist(v, st, 'Submitted at ' + money(v.submittedBase) + ' (revision 1)');
+  hist(v, st, 'Submitted to the client at ' + money(v.submittedBase) + ' (revision 1); status stays Pending');
   log(st, v.id + ' submitted at ' + money(v.submittedBase) + (n ? ' (' + plural(n, 'unapproved docket') + ', confirmed)' : ''));
   return { ok: true };
 }
@@ -349,29 +359,27 @@ function sendRevision(st, varId) {
   hist(v, st, 'Revision ' + v.revision + ' sent to the client at ' + money(v.submittedBase) + ' (was ' + money(was) + ')', { old: was, new: v.submittedBase });
   log(st, v.id + ' revision ' + v.revision + ' sent at ' + money(v.submittedBase));
 }
-// Decided 2026-11-16: the approved amount defaults to the current lines total, even while "Changed since submitted"
-// shows (e.g. $5,060, not the $5,000 the client last saw).
 function defaultApprovedAmount(st, v) { return varTotal(st, v); }
+// Decided 2026-11-17: approved for less than submitted = Partial Approved (the shortfall marker still records why);
+// approved for the same or more = Approved.
 function approveVariation(st, varId, amount, shortfall) {
   const v = getVar(st, varId);
-  if (v.status !== 'Submitted') throw new Error('Only a submitted variation can be approved');
+  if (v.status !== 'Pending' || !v.submittedOn) throw new Error('Only a submitted Pending variation can be approved');
   refuseIfIssues(st, v, 'approved');
   const total = varTotal(st, v);
   const appr = amount === undefined || amount === null ? defaultApprovedAmount(st, v) : round2(amount);
   const diff = round2(appr - total);
-  // Less than submitted: the shortfall rule applies. More than submitted: one adjustment, no status needed.
   if (diff < -0.004 && !SHORTFALL.includes(shortfall)) throw new Error('Mark the ' + money(diff) + ' adjustment absorbed, under dispute or to resubmit');
-  // Approving while "Changed since submitted" shows is allowed; the warning is recorded.
   const warning = varSubmittedChanged(st, v) ? 'Approved while changed since submitted: the client saw ' + money(v.submittedBase) + ' (revision ' + v.revision + '), the lines now total ' + money(total) : null;
   v.lines.forEach(ln => { ln.frozen = priceDocket(st, getDocket(st, ln.docket)).total; ln.frozenVersion = versionFor(st, getDocket(st, ln.docket).date).n; });
   v.submittedFinal = total;
   v.approvedAmount = appr;
   v.adjustment = Math.abs(diff) > 0.004 ? { amount: diff, status: diff < 0 ? shortfall : null } : null;
   if (warning) { v.decisions.push({ at: st.today, by: st.user, what: warning }); hist(v, st, warning, { old: v.submittedBase, new: total }); }
-  v.status = 'Approved'; v.approvedOn = st.today; v.docketsChanged = false;
-  hist(v, st, 'Approved at ' + money(appr) + '; lines frozen, dockets locked, changed-since-added flags cleared');
+  v.status = diff < -0.004 ? 'Partial Approved' : 'Approved'; v.approvedOn = st.today; v.docketsChanged = false;
+  hist(v, st, v.status + ' at ' + money(appr) + '; lines frozen, dockets locked, changed-since-added flags cleared');
   if (v.adjustment) hist(v, st, 'Adjustment ' + money(diff) + ' (submitted ' + money(total) + ', approved ' + money(appr) + ')' + (v.adjustment.status ? ': ' + v.adjustment.status : ': higher approval, no status needed'), { old: total, new: appr });
-  log(st, v.id + ' approved at ' + money(appr) + (v.adjustment ? ' (adjustment ' + money(diff) + (v.adjustment.status ? ', ' + v.adjustment.status.toLowerCase() : '') + ')' : '') + (warning ? ' over the changed-since-submitted warning' : '') + '; ' + v.lines.map(l => l.docket).join(', ') + ' locked');
+  log(st, v.id + ' ' + v.status.toLowerCase() + ' at ' + money(appr) + (v.adjustment ? ' (adjustment ' + money(diff) + (v.adjustment.status ? ', ' + v.adjustment.status.toLowerCase() : '') + ')' : '') + (warning ? ' over the changed-since-submitted warning' : '') + '; ' + v.lines.map(l => l.docket).join(', ') + ' locked');
   return { ok: true, warning };
 }
 function setAdjustmentStatus(st, varId, status) {
@@ -383,49 +391,49 @@ function setAdjustmentStatus(st, varId, status) {
   hist(v, st, 'Adjustment ' + money(v.adjustment.amount) + ' ' + (was || 'unmarked') + ' to ' + status);
   log(st, v.id + ' adjustment marked ' + status.toLowerCase());
 }
+// Rejected: the client rejected a submitted variation. Non-Claimable (decided 2026-11-17, replaces Withdrawn): the PM
+// drops a Pending variation, submitted or not. Both stay on the register and free their dockets.
 function releaseVariation(st, varId, status) {
   const v = getVar(st, varId);
-  if (status === 'Rejected' && v.status !== 'Submitted') throw new Error('Only a submitted variation can be rejected');
-  if (status === 'Withdrawn' && !['Draft', 'Submitted'].includes(v.status)) throw new Error('Only a draft or submitted variation can be withdrawn');
+  if (status === 'Rejected' && !(v.status === 'Pending' && v.submittedOn)) throw new Error('Only a submitted Pending variation can be rejected');
+  if (status === 'Non-Claimable' && v.status !== 'Pending') throw new Error('Only a Pending variation can be set Non-Claimable');
+  if (!['Rejected', 'Non-Claimable'].includes(status)) throw new Error('Unknown status ' + status);
   v.lines.forEach(ln => ln.releasedAt = priceDocket(st, getDocket(st, ln.docket)).total);
-  v.submittedFinal = v.status === 'Submitted' ? varTotal(st, v) : null;
+  v.submittedFinal = v.submittedOn ? varTotal(st, v) : null;
   v.status = status;
-  hist(v, st, status + '; kept on the register; ' + plural(v.lines.length, 'docket') + ' released (' + (v.lines.map(l => l.docket).join(', ') || 'none') + ')');
-  log(st, v.id + ' ' + status.toLowerCase() + '; ' + v.lines.map(l => l.docket).join(', ') + ' released');
+  hist(v, st, status + '; kept on the register; ' + plural(v.lines.length, 'docket') + ' freed (' + (v.lines.map(l => l.docket).join(', ') || 'none') + ')');
+  log(st, v.id + ' set ' + status + '; ' + (v.lines.map(l => l.docket).join(', ') || 'no dockets') + ' freed');
 }
-function contractSum(st) { return round2(st.project.contractSum + st.variations.filter(v => v.status === 'Approved').reduce((a, v) => a + v.approvedAmount, 0)); }
+function approvedVars(st) { return st.variations.filter(v => VAR_LOCKED.includes(v.status)); }
+function contractSum(st) { return round2(st.project.contractSum + approvedVars(st).reduce((a, v) => a + v.approvedAmount, 0)); }
 
-/* ───────── Claims (VAR-23037) ───────── */
-// Approved variations on claims: claimed by percent complete to date like other variations, default 100%, on one draft claim at a time.
-// Decided 2026-11-16: a later claim can enter a lower percent to date than an issued claim; the drop is charged as a
-// credit (negative) line. So "already claimed" is the percent on the latest issued claim that carries the variation.
+/* ───────── Claims (VAR-23037) on the Claim tab ───────── */
+function nextClaimId(st) { return String(st.claims.reduce((m, c) => Math.max(m, parseInt(c.id, 10) || 0), 0) + 1); }
+function approvedClaims(st) { return st.claims.filter(c => c.status === 'Approved').sort((a, b) => (a.issueSeq || 0) - (b.issueSeq || 0)); }
 function varClaimedPct(st, varId) {
-  const issued = st.claims.filter(c => c.status === 'Issued' && (c.varLines || []).some(l => l.variation === varId)).sort((a, b) => (a.issueSeq || 0) - (b.issueSeq || 0));
-  if (!issued.length) return 0;
-  return issued[issued.length - 1].varLines.find(l => l.variation === varId).pct;
+  const done = approvedClaims(st).filter(c => (c.varLines || []).some(l => l.variation === varId));
+  if (!done.length) return 0;
+  return done[done.length - 1].varLines.find(l => l.variation === varId).pct;
 }
-function varDraftClaim(st, varId) { return st.claims.find(c => c.status === 'Draft' && c.vars.some(x => x.variation === varId)) || null; }
-// Decided 2026-11-17: a variation claimed to 100% on an issued claim is still offered on later claims, unticked by
-// default, so a later claim can credit it back. Variations not yet fully claimed are ticked by default.
-function offeredVariations(st, claimId) {
-  return st.variations.filter(v => v.status === 'Approved' && !varDraftClaim(st, v.id));
-}
+function varDraftClaim(st, varId) { return st.claims.find(c => CLAIM_LIVE.includes(c.status) && c.vars.some(x => x.variation === varId)) || null; }
+function offeredVariations(st) { return approvedVars(st).filter(v => !varDraftClaim(st, v.id)); }
 function varFullyClaimed(st, varId) { return varClaimedPct(st, varId) >= 100 - 1e-9; }
 function defaultClaimVariations(st) { return offeredVariations(st).filter(v => !varFullyClaimed(st, v.id)); }
+function refuseIfClaimClosed(c) { if (!CLAIM_LIVE.includes(c.status)) throw new Error('Claim ' + c.id + ' is approved and locked'); }
 function addVarToClaim(st, claimId, varId, pct = 100) {
   const c = getClaim(st, claimId); const v = getVar(st, varId);
-  if (c.status !== 'Draft') throw new Error(c.id + ' is issued and locked');
-  if (v.status !== 'Approved') throw new Error(v.id + ' is not approved');
-  const other = varDraftClaim(st, varId); if (other) throw new Error(v.id + ' is already on draft claim ' + other.id);
+  refuseIfClaimClosed(c);
+  if (!VAR_LOCKED.includes(v.status)) throw new Error(v.id + ' is not approved');
+  const other = varDraftClaim(st, varId); if (other) throw new Error(v.id + ' is already on open claim ' + other.id);
   const prev = varClaimedPct(st, varId);
   c.vars.push({ variation: varId, pct: 100 });
   hist(c, st, v.id + ' added at 100% (' + money(round2(v.approvedAmount * (100 - prev) / 100)) + ')' + (prev >= 100 - 1e-9 ? '; fully claimed, lower the percent to credit it back' : ''));
   if (pct !== 100) setVarPct(st, claimId, varId, pct);
-  log(st, v.id + ' added to ' + c.id);
+  log(st, v.id + ' added to claim ' + c.id);
 }
 function setVarPct(st, claimId, varId, pct) {
-  const c = getClaim(st, claimId); if (c.status !== 'Draft') throw new Error(c.id + ' is issued and locked');
-  const x = c.vars.find(l => l.variation === varId); if (!x) throw new Error(varId + ' is not on ' + c.id);
+  const c = getClaim(st, claimId); refuseIfClaimClosed(c);
+  const x = c.vars.find(l => l.variation === varId); if (!x) throw new Error(varId + ' is not on claim ' + c.id);
   const prev = varClaimedPct(st, varId);
   if (!(pct >= 0 && pct <= 100)) throw new Error('Enter a percent complete between 0% and 100% (' + prev + '% already claimed; a lower percent is charged as a credit)');
   if (pct === x.pct) return;
@@ -434,13 +442,13 @@ function setVarPct(st, claimId, varId, pct) {
   x.pct = pct;
 }
 function removeVarFromClaim(st, claimId, varId) {
-  const c = getClaim(st, claimId); if (c.status !== 'Draft') throw new Error(c.id + ' is issued and locked');
+  const c = getClaim(st, claimId); refuseIfClaimClosed(c);
   c.vars = c.vars.filter(x => x.variation !== varId);
-  hist(c, st, varId + ' removed; offered to other draft claims');
+  hist(c, st, varId + ' removed; offered to other open claims');
 }
 function claimVarRows(st, c) {
-  if (c.status === 'Issued') return c.varLines || [];
-  if (c.status !== 'Draft') return [];
+  if (c.status === 'Approved') return c.varLines || [];
+  if (!CLAIM_LIVE.includes(c.status)) return [];
   return c.vars.map(x => {
     const v = getVar(st, x.variation); const prev = varClaimedPct(st, v.id);
     const value = round2(v.approvedAmount * (x.pct - prev) / 100);
@@ -448,45 +456,43 @@ function claimVarRows(st, c) {
   });
 }
 function createClaim(st, period, ids, opts = {}) {
-  if (ids.length) validateAdd(st, ids); // a claim can hold only variation or BOQ lines
+  if (ids.length) validateAdd(st, ids);
   const vars = opts.vars === undefined ? defaultClaimVariations(st).map(v => v.id) : opts.vars;
-  const c = { id: opts.id || nextId(st.claims, 'C-'), period, status: 'Draft', created: st.today, lines: [], boq: {}, vars: [], varLines: null, decisions: [], history: [] };
+  const c = { kind: 'claim', id: opts.id ? String(opts.id) : nextClaimId(st), period, status: 'Draft', created: st.today, submittedOn: null, lines: [], boq: {}, vars: [], varLines: null, decisions: [], history: [], invoiceRef: '' };
   st.claims.push(c);
   ids.forEach(id => c.lines.push(newLine(st, id)));
-  hist(c, st, 'Created for ' + fmtDate(period.from) + ' to ' + fmtDate(period.to) + (ids.length ? ' from ' + ids.map(id => id + ' at ' + money(c.lines.find(l => l.docket === id).added)).join(', ') : ''));
+  hist(c, st, 'Created for ' + fmtDate(period.from) + ' to ' + fmtDate(period.to) + (ids.length ? ' with ' + ids.map(id => id + ' at ' + money(c.lines.find(l => l.docket === id).added)).join(', ') : ''));
   vars.forEach(id => addVarToClaim(st, c.id, id, 100));
-  log(st, c.id + ' created for ' + fmtDate(period.from) + ' to ' + fmtDate(period.to) + ' with ' + (ids.join(', ') || 'no dockets') + (vars.length ? ' and ' + vars.join(', ') + ' at 100%' : ''));
+  log(st, 'Claim ' + c.id + ' created for ' + fmtDate(period.from) + ' to ' + fmtDate(period.to) + ' with ' + (ids.join(', ') || 'no dockets') + (vars.length ? ' and ' + vars.join(', ') + ' at 100%' : ''));
   return c;
 }
 function claimAddDockets(st, claimId, ids) {
-  const c = getClaim(st, claimId);
-  if (c.status !== 'Draft') throw new Error(c.id + ' is issued and locked');
+  const c = getClaim(st, claimId); refuseIfClaimClosed(c);
   validateAdd(st, ids);
   ids.forEach(id => c.lines.push(newLine(st, id)));
   hist(c, st, 'Added ' + ids.map(id => id + ' at ' + money(c.lines.find(l => l.docket === id).added)).join(', '));
-  log(st, ids.join(', ') + ' added to ' + c.id);
+  log(st, ids.join(', ') + ' added to claim ' + c.id);
 }
 function claimRemoveDocket(st, claimId, id) {
-  const c = getClaim(st, claimId);
-  if (c.status !== 'Draft') throw new Error(c.id + ' is issued and locked');
-  const ln = c.lines.find(l => l.docket === id); if (!ln) throw new Error(id + ' is not on ' + c.id);
+  const c = getClaim(st, claimId); refuseIfClaimClosed(c);
+  const ln = c.lines.find(l => l.docket === id); if (!ln) throw new Error(id + ' is not on claim ' + c.id);
+  if (ln.frozen !== null) throw new Error(id + ' was approved on this claim and stays locked');
   c.lines = c.lines.filter(l => l.docket !== id);
   hist(c, st, 'Removed ' + id + ' (' + money(ln.last) + '), released', { docket: id, old: ln.last, new: 0 });
-  log(st, id + ' removed from ' + c.id + ' and released');
+  log(st, id + ' removed from claim ' + c.id + ' and released');
 }
 function deleteDraftClaim(st, claimId) {
   const c = getClaim(st, claimId);
   if (c.status !== 'Draft') throw new Error('Only a draft claim can be deleted');
+  if (c.lines.some(l => l.frozen !== null)) throw new Error('Claim ' + c.id + ' holds dockets locked by an earlier approval');
   c.status = 'Deleted';
-  log(st, c.id + ' deleted; ' + (c.lines.map(l => l.docket).join(', ') || 'no dockets') + ' released' + (c.vars.length ? '; ' + c.vars.map(x => x.variation).join(', ') + ' offered again' : ''));
+  log(st, 'Claim ' + c.id + ' deleted; ' + (c.lines.map(l => l.docket).join(', ') || 'no dockets') + ' released' + (c.vars.length ? '; ' + c.vars.map(x => x.variation).join(', ') + ' offered again' : ''));
 }
-function claimLineValue(st, c, ln) { return c.status === 'Issued' ? ln.frozen : priceDocket(st, getDocket(st, ln.docket)).total; }
-function claimLineChanged(st, c, ln) { return c.status === 'Draft' && Math.abs(claimLineValue(st, c, ln) - ln.added) > 0.004; }
-// Retention and GST: same order and rules as existing claims (retention off the gross ex GST, GST on the net), per project settings.
-// Decided 2026-11-17: a claim whose total is below zero can be issued as a negative claim; retention and GST are
-// calculated the same way and go negative.
-// Decided 2026-11-17 (later): "For all retention rules we will be using what already exists in Varicon". Retention on
-// every claim, a negative one included, is the project's retention % of the gross; no cap, no retention-held tracking.
+function claimLineValue(st, c, ln) { return ln.frozen !== null ? ln.frozen : priceDocket(st, getDocket(st, ln.docket)).total; }
+function claimLineChanged(st, c, ln) { return CLAIM_LIVE.includes(c.status) && ln.frozen === null && Math.abs(claimLineValue(st, c, ln) - ln.added) > 0.004; }
+function boqPrevQty(st, c, code) { return round2(approvedClaims(st).filter(x => x !== c && (x.issueSeq || 0) < (c.issueSeq || Infinity)).reduce((a, x) => a + (x.boq[code] || 0), 0)); }
+// Retention and GST: same order and rules as existing claims, per project settings (decided 2026-11-17: use what
+// already exists in Varicon). A negative claim can be approved; its retention and GST go negative.
 function claimTotals(st, c) {
   const dockets = round2(c.lines.reduce((a, ln) => a + (claimLineValue(st, c, ln) || 0), 0));
   const vars = round2(claimVarRows(st, c).reduce((a, l) => a + l.value, 0));
@@ -497,30 +503,56 @@ function claimTotals(st, c) {
   const gst = round2(net * st.project.gst / 100);
   return { dockets, vars, boq, gross, retention, net, gst, total: round2(net + gst), negative: gross < -0.004 };
 }
-// Decided 2026-11-17: a negative claim goes to Xero or MYOB as a credit note. Invoicing is not in this prototype; an
-// issued negative claim only carries the label.
-function claimAccountingLabel(st, c) { return c.status === 'Issued' && c.sentAs === 'credit note' ? 'Sent to accounting as a credit note' : null; }
-function issueClaim(st, claimId, opts = {}) {
+function claimAccountingLabel(st, c) { return c.status === 'Approved' && c.sentAs === 'credit note' ? 'Sent to accounting as a credit note' : null; }
+function submitClaim(st, claimId) {
   const c = getClaim(st, claimId);
-  if (c.status !== 'Draft') throw new Error(c.id + ' is already issued');
-  refuseIfIssues(st, c, 'issued');
-  const n = unapprovedCount(st, c.lines.map(l => l.docket));
+  if (c.status !== 'Draft') throw new Error('Only a draft claim can be submitted');
+  c.status = 'Submitted'; c.submittedOn = st.today;
+  hist(c, st, 'Submitted to the client');
+  log(st, 'Claim ' + c.id + ' submitted');
+}
+// Approve = "issue" in the tickets. Lines freeze, dockets lock and the claim's docket lines move to Invoiced
+// (decided 2026-11-17). A variation's dockets move to Invoiced once the variation reaches 100% claimed on approved claims.
+function approveClaim(st, claimId, opts = {}) {
+  const c = getClaim(st, claimId);
+  if (!CLAIM_LIVE.includes(c.status)) throw new Error('Claim ' + c.id + ' is already approved');
+  refuseIfIssues(st, c, 'approved');
+  const n = unapprovedCount(st, c.lines.filter(l => l.frozen === null).map(l => l.docket));
   if (n && !opts.confirm) return { needsConfirm: true, count: n, message: plural(n, 'docket') + ' not yet approved' };
   c.varLines = claimVarRows(st, c);
-  c.lines.forEach(ln => { ln.frozen = priceDocket(st, getDocket(st, ln.docket)).total; ln.frozenVersion = versionFor(st, getDocket(st, ln.docket).date).n; });
+  const newly = c.lines.filter(ln => ln.frozen === null);
+  newly.forEach(ln => { ln.frozen = priceDocket(st, getDocket(st, ln.docket)).total; ln.frozenVersion = versionFor(st, getDocket(st, ln.docket).date).n; });
   if (claimTotals(st, c).negative) c.sentAs = 'credit note';
-  c.status = 'Issued'; c.issued = st.today; st.issueSeq = (st.issueSeq || 0) + 1; c.issueSeq = st.issueSeq;
-  if (n) c.decisions.push({ at: st.today, by: st.user, what: 'Issued with ' + plural(n, 'unapproved docket') });
-  hist(c, st, 'Issued at ' + money(claimTotals(st, c).gross) + ' ex GST' + (claimTotals(st, c).negative ? ' (negative claim, sent to accounting as a credit note)' : '') + '; lines frozen, dockets locked, changed-since-added flags cleared');
-  log(st, c.id + ' issued at ' + money(claimTotals(st, c).gross) + ' ex GST' + (n ? ' (' + plural(n, 'unapproved docket') + ', confirmed)' : '') + '; dockets locked');
-  return { ok: true };
+  if (!c.submittedOn) c.submittedOn = st.today;
+  c.status = 'Approved'; c.issued = st.today; st.issueSeq = (st.issueSeq || 0) + 1; c.issueSeq = st.issueSeq;
+  if (n) c.decisions.push({ at: st.today, by: st.user, what: 'Approved with ' + plural(n, 'unapproved docket') });
+  const inv = [];
+  newly.forEach(ln => toInvoiced(st, ln.docket, 'on approved claim ' + c.id, inv));
+  c.varLines.forEach(l => { if (varFullyClaimed(st, l.variation)) getVar(st, l.variation).lines.forEach(ln => toInvoiced(st, ln.docket, l.variation + ' 100% claimed on approved claims', inv)); });
+  hist(c, st, 'Approved at ' + money(claimTotals(st, c).gross) + ' ex GST' + (claimTotals(st, c).negative ? ' (negative claim, sent to accounting as a credit note)' : '') + '; lines frozen, dockets locked' + (inv.length ? ', ' + inv.join(', ') + ' moved to Invoiced' : ''));
+  log(st, 'Claim ' + c.id + ' approved at ' + money(claimTotals(st, c).gross) + ' ex GST' + (n ? ' (' + plural(n, 'unapproved docket') + ', confirmed)' : '') + (inv.length ? '; ' + inv.join(', ') + ' Invoiced' : ''));
+  return { ok: true, invoiced: inv };
 }
-function lastIssuedClaimDate(st) { return st.claims.filter(c => c.status === 'Issued').map(c => c.issued).sort().pop() || null; }
-function lastApprovedVarDate(st) { return st.variations.filter(v => v.status === 'Approved').map(v => v.approvedOn).sort().pop() || null; }
-// Calculator effective-from floor (VAR-23035): the later of the last issued claim and the last approved variation.
+const issueClaim = approveClaim;
+function toInvoiced(st, id, why, out) {
+  const d = getDocket(st, id); if (d.status === 'Invoiced') return;
+  d.prevBilled = d.status; d.status = 'Invoiced';
+  d.history.push({ at: st.today, by: 'Varicon', what: 'Moved to Invoiced (' + why + ')' });
+  out.push(id);
+}
+// Reopen Claim (existing): decided 2026-11-17 that its dockets stay locked and Invoiced at their frozen values.
+function reopenClaim(st, claimId) {
+  const c = getClaim(st, claimId);
+  if (c.status !== 'Approved') throw new Error('Only an approved claim can be reopened');
+  c.status = 'Draft'; c.reopenedOn = st.today;
+  hist(c, st, 'Reopened; docket lines stay frozen and their dockets stay locked and Invoiced');
+  log(st, 'Claim ' + c.id + ' reopened; ' + (c.lines.map(l => l.docket).join(', ') || 'no dockets') + ' stay locked and Invoiced');
+}
+function lastIssuedClaimDate(st) { return approvedClaims(st).map(c => c.issued).filter(Boolean).sort().pop() || null; }
+function lastApprovedVarDate(st) { return approvedVars(st).map(v => v.approvedOn).filter(Boolean).sort().pop() || null; }
 function calcFloor(st) { return [lastIssuedClaimDate(st), lastApprovedVarDate(st)].filter(Boolean).sort().pop() || null; }
 function nextClaimPeriod(st) {
-  const last = st.claims.filter(c => c.status === 'Issued').map(c => c.period.to).sort().pop();
+  const last = st.claims.filter(c => c.status !== 'Deleted').map(c => c.period.to).sort().pop();
   const from = last ? addDays(last, 1) : '2026-11-01';
   const [y, m, d] = from.split('-').map(Number);
   const mm = String(m).padStart(2, '0');
@@ -529,19 +561,37 @@ function nextClaimPeriod(st) {
 }
 function addDays(date, n) { const d = new Date(date + 'T00:00:00'); d.setDate(d.getDate() + n); const z = x => String(x).padStart(2, '0'); return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()); }
 
-/* ───────── Docket actions (VAR-23062, VAR-23063, edits) ───────── */
+/* ───────── Docket actions ───────── */
 function refuseIfOnRecord(st, d) { const h = docketHome(st, d.id); if (h) throw new Error('Remove this docket from ' + h.label + ' first'); }
-// Any edit to an Approved docket returns it to Submitted for re-approval: on a draft claim, on an unsubmitted or
-// submitted variation, or on no record. (Dockets on an approved variation or issued claim are read-only.)
+// Any edit to a signed (Approved, Costed) docket returns it to Submitted for re-approval. In Varicon a signed docket is
+// locked until Reopen; Reopen here is the same step.
 function afterEdit(st, d, what) {
   d.history.push({ at: st.today, by: st.user, what });
   const h = docketHome(st, d.id);
-  if (d.status === 'Approved') {
-    d.status = 'Submitted'; d.reapprove = { at: st.today, on: h ? h.rec.id : null };
-    d.history.push({ at: st.today, by: st.user, what: 'Edited while Approved' + (h ? ' on ' + h.label : '') + ': returned to Submitted for re-approval' });
-    log(st, d.id + ' edited while Approved' + (h ? ' on ' + h.rec.id : '') + ': returned to Submitted');
+  if (['Approved', 'Costed'].includes(d.status)) {
+    const was = d.status;
+    d.status = 'Submitted'; d.reapprove = { at: st.today, on: h ? h.rec.id : null, was };
+    d.history.push({ at: st.today, by: st.user, what: 'Edited while ' + was + (h ? ' on ' + h.label : '') + ': returned to Submitted for re-approval' });
+    log(st, d.id + ' edited while ' + was + (h ? ' on ' + h.label : '') + ': returned to Submitted');
   }
   sync(st, d.id + ' edited');
+}
+function reopenSigned(st, id) {
+  const d = getDocket(st, id); refuseIfLocked(st, d);
+  if (!['Approved', 'Costed'].includes(d.status)) throw new Error('Only an Approved or Costed docket can be reopened here');
+  afterEdit(st, d, 'Reopened: signature cleared, fields unlocked');
+}
+function markCosted(st, id) {
+  const d = getDocket(st, id);
+  if (d.status !== 'Approved') throw new Error('Only an Approved docket can be marked as costed');
+  d.status = 'Costed'; d.history.push({ at: st.today, by: st.user, what: 'Marked as costed' });
+  log(st, id + ' marked as costed'); sync(st, id + ' costed');
+}
+function markInvoiced(st, id) {
+  const d = getDocket(st, id);
+  if (!['Approved', 'Costed'].includes(d.status)) throw new Error('Only an Approved or Costed docket can be marked as invoiced');
+  d.prevBilled = d.status; d.status = 'Invoiced'; d.history.push({ at: st.today, by: st.user, what: 'Marked as invoiced (manually)' });
+  log(st, id + ' marked as invoiced'); sync(st, id + ' invoiced');
 }
 function markNotClaimable(st, id, note) {
   const d = getDocket(st, id);
@@ -560,18 +610,25 @@ function reopenDocket(st, id) {
 }
 function sendBack(st, id, reason, note) {
   const d = getDocket(st, id);
-  if (d.status !== 'Submitted') throw new Error('Only a Submitted docket can be sent back');
+  if (!['Submitted', 'Ready for Review'].includes(d.status)) throw new Error('Only a Ready for Review or Submitted docket can be sent back');
   if (reason === 'Other' && !(note || '').trim()) throw new Error('Add a note for Other');
   refuseIfOnRecord(st, d);
   d.status = 'Draft'; d.sentBack = { reason, note: note || '', by: st.user, at: st.today };
   d.history.push({ at: st.today, by: st.user, what: 'Sent back: ' + reason + (note ? ' (' + note + ')' : '') });
   log(st, id + ' sent back to ' + d.createdBy + ': ' + reason);
 }
+function readyForReview(st, id) {
+  const d = getDocket(st, id); refuseIfLocked(st, d);
+  if (!['Draft', 'Rejected'].includes(d.status)) throw new Error('Only a Draft or Rejected docket can be sent for review');
+  d.status = 'Ready for Review'; d.history.push({ at: st.today, by: d.createdBy, what: 'Ready for review' + (d.sentBack ? ' after send-back' : '') });
+  d.sentBack = null;
+  log(st, id + ' ready for review'); sync(st, id + ' ready for review');
+}
 function submitDocket(st, id) {
   const d = getDocket(st, id); refuseIfLocked(st, d);
-  if (!['Draft', 'Rejected'].includes(d.status)) throw new Error('Only a Draft or Rejected docket can be submitted');
+  if (!['Draft', 'Rejected', 'Ready for Review'].includes(d.status)) throw new Error('Only a Draft, Ready for Review or Rejected docket can be sent to the client');
   const was = d.status; d.status = 'Submitted';
-  d.history.push({ at: st.today, by: d.createdBy, what: (d.sentBack ? 'Resubmitted after send-back' : was === 'Rejected' ? 'Fixed and resubmitted' : 'Submitted') });
+  d.history.push({ at: st.today, by: d.createdBy, what: (d.sentBack ? 'Resubmitted after send-back' : was === 'Rejected' ? 'Fixed and resubmitted' : 'Sent to the client for signature') });
   d.sentBack = null;
   log(st, id + ' submitted');
   sync(st, id + ' ' + (was === 'Rejected' ? 'resubmitted' : 'submitted'));
@@ -580,17 +637,16 @@ function approveDocket(st, id) {
   const d = getDocket(st, id);
   if (d.status !== 'Submitted') throw new Error('Only a Submitted docket can be approved');
   const p = priceDocket(st, d); if (p.problems.length) throw new Error(id + ' cannot be approved: ' + p.problems.join(', '));
-  d.status = 'Approved'; d.reapprove = null; d.history.push({ at: st.today, by: st.user, what: 'Approved' });
+  d.status = 'Approved'; d.approvedOn = st.today; d.reapprove = null; d.history.push({ at: st.today, by: 'Client (signed)', what: 'Approved' });
   log(st, id + ' approved');
   sync(st, id + ' approved');
 }
-// The client rejects a docket through the docket email. On a record it stays on, flagged, and blocks submit, approve and issue.
 function rejectDocket(st, id) {
   const d = getDocket(st, id); refuseIfLocked(st, d);
   if (d.status !== 'Submitted') throw new Error('Only a Submitted docket can be rejected');
   d.status = 'Rejected'; d.history.push({ at: st.today, by: 'Client (email)', what: 'Rejected by client' });
   const h = docketHome(st, id);
-  log(st, id + ' rejected by the client' + (h ? '; stays on ' + h.rec.id + ', flagged, blocking it' : ''));
+  log(st, id + ' rejected by the client' + (h ? '; stays on ' + h.label + ', flagged, blocking it' : ''));
   sync(st, id + ' rejected by client');
 }
 function editHours(st, id, idx, hours) {
@@ -640,7 +696,7 @@ function addAllowance(st, id, idx, type) {
 const RATE_SECTIONS = { labour: 'Labour rates', wet: 'Wet hire', dry: 'Dry hire', attach: 'Attachments' };
 function publishVersion(st, section, lineName, std, effectiveFrom) {
   const floor = calcFloor(st);
-  if (floor && effectiveFrom < floor) throw new Error('Effective date cannot be before the last issued claim or approved variation (' + fmtDate(floor) + ')');
+  if (floor && effectiveFrom < floor) throw new Error('Effective date cannot be before the last approved claim or approved variation (' + fmtDate(floor) + ')');
   const cur = st.versions.slice().sort((a, b) => b.n - a.n)[0];
   const v = clone(cur); v.n = cur.n + 1; v.effectiveFrom = effectiveFrom; v.savedOn = st.today; v.savedBy = st.user;
   const ln = v[section].find(x => x.name === lineName); if (!ln) throw new Error('No line ' + lineName);
@@ -653,55 +709,72 @@ function publishVersion(st, section, lineName, std, effectiveFrom) {
   return v;
 }
 
-/* ───────── Demo seed: one project end to end (no line crosses midnight) ───────── */
+/* ───────── Demo seed: one project end to end ───────── */
+function manualVar(st, id, title, est, submitted, approved, status, subs) {
+  st.variations.push({ kind: 'variation', id, title, status, manual: { estimated: est, submitted, subs: subs || [] }, lines: [], approvedAmount: approved, approvedOn: '2026-09-15', submittedOn: '2026-09-10', history: [], decisions: [], revision: 1 });
+}
+function manualClaim(st, id, period, boq, date, invoiceRef, vars) {
+  st.issueSeq = (st.issueSeq || 0) + 1;
+  st.claims.push({ kind: 'claim', id: String(id), period, status: 'Approved', created: date, submittedOn: date, issued: date, issueSeq: st.issueSeq, lines: [], boq, vars: [], varLines: vars || [], decisions: [], history: [{ at: date, by: 'Dana Whitfield (PM)', what: 'Approved (before dockets could be claimed)' }], invoiceRef });
+}
 function seedState() {
   const st = baseState();
   const at = (date, fn) => { const t = st.today; st.today = date; fn(); st.today = t; };
-  // October: claimed on C-003, plus one that arrived after it was issued.
-  addDocket(st, 'D091', '2026-10-20', 'Approved', [lab('tom', '07:00', '15:30', 0.5)]);
-  addDocket(st, 'D092', '2026-10-22', 'Approved', [wet('EX-07', 'sam', '07:00', '15:00'), flt('EX-07', 'mob')]);
-  addDocket(st, 'D095', '2026-10-25', 'Approved', [lab('jo', '07:00', '15:00')], { note: 'Sunday work, submitted after C-003 was issued' });
+  // Existing variations, entered by hand before dockets could be used.
+  manualVar(st, 'V001', 'Additional excavation outside initial scope', 2460, 3000, 3000, 'Approved', [{ id: 'V001.1', title: 'Area 1', est: 980, submitted: 1200 }, { id: 'V001.2', title: 'Area 2', est: 1480, submitted: 1800 }]);
+  manualVar(st, 'V002', 'Site establishment fencing', 1500, 10000, 10000, 'Approved');
+  manualVar(st, 'V003', 'Additional work, pavement repair', 9800, 0, null, 'Pending');
+  // Claims 1 and 2: contract works only.
+  manualClaim(st, 1, { from: '2026-09-01', to: '2026-09-30' }, { '1.1': 1200, '2.3': 300 }, '2026-10-02', 'INV-1041', [{ variation: 'V001', title: 'Additional excavation outside initial scope', approved: 3000, pct: 100, prev: 0, value: 3000, credit: false, dockets: [] }]);
+  manualClaim(st, 2, { from: '2026-10-01', to: '2026-10-15' }, { '1.1': 900, '2.3': 250, '3.1': 1500 }, '2026-10-17', 'INV-1052', [{ variation: 'V002', title: 'Site establishment fencing', approved: 10000, pct: 50, prev: 0, value: 5000, credit: false, dockets: [] }]);
+  // October dockets: claimed on claim 3, plus one that arrived after it was approved.
+  addDocket(st, 'D091', '2026-10-20', 'Approved', [lab('tom', '07:00', '15:30', 0.5)], { desc: 'Kerb removal, Ch 80', ref: 'RR-0091' });
+  addDocket(st, 'D092', '2026-10-22', 'Approved', [wet('EX-07', 'sam', '07:00', '15:00'), flt('EX-07', 'mob')], { desc: 'Excavate unsuitable material, Ch 95', ref: 'RR-0092' });
+  addDocket(st, 'D095', '2026-10-25', 'Approved', [lab('jo', '07:00', '15:00')], { desc: 'Sunday clean up after storm', note: 'Sunday work, submitted after claim 3 was approved' });
   // November
-  addDocket(st, 'D201', '2026-11-02', 'Approved', [lab('tom', '07:00', '15:00')]);
-  addDocket(st, 'D210', '2026-11-02', 'Approved', [wet('EX-07', 'sam', '07:00', '16:00')]);
-  addDocket(st, 'D101', '2026-11-03', 'Approved', [lab('tom', '06:00', '17:00', 0.5)]);
-  addDocket(st, 'D212', '2026-11-03', 'Approved', [mat('Road base', { qty: 12 }), lab('jo', '07:00', '15:00')]);
-  addDocket(st, 'D202', '2026-11-04', 'Submitted', [lab('jo', '07:00', '15:00')]);
-  addDocket(st, 'D213', '2026-11-04', 'Approved', [sub('Traffic control', 1200)]);
-  addDocket(st, 'D103', '2026-11-05', 'Rejected', [lab('ben', '07:00', '15:00')]);
-  addDocket(st, 'D203', '2026-11-05', 'Approved', [lab('cris', '07:00', '15:00')]);
-  addDocket(st, 'D214', '2026-11-05', 'Approved', [dry('EX-12', '07:00', '16:00')]);
-  addDocket(st, 'D104', '2026-11-06', 'Draft', [dry('EX-07', '07:00', '12:00'), wet('EX-07', 'lee', '10:00', '15:00')]);
-  addDocket(st, 'D105', '2026-11-06', 'Submitted', [lab('jo', '07:00', '11:00')]);
-  addDocket(st, 'D102', '2026-11-09', 'Submitted', [wet('EX-07', 'sam', '07:00', '16:00')]);
-  addDocket(st, 'D209', '2026-11-10', 'Approved', [lab('tom', '06:00', '17:00', 0.5)]);
-  addDocket(st, 'D204', '2026-11-10', 'Rejected', [lab('jo', '07:00', '13:00')]);
-  addDocket(st, 'D106', '2026-11-10', 'Approved', [lab('mel', '06:00', '17:00', 0.5)]);
-  addDocket(st, 'D205', '2026-11-11', 'Submitted', [wet('EX-15', 'lee', '07:00', '16:00', 0, ['Breaker 1t']), flt('EX-15', 'mob')]);
-  addDocket(st, 'D206', '2026-11-11', 'Submitted', [lab('tom', '07:00', '15:00', 0, [{ type: 'Tool' }])]);
-  addDocket(st, 'D107', '2026-11-12', 'Submitted', [lab('jo', '07:00', '15:00')]);
-  addDocket(st, 'D207', '2026-11-12', 'Draft', [lab('cris', '07:00', '11:00')]);
-  addDocket(st, 'D208', '2026-11-12', 'Approved', [lab('tom', '06:00', '17:00', 0.5)]);
-  addDocket(st, 'D215', '2026-11-13', 'Submitted', [lab('mel', '07:00', '15:00')]);
-  addDocket(st, 'D216', '2026-11-13', 'Approved', [wet('EX-12', 'lee', '07:00', '15:00')]);
-  addDocket(st, 'D211', '2026-11-16', 'Submitted', [wet('EX-07', 'sam', '07:00', '15:00', 0, ['Breaker 1t']), mat('Concrete', { cost: 600 })]);
-  addDocket(st, 'D217', '2026-11-16', 'Approved', [lab('jo', '07:00', '15:00')], { note: 'Dated after the 1 to 15 Nov claim period' });
+  addDocket(st, 'D201', '2026-11-02', 'Approved', [lab('tom', '07:00', '15:00')], { desc: 'Extra kerb removal, Ch 120' });
+  addDocket(st, 'D210', '2026-11-02', 'Approved', [wet('EX-07', 'sam', '07:00', '16:00')], { desc: 'Rock breaking, Ch 340' });
+  addDocket(st, 'D101', '2026-11-03', 'Approved', [lab('tom', '06:00', '17:00', 0.5)], { desc: 'Service location, Ch 150' });
+  addDocket(st, 'D212', '2026-11-03', 'Approved', [mat('Road base', { qty: 12 }), lab('jo', '07:00', '15:00')], { desc: 'Detour road base' });
+  addDocket(st, 'D202', '2026-11-04', 'Submitted', [lab('jo', '07:00', '15:00')], { desc: 'Hand dig, Ch 160' });
+  addDocket(st, 'D213', '2026-11-04', 'Approved', [sub('Traffic control', 1200)], { desc: 'Traffic control for detour' });
+  addDocket(st, 'D103', '2026-11-05', 'Rejected', [lab('ben', '07:00', '15:00')], { desc: 'Water service relocation' });
+  addDocket(st, 'D203', '2026-11-05', 'Approved', [lab('cris', '07:00', '15:00')], { desc: 'Hand dig around Telstra pit' });
+  addDocket(st, 'D214', '2026-11-05', 'Approved', [dry('EX-12', '07:00', '16:00')], { desc: 'Detour grading' });
+  addDocket(st, 'D104', '2026-11-06', 'Draft', [dry('EX-07', '07:00', '12:00'), wet('EX-07', 'lee', '10:00', '15:00')], { desc: 'Trench backfill' });
+  addDocket(st, 'D105', '2026-11-06', 'Submitted', [lab('jo', '07:00', '11:00')], { desc: 'Clean up after client crew' });
+  addDocket(st, 'D102', '2026-11-09', 'Submitted', [wet('EX-07', 'sam', '07:00', '16:00')], { desc: 'Bulk excavation, Ch 300' });
+  addDocket(st, 'D218', '2026-11-09', 'Costed', [lab('mel', '07:00', '15:00')], { desc: 'Pit adjustment, Ch 310' });
+  addDocket(st, 'D209', '2026-11-10', 'Approved', [lab('tom', '06:00', '17:00', 0.5)], { desc: 'Rock breaking supervision' });
+  addDocket(st, 'D204', '2026-11-10', 'Rejected', [lab('jo', '07:00', '13:00')], { desc: 'Remove spoil' });
+  addDocket(st, 'D106', '2026-11-10', 'Approved', [lab('mel', '06:00', '17:00', 0.5)], { desc: 'Drainage pit, Ch 260' });
+  addDocket(st, 'D219', '2026-11-10', 'Invoiced', [lab('cris', '07:00', '13:00')], { desc: 'Fence repair', note: 'Marked as invoiced by hand before claims could carry dockets' });
+  addDocket(st, 'D205', '2026-11-11', 'Ready for Review', [wet('EX-15', 'lee', '07:00', '16:00', 0, ['Breaker 1t']), flt('EX-15', 'mob')], { desc: 'Rock breaking, Ch 360' });
+  addDocket(st, 'D206', '2026-11-11', 'Submitted', [lab('tom', '07:00', '15:00', 0, [{ type: 'Tool' }])], { desc: 'Formwork for headwall' });
+  addDocket(st, 'D107', '2026-11-12', 'Submitted', [lab('jo', '07:00', '15:00')], { desc: 'Trench shoring' });
+  addDocket(st, 'D207', '2026-11-12', 'Draft', [lab('cris', '07:00', '11:00')], { desc: 'Standby for client access' });
+  addDocket(st, 'D208', '2026-11-12', 'Approved', [lab('tom', '06:00', '17:00', 0.5)], { desc: 'Traffic switch, Ch 200' });
+  addDocket(st, 'D215', '2026-11-13', 'Submitted', [lab('mel', '07:00', '15:00')], { desc: 'Water main lowering' });
+  addDocket(st, 'D216', '2026-11-13', 'Approved', [wet('EX-12', 'lee', '07:00', '15:00')], { desc: 'Water main lowering, excavation' });
+  addDocket(st, 'D211', '2026-11-16', 'Submitted', [wet('EX-07', 'sam', '07:00', '15:00', 0, ['Breaker 1t']), mat('Concrete', { cost: 600 })], { desc: 'Rock breaking and concrete, Ch 380' });
+  addDocket(st, 'D217', '2026-11-16', 'Approved', [lab('jo', '07:00', '15:00')], { desc: 'Clean up, Ch 400', note: 'Dated after the 1 to 15 Nov claim period' });
 
   at('2026-10-31', () => {
-    const c = createClaim(st, { from: '2026-10-16', to: '2026-10-31' }, ['D091', 'D092'], { id: 'C-003' });
-    c.boq = { '1.1': 600, '2.3': 120 };
-    issueClaim(st, 'C-003');
+    const c = createClaim(st, { from: '2026-10-16', to: '2026-10-31' }, ['D091', 'D092'], { id: 3, vars: ['V002'] });
+    setVarPct(st, '3', 'V002', 80);
+    c.boq = { '1.1': 600, '2.3': 120 }; c.invoiceRef = 'INV-1067';
+    approveClaim(st, '3');
   });
-  at('2026-11-03', () => { createVariation(st, ['D201'], { id: 'V-012', title: 'Extra kerb removal, Ch 120' }); submitVariation(st, 'V-012'); });
-  at('2026-11-04', () => approveVariation(st, 'V-012'));
-  at('2026-11-06', () => { createVariation(st, ['D212', 'D213', 'D214'], { id: 'V-014', title: 'Detour road base and traffic control' }); submitVariation(st, 'V-014'); });
+  at('2026-11-03', () => { createVariation(st, ['D201'], { id: 'V004', title: 'Extra kerb removal, Ch 120' }); submitVariation(st, 'V004'); });
+  at('2026-11-04', () => approveVariation(st, 'V004'));
+  at('2026-11-06', () => { createVariation(st, ['D212', 'D213', 'D214'], { id: 'V005', title: 'Detour road base and traffic control' }); submitVariation(st, 'V005'); });
   at('2026-11-06', () => markNotClaimable(st, 'D105', 'goodwill, no charge'));
   at('2026-11-12', () => markNotClaimable(st, 'D207', 'crew waiting on client access'));
   at('2026-11-12', () => { sendBack(st, 'D107', 'More photos', 'need the trench depth shot'); });
-  at('2026-11-12', () => createVariation(st, ['D203'], { id: 'V-013', title: 'Hand dig around Telstra pit' }));
-  at('2026-11-13', () => createVariation(st, ['D208'], { id: 'V-015', title: 'Traffic switch, Ch 200' }));
-  at('2026-11-14', () => { createVariation(st, ['D215', 'D216'], { id: 'V-017', title: 'Water main lowering, Ch 410' }); submitVariation(st, 'V-017', { confirm: true }); });
-  at('2026-11-16', () => { createVariation(st, ['D209', 'D210', 'D211'], { id: 'V-016', title: 'Rock breaking, Ch 340 to 380' }); submitVariation(st, 'V-016', { confirm: true }); });
-  st.log = [{ at: st.today, what: 'Demo loaded: Riverside Rd Upgrade, 1 to 16 Nov 2026', kind: 'action' }];
+  at('2026-11-12', () => createVariation(st, ['D203'], { id: 'V006', title: 'Hand dig around Telstra pit' }));
+  at('2026-11-13', () => createVariation(st, ['D208'], { id: 'V007', title: 'Traffic switch, Ch 200' }));
+  at('2026-11-14', () => { createVariation(st, ['D215', 'D216'], { id: 'V008', title: 'Water main lowering, Ch 410' }); submitVariation(st, 'V008', { confirm: true }); });
+  at('2026-11-16', () => { createVariation(st, ['D209', 'D210', 'D211'], { id: 'V009', title: 'Rock breaking, Ch 340 to 380' }); submitVariation(st, 'V009', { confirm: true }); });
+  st.log = [{ at: st.today, what: 'Demo loaded: Riverside Rd Upgrade, 1 Sep to 16 Nov 2026', kind: 'action' }];
   return st;
 }
