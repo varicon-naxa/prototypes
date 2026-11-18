@@ -173,6 +173,40 @@ const SCENARIOS = [
       return st;
     } },
 
+  { story: 'Release', title: 'Delete Variation works on any status and frees its dockets',
+    text: 'Decided 2026-11-18: Delete Variation (kebab) works as today on any status. Deleting Approved V024 and Partial Approved V025 removes them from the register and frees their dockets; deleting a Rejected one just removes it. A variation already carried on a claim is refused, so the claim is not broken.',
+    run(c) {
+      const st = baseState(); st.today = '2026-11-16';
+      ['D701', 'D702', 'D703', 'D704'].forEach((id, i) => addDocket(st, id, '2026-11-0' + (i + 3), 'Approved', [lab('jo', '07:00', '15:00')]));
+      _approved(st, ['D701'], 'V024');
+      createVariation(st, ['D702'], { id: 'V025' }); setApproved(st, 'V025', 'D702', 1, 400); setVarStatus(st, 'V025', 'Partial Approved');
+      createVariation(st, ['D703'], { id: 'V026' }); setVarStatus(st, 'V026', 'Rejected');
+      _allowed(c, 'Delete Approved V024', () => deleteVariation(st, 'V024'));
+      _allowed(c, 'Delete Partial Approved V025', () => deleteVariation(st, 'V025'));
+      _allowed(c, 'Delete Rejected V026', () => deleteVariation(st, 'V026'));
+      _chk(c, 'All three gone, dockets freed', [st.variations.length, ['D701', 'D702', 'D703'].map(id => _ids(st).includes(id))], [0, [true, true, true]]);
+      _approved(st, ['D704'], 'V027');
+      createClaim(st, NOV1, [], { id: 4 });
+      _refused(c, 'On a claim: refused', () => deleteVariation(st, 'V027'), 'V027 is on claim 4 and cannot be deleted');
+      return st;
+    } },
+  { story: 'Status', title: 'Back to Pending unfreezes; Non-Claimable and Rejected are final',
+    text: 'Decided 2026-11-18: an Approved or Partial Approved docket variation can be set back to Pending from the dropdown and its lines unfreeze, unless it is already on a claim. Non-Claimable and Rejected are final: their dockets were freed and any status change is refused.',
+    run(c) {
+      const st = baseState(); st.today = '2026-11-16';
+      addDocket(st, 'D801', '2026-11-03', 'Approved', [lab('tom', '07:00', '15:00')]);
+      addDocket(st, 'D802', '2026-11-04', 'Approved', [lab('jo', '07:00', '15:00')]);
+      const v = _approved(st, ['D801'], 'V028');
+      _allowed(c, 'Approved to Pending', () => setVarStatus(st, 'V028', 'Pending'));
+      _chk(c, 'Unfrozen, editable again', [v.status, v.approvedAmount, v.lines[0].frozen], ['Pending', null, null]);
+      _allowed(c, 'Approved again', () => setVarStatus(st, 'V028', 'Approved'));
+      createClaim(st, NOV1, [], { id: 4 });
+      _refused(c, 'On a claim: back to Pending refused', () => setVarStatus(st, 'V028', 'Pending'), 'V028 is on claim 4 and stays Approved');
+      createVariation(st, ['D802'], { id: 'V029' }); setVarStatus(st, 'V029', 'Rejected');
+      ['Pending', 'Approved', 'Non-Claimable'].forEach(s => _refused(c, 'Rejected to ' + s + ' refused', () => setVarStatus(st, 'V029', s), 'V029 is Rejected and its dockets were freed; start a new variation from dockets'));
+      return st;
+    } },
+
   /* ───── Lean only ───── */
   { only: 'lean', story: 'Snapshot', title: 'Lines are a snapshot: a calculator change does not move them',
     text: 'V016 lines take the calculator value when each docket is added. A Leading Hand rate change to $75 raises D209 to $900 on the calculator, but its Submitted and Approved rates stay $840 and nothing is flagged.',
