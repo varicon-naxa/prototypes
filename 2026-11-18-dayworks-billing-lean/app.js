@@ -55,6 +55,7 @@ const PTAB_KEY = { 'Claim': 'claim', 'Variation Register': 'variation', 'Daywork
 function go(tab) { TAB = tab; MENU = null; if (tab === 'daywork') DW.open = null; if (tab === 'variation') VR.open = null; if (tab === 'claim') CL.open = null; render(); window.scrollTo(0, 0); }
 function render() {
   document.getElementById('ptabs').innerHTML = PTABS.map(t => { const k = PTAB_KEY[t]; return `<div class="ptab ${k ? 'live' : 'dead'} ${k === TAB ? 'active' : ''}" ${k ? `onclick="go('${k}')"` : `title="Not in this prototype"`}>${t}</div>`; }).join('');
+  if (VR.open && !getVarOrNull(S, VR.open)) { VR.open = null; VF = null; } // the open variation was deleted
   const v = document.getElementById('view');
   document.getElementById('cfoot').innerHTML = '';
   v.innerHTML = relBanner() + (TAB === 'daywork' ? (DW.open ? docketPage(DW.open) : dayworkList()) : TAB === 'variation' ? (VR.open ? varPage(getVar(S, VR.open)) : varRegister()) : (CL.open ? claimPage(getClaim(S, CL.open)) : claimList()));

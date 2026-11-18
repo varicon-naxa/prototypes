@@ -124,7 +124,7 @@ const SCENARIOS = [
       return st;
     } },
   { story: 'Release', title: 'Deleting a line, Delete Variation, Non-Claimable and Rejected free the dockets',
-    text: 'Deleting a line frees that docket. Delete Variation (kebab, Pending only) removes it and frees its dockets. Non-Claimable or Rejected from the dropdown keeps it on the register and frees its dockets; it cannot then be moved back.',
+    text: 'Deleting a line frees that docket. Delete Variation (kebab) removes it and frees its dockets. Non-Claimable or Rejected from the dropdown keeps it on the register and frees its dockets; it cannot then be moved back.',
     run(c) {
       const st = baseState();
       ['D501', 'D502', 'D503', 'D504', 'D505'].forEach((id, i) => addDocket(st, id, '2026-11-0' + (i + 3), 'Approved', [lab('jo', '07:00', '15:00')]));

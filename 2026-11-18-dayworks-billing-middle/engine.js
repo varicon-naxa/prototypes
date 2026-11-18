@@ -330,7 +330,9 @@ function saveVariation(st, varId, fields = {}) {
 }
 function deleteVariation(st, varId) {
   const v = getVar(st, varId);
-  if (v.status !== 'Pending') throw new Error('Only a Pending variation can be deleted');
+  // Decided 2026-11-18: Delete Variation works as today on any status and frees its dockets. A variation already
+  // carried on a claim cannot be deleted without breaking that claim, so that one case is refused.
+  const cl = varOnClaim(st, varId); if (cl) throw new Error(v.id + ' is on claim ' + cl.id + ' and cannot be deleted');
   st.variations = st.variations.filter(x => x !== v);
   log(st, v.id + ' deleted; ' + (v.lines.map(l => l.docket).join(', ') || 'no dockets') + ' freed');
 }

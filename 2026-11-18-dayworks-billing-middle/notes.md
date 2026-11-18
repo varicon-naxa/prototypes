@@ -5,7 +5,7 @@ Built 2026-11-18 as a smaller first release to compare against the full prototyp
 Live: https://varicon-naxa.github.io/prototypes/2026-11-18-dayworks-billing-middle/
 Compare: [full](https://varicon-naxa.github.io/prototypes/2026-11-12-dayworks-billing/) · [lean](https://varicon-naxa.github.io/prototypes/2026-11-18-dayworks-billing-lean/)
 
-Files: `config.js` (`RELEASE = 'middle'`), `engine.js`, `app.js`, `scenarios.js` (11/11 passing), `index.html`. The engine, screens and scenarios are the same files as the lean release; `config.js` switches between them.
+Files: `config.js` (`RELEASE = 'middle'`), `engine.js`, `app.js`, `scenarios.js` (13/13 passing), `index.html`. The engine, screens and scenarios are the same files as the lean release; `config.js` switches between them.
 
 ## What's in
 
@@ -28,7 +28,7 @@ Shared with lean:
 - Budget Sum and Estimated Cost are the COST total, and Margin = (charge - cost) / charge.
 - Status is the register dropdown: Pending, Approved, Partial Approved, Non-Claimable, Rejected.
 - Dockets are locked until their line is deleted. Mark as Costed and Mark as Invoiced are still allowed, status only.
-- Delete Variation works on Pending variations only.
+- Delete Variation works on any status and frees its dockets.
 - Claims are unchanged: dockets reach a claim through the Variation tab by percent to date, and there is no auto-Invoiced.
 
 ## What's out vs the full version
@@ -44,12 +44,13 @@ Shared with lean:
 - The scope above, from the coordinator briefs of 2026-11-18 (live app checked).
 - Mark as Costed and Mark as Invoiced are allowed on a docket that is locked on a variation; they change its status only.
 
+- Status dropdown on a docket variation: Approved or Partial Approved can be set back to Pending (lines unfreeze), refused once it is on a claim. Non-Claimable and Rejected are final; any status change is refused and its dockets are started on a new variation.
+- Delete Variation works as today on any status and frees its dockets.
+
+Prototype safeguard (not a product decision): deleting a variation that a claim already carries is refused, so the claim is not left pointing at nothing.
+
 Everything not listed keeps the full prototype's decided rules (VAR-23036, VAR-23037 and Alec's answers of 2026-11-16 and 2026-11-17).
 
 ## Open questions for Alec
 
-These cover the status dropdown on a docket variation. The prototype takes the reading shown in brackets; none is decided. They are the same three questions as in the lean release.
-
-1. Can an Approved or Partial Approved docket variation be set back to Pending from the dropdown? (Prototype: yes, its lines unfreeze and follow live again, unless it is on a claim, when it is refused.)
-2. Can a Non-Claimable or Rejected docket variation be set back to another status? Its dockets were already freed. (Prototype: refused.)
-3. Can Delete Variation be used on an Approved or Partial Approved docket variation? (Prototype: Pending only.)
+None.
