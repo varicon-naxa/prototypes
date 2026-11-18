@@ -787,6 +787,8 @@ function seedState() {
   addDocket(st, 'D215', '2026-11-13', 'Submitted', [lab('mel', '07:00', '15:00')], { desc: 'Water main lowering' });
   addDocket(st, 'D216', '2026-11-13', 'Approved', [wet('EX-12', 'lee', '07:00', '15:00')], { desc: 'Water main lowering, excavation' });
   addDocket(st, 'D211', '2026-11-16', 'Submitted', [wet('EX-07', 'sam', '07:00', '15:00', 0, ['Breaker 1t']), mat('Concrete', { cost: 600 })], { desc: 'Rock breaking and concrete, Ch 380' });
+  addDocket(st, 'D220', '2026-11-12', 'Approved', [lab('jo', '07:00', '15:30', 0.5), mat('Road base', { qty: 6 })], { desc: 'Backfill service trench, Ch 165' });
+  addDocket(st, 'D221', '2026-11-13', 'Costed', [dry('EX-12', '07:00', '12:00')], { desc: 'Stockpile tidy, dry hire' });
   addDocket(st, 'D217', '2026-11-16', 'Approved', [lab('jo', '07:00', '15:00')], { desc: 'Clean up, Ch 400', note: 'Dated after the 1 to 15 Nov claim period' });
 
   at('2026-10-24', () => { createVariation(st, ['D091', 'D092'], { id: 'V004', title: 'Kerb removal and unsuitable material, October', revision: 'Rev A' }); });
