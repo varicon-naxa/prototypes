@@ -1,6 +1,6 @@
-# Dayworks billing, middle release: lean plus live repricing
+# Dayworks billing, middle release: lean plus live values
 
-Built 2026-11-18 as a smaller first release to compare against the full prototype. Cut down from `2026-11-12-dayworks-billing`, keeping the same Varicon project shell (sidebar, project tabs, Prototype drawer), the same seed project (Riverside Rd Upgrade) and the same Dayworks Calculator pricing engine.
+Built 2026-11-18 as a smaller first release to compare against the full prototype, and reworked the same day to match Varicon's live Add Variation form (Alec checked the live app). Cut down from `2026-11-12-dayworks-billing`, keeping the same Varicon project shell (sidebar, project tabs, Prototype drawer), the same seed project (Riverside Rd Upgrade) and the same Dayworks Calculator pricing engine.
 
 Live: https://varicon-naxa.github.io/prototypes/2026-11-18-dayworks-billing-middle/
 Compare: [full](https://varicon-naxa.github.io/prototypes/2026-11-12-dayworks-billing/) · [lean](https://varicon-naxa.github.io/prototypes/2026-11-18-dayworks-billing-lean/)
@@ -9,44 +9,47 @@ Files: `config.js` (`RELEASE = 'middle'`), `engine.js`, `app.js`, `scenarios.js`
 
 ## What's in
 
-Everything in the lean release, except that line values are **live until approval** instead of a snapshot:
+Everything in the lean release, except that line values are **live until the variation is Approved or Partial Approved**:
 
-- Each line follows its docket's current calculator value until the variation is Approved or Partial Approved. A line that moves is flagged "changed since added" and the change is kept in the history.
-- A submitted variation whose amount moves shows "changed since submitted" and a **Send new revision** prompt. Approving while it shows is allowed, at the current total, and the warning is recorded.
-- Approval freezes the lines; later rate changes move nothing.
-- No Refresh button.
-- Dockets on a Pending variation are still locked, so live changes come only from calculator rate changes, not docket edits.
+- The Submitted and Approved rates on the CONTRACT lines, and the COST lines, follow the dockets' current calculator value. An Approved Rate the user edited stays as edited.
+- A line that moves is flagged "changed since added", and the change is kept in the history.
+- There is no changed-since-submitted flag, revision prompt or approve-over-stale warning, and no Refresh button.
+- Setting Approved or Partial Approved on the register dropdown freezes the lines; later rate changes move nothing.
+- Dockets on a Pending variation are still locked, so live changes come only from calculator rate changes.
 
 Shared with lean:
 
-- One entry point: Variation Register > New Variation > From dockets.
-- Picker offers Approved and Costed only, with unmapped and overlapping dockets blocked and no not-yet-approved warning.
-- One line per docket, with an "On V0xx" marker. More dockets can be added while Pending and not submitted.
-- Locking until the line is removed.
-- Today's variation flow. Partial Approved has no shortfall marker or adjustment line.
-- Non-Claimable, Rejected or deleting a line frees the dockets.
-- Claims through the Variation tab only, by percent to date, with credit lines and negative claims.
-- No auto-Invoiced; dockets are marked Invoiced by hand.
-- No estimated cost from dockets.
+- From dockets (Approved and Costed only) opens Varicon's Add Variation form.
+  - Header: task name and View task details, Revision as free text, Export, Cancel, Save Variation then Update Variation, and a kebab with only Delete Variation.
+  - Fields: WBS ID, Type, Cost Centre, Summary/Comments, Submitted and Approved Amount, greyed Margin, and Budget Sum.
+- Tabs: COST, CONTRACT, DOCKETS.
+- The CONTRACT tab has one row per docket. Unit is "docket", and both Submitted and Approved are qty 1 at the calculator value, so Approved = Submitted from the start. Approved Qty and Rate are editable while Pending.
+- The COST tab has one cost resource per labour, plant, material and subcontract line at internal cost rates, grouped under each docket's subtask.
+- Budget Sum and Estimated Cost are the COST total, and Margin = (charge - cost) / charge.
+- Status is the register dropdown: Pending, Approved, Partial Approved, Non-Claimable, Rejected.
+- Dockets are locked until their line is deleted. Mark as Costed and Mark as Invoiced are still allowed, status only.
+- Delete Variation works on Pending variations only.
+- Claims are unchanged: dockets reach a claim through the Variation tab by percent to date, and there is no auto-Invoiced.
 
 ## What's out vs the full version
 
-- Bulk Create variation / Add to claim on the Daywork Record tab.
-- Ready for Review and Submitted dockets in the picker, and the not-yet-approved warning.
+- Submit, revisions, the approve-amount dialog, the shortfall marker and the changed-since-submitted flag.
 - Editing a docket while it is on a variation (here it must come off first).
-- The shortfall marker and adjustment line on a lower approval.
-- A Dayworks tab on claims (dockets as claim lines).
+- Bulk actions on the Daywork Record tab, and Ready for Review and Submitted dockets in the picker.
+- A Dayworks tab on claims.
 - Auto-Invoiced.
-- Estimated Cost from dockets.
-
-## Decisions source
-
-The scope above is from Alec via the coordinator brief of 2026-11-18. Everything not listed there keeps the full prototype's decided rules (VAR-23036, VAR-23037 and Alec's answers of 2026-11-16 and 2026-11-17; see the full prototype's `notes.md`).
 
 ## Decided (Alec, 2026-11-18)
 
-- Mark as Costed and Mark as Invoiced are allowed on a docket that is locked on a variation; they change its status only (no edits, no Reopen).
+- The scope above, from the coordinator briefs of 2026-11-18 (live app checked).
+- Mark as Costed and Mark as Invoiced are allowed on a docket that is locked on a variation; they change its status only.
+
+Everything not listed keeps the full prototype's decided rules (VAR-23036, VAR-23037 and Alec's answers of 2026-11-16 and 2026-11-17).
 
 ## Open questions for Alec
 
-None.
+These cover the status dropdown on a docket variation. The prototype takes the reading shown in brackets; none is decided. They are the same three questions as in the lean release.
+
+1. Can an Approved or Partial Approved docket variation be set back to Pending from the dropdown? (Prototype: yes, its lines unfreeze and follow live again, unless it is on a claim, when it is refused.)
+2. Can a Non-Claimable or Rejected docket variation be set back to another status? Its dockets were already freed. (Prototype: refused.)
+3. Can Delete Variation be used on an Approved or Partial Approved docket variation? (Prototype: Pending only.)
