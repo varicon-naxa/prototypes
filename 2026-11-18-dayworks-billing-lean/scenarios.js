@@ -57,7 +57,7 @@ const SCENARIOS = [
       _chk(c, 'Submitted = Approved', [varSubmittedAmount(st, v), varApprovedAmount(st, v)], [2270, 2270]);
       _chk(c, 'Markers', ['D201', 'D210'].map(id => docketHome(st, id).rec.id), ['V011', 'V011']);
       _allowed(c, 'Add D213 while Pending', () => addToVariation(st, 'V011', ['D213']));
-      _chk(c, 'Amounts follow', [varSubmittedAmount(st, v), varApprovedAmount(st, v)], [3570, 3570]);
+      _chk(c, 'Amounts follow (traffic control charged at cost + 10%)', [varSubmittedAmount(st, v), varApprovedAmount(st, v)], [3590, 3590]);
       saveVariation(st, 'V011', { revisionText: 'Rev B' });
       _chk(c, 'Update keeps it Pending, revision is free text', [v.status, v.revisionText], ['Pending', 'Rev B']);
       return st;
