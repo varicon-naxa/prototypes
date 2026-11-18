@@ -40,8 +40,8 @@ function act(fn, okMsg) {
 
 /* ───────── Release banner ───────── */
 const REL = {
-  lean: ['Lean release', 'Copy dockets into a normal variation at their value when added, with Refresh from dockets to reprice. Leaves out: live repricing and flags, a Dayworks tab on claims, auto-Invoiced, estimated cost from dockets, bulk actions on Daywork Record.'],
-  middle: ['Middle release', 'Lean plus live repricing until approval, with changed-since flags and a revision prompt. Leaves out: a Dayworks tab on claims, auto-Invoiced, estimated cost from dockets, bulk actions on Daywork Record.'],
+  lean: ['Lean release', 'From dockets opens the existing Add Variation form: one line per docket at its value when added (Refresh from dockets reprices), cost lines from the dockets, status on the register dropdown. Leaves out: live repricing, a Dayworks tab on claims, auto-Invoiced, bulk actions on Daywork Record.'],
+  middle: ['Middle release', 'Lean, but contract and cost lines follow the calculator live until the variation is Approved, with "changed since added" flags; no Refresh. Leaves out: a Dayworks tab on claims, auto-Invoiced, bulk actions on Daywork Record.'],
 };
 function relBanner() {
   const [name, what] = REL[RELEASE];
@@ -71,7 +71,7 @@ function onMarker(id) {
   const lock = isLocked(S, id) ? ' <i class="fas fa-lock"></i>' : '';
   return `<span class="tag t-on" onclick="event.stopPropagation();goRecord('${h.kind}','${h.rec.id}')">On ${h.kind === 'claim' ? 'Claim ' + h.rec.id : h.rec.id}${lock}</span>`;
 }
-function goRecord(kind, id) { closeModal(); if (kind === 'variation') { TAB = 'variation'; VR.open = id; VR.sub = 'dockets'; } else { TAB = 'claim'; CL.open = id; CL.sub = 'variation'; } render(); window.scrollTo(0, 0); }
+function goRecord(kind, id) { closeModal(); if (kind === 'variation') { openVarForm(id); VR.sub = 'dockets'; render(); return; } else { TAB = 'claim'; CL.open = id; CL.sub = 'variation'; } render(); window.scrollTo(0, 0); }
 
 /* ───────── Daywork Record tab ───────── */
 const DW_TABS = ['ALL', 'Draft', 'Ready for Review', 'Submitted', 'Approved', 'Costed', 'Invoiced', 'Rejected', 'Not claimable'];
@@ -119,7 +119,7 @@ function docketPage(id) {
     <div class="row" style="margin-top:8px"><b>Daywork Record</b> ${pill(d.status)} ${onMarker(id)} ${d.sentBack ? `<span class="tag t-sent">Sent back: ${esc(d.sentBack.reason)}</span>` : ''}</div>
     <div class="kv"><div><b>Project</b>(${S.project.code}) ${esc(S.project.name)}</div><div><b>Client</b>${esc(S.project.client)}</div><div><b>Performed on</b>${dayName(d.date)}, ${fmtDate(d.date)}</div><div><b>Area / Work Zone</b>-</div><div><b>Reference #</b>${esc(d.ref || '-')}</div><div><b>Created by</b>${esc(d.createdBy)}</div></div>
     <div><b class="muted" style="font-weight:500">Description of work</b><div>${esc(d.desc || '-')}</div></div>`;
-  if (locked && h0.rec.status === 'Pending') h += `<div class="ban dark"><i class="fas fa-lock"></i><div><b>Locked while on variation ${h0.rec.id}.</b> Read-only: no edits and no Reopen. To fix it, remove its line from ${h0.rec.id} (the docket is freed), reopen and edit it, then add it again.</div></div>`;
+  if (locked && h0.rec.status === 'Pending') h += `<div class="ban dark"><i class="fas fa-lock"></i><div><b>Locked while on variation ${h0.rec.id}.</b> Read-only: no edits and no Reopen. To fix it, delete its line on ${h0.rec.id} (the docket is freed), reopen and edit it, then add it again.</div></div>`;
   else if (locked) h += `<div class="ban dark"><i class="fas fa-lock"></i><div><b>Read-only.</b> On ${h0.kind === 'variation' ? h0.rec.status.toLowerCase() + ' variation ' + h0.rec.id : 'approved Claim ' + h0.rec.id}. Its value is frozen at ${money(h0.line.frozen)} and is never repriced${Math.abs(p.total - h0.line.frozen) > 0.004 ? ` (the live calculator would now say ${money(p.total)})` : ''}. Its status is not changed by claims; mark it Invoiced by hand once billed.</div></div>`;
   else if (h0) h += `<div class="ban info"><i class="fas fa-link"></i><div>On ${h0.kind === 'claim' ? 'Claim ' + h0.rec.id : 'variation ' + h0.rec.id} (${h0.rec.status.toLowerCase()}${h0.kind === 'variation' && h0.rec.submittedOn ? ', submitted' : ''}). Changes flow to its line until the ${h0.kind === 'variation' ? 'variation is approved' : 'claim is approved'}, and are kept in its history. Send back and Not claimable are refused until it is removed.</div></div>`;
   if (h0 && !locked && docketIssue(S, d)) h += `<div class="ban err"><i class="fas fa-ban"></i><div><b>Blocking ${h0.kind === 'claim' ? 'Claim ' + h0.rec.id : h0.rec.id}:</b> ${esc(docketIssue(S, d))}. It stays on the ${h0.kind}, flagged, until it is fixed or removed.</div></div>`;
@@ -183,11 +183,11 @@ function openPicker(mode, target, preIds) {
 function resetTicks() { PK.ticked = new Set(pickerRows(S, PK.mode, PK.period).filter(r => r.preTick).map(r => r.d.id)); }
 function pickerModal() {
   const rows = pickerRows(S, PK.mode, PK.period); const isVar = PK.mode === 'variation';
-  const pendingVars = S.variations.filter(v => v.status === 'Pending' && !v.submittedOn && !v.manual);
+  const pendingVars = S.variations.filter(v => v.status === 'Pending' && !v.manual && !v.unsaved);
   const openClaims = S.claims.filter(c => CLAIM_LIVE.includes(c.status));
   let h = `<div class="spread"><h3>${isVar ? 'New Variation from dockets' : 'Add dockets to a claim'}</h3><button class="btn icon" onclick="closeModal()"><i class="fas fa-xmark"></i></button></div>`;
   if (PK.skipped && PK.skipped.length) h += `<div class="ban warn"><i class="fas fa-circle-info"></i><div>${PK.skipped.join(', ')} ${PK.skipped.length === 1 ? 'was' : 'were'} not ticked: Draft, Rejected, unmapped, overlapping, Not claimable and dockets already on a variation or claim cannot be added.</div></div>`;
-  if (isVar) h += `<div class="frow"><div class="field"><label>Add to</label><select onchange="PK.target=this.value;refreshModal()"><option value="new">New variation</option>${pendingVars.map(v => `<option value="${v.id}" ${PK.target === v.id ? 'selected' : ''}>${v.id} ${esc(v.title)} (Pending, not submitted)</option>`).join('')}</select></div>${PK.target === 'new' ? `<div class="field" style="flex:2"><label>Task name</label><input value="${esc(PK.title)}" placeholder="Dayworks ${fmtDate(S.today)}" oninput="PK.title=this.value"></div>` : ''}</div>`;
+  if (isVar) h += `<div class="frow"><div class="field"><label>Add to</label><select onchange="PK.target=this.value;refreshModal()"><option value="new">New variation</option>${pendingVars.map(v => `<option value="${v.id}" ${PK.target === v.id ? 'selected' : ''}>${v.id} ${esc(v.title)} (Pending)</option>`).join('')}</select></div>${PK.target === 'new' ? `<div class="field" style="flex:2"><label>Task name</label><input value="${esc(PK.title)}" placeholder="Dayworks ${fmtDate(S.today)}" oninput="PK.title=this.value"></div>` : ''}</div>`;
   else h += `<div class="frow"><div class="field"><label>Claim</label><select onchange="PK.target=this.value;PK.period=this.value==='new'?nextClaimPeriod(S):Object.assign({},getClaim(S,this.value).period);${PK.fromList ? '' : 'resetTicks();'}refreshModal()"><option value="new">Make New Claim</option>${openClaims.map(c => `<option value="${c.id}" ${PK.target === c.id ? 'selected' : ''}>Claim # ${c.id} (${c.status}, ${fmtDate(c.period.from)} to ${fmtDate(c.period.to)})</option>`).join('')}</select></div>
     ${PK.target === 'new' ? `<div class="field"><label>Claim period from</label><input type="date" value="${PK.period.from}" onchange="PK.period.from=this.value;${PK.fromList ? '' : 'resetTicks();'}refreshModal()"></div><div class="field"><label>to</label><input type="date" value="${PK.period.to}" onchange="PK.period.to=this.value;${PK.fromList ? '' : 'resetTicks();'}refreshModal()"></div>` : ''}</div>
     <div class="muted">Dockets dated in the period are pre-ticked; older and later dockets are listed unticked. Dockets on a variation are claimed through the variation.</div>`;
@@ -200,14 +200,14 @@ function pickerModal() {
   });
   h += `</tbody></table></div>`;
   const sel = rows.filter(r => PK.ticked.has(r.d.id)); const unap = sel.filter(r => !SIGNED.includes(r.d.status)).length;
-  h += `<div class="actions"><span class="muted" style="margin-right:auto">${plural(sel.length, 'docket')} ticked · ${money(round2(sel.reduce((a, r) => a + r.value, 0)))} ex GST · one line per docket at full calculator value, no margin${unap ? ` · <b style="color:#92400e">${unap} not yet approved</b>` : ''}</span><button class="btn" onclick="closeModal()">Cancel</button><button class="btn or" onclick="confirmPicker()">${isVar ? (PK.target === 'new' ? 'Create variation' : 'Add to ' + PK.target) : (PK.target === 'new' ? 'Make New Claim' : 'Add to Claim # ' + PK.target)}</button></div>`;
+  h += `<div class="actions"><span class="muted" style="margin-right:auto">${plural(sel.length, 'docket')} ticked · ${money(round2(sel.reduce((a, r) => a + r.value, 0)))} ex GST · one line per docket at full calculator value, no margin${unap ? ` · <b style="color:#92400e">${unap} not yet approved</b>` : ''}</span><button class="btn" onclick="closeModal()">Cancel</button><button class="btn or" onclick="confirmPicker()">${isVar ? (PK.target === 'new' ? 'Continue to Add Variation' : 'Add to ' + PK.target) : (PK.target === 'new' ? 'Make New Claim' : 'Add to Claim # ' + PK.target)}</button></div>`;
   return h;
 }
 function confirmPicker() {
   const pk = PK; const ids = pickerRows(S, pk.mode, pk.period).filter(r => pk.ticked.has(r.d.id)).map(r => r.d.id);
   if (pk.mode === 'variation') {
-    const r = act(() => pk.target === 'new' ? createVariation(S, ids, { title: pk.title || undefined }) : addToVariation(S, pk.target, ids), plural(ids.length, 'docket') + ' added');
-    if (r) { DW.sel.clear(); closeModal(); TAB = 'variation'; VR.open = r.id; VR.sub = 'dockets'; render(); }
+    const r = act(() => pk.target === 'new' ? createVariation(S, ids, { title: pk.title || undefined, unsaved: true }) : addToVariation(S, pk.target, ids), pk.target === 'new' ? 'Add Variation form opened with ' + plural(ids.length, 'docket') : plural(ids.length, 'docket') + ' added');
+    if (r) { DW.sel.clear(); closeModal(); if (pk.target === 'new') openVarForm(r.id); else { VR.sub = 'dockets'; render(); } }
   } else {
     let id = pk.target;
     const r = act(() => { if (pk.target === 'new') id = createClaim(S, { from: pk.period.from, to: pk.period.to }, ids).id; else claimAddDockets(S, pk.target, ids); return true; }, pk.target === 'new' ? 'Claim created' : plural(ids.length, 'docket') + ' added to Claim # ' + pk.target);
@@ -220,99 +220,118 @@ function confirmDialog(title, body, okLabel, onOk) {
 }
 
 /* ───────── Variation Register tab ───────── */
-const VAR_STATUSES = ['Pending', 'Approved', 'Partial Approved', 'Non-Claimable', 'Rejected'];
 function varRegister() {
-  const vs = S.variations.filter(v => !VR.filter || v.status === VR.filter);
-  const est = round2(S.variations.filter(v => v.manual).reduce((a, v) => a + v.manual.estimated, 0));
-  const subm = round2(S.variations.filter(v => !['Rejected', 'Non-Claimable'].includes(v.status)).reduce((a, v) => a + (varSubmittedAmount(S, v) || 0), 0));
-  const appr = round2(approvedVars(S).reduce((a, v) => a + v.approvedAmount, 0));
+  const vs = S.variations.filter(v => !v.unsaved && (!VR.filter || v.status === VR.filter));
+  const live = S.variations.filter(v => !v.unsaved && !['Rejected', 'Non-Claimable'].includes(v.status));
+  const est = round2(live.reduce((a, v) => a + varEstimatedCost(S, v), 0));
+  const subm = round2(live.reduce((a, v) => a + varSubmittedAmount(S, v), 0));
+  const appr = round2(live.reduce((a, v) => a + varApprovedAmount(S, v), 0));
   let h = `<div class="tiles"><div class="tilegrp"><div class="tile"><div class="l">Estimated Cost</div><div class="v">${money(est)}</div></div><div class="tile"><div class="l">Submitted Amount</div><div class="v">${money(subm)}</div></div><div class="tile"><div class="l">Approved Amount</div><div class="v">${money(appr)}</div></div></div></div>
     <div class="spread"><select class="filter" onchange="VR.filter=this.value;render()"><option value="">Filter by Status</option>${VAR_STATUSES.map(s => `<option ${VR.filter === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
     <div class="row"><span class="help"><i class="fas fa-circle-question"></i> Need Help?</span><button class="btn" onclick="inert('Export')"><i class="fas fa-download"></i> Export <i class="fas fa-chevron-down" style="font-size:9px"></i></button><button class="btn" onclick="inert('Import')"><i class="fas fa-upload"></i> Import</button>
     <span class="menuwrap"><button class="btn or" onclick="event.stopPropagation();MENU=MENU==='newvar'?null:'newvar';render()"><i class="fas fa-circle-plus"></i> New Variation <i class="fas fa-chevron-down" style="font-size:9px"></i></button>${MENU === 'newvar' ? `<div class="menu"><div onclick="event.stopPropagation();MENU=null;inert('Blank variation')"><i class="fas fa-file"></i> Blank variation</div><div onclick="event.stopPropagation();MENU=null;render();openPicker('variation')"><i class="fas fa-file-lines"></i> From dockets</div></div>` : ''}</span></div></div>`;
-  h += `<div class="tw card" style="margin-top:10px"><table class="navyhead"><thead><tr><th style="width:30px"></th><th>WBS ID</th><th style="width:30px"></th><th>Task</th><th class="num">Estimated Cost</th><th class="num">Submitted Amount</th><th class="num">Approved Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>`;
+  h += `<div class="tw card" style="margin-top:10px"><table class="navyhead"><thead><tr><th style="width:30px"></th><th>WBS ID</th><th style="width:30px"></th><th>Task</th><th class="num">Estimated Cost</th><th class="num">Submitted Amount</th><th class="num">Approved Amount</th><th>Status <i class="fas fa-circle-info"></i></th><th>Action</th></tr></thead><tbody>`;
   vs.forEach(v => {
-    const sub = varSubmittedAmount(S, v); const exp = VR.expand.has(v.id);
-    const kids = v.manual ? v.manual.subs : v.lines;
+    const exp = VR.expand.has(v.id); const kids = v.manual ? v.manual.subs : v.lines;
     const blocked = v.status === 'Pending' && !v.manual && recordIssues(S, v).length;
-    h += `<tr class="click" onclick="${v.manual ? `inert('Editing a hand-entered variation')` : `VR.open='${v.id}';VR.sub='dockets';render();window.scrollTo(0,0)`}"><td><i class="fas fa-pen" style="color:#475569"></i></td><td><b>${v.id}</b></td>
+    h += `<tr class="click" onclick="${v.manual ? `inert('Editing a hand-entered variation')` : `openVarForm('${v.id}')`}"><td><i class="fas fa-pen" style="color:#475569"></i></td><td><b>${esc(v.wbs || v.id)}</b></td>
       <td onclick="event.stopPropagation()">${kids.length ? `<a onclick="VR.expand.has('${v.id}')?VR.expand.delete('${v.id}'):VR.expand.add('${v.id}');render()"><i class="fas fa-chevron-${exp ? 'down' : 'right'}"></i></a>` : ''}</td>
-      <td><b>${esc(v.title)}</b>${v.manual ? '' : ` <span class="tag t-ver">${plural(v.lines.length, 'docket')}</span>`}${varSubmittedChanged(S, v) ? ' <span class="tag t-chg">changed since submitted</span>' : ''}${blocked ? ' <span class="tag t-bad">blocked</span>' : ''}</td>
-      <td class="num">${v.manual ? money(v.manual.estimated) : '-'}</td><td class="num">${sub === null ? money(0) : money(sub)}</td><td class="num">${v.approvedAmount === null || v.approvedAmount === undefined ? money(0) : money(v.approvedAmount)}</td>
-      <td>${pill(v.status)}${!v.manual && v.status === 'Pending' ? `<div class="muted">${v.submittedOn ? 'submitted, rev ' + v.revision : 'not submitted'}</div>` : ''}</td><td><i class="fas fa-download" style="color:#475569"></i></td></tr>`;
+      <td><b>${esc(v.title)}</b>${v.manual ? '' : ` <span class="tag t-ver">${plural(v.lines.length, 'docket')}</span>`}${!v.manual && v.lines.some(l => varLineChanged(S, v, l)) ? ' <span class="tag t-chg">changed since added</span>' : ''}${blocked ? ' <span class="tag t-bad">blocked</span>' : ''}</td>
+      <td class="num">${money(varEstimatedCost(S, v))}</td><td class="num">${money(varSubmittedAmount(S, v))}</td><td class="num">${money(varApprovedAmount(S, v))}</td>
+      <td onclick="event.stopPropagation()"><select class="cell" style="min-width:140px" onchange="statusChange('${v.id}',this.value)">${VAR_STATUSES.map(s => `<option ${s === v.status ? 'selected' : ''}>${s}</option>`).join('')}</select></td><td><i class="fas fa-download" style="color:#475569"></i></td></tr>`;
     if (exp) {
       if (v.manual) v.manual.subs.forEach(s => h += `<tr class="sub"><td></td><td>${s.id}</td><td></td><td style="padding-left:24px">${esc(s.title)}</td><td class="num">${money(s.est)}</td><td class="num">${money(s.submitted)}</td><td class="num">${v.status === 'Approved' ? money(s.submitted) : '-'}</td><td></td><td></td></tr>`);
-      else v.lines.forEach((ln, k) => { const d = getDocket(S, ln.docket); const val = varLineValue(S, v, ln); h += `<tr class="sub click" onclick="openDocket('${d.id}')"><td></td><td>${v.id}.${k + 1}</td><td></td><td style="padding-left:24px">Dayworks ${d.id} · ${fmtDate(d.date)} · ${esc(d.desc)} ${pill(d.status)}${varLineChanged(S, v, ln) ? ' <span class="tag t-chg">changed</span>' : ''}</td><td class="num">-</td><td class="num">${v.submittedOn ? money(val) : '-'}</td><td class="num">${VAR_LOCKED.includes(v.status) ? money(ln.frozen) : '-'}</td><td></td><td></td></tr>`; });
+      else v.lines.forEach((ln, k) => { const d = getDocket(S, ln.docket); h += `<tr class="sub click" onclick="openDocket('${d.id}')"><td></td><td>${esc(v.wbs || v.id)}.${k + 1}</td><td></td><td style="padding-left:24px">Dayworks ${d.id} · ${fmtDate(d.date)} · ${esc(d.desc)} ${pill(d.status)}${varLineChanged(S, v, ln) ? ' <span class="tag t-chg">changed since added</span>' : ''}</td><td class="num">${money(varLineCost(S, v, ln))}</td><td class="num">${money(varLineValue(S, v, ln))}</td><td class="num">${['Rejected', 'Non-Claimable'].includes(v.status) ? '-' : money(lineApAmount(S, v, ln))}</td><td></td><td></td></tr>`; });
     }
   });
   if (!vs.length) h += `<tr><td colspan="9" class="muted">No variations.</td></tr>`;
-  h += `</tbody></table></div><div class="muted" style="margin-top:8px">Approved contract sum ${money(contractSum(S))} (original ${money(S.project.contractSum)} + approved variations ${money(appr)}). Rejected and Non-Claimable variations stay on the register. Docket variations open on their Dockets tab; expand a row to see one sub-line per docket. Estimated Cost is not filled from dockets in this release.</div>`;
+  h += `</tbody></table></div><div class="muted" style="margin-top:8px">Status is set here, as today. Approved or Partial Approved freezes a docket variation's lines and keeps its dockets locked; Non-Claimable or Rejected keeps it on the register and frees its dockets. Estimated Cost on a docket variation is its COST total (what the dockets cost us), not the charge.</div>`;
   return h;
+}
+function statusChange(id, status) {
+  const v = getVar(S, id);
+  if (['Non-Claimable', 'Rejected'].includes(status) && !v.manual && v.lines.length) {
+    confirmDialog('Set ' + id + ' ' + status + '?', `It stays on the Variation Register as ${status}, and ${v.lines.map(l => l.docket).join(', ')} ${v.lines.length === 1 ? 'is' : 'are'} freed for another variation. This cannot be undone from here.`, 'Set ' + status, () => act(() => setVarStatus(S, id, status), id + ' set ' + status + ', dockets freed'));
+    render(); return;
+  }
+  act(() => setVarStatus(S, id, status), id + ' set ' + status);
 }
 function changedCell(changed, added, now, until) { return changed ? `<span class="tag t-chg"><i class="fas fa-arrows-rotate"></i> changed since added</span><div class="muted">was <s>${money(added)}</s> now ${money(now)} · flagged until ${until}</div>` : ''; }
 function lineFlags(d, live) {
-  if (!live) return ''; let f = ''; const iss = docketIssue(S, d);
-  if (iss) f += `<div><span class="tag t-bad"><i class="fas fa-ban"></i> ${esc(iss)}</span><div class="muted">blocks until fixed or removed</div></div>`;
-  if (d.reapprove && d.status === 'Submitted') f += `<div><span class="tag t-chg"><i class="fas fa-rotate-left"></i> reopened, back to Submitted</span></div>`;
-  return f;
+  if (!live) return ''; const iss = docketIssue(S, d);
+  return iss ? `<div><span class="tag t-bad"><i class="fas fa-ban"></i> ${esc(iss)}</span><div class="muted">blocks Approved until fixed or removed</div></div>` : '';
 }
 function historyTable(rec) {
   const rows = rec.history.slice().reverse();
-  return `<h2>History <span class="muted" style="font-weight:400">every line change with old and new value; kept after approval</span></h2><div class="tw card"><table><thead><tr><th>Date</th><th>By</th><th>Change</th><th class="num">Old</th><th class="num">New</th></tr></thead><tbody>${rows.map(x => `<tr><td class="small">${fmtDate(x.at)}</td><td class="small">${esc(x.by || '')}</td><td class="small">${esc(x.what)}</td><td class="num small">${x.old === undefined ? '' : money(x.old)}</td><td class="num small">${x.new === undefined ? '' : money(x.new)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No history.</td></tr>'}</tbody></table></div>`;
+  return `<h2>History <span class="muted" style="font-weight:400">every line change with old and new value</span></h2><div class="tw card"><table><thead><tr><th>Date</th><th>By</th><th>Change</th><th class="num">Old</th><th class="num">New</th></tr></thead><tbody>${rows.map(x => `<tr><td class="small">${fmtDate(x.at)}</td><td class="small">${esc(x.by || '')}</td><td class="small">${esc(x.what)}</td><td class="num small">${x.old === undefined ? '' : money(x.old)}</td><td class="num small">${x.new === undefined ? '' : money(x.new)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No history.</td></tr>'}</tbody></table></div>`;
+}
+/* Add / Edit Variation form, as live Varicon */
+let VF = null; // unsaved form fields
+function openVarForm(id) { closeModal(); const v = getVar(S, id); TAB = 'variation'; VR.open = id; VR.sub = 'contract'; VF = { title: v.title, revisionText: v.revisionText || '', type: v.type || 'Variation', wbs: v.wbs || v.id, costCentre: v.costCentre || 'Dayworks' }; render(); window.scrollTo(0, 0); }
+function cancelVarForm(id) {
+  const v = getVar(S, id);
+  if (v.unsaved) { act(() => deleteVariation(S, id), 'Not saved; dockets freed'); }
+  VR.open = null; VF = null; render();
 }
 function varPage(v) {
-  const live = v.status === 'Pending'; const iss = live ? recordIssues(S, v) : []; const total = varTotal(S, v); const sub = varSubmittedAmount(S, v);
-  let h = `<div class="spread"><div class="row"><a onclick="VR.open=null;render()"><i class="fas fa-arrow-left"></i></a> <b style="font-size:15px">Edit Variation</b> ${pill(v.status)}${live ? `<span class="muted">${v.submittedOn ? 'submitted ' + fmtDate(v.submittedOn) : 'not yet submitted to the client'}</span>` : ''}</div><div class="row">`;
-  if (live && RELEASE === 'lean') h += `<button class="btn" onclick="act(()=>refreshFromDockets(S,'${v.id}'),'${v.id} refreshed from dockets')"><i class="fas fa-arrows-rotate"></i> Refresh from dockets</button>`;
-  if (live && !v.submittedOn) h += `<button class="btn" onclick="openPicker('variation','${v.id}')"><i class="fas fa-plus"></i> Add dockets</button><button class="btn" onclick="doNonClaimable('${v.id}')">Set Non-Claimable</button><button class="btn or" onclick="doSubmitVar('${v.id}')">Submit to client</button>`;
-  if (live && v.submittedOn) h += `<button class="btn" onclick="doNonClaimable('${v.id}')">Set Non-Claimable</button><button class="btn danger" onclick="act(()=>releaseVariation(S,'${v.id}','Rejected'),'${v.id} rejected, dockets freed')">Client rejected</button><button class="btn or" onclick="doApproveVar('${v.id}')">Client approved</button>`;
-  h += `</div></div>
-    <div class="row" style="margin-top:10px"><div class="titlebox">${esc(v.title)}</div><div class="fld" style="min-width:90px"><label>Revision</label><div class="val">${v.revision || '-'}</div></div></div>
-    <div class="fields"><div class="fld"><label>WBS ID</label><div class="val">${v.id}</div></div><div class="fld"><label>Claim Ref</label><div class="val">${esc(v.claimRef || v.id)}</div></div><div class="fld"><label>Cost Centre</label><div class="val">${esc(v.costCentre || 'Dayworks')}</div></div><div class="fld"><label>Summary/Comments</label><div class="val"><i class="fas fa-file"></i> <i class="fas fa-message"></i></div></div>
-    <div class="fld"><label>Submitted Amount</label><div class="amt">${sub === null ? money(0) : money(sub)}</div></div><div class="fld"><label>Approved Amount</label><div class="amt">${v.approvedAmount === null ? money(0) : money(v.approvedAmount)}</div></div><div class="fld"><label>Estimated Cost</label><div class="amt">-</div></div><div class="fld"><label>Margin</label><div class="amt">-</div></div><div class="fld"><label>Budget Sum</label><div class="amt">-</div></div></div>`;
-  if (iss.length) h += `<div class="ban err"><i class="fas fa-ban"></i><div><b>${v.submittedOn ? 'Cannot be approved' : 'Cannot be submitted'}</b> until ${iss.map(x => x.docket).join(', ')} ${iss.length === 1 ? 'is' : 'are'} fixed or removed: ${iss.map(x => esc(x.docket + ' ' + x.issue)).join('; ')}.</div></div>`;
-  if (varNeedsRevision(S, v)) h += `<div class="ban warn"><i class="fas fa-paper-plane"></i><div style="flex:1"><b>Changed since submitted.</b> The client last saw ${money(v.submittedBase)} (revision ${v.revision}); the lines now total ${money(total)}${v.docketsChanged ? ', and dockets have been removed' : ''}. It can still be approved; approving now records a warning.</div><button class="btn or sm" onclick="act(()=>sendRevision(S,'${v.id}'),'Revision sent to the client')">Send new revision</button></div>`;
-  else if (live && v.submittedOn) h += `<div class="ban warn"><i class="fas fa-arrows-rotate"></i><div>Pending, submitted to the client. ${RELEASE === 'lean' ? 'Line values are the snapshot taken when each docket was added (or last refreshed); they do not move on their own.' : 'Each line still follows its docket\'s current calculator value until the variation is approved; a move shows "Changed since submitted".'}</div></div>`;
-  if (live && RELEASE === 'lean' && v.lines.some(ln => Math.abs(priceDocket(S, getDocket(S, ln.docket)).total - ln.snap) > 0.004)) h += `<div class="ban info"><i class="fas fa-circle-info"></i><div>The calculator now prices ${v.lines.filter(ln => Math.abs(priceDocket(S, getDocket(S, ln.docket)).total - ln.snap) > 0.004).map(ln => ln.docket).join(', ')} differently from the line value. Lines only change if you use Refresh from dockets${v.submittedOn ? '; after submit a refresh also updates the Submitted Amount and starts a new revision' : ''}.</div></div>`;
-  if (VAR_LOCKED.includes(v.status)) h += `<div class="ban ok"><i class="fas fa-lock"></i><div>${v.status}. Every line is frozen and its dockets are read-only. It is claimed on the Claim tab's Variation tab by percent complete to date${v.status === 'Partial Approved' ? ' of the approved amount' : ''}. Its dockets keep their status; mark them Invoiced by hand once billed.</div></div>`;
-  if (['Rejected', 'Non-Claimable'].includes(v.status)) h += `<div class="ban dark"><i class="fas fa-unlock"></i><div>${v.status}. It stays on the register with its history; its dockets were freed for another variation or a claim. Lines below are history only.</div></div>`;
-  h += `<div class="itabs">${['dockets', 'cost', 'contract'].map(t => `<div class="itab ${VR.sub === t ? 'active' : ''}" onclick="VR.sub='${t}';render()">${t}</div>`).join('')}</div>`;
-  if (VR.sub === 'dockets') {
-    h += `<div class="ban info"><i class="fas fa-percent"></i><div>Each line is its docket's full Dayworks Calculator value. Project cost-plus margins (Labour ${S.project.margins.Labour}%, Plant ${S.project.margins.Plant}%) are <b>not</b> applied to docket lines.</div></div>`;
+  if (!VF) VF = { title: v.title, revisionText: v.revisionText || '', type: v.type || 'Variation', wbs: v.wbs || v.id, costCentre: v.costCentre || 'Dayworks' };
+  const pend = v.status === 'Pending'; const locked = VAR_LOCKED.includes(v.status); const freed = ['Rejected', 'Non-Claimable'].includes(v.status);
+  const sub = varSubmittedAmount(S, v), ap = varApprovedAmount(S, v), cost = varEstimatedCost(S, v), mg = varMargin(S, v);
+  let h = `<div class="spread"><div class="row" style="flex:1;min-width:280px"><a onclick="cancelVarForm('${v.id}')"><i class="fas fa-arrow-left"></i></a> <b style="font-size:15px">${v.unsaved ? 'Add Variation' : 'Edit Variation'}</b></div>
+    <div class="row"><span class="muted">Revision</span><input class="cell" style="width:110px;text-align:left" placeholder="Revision" value="${esc(VF.revisionText)}" oninput="VF.revisionText=this.value">
+    ${pend && RELEASE === 'lean' ? `<button class="btn" onclick="act(()=>refreshFromDockets(S,'${v.id}'),'${v.id} refreshed from dockets')"><i class="fas fa-arrows-rotate"></i> Refresh from dockets</button>` : ''}
+    <button class="btn" onclick="inert('Export')"><i class="fas fa-download"></i> Export</button><button class="btn" onclick="cancelVarForm('${v.id}')">Cancel</button>
+    <button class="btn or" onclick="if(act(()=>saveVariation(S,'${v.id}',VF),'${v.unsaved ? 'Variation saved as Pending' : 'Variation updated'}')!==null){VR.open=null;VF=null;render();}">${v.unsaved ? 'Save Variation' : 'Update Variation'}</button>
+    ${menuBtn('vf' + v.id, [{ label: 'Delete Variation', icon: 'fa-trash', cls: 'red', on: `if(confirm('Delete ${v.id}? Its dockets are freed.')){if(act(()=>deleteVariation(S,'${v.id}'),'${v.id} deleted, dockets freed')!==null){VR.open=null;VF=null;render();}}` }])}</div></div>
+    <div class="row" style="margin-top:10px"><input class="titlebox" value="${esc(VF.title)}" placeholder="Enter a task name..." oninput="VF.title=this.value"> <a onclick="inert('View task details')" class="small">View task details</a></div>
+    <div class="fields"><div class="fld"><label>WBS ID</label><input class="cell" style="width:100px;text-align:left" value="${esc(VF.wbs)}" oninput="VF.wbs=this.value"></div>
+    <div class="fld"><label>Type</label><select class="cell" onchange="VF.type=this.value">${['Contract', 'Variation'].map(t => `<option ${VF.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <div class="fld"><label>Cost Centre</label><select class="cell" onchange="VF.costCentre=this.value">${['Dayworks', 'Earthworks', 'Drainage', 'Pavement'].map(t => `<option ${VF.costCentre === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <div class="fld"><label>Summary/Comments</label><div class="val"><i class="fas fa-file"></i> <i class="fas fa-message"></i></div></div>
+    <div class="fld"><label>Submitted Amount</label><div class="amt">${money(sub)}</div></div><div class="fld"><label>Approved Amount</label><div class="amt">${money(ap)}</div></div>
+    <div class="fld"><label>Margin</label><div class="amt" style="color:#94a3b8">${mg.pct.toFixed(2)}%</div></div><div class="fld"><label>Budget Sum</label><div class="amt">${money(cost)}</div></div></div>`;
+  if (v.unsaved) h += `<div class="ban info"><i class="fas fa-circle-info"></i><div>Not saved yet. Save Variation creates it as <b>Pending</b>; set its status later from the Variation Register, as today. Cancel frees the dockets.</div></div>`;
+  if (pend && recordIssues(S, v).length) h += `<div class="ban err"><i class="fas fa-ban"></i><div>${recordIssues(S, v).map(x => esc(x.docket + ' ' + x.issue)).join('; ')}: it cannot be set Approved until fixed or removed.</div></div>`;
+  if (pend && RELEASE === 'lean' && v.lines.some(ln => Math.abs(priceDocket(S, getDocket(S, ln.docket)).total - ln.snap) > 0.004)) h += `<div class="ban info"><i class="fas fa-circle-info"></i><div>The calculator now prices ${v.lines.filter(ln => Math.abs(priceDocket(S, getDocket(S, ln.docket)).total - ln.snap) > 0.004).map(ln => ln.docket).join(', ')} differently from the line. Lines only change if you use Refresh from dockets.</div></div>`;
+  if (locked) h += `<div class="ban ok"><i class="fas fa-lock"></i><div>${v.status} (set on the Variation Register). Lines are frozen and its dockets stay locked. It is claimed on the Claim's Variation tab by percent to date; its dockets keep their status (mark them Invoiced by hand).</div></div>`;
+  if (freed) h += `<div class="ban dark"><i class="fas fa-unlock"></i><div>${v.status}. It stays on the register; its dockets were freed. Lines below are history only.</div></div>`;
+  h += `<div class="itabs">${['cost', 'contract', 'dockets'].map(t => `<div class="itab ${VR.sub === t ? 'active' : ''}" onclick="VR.sub='${t}';render()">${t}</div>`).join('')}</div>`;
+  const wbs = esc(VF.wbs || v.id);
+  if (VR.sub === 'cost') {
+    h += `<div class="row" style="margin-bottom:8px"><button class="btn" onclick="inert('Add Subtask')"><i class="fas fa-plus"></i> Add Subtask</button><button class="btn" onclick="inert('Add Resource')"><i class="fas fa-plus"></i> Add Resource</button></div>`;
+    h += `<div class="tw card"><table><thead><tr><th>Resource</th><th>Resource Type</th><th>Accounting Code</th><th>Unit</th><th class="num">Unit Cost</th><th class="num">Quantity</th><th class="num">Duration</th><th class="num">Total</th></tr></thead><tbody>`;
+    v.lines.forEach((ln, k) => {
+      const d = getDocket(S, ln.docket); const rows = costLines(S, d); const tot = varLineCost(S, v, ln);
+      h += `<tr class="grp"><td colspan="7">${wbs}.${k + 1} Dayworks ${d.id} · ${esc(d.desc)}${Math.abs(tot - docketCost(S, d)) > 0.004 ? ' <span class="tag t-chg">cost snapshot</span>' : ''}</td><td class="num">${money(tot)}</td></tr>`;
+      rows.forEach(r => h += `<tr><td style="padding-left:22px">${esc(r.resource)}</td><td>${r.type}</td><td class="small">${r.code}</td><td>${r.unit}</td><td class="num">${money(r.unitCost)}</td><td class="num">${fmtH(r.qty)}</td><td class="num">${r.duration === null ? '-' : fmtH(r.duration)}</td><td class="num">${money(r.total)}</td></tr>`);
+    });
+    if (!v.lines.length) h += `<tr><td colspan="8" class="muted">No dockets.</td></tr>`;
+    h += `<tr class="tot"><td colspan="7">Budget Sum (COST total)</td><td class="num">${money(cost)}</td></tr></tbody></table></div><div class="muted" style="margin-top:6px">One cost resource per labour, plant, material and subcontract line on each docket, at internal cost rates (what the work costs us, as in Daily Cost Tracking), never the charge. Margin ${mg.pct}% = (charge ${money(ap || sub)} - cost ${money(cost)}) / charge.</div>`;
+  } else if (VR.sub === 'contract') {
+    h += `<div class="tw card"><table><thead><tr><th>Task</th><th>Claim Reference</th><th>Unit</th><th class="num">Submitted Qty</th><th class="num">Submitted Rate</th><th class="num">Submitted Amount</th><th class="num">Approved Qty</th><th class="num">Approved Rate</th><th class="num">Approved Amount</th><th class="num">Margin</th><th class="num">Budget Sum</th></tr></thead><tbody>`;
+    v.lines.forEach((ln, k) => {
+      const d = getDocket(S, ln.docket); const sr = varLineValue(S, v, ln); const aq = lineApQty(ln), ar = lineApRate(S, v, ln), aa = lineApAmount(S, v, ln); const c = varLineCost(S, v, ln);
+      const m = (aa || sr) ? round2(((aa || sr) - c) / (aa || sr) * 100) : 0;
+      const edit = pend ? `onchange="const tr=this.closest('tr');act(()=>setApproved(S,'${v.id}','${d.id}',Number(tr.querySelector('.aq').value),Number(tr.querySelector('.ar').value)),'Approved line updated')"` : 'disabled';
+      h += `<tr><td>Dayworks ${d.id} · ${esc(d.desc)}${varLineChanged(S, v, ln) ? `<div>${changedCell(true, ln.added, sr, 'Approved')}</div>` : ''}</td><td>${wbs}.${k + 1}</td><td>docket</td><td class="num">1</td><td class="num">${money(sr)}</td><td class="num">${money(sr)}</td>
+        <td class="num"><input class="cell aq" type="number" min="0" step="0.5" value="${aq}" ${edit}></td><td class="num"><input class="cell ar" type="number" min="0" step="0.01" style="width:96px" value="${ar}" ${edit}></td><td class="num"><b>${money(aa)}</b></td><td class="num">${m}%</td><td class="num">${money(c)}</td></tr>`;
+    });
+    if (!v.lines.length) h += `<tr><td colspan="11" class="muted">No dockets.</td></tr>`;
+    h += `<tr class="tot"><td colspan="5">Total</td><td class="num">${money(sub)}</td><td colspan="2"></td><td class="num">${money(ap)}</td><td class="num">${mg.pct}%</td><td class="num">${money(cost)}</td></tr></tbody></table></div>
+      <div class="muted" style="margin-top:6px">One line per docket: Submitted Qty 1 at the calculator value${RELEASE === 'lean' ? ' when it was added (Refresh from dockets reprices)' : ', following the calculator until the variation is Approved'}. Approved Qty and Rate start the same and can be edited, as today.</div>`;
+  } else {
+    if (pend) h += `<div class="row" style="margin-bottom:8px"><button class="btn" onclick="openPicker('variation','${v.id}')"><i class="fas fa-plus"></i> Add dockets</button></div>`;
     h += `<div class="tw card"><table><thead><tr><th>Ref</th><th>Docket</th><th>Performed on</th><th>Docket status</th><th>Description</th><th class="num">Docket value now</th><th class="num">Line value</th><th>Flags</th><th></th></tr></thead><tbody>`;
     v.lines.forEach((ln, k) => {
-      const d = getDocket(S, ln.docket); const val = varLineValue(S, v, ln); const dv = live ? priceDocket(S, d).total : val; const issue = live && docketIssue(S, d);
-      h += `<tr class="${issue ? 'block' : !SIGNED.includes(d.status) && live ? 'warn' : ''}"><td>${v.id}.${k + 1}</td><td><a onclick="openDocket('${d.id}')"><b>${d.id}</b></a></td><td class="small">${fmtDate(d.date)}</td><td>${pill(d.status)}</td><td class="small">${esc(d.desc)}</td><td class="num">${money(dv)}</td><td class="num"><b>${money(val)}</b></td><td>${changedCell(varLineChanged(S, v, ln), ln.added, val, 'approval')}${lineFlags(d, live)}</td>
-        <td>${live ? `<button class="btn icon" title="Remove and free" onclick="act(()=>removeFromVariation(S,'${v.id}','${d.id}'),'${d.id} removed and freed')"><i class="fas fa-xmark"></i></button>` : ''}</td></tr>`;
+      const d = getDocket(S, ln.docket); const val = varLineValue(S, v, ln); const dv = priceDocket(S, d).total;
+      h += `<tr class="${pend && docketIssue(S, d) ? 'block' : ''}"><td>${wbs}.${k + 1}</td><td><a onclick="openDocket('${d.id}')"><b>${d.id}</b></a></td><td class="small">${fmtDate(d.date)}</td><td>${pill(d.status)}</td><td class="small">${esc(d.desc)}</td><td class="num">${money(dv)}</td><td class="num"><b>${money(val)}</b></td><td>${changedCell(varLineChanged(S, v, ln), ln.added, val, 'Approved')}${lineFlags(d, pend)}</td>
+        <td>${pend ? `<button class="btn icon" title="Delete line and free the docket" onclick="act(()=>removeFromVariation(S,'${v.id}','${d.id}'),'${d.id} removed and freed')"><i class="fas fa-xmark"></i></button>` : ''}</td></tr>`;
     });
-    if (v.adjustment) h += `<tr class="warn"><td colspan="6"><b>Adjustment</b> <span class="muted">approved ${money(v.approvedAmount)} against lines of ${money(v.submittedFinal)}</span></td><td class="num"><b>${money(v.adjustment.amount)}</b></td><td colspan="2">${v.adjustment.amount < 0 ? `<select class="cell" onchange="act(()=>setAdjustmentStatus(S,'${v.id}',this.value),'Adjustment updated')">${SHORTFALL.map(x => `<option ${x === v.adjustment.status ? 'selected' : ''}>${x}</option>`).join('')}</select>` : '<span class="muted">higher approval, no status needed</span>'}</td></tr>`;
     if (!v.lines.length) h += `<tr><td colspan="9" class="muted">No dockets.</td></tr>`;
-    h += `<tr class="tot"><td colspan="6">Lines total (ex GST, no cost-plus margin)</td><td class="num">${money(total)}</td><td colspan="2"></td></tr></tbody></table></div><div class="muted" style="margin-top:6px">Docket value now is what the calculator says today; line value is ${RELEASE === 'lean' ? 'the snapshot on this variation' : 'what this variation carries'}. Remove a line to free its docket.</div>`;
-    if (v.decisions.length) h += `<div class="ban warn"><i class="fas fa-clipboard-check"></i><div>${v.decisions.map(x => `${fmtDate(x.at)} · ${esc(x.by)} · ${esc(x.what)}`).join('<br>')}</div></div>`;
+    h += `</tbody></table></div><div class="muted" style="margin-top:6px">Dockets on this variation are locked until their line is deleted. Docket value now is what the calculator says today.</div>`;
     h += historyTable(v);
-  } else if (VR.sub === 'cost') {
-    h += `<div class="row"><button class="btn" onclick="inert('Add Subtask')"><i class="fas fa-plus"></i> Add Subtask</button><button class="btn" onclick="inert('Add Resource')"><i class="fas fa-plus"></i> Add Resource</button></div><div class="muted" style="margin-top:8px">The Cost tab works as today; it is not filled from dockets in this release.</div>`;
-  } else {
-    h += `<div class="tw card"><table><thead><tr><th>Task</th><th>Claim Reference</th><th>Unit</th><th class="num">Submitted Qty</th><th class="num">Submitted Rate</th><th class="num">Submitted Amount</th><th class="num">Approved Qty</th><th class="num">Approved Rate</th><th class="num">Approved Amount</th><th class="num">Margin</th></tr></thead><tbody>${v.lines.map((ln, k) => { const val = varLineValue(S, v, ln); const appr = VAR_LOCKED.includes(v.status); return `<tr><td>Dayworks ${ln.docket}</td><td>${v.id}.${k + 1}</td><td>item</td><td class="num">${v.submittedOn ? 1 : '-'}</td><td class="num">${v.submittedOn ? money(val) : '-'}</td><td class="num">${v.submittedOn ? money(val) : '-'}</td><td class="num">${appr ? 1 : '-'}</td><td class="num">${appr ? money(ln.frozen) : '-'}</td><td class="num">${appr ? money(ln.frozen) : '-'}</td><td class="num">0</td></tr>`; }).join('')}${v.adjustment ? `<tr class="warn"><td>Adjustment${v.adjustment.status ? ' (' + esc(v.adjustment.status) + ')' : ''}</td><td></td><td></td><td></td><td></td><td></td><td class="num">1</td><td class="num">${money(v.adjustment.amount)}</td><td class="num">${money(v.adjustment.amount)}</td><td></td></tr>` : ''}</tbody></table></div><div class="muted" style="margin-top:6px">Contract tab: each docket is one contract line, quantity 1 at its calculator value.</div>`;
   }
   return h;
-}
-function doNonClaimable(id) {
-  const v = getVar(S, id);
-  confirmDialog('Set ' + id + ' Non-Claimable?', `It stays on the Variation Register as Non-Claimable with its history, and ${v.lines.map(l => l.docket).join(', ') || 'its dockets'} ${v.lines.length === 1 ? 'is' : 'are'} freed for a claim or another variation.`, 'Set Non-Claimable', () => act(() => releaseVariation(S, id, 'Non-Claimable'), id + ' set Non-Claimable, dockets freed'));
-}
-function doSubmitVar(id) {
-  const r = act(() => submitVariation(S, id), null);
-  if (r && r.needsConfirm) confirmDialog('Submit ' + id + ' to the client?', `<b>${r.message}.</b> It can still be submitted; your decision is recorded. Lines keep following their dockets until the variation is approved.`, 'Submit anyway', () => act(() => submitVariation(S, id, { confirm: true }), id + ' submitted, status stays Pending'));
-  else if (r) toast(id + ' submitted, status stays Pending');
-}
-function doApproveVar(id) {
-  const v = getVar(S, id); const amt = defaultApprovedAmount(S, v); const stale = varSubmittedChanged(S, v);
-  openModal(() => `<h3>Record client approval of ${id}</h3>${stale ? `<div class="ban warn"><i class="fas fa-triangle-exclamation"></i><div><b>Changed since submitted.</b> The client saw ${money(v.submittedBase)} (revision ${v.revision}); the lines now total ${money(amt)}. The approved amount defaults to the current total. Approval can go ahead; this warning is recorded.</div></div>` : ''}<p class="muted">Lines total ${money(amt)}. Less than that is Partial Approved; the same or more is Approved. Either way every line freezes and the dockets lock.</p>
-    <div class="field"><label>Approved amount (ex GST)</label><input id="apAmt" type="number" step="0.01" value="${amt}" oninput="const d=Math.round((Number(this.value)-${amt})*100)/100;document.getElementById('apAdj').style.display=d<-0.004?'flex':'none';document.getElementById('apUp').style.display=d>0.004?'flex':'none';document.getElementById('apDiff').textContent=money(d);document.getElementById('apUpDiff').textContent=money(d)"></div>
-    <div id="apAdj" style="display:none" class="ban warn"><i class="fas fa-scale-unbalanced"></i><div style="flex:1">Less than submitted (<b id="apDiff"></b>): the variation becomes <b>Partial Approved</b>.</div></div>
-    <div id="apUp" style="display:none" class="ban info"><i class="fas fa-scale-unbalanced"></i><div>More than submitted (<b id="apUpDiff"></b>): Approved.</div></div>
-    <div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn or" onclick="const a=Number(document.getElementById('apAmt').value),sf='';const r=act(()=>approveVariation(S,'${id}',a,sf||undefined),'${id} approved');if(r!==null){closeModal();render();if(r.warning)toast(r.warning+'. Warning recorded.');}">${stale ? 'Approve anyway' : 'Approve'}</button></div>`);
 }
 
 /* ───────── Claim tab ───────── */
@@ -446,7 +465,7 @@ function renderDrawer() {
       <div class="field"><label>Publish calculator change: rate line</label><select onchange="const [s,n]=this.value.split('|');SIM.section=s;SIM.line=n">${opts.map(o => `<option value="${o.sec}|${esc(o.name)}" ${o.sec === SIM.section && o.name === SIM.line ? 'selected' : ''}>${RATE_SECTIONS[o.sec]}: ${esc(o.name)} (${money(o.std)})</option>`).join('')}</select></div>
       <div class="frow"><div class="field"><label>New Standard $</label><input type="number" step="0.5" value="${SIM.std}" onchange="SIM.std=Number(this.value)"></div><div class="field"><label>Effective from</label><input type="date" value="${SIM.eff}" onchange="SIM.eff=this.value"></div></div>
       <div class="row" style="margin-top:10px"><button class="btn" onclick="doPublish()"><i class="fas fa-upload"></i> Publish version</button><button class="btn alt" onclick="doLateDocket()"><i class="fas fa-truck"></i> Late docket arrives</button><button class="btn alt" onclick="if(confirm('Reset the demo project?')){S=seedState();DW={status:'ALL',sel:new Set(),open:null};VR.open=null;CL.open=null;SIM.eff=null;closeModal();render();}"><i class="fas fa-rotate-left"></i> Reset demo</button></div>
-      <p style="margin-top:10px;font-size:12px;color:#94a3b8">Effective date must be on or after ${fmtDate(calcFloor(S))} (the later of the last approved claim and last approved variation). ${RELEASE === 'lean' ? 'Try Leading Hand $75 from 05/11/2026: the calculator moves D209 and D208, but lines on V010 and V008 stay put until you press Refresh from dockets.' : 'Try Leading Hand $75 from 05/11/2026 to move D209 on V010 (submitted: revision prompted) and D208 on V008.'}</p>
+      <p style="margin-top:10px;font-size:12px;color:#94a3b8">Effective date must be on or after ${fmtDate(calcFloor(S))} (the later of the last approved claim and last approved variation). ${RELEASE === 'lean' ? 'Try Leading Hand $75 from 05/11/2026: the calculator moves D209 and D208, but lines on V010 and V008 stay put until you press Refresh from dockets.' : 'Try Leading Hand $75 from 05/11/2026 to move D209 on V010 and D208 on V008 (flagged changed since added).'}</p>
       <div style="margin-top:10px;font-size:12px">${S.versions.slice().sort((a, b) => a.n - b.n).map(v => `<div>Calculator v${v.n} from ${fmtDate(v.effectiveFrom)}${v.n > 1 ? ': ' + esc(v.note) : ''}</div>`).join('')}</div>`;
   } else if (DRAWER.tab === 'log') {
     h += `<div class="log">${S.log.slice(0, 80).map(e => `<div class="${e.kind}">${fmtDate(e.at)} · ${esc(e.what)}</div>`).join('')}</div>`;
@@ -455,7 +474,7 @@ function renderDrawer() {
     SCEN.forEach(r => { h += `<div class="scen ${r.pass ? '' : 'open'}" id="sc${r.i}"><div class="h" onclick="document.getElementById('sc${r.i}').classList.toggle('open')"><span class="${r.pass ? 'pass' : 'fail'}">${r.pass ? 'PASS' : 'FAIL'}</span><span class="tag t-ver">${r.s.story}</span><span style="flex:1">${esc(r.s.title)}</span></div><div class="b"><p style="margin-bottom:6px">${esc(r.s.text)}</p>${r.error ? `<div class="fail">Error: ${esc(r.error)}</div>` : ''}<table><tbody>${r.checks.map(c => `<tr><td class="${c.pass ? 'pass' : 'fail'}">${c.pass ? '✓' : '✗'}</td><td>${esc(c.label)}</td><td>${esc(c.actual)}</td></tr>`).join('')}</tbody></table>${r.state ? `<button class="btn sm" style="margin-top:6px" onclick="loadScenario(${r.i})">Load this end state into the screens</button>` : ''}</div></div>`; });
   } else {
     const v = S.versions.slice().sort((a, b) => b.n - a.n)[0];
-    h += `<p style="font-size:12px;margin-bottom:8px">Latest version v${v.n}, effective ${fmtDate(v.effectiveFrom)}. Editing is the calculator prototype (a later build).</p><table><tbody>${['labour', 'wet', 'attach'].flatMap(sec => v[sec].map(l => `<tr><td>${RATE_SECTIONS[sec]}</td><td>${esc(l.name)}</td><td>${money(l.r.std)} std</td></tr>`)).join('')}${v.dry.map(l => `<tr><td>Dry hire</td><td>${esc(l.name)}</td><td>${money(l.r.std)}/${l.unit}</td></tr>`).join('')}${v.float.map(f => `<tr><td>Float</td><td>${esc(f.name)}</td><td>mob ${money(f.mob)} · demob ${money(f.demob)}</td></tr>`).join('')}${v.allow.map(a => `<tr><td>Allowance</td><td>${esc(a.name)}</td><td>${money(a.amount)}/${a.unit}</td></tr>`).join('')}</tbody></table><p style="display:none"><b>Internal COST rates</b> (what the work costs us, as in Daily Cost Tracking; used for Estimated Cost, never charged)</p><table style="display:none"><tbody>${Object.entries(S.project.cost.labour).map(([k, x]) => `<tr><td>Labour cost</td><td>${k}</td><td>${money(x)}/h</td></tr>`).join('')}${Object.entries(S.project.cost.plant).map(([k, x]) => `<tr><td>Plant cost</td><td>${k}</td><td>${money(x)}/h plus operator</td></tr>`).join('')}${Object.entries(S.project.cost.attach).map(([k, x]) => `<tr><td>Attachment cost</td><td>${k}</td><td>${money(x)}/h</td></tr>`).join('')}<tr><td>Float cost</td><td>per move</td><td>${money(S.project.cost.float)}</td></tr>${Object.entries(S.project.cost.material).map(([k, x]) => `<tr><td>Material cost</td><td>${k}</td><td>${money(x)}/unit</td></tr>`).join('')}<tr><td>Other materials, subcontract</td><td></td><td>at cost</td></tr></tbody></table>`;
+    h += `<p style="font-size:12px;margin-bottom:8px">Latest version v${v.n}, effective ${fmtDate(v.effectiveFrom)}. Editing is the calculator prototype (a later build).</p><table><tbody>${['labour', 'wet', 'attach'].flatMap(sec => v[sec].map(l => `<tr><td>${RATE_SECTIONS[sec]}</td><td>${esc(l.name)}</td><td>${money(l.r.std)} std</td></tr>`)).join('')}${v.dry.map(l => `<tr><td>Dry hire</td><td>${esc(l.name)}</td><td>${money(l.r.std)}/${l.unit}</td></tr>`).join('')}${v.float.map(f => `<tr><td>Float</td><td>${esc(f.name)}</td><td>mob ${money(f.mob)} · demob ${money(f.demob)}</td></tr>`).join('')}${v.allow.map(a => `<tr><td>Allowance</td><td>${esc(a.name)}</td><td>${money(a.amount)}/${a.unit}</td></tr>`).join('')}</tbody></table><p style="font-size:12px;margin:12px 0 6px"><b>Internal COST rates</b> (what the work costs us, as in Daily Cost Tracking; used for Estimated Cost, never charged)</p><table><tbody>${Object.entries(S.project.cost.labour).map(([k, x]) => `<tr><td>Labour cost</td><td>${k}</td><td>${money(x)}/h</td></tr>`).join('')}${Object.entries(S.project.cost.plant).map(([k, x]) => `<tr><td>Plant cost</td><td>${k}</td><td>${money(x)}/h plus operator</td></tr>`).join('')}${Object.entries(S.project.cost.attach).map(([k, x]) => `<tr><td>Attachment cost</td><td>${k}</td><td>${money(x)}/h</td></tr>`).join('')}<tr><td>Float cost</td><td>per move</td><td>${money(S.project.cost.float)}</td></tr>${Object.entries(S.project.cost.material).map(([k, x]) => `<tr><td>Material cost</td><td>${k}</td><td>${money(x)}/unit</td></tr>`).join('')}<tr><td>Other materials, subcontract</td><td></td><td>at cost</td></tr></tbody></table>`;
   }
   el.innerHTML = h + `</div>`;
 }
