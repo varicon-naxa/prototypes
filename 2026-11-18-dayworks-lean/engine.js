@@ -140,6 +140,23 @@ function setRate(st, key, rate) {
   log(st, 'Charge Resource ' + r.resource + ' ' + money(was) + ' to ' + money(r.rate) + ' per ' + r.unit.toLowerCase() + ' (changed by support)');
   sync(st, r.resource + ' rate changed');
 }
+// Rates download (VAR-23168, lean): one row per rate line, rates in effect today.
+function ratesAppliesTo(st, r) {
+  const [kind, x, y] = r.key.split(':');
+  const named = st.project.rates.filter(q => q.key.startsWith('person:')).map(q => q.key.split(':')[1]);
+  if (kind === 'person') return PEOPLE[x].name;
+  if (kind === 'role') return Object.entries(PEOPLE).filter(([id, p]) => p.role === x && !named.includes(id)).map(([, p]) => p.name).join(', ') || '-';
+  if (kind === 'wet' || kind === 'dry') return Object.entries(PLANT).filter(([, p]) => p.res === x).map(([id, p]) => id + ' ' + p.name).join(', ') || '-';
+  if (kind === 'attach') return x + ' on any wet-hire plant';
+  if (kind === 'float') return Object.entries(PLANT).filter(([, p]) => p.type === y).map(([id]) => id).join(', ') || '-';
+  return '-';
+}
+function ratesExportRows(st) { return st.project.rates.map(r => ({ key: r.key, type: r.type, resource: r.resource, unit: r.unit, rate: r.rate, appliesTo: ratesAppliesTo(st, r) })); }
+function ratesExportAoa(st) {
+  return [[st.project.name + ' (' + st.project.code + ')'], ['Rates as at ' + fmtDate(st.today)], [], ['Resource Type', 'Resource', 'Unit', 'Charge Rate', 'Applies to']]
+    .concat(ratesExportRows(st).map(r => [r.type, r.resource, r.unit, r.rate, r.appliesTo]));
+}
+function ratesFileName(st) { return st.project.code + ' dayworks rates ' + fmtDate(st.today).replace(/\//g, '-') + '.xlsx'; }
 function priceDocket(st, d) {
   const out = { version: { n: 1 }, lines: [], total: 0, problems: [] };
   const timed = d.lines.map((l, i) => ({ l, i })).filter(x => ['labour', 'wet', 'dry'].includes(x.l.t));
@@ -154,7 +171,7 @@ function priceDocket(st, d) {
   const unmapped = [];
   d.lines.forEach((l, i) => {
     const r = { i, l, label: '', rateLine: null, rows: [], extras: [], value: 0, unmapped: [], overlap: overlapLines.has(i), hours: null };
-    const charge = (row, qty, label) => { r.rateLine = { name: row.resource }; r.rows.push({ tier: 'unit', hours: qty, rate: row.rate, unit: row.unit, value: round2(qty * row.rate) }); };
+    const charge = (row, qty, label) => { r.rateLine = { name: row.resource, key: row.key }; r.rows.push({ tier: 'unit', hours: qty, rate: row.rate, unit: row.unit, value: round2(qty * row.rate) }); };
     const miss = (what) => r.unmapped.push(what);
     if (l.t === 'labour') {
       const p = PEOPLE[l.person]; r.hours = lineHours(l); r.label = p.name + ' (' + p.role + ')';
@@ -176,7 +193,8 @@ function priceDocket(st, d) {
     } else if (l.t === 'material' || l.t === 'sub') {
       r.label = l.item + (l.qty !== undefined ? ' ' + l.qty : ' cost ' + money(l.cost));
       const row = rateRow(st, (l.t === 'material' ? 'material:' : 'sub:') + l.item);
-      if (l.qty === undefined) miss(l.item + ' (recorded as a $ cost, not a quantity)');
+      // Decided 2026-11-20: a material or subcontract line recorded only as a $ amount is charged at cost.
+      if (l.qty === undefined) { r.rateLine = { name: l.item + ' (charged at cost)', key: null }; r.rows.push({ tier: 'atcost', hours: 1, rate: round2(l.cost || 0), value: round2(l.cost || 0) }); }
       else if (row) charge(row, l.qty); else miss(l.item);
     }
     (l.allow || []).forEach(a => r.extras.push({ label: allowName(a.type), value: 0, note: 'allowances are not charged in this release' }));
@@ -502,6 +520,7 @@ function claimRemoveDocket(st, claimId, id) {
   hist(c, st, 'Removed ' + id + ' (' + money(ln.last) + '), released' + (sub ? '; changed since submitted' : ''), { docket: id, old: ln.last, new: 0 });
   log(st, id + ' removed from claim ' + c.id + ' and released');
 }
+// Decided 2026-11-20: deleting a claim frees its dockets; docket statuses are unchanged.
 function deleteDraftClaim(st, claimId) {
   const c = getClaim(st, claimId);
   if (c.status !== 'Draft') throw new Error('Only a draft claim can be deleted');
@@ -512,7 +531,8 @@ function claimLineValue(st, c, ln) { return ln.frozen !== null ? ln.frozen : ln.
 // Refresh from dockets on a Draft claim: reprices every docket line from the rates table and logs old -> new.
 function claimRefreshFromDockets(st, claimId) {
   const c = getClaim(st, claimId);
-  if (c.status !== 'Draft') throw new Error('Only a Draft claim can be refreshed');
+  // Decided 2026-11-20: the Dayworks tab stays editable (add, remove, refresh) until the claim is Approved.
+  if (!CLAIM_LIVE.includes(c.status)) throw new Error('Only a Draft or Submitted claim can be refreshed');
   let n = 0;
   c.lines.forEach(ln => { if (ln.frozen !== null) return; const now = priceDocket(st, getDocket(st, ln.docket)).total; if (Math.abs(now - ln.snap) > 0.004) { hist(c, st, ln.docket + ' refreshed ' + money(ln.snap) + ' to ' + money(now), { docket: ln.docket, old: ln.snap, new: now }); ln.snap = now; n++; } });
   if (!n) hist(c, st, 'Refreshed from dockets: no line changed');
@@ -570,13 +590,13 @@ function toInvoiced(st, id, why, out) {
   out.push(id);
 }
 // Reopen Claim (existing): decided 2026-11-17 that its dockets stay locked and Invoiced at their frozen values.
+// Decided 2026-11-20: Reopen Claim leaves its Dayworks lines frozen at their approved values (dockets stay locked).
 function reopenClaim(st, claimId) {
   const c = getClaim(st, claimId);
   if (c.status !== 'Approved') throw new Error('Only an approved claim can be reopened');
   c.status = 'Draft'; c.reopenedOn = st.today;
-  c.lines.forEach(ln => { if (ln.frozen !== null) { ln.snap = ln.frozen; ln.frozen = null; } });
-  hist(c, st, 'Reopened; docket lines editable again, dockets stay locked on the claim');
-  log(st, 'Claim ' + c.id + ' reopened');
+  hist(c, st, 'Reopened; Dayworks lines stay frozen at their approved values');
+  log(st, 'Claim ' + c.id + ' reopened; Dayworks lines stay frozen');
 }
 function lastIssuedClaimDate(st) { return approvedClaims(st).map(c => c.issued).filter(Boolean).sort().pop() || null; }
 function lastApprovedVarDate(st) { return approvedVars(st).map(v => v.approvedOn).filter(Boolean).sort().pop() || null; }

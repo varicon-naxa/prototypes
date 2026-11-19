@@ -5,7 +5,7 @@ Built 2026-11-18. Based on `2026-11-18-dayworks-billing-lean` (copied, not chang
 Live: https://varicon-naxa.github.io/prototypes/2026-11-18-dayworks-lean/
 Compare: [full billing](https://varicon-naxa.github.io/prototypes/2026-11-12-dayworks-billing/) · [billing lean](https://varicon-naxa.github.io/prototypes/2026-11-18-dayworks-billing-lean/) · [billing middle](https://varicon-naxa.github.io/prototypes/2026-11-18-dayworks-billing-middle/) · [full calculator](https://varicon-naxa.github.io/prototypes/2026-11-05-dayworks-calculator/)
 
-Files: `config.js`, `engine.js`, `app.js`, `scenarios.js` (13/13 passing), `index.html`.
+Files: `config.js`, `engine.js`, `app.js`, `scenarios.js` (14/14 passing), `index.html`.
 
 ## Decided (Alec, 2026-11-18)
 
@@ -50,19 +50,37 @@ Files: `config.js`, `engine.js`, `app.js`, `scenarios.js` (13/13 passing), `inde
 - **Claim statuses** and Make New Claim / Reopen Claim / Delete claim work as today. An approved claim freezes its docket lines.
 - **Variations on claims.** Approved variations are still claimed by percent on the Variation tab.
 
-## Read "as today" (literal reading, not decided - see open questions)
+### 4. Answers of 2026-11-20
 
-- A **Submitted** claim can still take and remove dockets (as Draft can). Refresh is Draft only, as decided.
-- **Reopen Claim** returns the claim to Draft. Its docket lines unfreeze and become editable (refresh, remove), and the dockets stay locked on the claim.
-- **Delete claim** works on a Draft claim (as today) and frees its dockets.
-- **Overlaps.** An overlapping docket (the same plant or person twice at the same time) is still blocked from the pickers, as in the billing lean release.
-- **Seed data.** The seeded traffic control docket records 8 crew hours so it fits quantity x rate.
+- **$-only materials and subcontract.** A material or subcontract line recorded only as a $ amount (no quantity, e.g. D211 concrete $600) is charged at cost: charge = the recorded amount. It is no longer Unmapped.
+- **Submitted claims.** The Dayworks tab stays editable (Add dockets, remove, Refresh from dockets) until the claim is Approved.
+- **Reopen Claim.** Dayworks lines stay frozen at their approved values. They cannot be refreshed or removed, and the dockets stay locked. New dockets can still be added to the reopened claim.
+- **Delete claim.** Deleting a claim frees its dockets; docket statuses are unchanged.
+- **Overlaps.** Overlapping dockets (the same plant or person twice at the same time) stay blocked from the pickers.
+
+### 5. Rates download (VAR-23168, lean)
+
+- A **Download rates** button on the Charge Resource page (project Daywork Record tab > kebab > Charge Resource) downloads a real .xlsx, built with SheetJS 0.18.5 from cdnjs.
+- **File contents:**
+  - Title rows: project name and code, then "Rates as at dd/mm/yyyy".
+  - A header row.
+  - One row per rate line: Resource Type, Resource, Unit, Charge Rate, Applies to.
+- **Applies to** names who or what a rate covers:
+  - the role's people, excluding anyone with their own named rate;
+  - the named person;
+  - the plant items of that type;
+  - "-" for materials and subcontract.
+- **Rates in effect today.** The table has no versions, so today's rates are the only rates.
+- **Who sees it.** Anyone who can see the project's dockets; there is no permission UI in the prototype.
+- **No rates.** If the project has no rates, there is no button.
+- **File name:** "RRU01 dayworks rates dd-mm-yyyy.xlsx".
+
+## Seed choices
+
+- The seeded traffic control docket records 8 crew hours so it fits quantity x rate.
+- Plumber has no rate, so it shows Unmapped.
 
 ## Open questions for Alec
 
 1. **Delete Variation when the variation is already on a claim.** "Do as the live app does": pending a check of the live app. The prototype keeps its guard and refuses.
-2. **Materials or subcontract recorded as a $ cost, not a quantity.** For example, D211's concrete is recorded as $600 with no quantity, so there is nothing to multiply by a rate. The prototype shows it Unmapped. How should a cost-only line be priced in the lean release?
-3. **Can a Submitted claim take or lose dockets?** The prototype allows it.
-4. **Does Reopen Claim unlock its docket lines?** The prototype unfreezes them for editing and keeps the dockets locked on the claim.
-5. **Does Delete claim free its dockets, and is it Draft only as today?** The prototype frees them and allows Draft only.
-6. **Should overlapping dockets still be blocked**, now that the rates table has no time logic? The prototype keeps the block.
+2. **Delete claim on a claim that is not Draft.** The live claim menu shows Delete claim on approved claims too. The prototype allows Draft only and frees the dockets. Which claim statuses can be deleted?

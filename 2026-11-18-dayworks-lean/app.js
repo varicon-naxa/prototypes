@@ -45,7 +45,7 @@ const REL = {
 };
 function relBanner() {
   const L = (href, label) => `<a style="color:#93c5fd" href="${href}">${label}</a>`;
-  return `<div style="background:#0f172a;color:#e2e8f0;border-radius:6px;padding:7px 12px;margin-bottom:12px;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><span class="tag" style="background:#f39200;color:#fff">Dayworks lean release</span><span style="flex:1;min-width:220px">Rates table, variations from dockets, claims from dockets.</span><span style="white-space:nowrap">Compare: ${L('../2026-11-12-dayworks-billing/', 'Full billing')} · ${L('../2026-11-18-dayworks-billing-lean/', 'Billing lean')} · ${L('../2026-11-18-dayworks-billing-middle/', 'Billing middle')} · ${L('../2026-11-05-dayworks-calculator/', 'Full calculator')}</span></div>`;
+  return `<div style="background:#0f172a;color:#e2e8f0;border-radius:6px;padding:7px 12px;margin-bottom:12px;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><span class="tag" style="background:#f39200;color:#fff">Dayworks lean release</span><span style="flex:1;min-width:220px">Rates table (with rates download), variations from dockets, claims from dockets.</span><span style="white-space:nowrap">Compare: ${L('../2026-11-12-dayworks-billing/', 'Full billing')} · ${L('../2026-11-18-dayworks-billing-lean/', 'Billing lean')} · ${L('../2026-11-18-dayworks-billing-middle/', 'Billing middle')} · ${L('../2026-11-05-dayworks-calculator/', 'Full calculator')}</span></div>`;
 }
 
 /* ───────── Layout ───────── */
@@ -106,10 +106,24 @@ function dayworkList() {
 function chargeResourcePage() {
   const r = S.project.rates;
   let h = `<div class="spread"><div class="row"><a onclick="DW.page=null;render()"><i class="fas fa-arrow-left"></i></a> <a onclick="DW.page=null;render()" style="color:#d97706">Daywork Record</a> <span class="muted">›</span> <b>Charge Resource</b></div></div>
+    ${r.length ? `<div class="row" style="justify-content:flex-end;margin:6px 0"><button class="btn or" onclick="downloadRates()"><i class="fas fa-file-excel"></i> Download rates</button></div>` : ''}
     <div class="ban info"><i class="fas fa-circle-info"></i><div>The project's charge rates. Every daywork docket is priced from this table: quantity x charge rate (hours worked as recorded for labour and plant, quantity for materials and subcontract). Rates are not editable here; changes go through Varicon support.</div></div>
     <div class="tw card"><table><thead><tr><th>Resource</th><th>Resource Type</th><th>Unit</th><th class="num">Charge Rate</th></tr></thead><tbody>${r.map(x => `<tr><td>${esc(x.resource)}</td><td>${x.type}</td><td>${x.unit}</td><td class="num">${money(x.rate)}</td></tr>`).join('')}</tbody></table></div>
-    <div class="muted" style="margin-top:8px">A docket line with no charge resource here shows as Unmapped and cannot be added to a variation or claim. Allowances are not charged in this release.</div>`;
+    <div class="muted" style="margin-top:8px">A docket line with no charge resource here shows as Unmapped and cannot be added to a variation or claim. Materials or subcontract recorded only as a $ amount are charged at cost. Allowances are not charged in this release.</div>`;
   return h;
+}
+// Rates download (VAR-23168, lean): a real .xlsx built with SheetJS, rates in effect today.
+function ratesWorkbook() {
+  const ws = XLSX.utils.aoa_to_sheet(ratesExportAoa(S));
+  ws['!cols'] = [{ wch: 20 }, { wch: 44 }, { wch: 8 }, { wch: 12 }, { wch: 56 }];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Dayworks rates');
+  return wb;
+}
+function downloadRates() {
+  if (!S.project.rates.length) return toast('This project has no rates', true);
+  if (typeof XLSX === 'undefined') return toast('Spreadsheet library did not load', true);
+  XLSX.writeFile(ratesWorkbook(), ratesFileName(S));
+  log(S, 'Rates downloaded: ' + ratesFileName(S)); toast('Downloaded ' + ratesFileName(S));
 }
 function bulkTo(mode) {
   const ids = [...DW.sel];
@@ -143,7 +157,7 @@ function docketPage(id) {
   const allowTypes = (versionFor(S, d.date) || { allow: [] }).allow.map(a => a.type).concat(['Tool']);
   const extras = (r, i) => r.extras.map(x => `<div class="small">${/Unmapped/.test(x.note) ? '<span class="tag t-bad">Unmapped</span> ' : '+ '}${esc(x.label)} ${money(x.value)} <span class="muted">${esc(x.note)}</span>${editable && /Unmapped/.test(x.note) && (r.l.allow || []).some(a => allowName(a.type) === x.label) ? ` <a onclick="act(()=>removeAllowance(S,'${id}',${i},'${esc((r.l.allow.find(a => allowName(a.type) === x.label) || {}).type)}'),'Allowance removed')">remove</a>` : ''}</div>`).join('')
     + (editable && ['labour', 'wet'].includes(r.l.t) ? `<select class="cell" style="font-size:11px;margin-top:3px;width:auto" onchange="if(this.value)act(()=>addAllowance(S,'${id}',${i},this.value),'Allowance added')"><option value="">+ allowance</option>${allowTypes.filter(t => !(r.l.allow || []).some(a => a.type === t)).map(t => `<option value="${t}">${esc(allowName(t))}${t === 'Tool' ? ' (not charged)' : ''}</option>`).join('')}</select>` : '');
-  const split = r => r.rows.map(x => x.tier === 'unit' ? `${x.hours} x ${money(x.rate)}` : x.tier === 'costplus' ? `cost ${money(r.l.cost)} + ${r.rateLine.margin}%` : x.tier === 'flat' ? (r.l.t === 'float' ? 'flat' : `${fmtH(x.hours)}h x ${money(x.rate)}`) : x.tier === 'day' ? `1 day x ${money(x.rate)}` : `${fmtH(x.hours)}h ${TIER_LABEL[x.tier]} x ${money(x.rate)}`).join(' + ');
+  const split = r => r.rows.map(x => x.tier === 'atcost' ? `charged at cost ${money(x.value)}` : x.tier === 'unit' ? `${x.hours} x ${money(x.rate)}` : x.tier === 'costplus' ? `cost ${money(r.l.cost)} + ${r.rateLine.margin}%` : x.tier === 'flat' ? (r.l.t === 'float' ? 'flat' : `${fmtH(x.hours)}h x ${money(x.rate)}`) : x.tier === 'day' ? `1 day x ${money(x.rate)}` : `${fmtH(x.hours)}h ${TIER_LABEL[x.tier]} x ${money(x.rate)}`).join(' + ');
   const rateCell = r => r.rateLine ? `<span class="muted">${esc(r.rateLine.name)}</span>` : (r.l.t === 'float' ? '<span class="muted">no float line</span>' : '<span class="tag t-bad">Unmapped</span>');
   const lab = rows.filter(x => x.r.l.t === 'labour');
   h += `<h2>Labour</h2><div class="tw card"><table><thead><tr><th>#</th><th>Name</th><th>Resource</th><th>Role</th><th>Clock in</th><th>Clock out</th><th>Break</th><th class="num">Total Hour</th><th>Charge rate</th><th class="num">Value</th><th></th></tr></thead><tbody>${lab.map(({ r, i }, k) => `<tr class="${r.overlap || r.unmapped.length ? 'block' : ''}"><td>${k + 1}</td><td>${esc(PEOPLE[r.l.person].name)}</td><td>(${esc(PEOPLE[r.l.person].role)}) ${esc(PEOPLE[r.l.person].role)}</td><td>${esc(PEOPLE[r.l.person].role)}</td><td>${timeIn(r, i)}</td><td>${r.l.end}</td><td>${r.l.brk ? fmtH(r.l.brk * 60) + 'm' : '0m'}</td><td class="num">${hrsIn(r, i)}</td><td class="small">${rateCell(r)}<div>${split(r)}</div>${extras(r, i)}</td><td class="num"><b>${money(r.value)}</b></td><td>${delBtn(i)}</td></tr>`).join('') || '<tr><td colspan="11" class="muted">No labour.</td></tr>'}</tbody></table></div>`;
@@ -390,7 +404,7 @@ function claimPage(c) {
   if (iss.length) h += `<div class="ban err"><i class="fas fa-ban"></i><div><b>Cannot be approved</b> until ${iss.map(x => x.docket).join(', ')} ${iss.length === 1 ? 'is' : 'are'} fixed or removed: ${iss.map(x => esc(x.docket + ' ' + x.issue)).join('; ')}.</div></div>`;
   if (c.changedSinceSubmitted) h += `<div class="ban warn"><i class="fas fa-arrows-rotate"></i><div><b>Changed since submitted.</b> Dockets were added or removed after the claim was submitted; every change is in the history below. The flag clears when the claim is approved.</div></div>`;
   if (c.status === 'Approved') h += `<div class="ban ok"><i class="fas fa-lock"></i><div>Approved and locked. Its docket lines are frozen and its dockets stay locked on it; docket statuses do not change (mark them Invoiced by hand once billed).</div></div>`;
-  else if (c.reopenedOn) h += `<div class="ban warn"><i class="fas fa-rotate-left"></i><div>Reopened, as today. Its docket lines are editable again; the dockets stay locked on it.</div></div>`;
+  else if (c.reopenedOn) h += `<div class="ban warn"><i class="fas fa-rotate-left"></i><div>Reopened, as today. Dayworks lines approved earlier stay frozen at their approved values; new dockets can still be added.</div></div>`;
   if (t.negative) h += `<div class="ban warn"><i class="fas fa-circle-minus"></i><div><b>Negative claim.</b> Credit lines take this claim below zero (${money(t.gross)} ex GST). It ${open ? 'can be approved' : 'was approved'}; retention and GST follow Varicon's existing rules and go negative.</div></div>`;
   if (claimAccountingLabel(S, c)) h += `<div class="ban ok"><i class="fas fa-file-invoice"></i><div><b>${claimAccountingLabel(S, c)}.</b> A negative claim goes to Xero or MYOB as a credit note, not an invoice.</div></div>`;
   h += `<div class="itabs">${['contract', 'variation', 'dayworks', 'retention'].map(x => `<div class="itab ${CL.sub === x ? 'active' : ''}" onclick="CL.sub='${x}';CL.ticks=null;render()">${x}${x === 'dayworks' ? ` <span class="tag t-ver">${c.lines.length}</span>` : ''}</div>`).join('')}</div>`;
@@ -424,9 +438,9 @@ function claimVariations(c, open) {
 function claimDayworks(c, open) {
   const draft = c.status === 'Draft';
   let h = '';
-  if (open) h += `<div class="row" style="margin-bottom:8px"><button class="btn or" onclick="openPicker('claim','${c.id}')"><i class="fas fa-plus"></i> Add dockets</button>${draft ? `<button class="btn" onclick="act(()=>claimRefreshFromDockets(S,'${c.id}'),'Claim ${c.id} refreshed from dockets')"><i class="fas fa-arrows-rotate"></i> Refresh from dockets</button>` : ''}</div>`;
+  if (open) h += `<div class="row" style="margin-bottom:8px"><button class="btn or" onclick="openPicker('claim','${c.id}')"><i class="fas fa-plus"></i> Add dockets</button><button class="btn" onclick="act(()=>claimRefreshFromDockets(S,'${c.id}'),'Claim ${c.id} refreshed from dockets')"><i class="fas fa-arrows-rotate"></i> Refresh from dockets</button></div>`;
   const stale = c.lines.filter(ln => ln.frozen === null && Math.abs(priceDocket(S, getDocket(S, ln.docket)).total - ln.snap) > 0.004);
-  if (draft && stale.length) h += `<div class="ban info"><i class="fas fa-circle-info"></i><div>The rates table now prices ${stale.map(l => l.docket).join(', ')} differently from the line. Lines only change if you use Refresh from dockets.</div></div>`;
+  if (open && stale.length) h += `<div class="ban info"><i class="fas fa-circle-info"></i><div>The rates table now prices ${stale.map(l => l.docket).join(', ')} differently from the line. Lines only change if you use Refresh from dockets.</div></div>`;
   h += `<div class="tw card"><table><thead><tr><th>Ref</th><th>Docket</th><th>Performed on</th><th>Docket status</th><th>Description</th><th class="num">Docket value now</th><th class="num">Claim Amount</th><th>Action</th></tr></thead><tbody>`;
   c.lines.forEach((ln, k) => {
     const d = getDocket(S, ln.docket); const frozen = ln.frozen !== null; const val = claimLineValue(S, c, ln);
