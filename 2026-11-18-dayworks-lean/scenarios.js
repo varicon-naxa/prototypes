@@ -230,6 +230,34 @@ const SCENARIOS = [
       _chk(c, 'No rates: nothing to download', ratesExportRows(st).length, 0);
       return st;
     } },
+  { story: 'Set-up', title: 'Dayworks set-up: 4 steps with complete or missing; client approvers done inline',
+    text: 'VAR-23108 (lean): the seeded project has no default client representative, so set-up reads 3 of 4 complete with Client approvers missing. Saving an invalid email is refused; saving Joe Bloggs (joe@northerncouncils.nsw.gov.au) with a CC completes the step: 4 of 4.',
+    run(c) {
+      const st = seedState();
+      _chk(c, 'Seeded progress', setupProgress(st), { done: 3, total: 4 });
+      _chk(c, 'Missing step', setupSteps(st).filter(x => !x.complete).map(x => x.title), ['Client approvers']);
+      _refused(c, 'Invalid email refused', () => saveApprovers(st, { clientRep: 'joe at council', clientName: 'Joe Bloggs' }), 'Enter a valid email for the client representative');
+      _refused(c, 'Invalid CC refused', () => saveApprovers(st, { clientRep: 'joe@northerncouncils.nsw.gov.au', clientName: 'Joe Bloggs', cc: 'ok@x.com.au; nope' }), 'Not a valid email: nope');
+      saveApprovers(st, { clientRep: 'joe@northerncouncils.nsw.gov.au', clientName: 'Joe Bloggs', cc: 'sue@northerncouncils.nsw.gov.au', notify: ['Dana Whitfield (PM)', 'Kim Nguyen (Accounts)'] });
+      _chk(c, 'Complete: 4 of 4', [setupSteps(st)[0].complete, setupProgress(st)], [true, { done: 4, total: 4 }]);
+      _chk(c, 'Saved fields', [st.project.setup.approvers.clientName, st.project.setup.approvers.notify], ['Joe Bloggs', ['Dana Whitfield (PM)', 'Kim Nguyen (Accounts)']]);
+      return st;
+    } },
+  { story: 'Set-up', title: 'Docket template, rates and contract checks',
+    text: 'Turning every template section off makes the Docket template step missing. The Rates step lists the unmapped resources found on the project dockets (Ben Okafor, Plumber) and is missing when the project has no rates. The link step is missing when the project has no contract.',
+    run(c) {
+      const st = seedState();
+      saveTemplate(st, { travelHour: true, allowances: ['Meal'] });
+      _chk(c, 'Template saved', [st.project.setup.template.travelHour, st.project.setup.template.allowances], [true, ['Meal']]);
+      saveTemplate(st, { sections: { 'Labour': false, 'Plant and Equipment': false, 'Materials': false, 'Miscellaneous': false } });
+      _chk(c, 'All sections off: missing', setupSteps(st)[1].complete, false);
+      _chk(c, 'Rates step: count and unmapped', [setupSteps(st)[2].complete, st.project.rates.length, setupUnmapped(st)], [true, 11, ['Ben Okafor (Plumber)']]);
+      st.project.rates = [];
+      _chk(c, 'No rates: missing', setupSteps(st)[2].complete, false);
+      st.project.contractSum = 0;
+      _chk(c, 'No contract: link missing', setupSteps(st)[3].complete, false);
+      return st;
+    } },
 ];
 
 function runScenarios() {

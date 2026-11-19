@@ -5,7 +5,7 @@ Built 2026-11-18. Based on `2026-11-18-dayworks-billing-lean` (copied, not chang
 Live: https://varicon-naxa.github.io/prototypes/2026-11-18-dayworks-lean/
 Compare: [full billing](https://varicon-naxa.github.io/prototypes/2026-11-12-dayworks-billing/) · [billing lean](https://varicon-naxa.github.io/prototypes/2026-11-18-dayworks-billing-lean/) · [billing middle](https://varicon-naxa.github.io/prototypes/2026-11-18-dayworks-billing-middle/) · [full calculator](https://varicon-naxa.github.io/prototypes/2026-11-05-dayworks-calculator/)
 
-Files: `config.js`, `engine.js`, `app.js`, `scenarios.js` (14/14 passing), `index.html`.
+Files: `config.js`, `engine.js`, `app.js`, `scenarios.js` (16/16 passing), `index.html`.
 
 ## Decided (Alec, 2026-11-18)
 
@@ -75,6 +75,23 @@ Files: `config.js`, `engine.js`, `app.js`, `scenarios.js` (14/14 passing), `inde
 - **No rates.** If the project has no rates, there is no button.
 - **File name:** "RRU01 dayworks rates dd-mm-yyyy.xlsx".
 
+### 6. Dayworks set-up page (VAR-23108, lean)
+
+- **Where it is.** A new **Dayworks set-up** page, opened from the project's Daywork Record tab: a "Dayworks set-up n/4" button, and also a kebab item. The existing settings pages are unchanged.
+- **Progress** reads "n of 4 complete". The seed has no default client representative, so it opens at 3 of 4 with step 1 Missing.
+- **Steps.** Each has a Complete or Missing state and is done inline without leaving the page:
+  1. **Client approvers.** Mirrors the existing Approval Settings fields: Default Approver, Client Representative (email), Client Name, CC Recipients, Notify to.
+     - Saved here; invalid emails are refused.
+     - Complete when Default Approver is on with a valid client representative email and name.
+  2. **Docket template.** Mirrors the existing Daywork Template fields: sections on or off, include travel hour, attachment duration, daywork allowances.
+     - Saved here.
+     - Missing only if every section is off.
+  3. **Rates.** A read-only summary: has rates, rate count, and the unmapped resources found on the project's dockets (Ben Okafor, Plumber, in the seed).
+     - Links to the Charge Resource page and the Download rates button.
+     - Says edits go through Varicon support.
+     - Complete when the project has rates.
+  4. **Claim and variation link.** A read-only check that the project has a contract, so dockets can reach variations and claims.
+
 ## Seed choices
 
 - The seeded traffic control docket records 8 crew hours so it fits quantity x rate.
@@ -84,3 +101,7 @@ Files: `config.js`, `engine.js`, `app.js`, `scenarios.js` (14/14 passing), `inde
 
 1. **Delete Variation when the variation is already on a claim.** "Do as the live app does": pending a check of the live app. The prototype keeps its guard and refuses.
 2. **Delete claim on a claim that is not Draft.** The live claim menu shows Delete claim on approved claims too. The prototype allows Draft only and frees the dockets. Which claim statuses can be deleted?
+3. **Set-up step 1 with Default Approver off.** With Default Approver off, users pick the approver at signing. Should step 1 then count as complete? The prototype counts it as Missing.
+4. **Set-up step 3 and unmapped resources.** Should unmapped resources on the project's dockets make the Rates step Missing? The prototype marks it Complete whenever the project has rates and lists the unmapped resources as a warning.
+5. **Set-up step 2: when is the template Missing?** The prototype marks it Missing only when every section is off.
+6. **Set-up step 4: anything beyond "project has a contract"?** For example, whether the claim set-up (retention, claim period) is in place. The prototype checks the contract only.
