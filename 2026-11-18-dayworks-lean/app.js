@@ -45,19 +45,19 @@ const REL = {
 };
 function relBanner() {
   const L = (href, label) => `<a style="color:#93c5fd" href="${href}">${label}</a>`;
-  return `<div style="background:#0f172a;color:#e2e8f0;border-radius:6px;padding:7px 12px;margin-bottom:12px;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><span class="tag" style="background:#f39200;color:#fff">Dayworks lean release</span><span style="flex:1;min-width:220px">Rates table, variations from dockets, claims from dockets.</span><span style="white-space:nowrap">Compare: ${L('../2026-11-12-dayworks-billing/', 'Full billing')} · ${L('../2026-11-18-dayworks-billing-lean/', 'Billing lean')} · ${L('../2026-11-18-dayworks-billing-middle/', 'Billing middle')} · ${L('../2026-11-05-dayworks-calculator/', 'Full calculator')}</span></div>`;
+  return `<div style="background:#0f172a;color:#e2e8f0;border-radius:6px;padding:7px 12px;margin-bottom:12px;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><span class="tag" style="background:#f39200;color:#fff">Dayworks lean release</span><span style="flex:1;min-width:220px">Rates table with rates download, Dayworks set-up page, variations from dockets, claims from dockets.</span><span style="white-space:nowrap">Compare: ${L('../2026-11-12-dayworks-billing/', 'Full billing')} · ${L('../2026-11-18-dayworks-billing-lean/', 'Billing lean')} · ${L('../2026-11-18-dayworks-billing-middle/', 'Billing middle')} · ${L('../2026-11-05-dayworks-calculator/', 'Full calculator')}</span></div>`;
 }
 
 /* ───────── Layout ───────── */
 const PTABS = ['Dashboard', 'Budget Overview', 'Daily Cost Tracking', 'Claim', 'Variation Register', 'Report', 'File Manager', 'Site Diary', 'Forms', 'Daywork Record'];
 const PTAB_KEY = { 'Claim': 'claim', 'Variation Register': 'variation', 'Daywork Record': 'daywork' };
-function go(tab) { TAB = tab; MENU = null; if (tab === 'daywork') { DW.open = null; DW.page = null; } if (tab === 'variation') VR.open = null; if (tab === 'claim') CL.open = null; render(); window.scrollTo(0, 0); }
+function go(tab) { TAB = tab; MENU = null; if (tab === 'daywork') { DW.open = null; DW.page = null; SU = null; } if (tab === 'variation') VR.open = null; if (tab === 'claim') CL.open = null; render(); window.scrollTo(0, 0); }
 function render() {
   document.getElementById('ptabs').innerHTML = PTABS.map(t => { const k = PTAB_KEY[t]; return `<div class="ptab ${k ? 'live' : 'dead'} ${k === TAB ? 'active' : ''}" ${k ? `onclick="go('${k}')"` : `title="Not in this prototype"`}>${t}</div>`; }).join('');
   if (VR.open && !getVarOrNull(S, VR.open)) { VR.open = null; VF = null; } // the open variation was deleted
   const v = document.getElementById('view');
   document.getElementById('cfoot').innerHTML = '';
-  v.innerHTML = relBanner() + (TAB === 'daywork' ? (DW.open ? docketPage(DW.open) : DW.page === 'rates' ? chargeResourcePage() : dayworkList()) : TAB === 'variation' ? (VR.open ? varPage(getVar(S, VR.open)) : varRegister()) : (CL.open ? claimPage(getClaim(S, CL.open)) : claimList()));
+  v.innerHTML = relBanner() + (TAB === 'daywork' ? (DW.open ? docketPage(DW.open) : DW.page === 'rates' ? chargeResourcePage() : DW.page === 'setup' ? setupPage() : dayworkList()) : TAB === 'variation' ? (VR.open ? varPage(getVar(S, VR.open)) : varRegister()) : (CL.open ? claimPage(getClaim(S, CL.open)) : claimList()));
   refreshModal();
   if (!SCEN) SCEN = runScenarios();
   const n = SCEN.filter(r => r.pass).length;
@@ -79,7 +79,8 @@ function dayworkList() {
   const all = S.dockets.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   const list = DW.status === 'ALL' ? all : all.filter(d => d.status === DW.status);
   let h = `<div class="spread"><h1>Daywork Record list <i class="fas fa-circle-info muted"></i></h1><div class="row"><span class="help"><i class="fas fa-circle-question"></i> Need Help?</span><button class="btn" onclick="inert('Export')"><i class="fas fa-download"></i> Export</button>
-    ${menuBtn('dwmenu', [{ label: 'Charge Resource', icon: 'fa-file-lines', on: `DW.page='rates';render()` }, { label: 'Daywork Project Setting', icon: 'fa-gear' }, { label: 'Daywork Report Setting', icon: 'fa-file-pen' }, { label: 'Feedback Form', icon: 'fa-comment' }])}</div></div>
+    <button class="btn" onclick="DW.page='setup';render()"><i class="fas fa-list-check"></i> Dayworks set-up <span class="tag ${setupProgress(S).done === setupProgress(S).total ? 't-ok' : 't-chg'}">${setupProgress(S).done}/${setupProgress(S).total}</span></button>
+    ${menuBtn('dwmenu', [{ label: 'Dayworks set-up', icon: 'fa-list-check', on: `DW.page='setup';render()` }, { label: 'Charge Resource', icon: 'fa-file-lines', on: `DW.page='rates';render()` }, { label: 'Daywork Project Setting', icon: 'fa-gear' }, { label: 'Daywork Report Setting', icon: 'fa-file-pen' }, { label: 'Feedback Form', icon: 'fa-comment' }])}</div></div>
     <div class="row" style="margin-top:10px"><span class="filter"><i class="fas fa-calendar"></i> Select Date Range</span><span class="filter">Created By <i class="fas fa-chevron-down" style="float:right;margin-top:3px"></i></span><span class="filter">Filter by Client <i class="fas fa-chevron-down" style="float:right;margin-top:3px"></i></span>
     <b style="margin-left:6px">Dayworks Claim Summary Status</b> <i class="fas fa-circle-check" style="color:#16a34a"></i> <span class="help"><i class="fas fa-circle-question"></i> Know More</span>
     <span class="filter" style="margin-left:auto;min-width:200px">Search Daywork Record <i class="fas fa-magnifying-glass" style="float:right;margin-top:3px"></i></span></div>`;
@@ -106,9 +107,60 @@ function dayworkList() {
 function chargeResourcePage() {
   const r = S.project.rates;
   let h = `<div class="spread"><div class="row"><a onclick="DW.page=null;render()"><i class="fas fa-arrow-left"></i></a> <a onclick="DW.page=null;render()" style="color:#d97706">Daywork Record</a> <span class="muted">›</span> <b>Charge Resource</b></div></div>
+    ${r.length ? `<div class="row" style="justify-content:flex-end;margin:6px 0"><button class="btn or" onclick="downloadRates()"><i class="fas fa-file-excel"></i> Download rates</button></div>` : ''}
     <div class="ban info"><i class="fas fa-circle-info"></i><div>The project's charge rates. Every daywork docket is priced from this table: quantity x charge rate (hours worked as recorded for labour and plant, quantity for materials and subcontract). Rates are not editable here; changes go through Varicon support.</div></div>
     <div class="tw card"><table><thead><tr><th>Resource</th><th>Resource Type</th><th>Unit</th><th class="num">Charge Rate</th></tr></thead><tbody>${r.map(x => `<tr><td>${esc(x.resource)}</td><td>${x.type}</td><td>${x.unit}</td><td class="num">${money(x.rate)}</td></tr>`).join('')}</tbody></table></div>
-    <div class="muted" style="margin-top:8px">A docket line with no charge resource here shows as Unmapped and cannot be added to a variation or claim. Allowances are not charged in this release.</div>`;
+    <div class="muted" style="margin-top:8px">A docket line with no charge resource here shows as Unmapped and cannot be added to a variation or claim. Materials or subcontract recorded only as a $ amount are charged at cost. Allowances are not charged in this release.</div>`;
+  return h;
+}
+// Rates download (VAR-23168, lean): a real .xlsx built with SheetJS, rates in effect today.
+function ratesWorkbook() {
+  const ws = XLSX.utils.aoa_to_sheet(ratesExportAoa(S));
+  ws['!cols'] = [{ wch: 20 }, { wch: 44 }, { wch: 8 }, { wch: 12 }, { wch: 56 }];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Dayworks rates');
+  return wb;
+}
+function downloadRates() {
+  if (!S.project.rates.length) return toast('This project has no rates', true);
+  if (typeof XLSX === 'undefined') return toast('Spreadsheet library did not load', true);
+  XLSX.writeFile(ratesWorkbook(), ratesFileName(S));
+  log(S, 'Rates downloaded: ' + ratesFileName(S)); toast('Downloaded ' + ratesFileName(S));
+}
+/* Dayworks set-up (VAR-23108, lean): four steps, each done inline. Existing settings pages are unchanged. */
+let SU = null; // unsaved form values per step
+function setupPage() {
+  const steps = setupSteps(S); const pr = setupProgress(S);
+  const a = S.project.setup.approvers, t = S.project.setup.template;
+  if (!SU) SU = { approvers: JSON.parse(JSON.stringify(a)), template: JSON.parse(JSON.stringify(t)) };
+  const pill2 = ok => `<span class="tag ${ok ? 't-ok' : 't-chg'}"><i class="fas ${ok ? 'fa-circle-check' : 'fa-circle-exclamation'}"></i> ${ok ? 'Complete' : 'Missing'}</span>`;
+  const head = (n, st) => `<div class="spread"><div class="row"><span style="width:26px;height:26px;border-radius:50%;background:${st.complete ? '#16a34a' : '#f59e0b'};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700">${st.complete ? '<i class="fas fa-check"></i>' : n}</span><b style="font-size:14px">${n}. ${st.title}</b> ${pill2(st.complete)}</div></div><div class="muted" style="margin:4px 0 10px 34px">${esc(st.detail)}</div>`;
+  let h = `<div class="spread"><div class="row"><a onclick="DW.page=null;SU=null;render()"><i class="fas fa-arrow-left"></i></a> <a onclick="DW.page=null;SU=null;render()" style="color:#d97706">Daywork Record</a> <span class="muted">›</span> <b>Dayworks set-up</b></div></div>
+    <div class="card pad" style="margin:10px 0"><div class="spread"><b style="font-size:14px">${pr.done} of ${pr.total} complete</b><span class="muted">Everything a project needs before dockets can be billed. Each step saves here; the existing settings pages are unchanged.</span></div><div class="progress"><div style="background:#16a34a;width:${pr.done / pr.total * 100}%"></div></div></div>`;
+  // 1. Client approvers
+  h += `<div class="card pad" style="margin-bottom:10px">${head(1, steps[0])}<div style="margin-left:34px">
+    <label class="row small" style="margin-bottom:8px"><input type="checkbox" ${SU.approvers.defaultApprover ? 'checked' : ''} onchange="SU.approvers.defaultApprover=this.checked;render()"> <b>Default Approver</b> <span class="muted">set the default client representative who receives daywork record requests for approval</span></label>
+    <div class="frow"><div class="field"><label>Client Representative (email)</label><input value="${esc(SU.approvers.clientRep)}" placeholder="name@client.com.au" oninput="SU.approvers.clientRep=this.value" ${SU.approvers.defaultApprover ? '' : 'disabled'}></div>
+    <div class="field"><label>Client Name</label><input value="${esc(SU.approvers.clientName)}" placeholder="Primary approver's name" oninput="SU.approvers.clientName=this.value" ${SU.approvers.defaultApprover ? '' : 'disabled'}></div></div>
+    <div class="frow" style="margin-top:8px"><div class="field"><label>CC Recipients (client emails, separated by commas or semicolons; they can also approve)</label><input value="${esc(SU.approvers.cc)}" oninput="SU.approvers.cc=this.value"></div></div>
+    <div class="field"><label>Notify to (users notified when a daywork record is submitted or approved)</label><div class="row">${SETUP_USERS.map(u => `<label class="small row" style="gap:4px"><input type="checkbox" ${SU.approvers.notify.includes(u) ? 'checked' : ''} onchange="this.checked?SU.approvers.notify.push('${esc(u)}'):SU.approvers.notify=SU.approvers.notify.filter(x=>x!=='${esc(u)}')"> ${esc(u)}</label>`).join('')}</div></div>
+    <div class="actions" style="justify-content:flex-start"><button class="btn or" onclick="if(act(()=>saveApprovers(S,SU.approvers),'Client approvers saved')!==null){SU=null;render();}">Save client approvers</button></div></div></div>`;
+  // 2. Docket template
+  h += `<div class="card pad" style="margin-bottom:10px">${head(2, steps[1])}<div style="margin-left:34px">
+    <div class="row" style="margin-bottom:8px">${Object.keys(SU.template.sections).map(k => `<label class="small row" style="gap:4px"><input type="checkbox" ${SU.template.sections[k] ? 'checked' : ''} onchange="SU.template.sections['${k}']=this.checked"> ${k}</label>`).join('')}</div>
+    <label class="small row" style="margin-bottom:6px"><input type="checkbox" ${SU.template.travelHour ? 'checked' : ''} onchange="SU.template.travelHour=this.checked"> Labour: include travel hour</label>
+    <label class="small row" style="margin-bottom:6px"><input type="checkbox" ${SU.template.attachmentDuration ? 'checked' : ''} onchange="SU.template.attachmentDuration=this.checked"> Plant and Equipment: allow the user to enter the attachment duration</label>
+    <div class="field"><label>Daywork allowances (shown on the docket; not charged in this release)</label><div class="row">${SETUP_ALLOWANCES.map(x => `<label class="small row" style="gap:4px"><input type="checkbox" ${SU.template.allowances.includes(x) ? 'checked' : ''} onchange="this.checked?SU.template.allowances.push('${x}'):SU.template.allowances=SU.template.allowances.filter(y=>y!=='${x}')"> ${x}</label>`).join('')}</div></div>
+    <div class="actions" style="justify-content:flex-start"><button class="btn or" onclick="if(act(()=>saveTemplate(S,SU.template),'Docket template saved')!==null){SU=null;render();}">Save docket template</button></div></div></div>`;
+  // 3. Rates (read-only)
+  const um = setupUnmapped(S);
+  h += `<div class="card pad" style="margin-bottom:10px">${head(3, steps[2])}<div style="margin-left:34px">
+    <div class="kv" style="grid-template-columns:repeat(3,minmax(120px,1fr))"><div><b>Has rates</b>${S.project.rates.length ? 'Yes' : 'No'}</div><div><b>Rate count</b>${S.project.rates.length}</div><div><b>Unmapped on dockets</b>${um.length}</div></div>
+    ${um.length ? `<div class="ban warn"><i class="fas fa-triangle-exclamation"></i><div>These resources are on the project's dockets but have no charge rate, so those dockets show Unmapped and cannot be billed: <b>${um.map(esc).join(', ')}</b>.</div></div>` : ''}
+    <div class="ban info"><i class="fas fa-headset"></i><div>Rates are read-only here. To add or change a rate, contact Varicon support.</div></div>
+    <div class="row"><button class="btn" onclick="DW.page='rates';SU=null;render()"><i class="fas fa-file-lines"></i> Open Charge Resource</button>${S.project.rates.length ? `<button class="btn or" onclick="downloadRates()"><i class="fas fa-file-excel"></i> Download rates</button>` : ''}</div></div></div>`;
+  // 4. Claim and variation link (read-only check)
+  h += `<div class="card pad" style="margin-bottom:10px">${head(4, steps[3])}<div style="margin-left:34px">
+    <div class="row small"><i class="fas ${S.project.contractSum > 0 ? 'fa-circle-check' : 'fa-circle-xmark'}" style="color:${S.project.contractSum > 0 ? '#16a34a' : '#b91c1c'}"></i> Project has a contract${S.project.contractSum > 0 ? ': ' + money(S.project.contractSum) + ', so dockets can go onto variations (Variation Register) and claims (Claim tab)' : ''}</div></div></div>`;
   return h;
 }
 function bulkTo(mode) {
@@ -143,7 +195,7 @@ function docketPage(id) {
   const allowTypes = (versionFor(S, d.date) || { allow: [] }).allow.map(a => a.type).concat(['Tool']);
   const extras = (r, i) => r.extras.map(x => `<div class="small">${/Unmapped/.test(x.note) ? '<span class="tag t-bad">Unmapped</span> ' : '+ '}${esc(x.label)} ${money(x.value)} <span class="muted">${esc(x.note)}</span>${editable && /Unmapped/.test(x.note) && (r.l.allow || []).some(a => allowName(a.type) === x.label) ? ` <a onclick="act(()=>removeAllowance(S,'${id}',${i},'${esc((r.l.allow.find(a => allowName(a.type) === x.label) || {}).type)}'),'Allowance removed')">remove</a>` : ''}</div>`).join('')
     + (editable && ['labour', 'wet'].includes(r.l.t) ? `<select class="cell" style="font-size:11px;margin-top:3px;width:auto" onchange="if(this.value)act(()=>addAllowance(S,'${id}',${i},this.value),'Allowance added')"><option value="">+ allowance</option>${allowTypes.filter(t => !(r.l.allow || []).some(a => a.type === t)).map(t => `<option value="${t}">${esc(allowName(t))}${t === 'Tool' ? ' (not charged)' : ''}</option>`).join('')}</select>` : '');
-  const split = r => r.rows.map(x => x.tier === 'unit' ? `${x.hours} x ${money(x.rate)}` : x.tier === 'costplus' ? `cost ${money(r.l.cost)} + ${r.rateLine.margin}%` : x.tier === 'flat' ? (r.l.t === 'float' ? 'flat' : `${fmtH(x.hours)}h x ${money(x.rate)}`) : x.tier === 'day' ? `1 day x ${money(x.rate)}` : `${fmtH(x.hours)}h ${TIER_LABEL[x.tier]} x ${money(x.rate)}`).join(' + ');
+  const split = r => r.rows.map(x => x.tier === 'atcost' ? `charged at cost ${money(x.value)}` : x.tier === 'unit' ? `${x.hours} x ${money(x.rate)}` : x.tier === 'costplus' ? `cost ${money(r.l.cost)} + ${r.rateLine.margin}%` : x.tier === 'flat' ? (r.l.t === 'float' ? 'flat' : `${fmtH(x.hours)}h x ${money(x.rate)}`) : x.tier === 'day' ? `1 day x ${money(x.rate)}` : `${fmtH(x.hours)}h ${TIER_LABEL[x.tier]} x ${money(x.rate)}`).join(' + ');
   const rateCell = r => r.rateLine ? `<span class="muted">${esc(r.rateLine.name)}</span>` : (r.l.t === 'float' ? '<span class="muted">no float line</span>' : '<span class="tag t-bad">Unmapped</span>');
   const lab = rows.filter(x => x.r.l.t === 'labour');
   h += `<h2>Labour</h2><div class="tw card"><table><thead><tr><th>#</th><th>Name</th><th>Resource</th><th>Role</th><th>Clock in</th><th>Clock out</th><th>Break</th><th class="num">Total Hour</th><th>Charge rate</th><th class="num">Value</th><th></th></tr></thead><tbody>${lab.map(({ r, i }, k) => `<tr class="${r.overlap || r.unmapped.length ? 'block' : ''}"><td>${k + 1}</td><td>${esc(PEOPLE[r.l.person].name)}</td><td>(${esc(PEOPLE[r.l.person].role)}) ${esc(PEOPLE[r.l.person].role)}</td><td>${esc(PEOPLE[r.l.person].role)}</td><td>${timeIn(r, i)}</td><td>${r.l.end}</td><td>${r.l.brk ? fmtH(r.l.brk * 60) + 'm' : '0m'}</td><td class="num">${hrsIn(r, i)}</td><td class="small">${rateCell(r)}<div>${split(r)}</div>${extras(r, i)}</td><td class="num"><b>${money(r.value)}</b></td><td>${delBtn(i)}</td></tr>`).join('') || '<tr><td colspan="11" class="muted">No labour.</td></tr>'}</tbody></table></div>`;
@@ -390,7 +442,7 @@ function claimPage(c) {
   if (iss.length) h += `<div class="ban err"><i class="fas fa-ban"></i><div><b>Cannot be approved</b> until ${iss.map(x => x.docket).join(', ')} ${iss.length === 1 ? 'is' : 'are'} fixed or removed: ${iss.map(x => esc(x.docket + ' ' + x.issue)).join('; ')}.</div></div>`;
   if (c.changedSinceSubmitted) h += `<div class="ban warn"><i class="fas fa-arrows-rotate"></i><div><b>Changed since submitted.</b> Dockets were added or removed after the claim was submitted; every change is in the history below. The flag clears when the claim is approved.</div></div>`;
   if (c.status === 'Approved') h += `<div class="ban ok"><i class="fas fa-lock"></i><div>Approved and locked. Its docket lines are frozen and its dockets stay locked on it; docket statuses do not change (mark them Invoiced by hand once billed).</div></div>`;
-  else if (c.reopenedOn) h += `<div class="ban warn"><i class="fas fa-rotate-left"></i><div>Reopened, as today. Its docket lines are editable again; the dockets stay locked on it.</div></div>`;
+  else if (c.reopenedOn) h += `<div class="ban warn"><i class="fas fa-rotate-left"></i><div>Reopened, as today. Dayworks lines approved earlier stay frozen at their approved values; new dockets can still be added.</div></div>`;
   if (t.negative) h += `<div class="ban warn"><i class="fas fa-circle-minus"></i><div><b>Negative claim.</b> Credit lines take this claim below zero (${money(t.gross)} ex GST). It ${open ? 'can be approved' : 'was approved'}; retention and GST follow Varicon's existing rules and go negative.</div></div>`;
   if (claimAccountingLabel(S, c)) h += `<div class="ban ok"><i class="fas fa-file-invoice"></i><div><b>${claimAccountingLabel(S, c)}.</b> A negative claim goes to Xero or MYOB as a credit note, not an invoice.</div></div>`;
   h += `<div class="itabs">${['contract', 'variation', 'dayworks', 'retention'].map(x => `<div class="itab ${CL.sub === x ? 'active' : ''}" onclick="CL.sub='${x}';CL.ticks=null;render()">${x}${x === 'dayworks' ? ` <span class="tag t-ver">${c.lines.length}</span>` : ''}</div>`).join('')}</div>`;
@@ -424,9 +476,9 @@ function claimVariations(c, open) {
 function claimDayworks(c, open) {
   const draft = c.status === 'Draft';
   let h = '';
-  if (open) h += `<div class="row" style="margin-bottom:8px"><button class="btn or" onclick="openPicker('claim','${c.id}')"><i class="fas fa-plus"></i> Add dockets</button>${draft ? `<button class="btn" onclick="act(()=>claimRefreshFromDockets(S,'${c.id}'),'Claim ${c.id} refreshed from dockets')"><i class="fas fa-arrows-rotate"></i> Refresh from dockets</button>` : ''}</div>`;
+  if (open) h += `<div class="row" style="margin-bottom:8px"><button class="btn or" onclick="openPicker('claim','${c.id}')"><i class="fas fa-plus"></i> Add dockets</button><button class="btn" onclick="act(()=>claimRefreshFromDockets(S,'${c.id}'),'Claim ${c.id} refreshed from dockets')"><i class="fas fa-arrows-rotate"></i> Refresh from dockets</button></div>`;
   const stale = c.lines.filter(ln => ln.frozen === null && Math.abs(priceDocket(S, getDocket(S, ln.docket)).total - ln.snap) > 0.004);
-  if (draft && stale.length) h += `<div class="ban info"><i class="fas fa-circle-info"></i><div>The rates table now prices ${stale.map(l => l.docket).join(', ')} differently from the line. Lines only change if you use Refresh from dockets.</div></div>`;
+  if (open && stale.length) h += `<div class="ban info"><i class="fas fa-circle-info"></i><div>The rates table now prices ${stale.map(l => l.docket).join(', ')} differently from the line. Lines only change if you use Refresh from dockets.</div></div>`;
   h += `<div class="tw card"><table><thead><tr><th>Ref</th><th>Docket</th><th>Performed on</th><th>Docket status</th><th>Description</th><th class="num">Docket value now</th><th class="num">Claim Amount</th><th>Action</th></tr></thead><tbody>`;
   c.lines.forEach((ln, k) => {
     const d = getDocket(S, ln.docket); const frozen = ln.frozen !== null; const val = claimLineValue(S, c, ln);

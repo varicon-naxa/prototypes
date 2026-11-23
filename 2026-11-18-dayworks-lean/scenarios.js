@@ -34,16 +34,17 @@ const SCENARIOS = [
       _chk(c, 'Allowance shown at $0', p.lines[0].extras.map(x => [x.label, x.value]), [['Meal allowance', 0]]);
       return st;
     } },
-  { story: 'Rates', title: 'A line with no charge rate is Unmapped and blocks the docket',
-    text: 'Ben (Plumber) has no charge rate, and concrete recorded as a $ cost has no quantity to price. Both dockets show Unmapped and cannot be picked.',
+  { story: 'Rates', title: 'A line with no charge rate is Unmapped; a $-only material or subcontract is charged at cost',
+    text: 'Ben (Plumber) has no charge rate: Unmapped, blocked from the pickers. Decided 2026-11-20: concrete recorded only as $600 (no quantity) is charged at cost, $600, and is not Unmapped; the same for a $-only subcontract.',
     run(c) {
       const st = baseState();
       addDocket(st, 'D402', '2026-11-04', 'Approved', [lab('ben', '07:00', '15:00')]);
-      addDocket(st, 'D403', '2026-11-04', 'Approved', [mat('Concrete', { cost: 600 })]);
+      addDocket(st, 'D403', '2026-11-04', 'Approved', [mat('Concrete', { cost: 600 }), sub('Line marking', 850)]);
       _chk(c, 'Plumber unmapped', priceDocket(st, getDocket(st, 'D402')).problems, ['Unmapped: Ben Okafor (Plumber)']);
-      _chk(c, 'Concrete cost unmapped', priceDocket(st, getDocket(st, 'D403')).problems, ['Unmapped: Concrete (recorded as a $ cost, not a quantity)']);
-      _chk(c, 'Both blocked in the picker', [_row(st, 'D402').tickable, _row(st, 'D403').tickable], [false, false]);
-      _refused(c, 'Refused on save', () => createVariation(st, ['D402']), 'D402 cannot be added: Unmapped: Ben Okafor (Plumber)');
+      const p = priceDocket(st, getDocket(st, 'D403'));
+      _chk(c, 'Concrete and line marking charged at cost', [p.lines.map(l => l.value), p.total, p.problems], [[600, 850], 1450, []]);
+      _chk(c, 'Picker: D402 blocked, D403 tickable', [_row(st, 'D402').tickable, _row(st, 'D403').tickable], [false, true]);
+      _refused(c, 'Unmapped refused on save', () => createVariation(st, ['D402']), 'D402 cannot be added: Unmapped: Ben Okafor (Plumber)');
       return st;
     } },
   { story: 'Rates', title: 'A named person rate wins over the role rate',
@@ -135,18 +136,24 @@ const SCENARIOS = [
       _chk(c, 'Totals: BOQ, dayworks, gross, retention', [t.boq, t.dockets, t.gross, t.retention], [1850, 1757.5, 3607.5, 180.38]);
       return st;
     } },
-  { story: 'Claim', title: 'Refresh from dockets while the claim is Draft',
-    text: 'Leading Hand goes to $100/h. D101 on Draft claim 4 stays $997.50 until Refresh from dockets, which reprices it to $1,050 and logs it. Refresh is refused once the claim is Submitted.',
+  { story: 'Claim', title: 'Refresh from dockets until the claim is Approved',
+    text: 'Leading Hand goes to $100/h. D101 on Draft claim 4 stays $997.50 until Refresh from dockets, which reprices it to $1,050 and logs it. Decided 2026-11-20: a Submitted claim can still be refreshed (and take or lose dockets); an Approved one cannot.',
     run(c) {
       const st = baseState(); st.today = '2026-11-16';
       addDocket(st, 'D101', '2026-11-03', 'Approved', [lab('tom', '06:00', '17:00', 0.5)]);
+      addDocket(st, 'D102', '2026-11-04', 'Approved', [lab('mel', '07:00', '15:00')]);
       const cl = createClaim(st, NOV1, ['D101'], { id: 4 });
       setRate(st, 'role:Leading Hand', 100);
       _chk(c, 'Still $997.50', claimLineValue(st, cl, cl.lines[0]), 997.5);
       _chk(c, 'Lines repriced', claimRefreshFromDockets(st, '4'), 1);
       _chk(c, 'Now $1,050, logged', [claimLineValue(st, cl, cl.lines[0]), _hasHist(cl, 'D101', 997.5, 1050)], [1050, true]);
       submitClaim(st, '4');
-      _refused(c, 'Refused when Submitted', () => claimRefreshFromDockets(st, '4'), 'Only a Draft claim can be refreshed');
+      _allowed(c, 'Submitted: add D102', () => claimAddDockets(st, '4', ['D102']));
+      setRate(st, 'role:Leading Hand', 105);
+      _chk(c, 'Submitted: refresh allowed', claimRefreshFromDockets(st, '4'), 2);
+      _allowed(c, 'Submitted: remove D102', () => claimRemoveDocket(st, '4', 'D102'));
+      approveClaim(st, '4');
+      _refused(c, 'Approved: refresh refused', () => claimRefreshFromDockets(st, '4'), 'Only a Draft or Submitted claim can be refreshed');
       return st;
     } },
   { story: 'Claim', title: 'A docket on a claim is locked; removing the line frees it',
@@ -178,19 +185,20 @@ const SCENARIOS = [
       _chk(c, 'Still locked', isLocked(st, 'D101'), true);
       return st;
     } },
-  { story: 'Claim', title: '"As today" readings (open questions): Submitted claim takes dockets, Reopen unfreezes, Delete frees',
-    text: 'Not decided; the most literal "as today" reading. A Submitted claim can still take dockets. Reopen Claim returns it to Draft and its docket lines become editable again (dockets stay locked on it). Deleting a Draft claim frees its dockets.',
+  { story: 'Claim', title: 'Reopen Claim keeps Dayworks lines frozen; Delete claim frees its dockets',
+    text: 'Decided 2026-11-20: reopening approved claim 4 leaves its Dayworks lines frozen at their approved values; they cannot be refreshed or removed, and a rate change moves nothing. Deleting a claim frees its dockets; docket statuses are unchanged.',
     run(c) {
       const st = baseState(); st.today = '2026-11-16';
       ['D601', 'D602', 'D603'].forEach((id, i) => addDocket(st, id, '2026-11-0' + (i + 3), 'Approved', [lab('jo', '07:00', '15:00')]));
-      const cl = createClaim(st, NOV1, ['D601'], { id: 4 }); submitClaim(st, '4');
-      _allowed(c, 'Submitted claim takes D602', () => claimAddDockets(st, '4', ['D602']));
-      approveClaim(st, '4'); reopenClaim(st, '4');
-      _chk(c, 'Reopened: Draft, lines unfrozen, dockets locked', [cl.status, cl.lines.map(l => l.frozen), isLocked(st, 'D601')], ['Draft', [null, null], true]);
-      _allowed(c, 'Line removable again', () => claimRemoveDocket(st, '4', 'D602'));
+      const cl = createClaim(st, NOV1, ['D601'], { id: 4 }); approveClaim(st, '4'); reopenClaim(st, '4');
+      setRate(st, 'role:Labourer', 90);
+      _chk(c, 'Reopened: Draft, line frozen at $624', [cl.status, cl.lines[0].frozen, claimLineValue(st, cl, cl.lines[0])], ['Draft', 624, 624]);
+      _chk(c, 'Refresh leaves it alone', [claimRefreshFromDockets(st, '4'), claimLineValue(st, cl, cl.lines[0])], [0, 624]);
+      _refused(c, 'Frozen line cannot be removed', () => claimRemoveDocket(st, '4', 'D601'), 'D601 was approved on this claim and stays locked');
+      _allowed(c, 'A new docket can be added while reopened', () => claimAddDockets(st, '4', ['D602']));
       createClaim(st, { from: '2026-11-16', to: '2026-11-30' }, ['D603'], { id: 5, vars: [] });
       _allowed(c, 'Delete Draft claim 5', () => deleteDraftClaim(st, '5'));
-      _chk(c, 'D603 freed', docketHome(st, 'D603'), null);
+      _chk(c, 'D603 freed, status unchanged', [docketHome(st, 'D603'), getDocket(st, 'D603').status], [null, 'Approved']);
       return st;
     } },
   { story: 'Claim', title: 'Approved variations are still claimed by percent on the Variation tab',
@@ -202,6 +210,52 @@ const SCENARIOS = [
       _approved(st, ['D201'], 'V012');
       const cl = createClaim(st, NOV1, ['D101'], { id: 4 }); setVarPct(st, '4', 'V012', 50);
       _chk(c, 'Variation and dayworks', [claimTotals(st, cl).vars, claimTotals(st, cl).dockets], [380, 997.5]);
+      return st;
+    } },
+  { story: 'Rates download', title: 'The rates download rows equal the rates pricing the dockets',
+    text: 'VAR-23168 (lean): the download has the project name, "Rates as at <today>", a header and one row per rate line (Resource Type, Resource, Unit, Charge Rate, Applies to). Every priced docket line on the project uses a rate that appears in the download at the same charge rate.',
+    run(c) {
+      const st = seedState();
+      const aoa = ratesExportAoa(st);
+      _chk(c, 'Title rows', [aoa[0][0], aoa[1][0]], ['Riverside Rd Upgrade (RRU01)', 'Rates as at 16/11/2026']);
+      _chk(c, 'Header', aoa[3], ['Resource Type', 'Resource', 'Unit', 'Charge Rate', 'Applies to']);
+      _chk(c, 'One row per rate line', aoa.length - 4, st.project.rates.length);
+      const byRes = Object.fromEntries(aoa.slice(4).map(r => [r[1], r[3]]));
+      const used = []; let mismatch = 0;
+      st.dockets.forEach(d => priceDocket(st, d).lines.forEach(l => { if (!l.rateLine || !l.rateLine.key) return; const row = rateRow(st, l.rateLine.key); used.push(row.resource); if (byRes[row.resource] !== row.rate || Math.abs(l.rows[0].rate - row.rate) > 0.004) mismatch++; }));
+      _chk(c, 'Every rate used on a docket is in the download at the same rate', [used.length > 10, mismatch], [true, 0]);
+      _chk(c, 'Applies to: Leading Hand', aoa.find(r => r[1] === 'Leading Hand')[4], 'Tom Reilly, Mel Grant');
+      _chk(c, 'File name', ratesFileName(st), 'RRU01 dayworks rates 16-11-2026.xlsx');
+      st.project.rates = [];
+      _chk(c, 'No rates: nothing to download', ratesExportRows(st).length, 0);
+      return st;
+    } },
+  { story: 'Set-up', title: 'Dayworks set-up: 4 steps with complete or missing; client approvers done inline',
+    text: 'VAR-23108 (lean): the seeded project has no default client representative, so set-up reads 3 of 4 complete with Client approvers missing. Saving an invalid email is refused; saving Joe Bloggs (joe@northerncouncils.nsw.gov.au) with a CC completes the step: 4 of 4.',
+    run(c) {
+      const st = seedState();
+      _chk(c, 'Seeded progress', setupProgress(st), { done: 3, total: 4 });
+      _chk(c, 'Missing step', setupSteps(st).filter(x => !x.complete).map(x => x.title), ['Client approvers']);
+      _refused(c, 'Invalid email refused', () => saveApprovers(st, { clientRep: 'joe at council', clientName: 'Joe Bloggs' }), 'Enter a valid email for the client representative');
+      _refused(c, 'Invalid CC refused', () => saveApprovers(st, { clientRep: 'joe@northerncouncils.nsw.gov.au', clientName: 'Joe Bloggs', cc: 'ok@x.com.au; nope' }), 'Not a valid email: nope');
+      saveApprovers(st, { clientRep: 'joe@northerncouncils.nsw.gov.au', clientName: 'Joe Bloggs', cc: 'sue@northerncouncils.nsw.gov.au', notify: ['Dana Whitfield (PM)', 'Kim Nguyen (Accounts)'] });
+      _chk(c, 'Complete: 4 of 4', [setupSteps(st)[0].complete, setupProgress(st)], [true, { done: 4, total: 4 }]);
+      _chk(c, 'Saved fields', [st.project.setup.approvers.clientName, st.project.setup.approvers.notify], ['Joe Bloggs', ['Dana Whitfield (PM)', 'Kim Nguyen (Accounts)']]);
+      return st;
+    } },
+  { story: 'Set-up', title: 'Docket template, rates and contract checks',
+    text: 'Turning every template section off makes the Docket template step missing. The Rates step lists the unmapped resources found on the project dockets (Ben Okafor, Plumber) and is missing when the project has no rates. The link step is missing when the project has no contract.',
+    run(c) {
+      const st = seedState();
+      saveTemplate(st, { travelHour: true, allowances: ['Meal'] });
+      _chk(c, 'Template saved', [st.project.setup.template.travelHour, st.project.setup.template.allowances], [true, ['Meal']]);
+      saveTemplate(st, { sections: { 'Labour': false, 'Plant and Equipment': false, 'Materials': false, 'Miscellaneous': false } });
+      _chk(c, 'All sections off: missing', setupSteps(st)[1].complete, false);
+      _chk(c, 'Rates step: count and unmapped', [setupSteps(st)[2].complete, st.project.rates.length, setupUnmapped(st)], [true, 11, ['Ben Okafor (Plumber)']]);
+      st.project.rates = [];
+      _chk(c, 'No rates: missing', setupSteps(st)[2].complete, false);
+      st.project.contractSum = 0;
+      _chk(c, 'No contract: link missing', setupSteps(st)[3].complete, false);
       return st;
     } },
 ];
